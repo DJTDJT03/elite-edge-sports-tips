@@ -577,7 +577,7 @@
     "league": "Multi-League",
     "market": "5-Fold Accumulator",
     "selection": "Weekly Acca — 5 Selections",
-    "odds": 6.33,
+    "odds": 10.74,
     "confidence": 7,
     "modelProbability": 0.25,
     "impliedProbability": 0.2,
@@ -602,9 +602,9 @@
       {
         "match": "Chelsea vs Port Vale",
         "league": "FA Cup Quarter-Final",
-        "selection": "Chelsea to Win",
-        "odds": 1.02,
-        "reasoning": "Two-division gap makes this the banker of the weekend. Chelsea 1/50 for a reason."
+        "selection": "Over 3.5 Goals",
+        "odds": 1.73,
+        "reasoning": "Chelsea averaging 3.7 goals per game in this season's FA Cup. Two-division quality gap should see the Blues run riot at Stamford Bridge."
       },
       {
         "match": "Atletico Madrid vs Barcelona",
