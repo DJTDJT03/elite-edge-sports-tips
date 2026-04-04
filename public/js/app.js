@@ -603,6 +603,15 @@ const App = {
           <p>Today's premium betting intelligence — ${new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}</p>
         </div>
 
+        <!-- Quality Philosophy Banner -->
+        <div style="background:linear-gradient(135deg, rgba(212,168,67,0.1), rgba(212,168,67,0.02));border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;">
+          <div style="font-size:28px;">🎯</div>
+          <div>
+            <div style="font-weight:700;font-size:14px;color:#d4a843;margin-bottom:2px;">Quality Over Quantity — We Only Tip When The Edge Is Real</div>
+            <div style="font-size:12px;color:var(--text-secondary);">We publish 2-4 selections daily maximum. If there's no genuine edge, we say "no bet today". We never publish filler tips to hit a quota. Every selection has a calculated statistical edge.</div>
+          </div>
+        </div>
+
         <!-- Trust Banner -->
         <div class="trust-banner">
           <div class="trust-item"><div class="trust-value">+${perf.roi}%</div><div class="trust-label">Overall ROI</div></div>
@@ -1454,15 +1463,15 @@ const App = {
         <div class="pricing-grid mb-32">
           <div class="pricing-card">
             <h3>Free</h3>
-            <p class="text-muted">Get started with selected daily tips</p>
+            <p class="text-muted">One free selection every day</p>
             <div class="pricing-price">&pound;<span style="font-size:42px;">0</span><span class="period">/month</span></div>
             <ul class="pricing-features">
-              <li>1-2 free tips daily</li>
+              <li>1 free NAP of the day</li>
               <li>Basic match/race info</li>
               <li>Summary analysis</li>
               <li>Results tracker access</li>
               <li class="disabled">Full deep-dive analysis</li>
-              <li class="disabled">Premium selections (3-5 extra daily)</li>
+              <li class="disabled">Premium edge selections (2-4 daily max)</li>
               <li class="disabled">Early access to tips</li>
               <li class="disabled">Email bulletins</li>
               <li class="disabled">Staking recommendations</li>
@@ -1475,12 +1484,12 @@ const App = {
 
           <div class="pricing-card featured">
             <h3>Premium</h3>
-            <p class="text-muted">Full access to our complete platform</p>
+            <p class="text-muted">Every edge play, every day — quality not quantity</p>
             <div class="pricing-price"><span class="currency">&pound;</span>29<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
             <p class="text-xs text-gold mb-8">or &pound;249.99/year (save &pound;110)</p>
             <ul class="pricing-features">
               <li>All free features included</li>
-              <li>5-10 premium tips daily</li>
+              <li>2-4 premium selections daily (quality over quantity)</li>
               <li>Full deep-dive analysis</li>
               <li>Probability & edge calculations</li>
               <li>Staking recommendations</li>
@@ -3164,7 +3173,7 @@ const App = {
 
   _onboardingSteps: [
     { title: 'Welcome to Elite Edge', desc: 'Your new home for data-driven betting intelligence. We use statistical models to identify value in horse racing and football markets, giving you a genuine edge over the bookmakers.' },
-    { title: 'Browse Tips', desc: 'Our dashboard shows today\'s top selections with confidence scores, edge percentages, and detailed analysis. Free members get 1-2 daily tips, Premium members get full access to 5-10 selections.' },
+    { title: 'Browse Tips', desc: 'Our dashboard shows today\'s top selections with confidence scores, edge percentages, and detailed analysis. Free members get 1 daily tip. Premium members get 2-4 carefully selected edge plays — we never publish tips just to fill a quota.' },
     { title: 'Track Performance', desc: 'Visit the Results page to see our full, transparent track record. Every tip is recorded with P/L, strike rate, and ROI. Use the "I backed this" button to track your own personal performance.' },
     { title: 'Go Premium', desc: 'Unlock all tips, full analysis, staking recommendations, and priority alerts. Plans start at just \u00a329.99/month with a 7-day money-back guarantee. Your edge starts here.' },
   ],
@@ -3219,7 +3228,7 @@ const App = {
       { q: "How are your tips generated?", a: "Our tips are generated using a proprietary multi-factor scoring model that analyses form, statistics, market movements, and contextual data. For horse racing, we evaluate speed ratings, going suitability, trainer/jockey stats, draw bias, and class movement. For football, we use expected goals (xG), home/away splits, injury reports, and head-to-head records. Every tip must exceed a minimum edge threshold before publication." },
       { q: "What does 'edge' mean?", a: "Edge is the difference between our model's calculated probability and the bookmaker's implied probability (derived from the odds). For example, if we calculate a 50% chance of winning but the odds imply only 33%, we have a 17% edge. Positive edge means we believe the odds are in the bettor's favour." },
       { q: "How is ROI calculated?", a: "ROI (Return on Investment) = (Total Profit / Total Staked) x 100. For example, if we've staked 100 units total and our net profit is 15 units, our ROI is +15%. We track this across all published tips with full transparency." },
-      { q: "What's included in Premium?", a: "Premium members get 5-10 daily tips (vs 1-2 free), full deep-dive analysis with all statistical breakdowns, probability calculations, staking recommendations, early morning access before 9am, daily email bulletins, and priority support. You also get access to our private Telegram group." },
+      { q: "What's included in Premium?", a: "Premium members get 2-4 carefully selected premium tips daily — we only publish when the edge is genuine. Full deep-dive analysis with probability calculations, staking recommendations, early morning access before 9am, daily email bulletins, and priority Telegram alerts. Quality over quantity — we never publish filler tips." },
       { q: "Can I cancel my subscription?", a: "Yes, you can cancel anytime with no questions asked. We also offer a 7-day money-back guarantee on all new subscriptions. Simply contact support@eliteedgesports.com to cancel." },
       { q: "How do I know your results are real?", a: "All tips are published before the event starts with timestamped records. Our full results history is publicly available on the Results page, including every loss. We believe in complete transparency — that's why we show ROI, strike rate, and every individual result." },
       { q: "Do you cover all horse racing meetings?", a: "We currently focus on the major UK and Irish meetings where our model has the strongest historical performance. This includes Cheltenham, Ascot, Newmarket, York, and Kempton, plus selected midweek cards. We're expanding coverage to smaller meetings soon." },
