@@ -1,0 +1,74 @@
+[
+  {
+    "id": "sup_001",
+    "userId": "usr_002",
+    "name": "Free User",
+    "email": "free@test.com",
+    "subject": "How do I upgrade to Premium?",
+    "message": "I've been using the free tips for a few weeks and I'm impressed with the results. I'd like to upgrade to Premium — can you walk me through the process and let me know what payment methods you accept?",
+    "status": "open",
+    "priority": "medium",
+    "date": "2026-04-02T10:30:00Z",
+    "replies": []
+  },
+  {
+    "id": "sup_002",
+    "userId": "usr_003",
+    "name": "Premium User",
+    "email": "premium@test.com",
+    "subject": "Tip notification emails not arriving",
+    "message": "I subscribed last month and was told I'd receive daily tip emails by 10am. I haven't received any for the past 3 days. Can you check my email settings? My subscription is definitely active.",
+    "status": "in-progress",
+    "priority": "high",
+    "date": "2026-04-01T08:15:00Z",
+    "replies": [
+      {
+        "from": "admin",
+        "message": "Thanks for flagging this. We've identified an issue with our email delivery and are working to resolve it. Your subscription is confirmed active. Apologies for the inconvenience.",
+        "date": "2026-04-01T09:45:00Z"
+      }
+    ]
+  },
+  {
+    "id": "sup_003",
+    "userId": "usr_004",
+    "name": "John Mitchell",
+    "email": "john@example.com",
+    "subject": "Can you explain the scoring model?",
+    "message": "I'd love to understand more about how your confidence scores and edge percentages are calculated. Is there documentation available? I'm a data-driven bettor and want to understand the methodology before increasing my stakes.",
+    "status": "resolved",
+    "priority": "low",
+    "date": "2026-03-28T14:20:00Z",
+    "replies": [
+      {
+        "from": "admin",
+        "message": "Great question! Our scoring model uses multiple weighted factors including form, statistical ratings, market movements, and contextual data. For racing, we weight going suitability, trainer/jockey stats, class movement, and draw bias. For football, xG data, home/away splits, injuries, and H2H records are key inputs. The edge % represents the difference between our model probability and the implied probability from the odds. We'll be publishing a detailed methodology page soon.",
+        "date": "2026-03-28T16:00:00Z"
+      }
+    ]
+  },
+  {
+    "id": "sup_004",
+    "userId": "usr_005",
+    "name": "Sarah Williams",
+    "email": "sarah@example.com",
+    "subject": "Annual subscription discount",
+    "message": "Is there a discount if I sign up for the annual plan instead of monthly? Also, do you offer a trial period so I can test the premium features before committing?",
+    "status": "open",
+    "priority": "medium",
+    "date": "2026-04-02T16:45:00Z",
+    "replies": []
+  },
+  {
+    "id": "sup_005",
+    "userId": "usr_003",
+    "name": "Premium User",
+    "email": "premium@test.com",
+    "subject": "Request for more racing tips at smaller meetings",
+    "message": "Your big-meeting coverage is excellent but I'd love to see more tips for midweek racing at places like Catterick, Sedgefield, and the smaller AW meetings. These often have the best value opportunities. Any plans to expand coverage?",
+    "status": "open",
+    "priority": "low",
+    "date": "2026-03-30T11:00:00Z",
+    "replies": []
+  }
+]

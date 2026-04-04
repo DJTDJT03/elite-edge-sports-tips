@@ -1,0 +1,75 @@
+[
+  {
+    "id": "usr_001",
+    "email": "admin@elite.com",
+    "password": "$2a$10$XQxBj8JETH0Zq9R2F5.YOeHp0kZHqYx3v4nXz5bN7JdEVGhS1VxW2",
+    "passwordPlain": "admin123",
+    "name": "Admin User",
+    "role": "admin",
+    "subscription": "premium",
+    "subscriptionExpiry": "2027-12-31",
+    "joined": "2024-01-15",
+    "bank": 1000
+  },
+  {
+    "id": "usr_002",
+    "email": "free@test.com",
+    "password": "$2a$10$XQxBj8JETH0Zq9R2F5.YOeHp0kZHqYx3v4nXz5bN7JdEVGhS1VxW2",
+    "passwordPlain": "test123",
+    "name": "Free User",
+    "role": "free",
+    "subscription": "free",
+    "subscriptionExpiry": null,
+    "joined": "2025-06-01",
+    "bank": 100
+  },
+  {
+    "id": "usr_003",
+    "email": "premium@test.com",
+    "password": "$2a$10$XQxBj8JETH0Zq9R2F5.YOeHp0kZHqYx3v4nXz5bN7JdEVGhS1VxW2",
+    "passwordPlain": "test123",
+    "name": "Premium User",
+    "role": "premium",
+    "subscription": "premium",
+    "subscriptionExpiry": "2026-12-31",
+    "joined": "2025-03-10",
+    "bank": 500
+  },
+  {
+    "id": "usr_004",
+    "email": "john@example.com",
+    "password": "$2a$10$XQxBj8JETH0Zq9R2F5.YOeHp0kZHqYx3v4nXz5bN7JdEVGhS1VxW2",
+    "passwordPlain": "test123",
+    "name": "John Mitchell",
+    "role": "premium",
+    "subscription": "premium",
+    "subscriptionExpiry": "2026-09-15",
+    "joined": "2025-01-20",
+    "bank": 750
+  },
+  {
+    "id": "usr_005",
+    "email": "sarah@example.com",
+    "password": "$2a$10$XQxBj8JETH0Zq9R2F5.YOeHp0kZHqYx3v4nXz5bN7JdEVGhS1VxW2",
+    "passwordPlain": "test123",
+    "name": "Sarah Williams",
+    "role": "free",
+    "subscription": "free",
+    "subscriptionExpiry": null,
+    "joined": "2025-08-05",
+    "bank": 100
+  },
+  {
+    "id": "usr_1775333464938",
+    "email": "darren@ecocleaningsystems.co.uk",
+    "password": "$2a$10$hbApNpTAhn90rpPcBosoO.KTZrrfD9TZJXcyzx.ZSX38oBUEi8bS.",
+    "name": "Darren Thornton",
+    "role": "free",
+    "subscription": "free",
+    "subscriptionExpiry": null,
+    "joined": "2026-04-04",
+    "bank": 100,
+    "agreementTimestamp": "2026-04-04T20:11:04.766Z",
+    "agreementText": "I confirm I am 18+ and understand this service provides statistical analysis only, not betting advice. I accept full responsibility for any betting decisions I make."
+  }
+]
