@@ -2066,11 +2066,11 @@ const App = {
           `).join('')}
           <div class="acca-total-row">
             <div class="acca-total-label">Combined Odds</div>
-            <div class="acca-total-value">${acca.accaCombinedOdds.toFixed(2)}</div>
+            <div class="acca-total-value">${(acca.odds || acca.accaCombinedOdds || 0).toFixed(2)}</div>
           </div>
           <div class="acca-return-info">
             <div class="return-label">&pound;10 Stake Returns</div>
-            <div class="return-amount">&pound;${acca.accaReturn10.toFixed(2)}</div>
+            <div class="return-amount">&pound;${((acca.odds || acca.accaCombinedOdds || 0) * 10).toFixed(2)}</div>
           </div>
           <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:12px;">
             This accumulator is provided for entertainment purposes only. Please gamble responsibly. 18+.
