@@ -8,8 +8,7 @@ const fs = require('fs');
 
 const scoringModel = require('./services/scoringModel');
 const emailService = require('./services/emailService');
-// Data ingestion is available but not started by default (no API keys in demo)
-// const dataIngestion = require('./services/dataIngestion');
+const dataIngestion = require('./services/dataIngestion');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -234,6 +233,58 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     }
 
     res.json({ message });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// LIVE RACING DATA (The Racing API)
+// These endpoints pull real-time data when API keys are configured
+// Set env: RACING_API_KEY and RACING_API_SECRET
+// Sign up: https://www.theracingapi.com/ (free 2-week trial)
+// ---------------------------------------------------------------------------
+const racingSource = dataIngestion.sources ? dataIngestion.sources.get('racing-cards') : null;
+
+app.get('/api/racing/live-cards', async (req, res) => {
+  try {
+    if (!racingSource || !process.env.RACING_API_KEY) {
+      return res.json({
+        live: false,
+        message: 'Racing API not configured. Set RACING_API_KEY and RACING_API_SECRET environment variables.',
+        setup: 'Sign up for free trial at https://www.theracingapi.com/',
+        racecards: []
+      });
+    }
+    const raw = await racingSource.fetch();
+    const normalised = racingSource.normalise(raw);
+    res.json({ live: true, racecards: normalised, fetchedAt: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/racing/live-results', async (req, res) => {
+  try {
+    const date = req.query.date || new Date().toISOString().split('T')[0];
+    if (!racingSource || !process.env.RACING_API_KEY) {
+      return res.json({ live: false, message: 'Racing API not configured', results: [] });
+    }
+    const results = await racingSource.fetchResults(date);
+    res.json({ live: true, results: results.results || [], fetchedAt: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/racing/horse/:horseId', async (req, res) => {
+  try {
+    if (!racingSource || !process.env.RACING_API_KEY) {
+      return res.json({ live: false, message: 'Racing API not configured' });
+    }
+    const form = await racingSource.fetchHorseForm(req.params.horseId);
+    res.json({ live: true, form });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

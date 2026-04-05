@@ -164,28 +164,116 @@ class FootballOddsSource extends DataSource {
 class RacingCardsSource extends DataSource {
   constructor() {
     super('racing-cards', {
-      refreshInterval: 900000, // 15 minutes — cards don't change often
-      // apiUrl: 'https://api.theracingapi.com/v1',
-      // apiKey: process.env.RACING_API_KEY,
-      // apiSecret: process.env.RACING_API_SECRET,
+      refreshInterval: 180000, // 3 minutes — match The Racing API update frequency
+      apiUrl: 'https://api.theracingapi.com/v1',
+      apiKey: process.env.RACING_API_KEY || '',
+      apiSecret: process.env.RACING_API_SECRET || '',
     });
   }
 
   async fetch() {
-    // PLACEHOLDER: Replace with real API call
-    // const auth = Buffer.from(`${this.config.apiKey}:${this.config.apiSecret}`).toString('base64');
-    // const res = await fetch(`${this.config.apiUrl}/racecards?date=${today}`, {
-    //   headers: { Authorization: `Basic ${auth}` }
-    // });
-    // return res.json();
+    if (!this.config.apiKey || !this.config.apiSecret) {
+      console.log(`[${this.name}] No API credentials — set RACING_API_KEY and RACING_API_SECRET`);
+      console.log(`[${this.name}] Sign up free trial: https://www.theracingapi.com/`);
+      return { racecards: [] };
+    }
 
-    console.log(`[${this.name}] Fetch called — using sample data`);
-    return { racecards: [] };
+    try {
+      const https = require('https');
+      const auth = Buffer.from(`${this.config.apiKey}:${this.config.apiSecret}`).toString('base64');
+      const today = new Date().toISOString().split('T')[0];
+
+      // Fetch today's racecards
+      const racecards = await this._apiGet(`/racecards?date=${today}`, auth);
+      console.log(`[${this.name}] Fetched ${(racecards.racecards || []).length} races for ${today}`);
+      return racecards;
+    } catch (err) {
+      console.error(`[${this.name}] API Error: ${err.message}`);
+      this.errorCount++;
+      return { racecards: [] };
+    }
+  }
+
+  // Fetch results for a specific date
+  async fetchResults(date) {
+    if (!this.config.apiKey || !this.config.apiSecret) return { results: [] };
+    try {
+      const auth = Buffer.from(`${this.config.apiKey}:${this.config.apiSecret}`).toString('base64');
+      const results = await this._apiGet(`/results?date=${date || new Date().toISOString().split('T')[0]}`, auth);
+      console.log(`[${this.name}] Fetched ${(results.results || []).length} results for ${date}`);
+      return results;
+    } catch (err) {
+      console.error(`[${this.name}] Results Error: ${err.message}`);
+      return { results: [] };
+    }
+  }
+
+  // Fetch individual horse form
+  async fetchHorseForm(horseId) {
+    if (!this.config.apiKey || !this.config.apiSecret) return {};
+    try {
+      const auth = Buffer.from(`${this.config.apiKey}:${this.config.apiSecret}`).toString('base64');
+      return await this._apiGet(`/horses/${horseId}/form`, auth);
+    } catch (err) {
+      return {};
+    }
+  }
+
+  // Generic API GET request
+  _apiGet(path, auth) {
+    return new Promise((resolve, reject) => {
+      const https = require('https');
+      const options = {
+        hostname: 'api.theracingapi.com',
+        path: `/v1${path}`,
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Accept': 'application/json'
+        }
+      };
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try { resolve(JSON.parse(data)); }
+          catch (e) { reject(new Error('Invalid JSON response')); }
+        });
+      });
+      req.on('error', reject);
+      req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')); });
+      req.end();
+    });
   }
 
   normalise(raw) {
-    // Transform to: { raceId, meeting, time, runners[], class, distance, going, surface }
-    return raw.racecards || [];
+    // Transform Racing API response to our internal format
+    if (!raw.racecards) return [];
+    return raw.racecards.map(race => ({
+      raceId: race.race_id || race.id,
+      meeting: race.course || race.meeting,
+      time: race.off_time || race.time,
+      raceClass: race.race_class || race.class,
+      distance: race.distance,
+      going: race.going,
+      surface: race.surface || 'Turf',
+      prizeMoney: race.prize,
+      raceName: race.race_name || race.name,
+      runners: (race.runners || []).map(r => ({
+        horseName: r.horse || r.horse_name,
+        horseId: r.horse_id,
+        jockey: r.jockey,
+        trainer: r.trainer,
+        age: r.age,
+        weight: r.weight || r.lbs,
+        draw: r.draw || r.stall,
+        officialRating: r.or || r.official_rating,
+        form: r.form,
+        odds: r.odds || r.forecast_price,
+        silkUrl: r.silk_url,
+        ownerName: r.owner
+      }))
+    }));
   }
 }
 
@@ -332,20 +420,18 @@ class DataIngestionManager {
     console.log(`[DataIngestion] Registered source: ${source.name}`);
   }
 
-  /**
-   * Start scheduled refresh jobs for all sources.
-   * Call this once on server startup.
-   *
-   * In production, replace setInterval with node-cron for precise scheduling:
-   *   const cron = require('node-cron');
-   *   cron.schedule('*/5 * * * *', () => this.refreshSource('football-fixtures'));
-   *   cron.schedule('*/2 * * * *', () => this.refreshSource('football-odds'));
-   *   cron.schedule('*/15 * * * *', () => this.refreshSource('racing-cards'));
-   *   cron.schedule('* * * * *', () => this.refreshSource('racing-odds'));
-   *   cron.schedule('0 * * * *', () => this.refreshSource('form-enrichment'));
-   *   cron.schedule('*/30 * * * *', () => this.refreshSource('injury-news'));
-   *   cron.schedule('0 0 * * *', () => this.refreshSource('historical-results'));
-   */
+  // Start scheduled refresh jobs for all sources.
+  // Call this once on server startup.
+  //
+  // In production, replace setInterval with node-cron for precise scheduling:
+  //   const cron = require('node-cron');
+  //   cron.schedule('every-5-min', () => this.refreshSource('football-fixtures'));
+  //   cron.schedule('every-2-min', () => this.refreshSource('football-odds'));
+  //   cron.schedule('every-15-min', () => this.refreshSource('racing-cards'));
+  //   cron.schedule('every-1-min', () => this.refreshSource('racing-odds'));
+  //   cron.schedule('hourly', () => this.refreshSource('form-enrichment'));
+  //   cron.schedule('every-30-min', () => this.refreshSource('injury-news'));
+  //   cron.schedule('daily', () => this.refreshSource('historical-results'));
   startScheduledJobs() {
     for (const [name, source] of this.sources) {
       console.log(`[DataIngestion] Scheduling ${name} every ${source.refreshInterval / 1000}s`);
