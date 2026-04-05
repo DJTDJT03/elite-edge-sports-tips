@@ -717,7 +717,7 @@ const App = {
           <h2 style="margin-bottom:8px;">Unlock Premium Tips</h2>
           <p class="text-muted mb-24">Join thousands of winning bettors. Get full access to all selections, deep analysis, and priority alerts.</p>
           <a href="#/pricing" class="btn btn-gold btn-lg">View Premium Plans</a>
-          <p class="text-xs text-muted mt-16">From just &pound;29.99/month. Cancel anytime.</p>
+          <p class="text-xs text-muted mt-16">From just &pound;14.99/month. Cancel anytime.</p>
         </div>` : ''}
       </div>
     `;
@@ -1485,8 +1485,8 @@ const App = {
           <div class="pricing-card featured">
             <h3>Premium</h3>
             <p class="text-muted">Every edge play, every day — quality not quantity</p>
-            <div class="pricing-price"><span class="currency">&pound;</span>29<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
-            <p class="text-xs text-gold mb-8">or &pound;249.99/year (save &pound;110)</p>
+            <div class="pricing-price"><span class="currency">&pound;</span>14<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
+            <p class="text-xs text-gold mb-8">or &pound;119.99/year (save &pound;60)</p>
             <ul class="pricing-features">
               <li>All free features included</li>
               <li>2-4 premium selections daily (quality over quantity)</li>
@@ -1501,11 +1501,11 @@ const App = {
             </ul>
             <!-- STRIPE INTEGRATION POINT: Replace onclick with Stripe Checkout redirect -->
             <!-- stripe.redirectToCheckout({ sessionId: await createCheckoutSession(plan, price) }) -->
-            <button class="btn btn-gold btn-full" data-plan="monthly" data-price="2999" data-currency="gbp" onclick="trackEvent('upgrade','click_monthly','pricing');App.showModal('stripe')">
+            <button class="btn btn-gold btn-full" data-plan="monthly" data-price="1499" data-currency="gbp" onclick="trackEvent('upgrade','click_monthly','pricing');App.showModal('stripe')">
               ${this.user?.subscription === 'premium' ? 'Current Plan' : 'Subscribe Now'}
             </button>
-            <button class="btn btn-outline btn-full mt-8" data-plan="annual" data-price="24999" data-currency="gbp" onclick="App.showModal('stripe')">
-              Annual Plan - &pound;249.99/yr (Save &pound;110)
+            <button class="btn btn-outline btn-full mt-8" data-plan="annual" data-price="11999" data-currency="gbp" onclick="App.showModal('stripe')">
+              Annual Plan - &pound;119.99/yr (Save &pound;60)
             </button>
             <div class="stripe-badge mt-8">
               <span>Secure payment powered by</span>
@@ -2127,7 +2127,7 @@ const App = {
           <h2>6. Subscription Terms</h2>
           <ul>
             <li><strong>Free Tier:</strong> Limited access to selected daily tips and basic analysis. No payment required.</li>
-            <li><strong>Premium Tier:</strong> Full access to all tips, detailed analysis, email bulletins, and priority support. Charged at the published rate (currently &pound;29.99/month or &pound;249.99/year).</li>
+            <li><strong>Premium Tier:</strong> Full access to all tips, detailed analysis, email bulletins, and priority support. Charged at the published rate (currently &pound;14.99/month or &pound;119.99/year).</li>
             <li><strong>Billing:</strong> Subscriptions are billed in advance on a recurring basis. You authorise us to charge your chosen payment method.</li>
             <li><strong>Cancellation:</strong> You may cancel your subscription at any time. Access continues until the end of the current billing period.</li>
             <li><strong>Cooling-Off Period:</strong> In accordance with UK consumer regulations, you have a 14-day cooling-off period from the date of purchase during which you may request a full refund, provided you have not accessed Premium content during that period.</li>
@@ -3175,7 +3175,7 @@ const App = {
     { title: 'Welcome to Elite Edge', desc: 'Your new home for data-driven betting intelligence. We use statistical models to identify value in horse racing and football markets, giving you a genuine edge over the bookmakers.' },
     { title: 'Browse Tips', desc: 'Our dashboard shows today\'s top selections with confidence scores, edge percentages, and detailed analysis. Free members get 1 daily tip. Premium members get 2-4 carefully selected edge plays — we never publish tips just to fill a quota.' },
     { title: 'Track Performance', desc: 'Visit the Results page to see our full, transparent track record. Every tip is recorded with P/L, strike rate, and ROI. Use the "I backed this" button to track your own personal performance.' },
-    { title: 'Go Premium', desc: 'Unlock all tips, full analysis, staking recommendations, and priority alerts. Plans start at just \u00a329.99/month with a 7-day money-back guarantee. Your edge starts here.' },
+    { title: 'Go Premium', desc: 'Unlock all tips, full analysis, staking recommendations, and priority alerts. Plans start at just \u00a314.99/month with a 7-day money-back guarantee. Your edge starts here.' },
   ],
 
   _renderOnboardingStep() {
