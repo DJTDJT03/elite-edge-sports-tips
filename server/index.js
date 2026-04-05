@@ -546,7 +546,7 @@ app.post('/api/chat', (req, res) => {
     response = `We have ${tips.length} football tips today covering ${[...new Set(tips.map(t => t.league))].join(', ')}. Markets include ${[...new Set(tips.map(t => t.market))].join(', ')}.`;
     suggestions = ['Show racing tips', "Today's best tips?", 'How do I upgrade?'];
   } else if (lower.includes('upgrade') || lower.includes('premium') || lower.includes('subscribe') || lower.includes('price')) {
-    response = 'Premium membership gives you access to all tips, full analysis, and priority alerts. Plans start at just \u00a314.99/month or save with our annual plan at \u00a3119.99/year. Click the Upgrade button to get started \u2014 you can cancel anytime.';
+    response = 'Your first month of Premium is completely FREE! After that it\u2019s just \u00a314.99/month (or \u00a3119.99/year to save \u00a360). Your subscription auto-renews monthly but you can cancel anytime before your free trial ends. Click the Upgrade button to start your free month.';
     suggestions = ['What do I get with Premium?', "Today's best tips?", 'Show my results'];
   } else if (lower.includes('roi') || lower.includes('profit') || lower.includes('performance') || lower.includes('results') || lower.includes('record')) {
     const results = readJSON('sample-results.json');

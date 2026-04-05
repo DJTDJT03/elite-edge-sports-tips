@@ -717,7 +717,7 @@ const App = {
           <h2 style="margin-bottom:8px;">Unlock Premium Tips</h2>
           <p class="text-muted mb-24">Join thousands of winning bettors. Get full access to all selections, deep analysis, and priority alerts.</p>
           <a href="#/pricing" class="btn btn-gold btn-lg">View Premium Plans</a>
-          <p class="text-xs text-muted mt-16">From just &pound;14.99/month. Cancel anytime.</p>
+          <p class="text-xs text-muted mt-16">First month FREE, then &pound;14.99/month. Cancel anytime.</p>
         </div>` : ''}
       </div>
     `;
@@ -1483,12 +1483,13 @@ const App = {
           </div>
 
           <div class="pricing-card featured">
+            <div style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">🎉 FIRST MONTH FREE — LIMITED OFFER</div>
             <h3>Premium</h3>
             <p class="text-muted">Every edge play, every day — quality not quantity</p>
-            <div class="pricing-price"><span class="currency">&pound;</span>14<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
-            <p class="text-xs text-gold mb-8">or &pound;119.99/year (save &pound;60)</p>
+            <div class="pricing-price"><span style="text-decoration:line-through;color:var(--text-muted);font-size:18px;">&pound;14.99</span> <span class="currency">&pound;</span>0<span style="font-size:20px;">.00</span><span class="period">/1st month</span></div>
+            <p class="text-xs text-gold mb-8">Then &pound;14.99/month | or &pound;119.99/year (save &pound;60)</p>
             <ul class="pricing-features">
-              <li>All free features included</li>
+              <li><strong>First month completely FREE</strong></li>
               <li>2-4 premium selections daily (quality over quantity)</li>
               <li>Full deep-dive analysis</li>
               <li>Probability & edge calculations</li>
@@ -1500,9 +1501,9 @@ const App = {
               <li>Exclusive Telegram group</li>
             </ul>
             <!-- STRIPE INTEGRATION POINT: Replace onclick with Stripe Checkout redirect -->
-            <!-- stripe.redirectToCheckout({ sessionId: await createCheckoutSession(plan, price) }) -->
-            <button class="btn btn-gold btn-full" data-plan="monthly" data-price="1499" data-currency="gbp" onclick="trackEvent('upgrade','click_monthly','pricing');App.showModal('stripe')">
-              ${this.user?.subscription === 'premium' ? 'Current Plan' : 'Subscribe Now'}
+            <!-- stripe.redirectToCheckout({ sessionId: await createCheckoutSession(plan, price, trialDays: 30) }) -->
+            <button class="btn btn-gold btn-full" data-plan="monthly" data-price="0" data-trial="30" data-currency="gbp" onclick="trackEvent('upgrade','click_monthly_trial','pricing');App.showModal('stripe')">
+              ${this.user?.subscription === 'premium' ? 'Current Plan' : 'Start Free Month'}
             </button>
             <button class="btn btn-outline btn-full mt-8" data-plan="annual" data-price="11999" data-currency="gbp" onclick="App.showModal('stripe')">
               Annual Plan - &pound;119.99/yr (Save &pound;60)
@@ -1511,7 +1512,7 @@ const App = {
               <span>Secure payment powered by</span>
               <span class="stripe-logo">Stripe</span>
             </div>
-            <p class="text-xs text-muted mt-8">7-day money-back guarantee. Cancel anytime.</p>
+            <p class="text-xs text-muted mt-8">Free for 30 days, then auto-renews at &pound;14.99/month. Cancel anytime before your trial ends to avoid charges. No commitment.</p>
           </div>
         </div>
 
@@ -2124,14 +2125,17 @@ const App = {
             <li>We strongly advise that you only bet with money you can afford to lose.</li>
           </ul>
 
-          <h2>6. Subscription Terms</h2>
+          <h2>6. Subscription Terms, Free Trial &amp; Auto-Renewal</h2>
           <ul>
-            <li><strong>Free Tier:</strong> Limited access to selected daily tips and basic analysis. No payment required.</li>
-            <li><strong>Premium Tier:</strong> Full access to all tips, detailed analysis, email bulletins, and priority support. Charged at the published rate (currently &pound;14.99/month or &pound;119.99/year).</li>
-            <li><strong>Billing:</strong> Subscriptions are billed in advance on a recurring basis. You authorise us to charge your chosen payment method.</li>
-            <li><strong>Cancellation:</strong> You may cancel your subscription at any time. Access continues until the end of the current billing period.</li>
-            <li><strong>Cooling-Off Period:</strong> In accordance with UK consumer regulations, you have a 14-day cooling-off period from the date of purchase during which you may request a full refund, provided you have not accessed Premium content during that period.</li>
-            <li><strong>Refunds:</strong> Outside the 14-day cooling-off period, refunds are at our discretion. Contact support@eliteedgesports.com for all refund requests.</li>
+            <li><strong>Free Tier:</strong> Limited access to one daily NAP selection and basic analysis. No payment required.</li>
+            <li><strong>Premium Tier:</strong> Full access to all tips, detailed analysis, email bulletins, and priority support. Pricing: &pound;14.99/month or &pound;119.99/year.</li>
+            <li><strong>Free Trial:</strong> New Premium subscribers receive their first month (30 days) completely free of charge. No payment is taken during the trial period. You may cancel at any time during the free trial without incurring any charge.</li>
+            <li><strong>Auto-Renewal:</strong> <strong>Your subscription will automatically renew at the end of each billing period (including at the end of your free trial) unless you cancel before the renewal date.</strong> By subscribing, you expressly consent to auto-renewal and authorise us to charge your chosen payment method at the then-current subscription rate (&pound;14.99/month or &pound;119.99/year) on each renewal date.</li>
+            <li><strong>Billing:</strong> After your free trial ends, subscriptions are billed in advance on a recurring monthly or annual basis. Your payment method will be charged automatically on the same date each month (or year for annual plans). You will receive an email reminder at least 3 days before each renewal.</li>
+            <li><strong>Cancellation:</strong> You may cancel your subscription at any time through your account settings, by emailing support@eliteedgesports.com, or by contacting us via the in-app support form. Cancellation takes effect at the end of the current billing period — you will retain access until that date. <strong>If you cancel during your free trial, you will not be charged.</strong></li>
+            <li><strong>Price Changes:</strong> We reserve the right to change subscription prices. We will notify you at least 14 days before any price increase. If you do not agree with the new price, you may cancel before the new rate takes effect.</li>
+            <li><strong>Cooling-Off Period:</strong> In accordance with the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013, you have a 14-day cooling-off period from the date of your first paid subscription during which you may request a full refund, provided you have not accessed Premium content during that period.</li>
+            <li><strong>Refunds:</strong> Outside the 14-day cooling-off period, refunds are at our sole discretion. Partial-month refunds are not provided for mid-cycle cancellations. Contact support@eliteedgesports.com for all refund requests.</li>
           </ul>
 
           <h2>7. Intellectual Property</h2>
@@ -3175,7 +3179,7 @@ const App = {
     { title: 'Welcome to Elite Edge', desc: 'Your new home for data-driven betting intelligence. We use statistical models to identify value in horse racing and football markets, giving you a genuine edge over the bookmakers.' },
     { title: 'Browse Tips', desc: 'Our dashboard shows today\'s top selections with confidence scores, edge percentages, and detailed analysis. Free members get 1 daily tip. Premium members get 2-4 carefully selected edge plays — we never publish tips just to fill a quota.' },
     { title: 'Track Performance', desc: 'Visit the Results page to see our full, transparent track record. Every tip is recorded with P/L, strike rate, and ROI. Use the "I backed this" button to track your own personal performance.' },
-    { title: 'Go Premium', desc: 'Unlock all tips, full analysis, staking recommendations, and priority alerts. Plans start at just \u00a314.99/month with a 7-day money-back guarantee. Your edge starts here.' },
+    { title: 'Go Premium', desc: 'Unlock all tips, full analysis, staking recommendations, and priority alerts. First month is completely FREE. Then just \u00a314.99/month, cancel anytime. Your edge starts here.' },
   ],
 
   _renderOnboardingStep() {
