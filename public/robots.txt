@@ -3,4 +3,4 @@ Allow: /
 Disallow: /api/
 Disallow: /admin
 
-Sitemap: https://eliteedgesports.com/sitemap.xml
+Sitemap: https://eliteedgessports.co.uk/sitemap.xml

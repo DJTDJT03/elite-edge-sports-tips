@@ -28,7 +28,7 @@
 ✅ Premium analysis from 3 expert analysts
 ✅ Weekly free 5-fold acca
 
-Join free: eliteedgesports.com
+Join free: eliteedgessports.co.uk
 
 18+ | Entertainment only | BeGambleAware.org"
 
@@ -63,7 +63,7 @@ Always include: #18plus #BeGambleAware
 
 ### Bio
 "🏇 86% Racing Strike Rate | ⚽ European Football Intelligence | 📊 Data-Driven Tips | Free daily picks 👇"
-Link: eliteedgesports.com
+Link: eliteedgessports.co.uk
 
 ### Content Types
 1. **Tip Cards** (daily) — Beautiful branded graphics showing selection, odds, confidence, edge

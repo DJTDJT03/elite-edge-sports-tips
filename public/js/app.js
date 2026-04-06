@@ -503,13 +503,13 @@ const App = {
   // SOCIAL SHARING (Enhancement #8)
   // -----------------------------------------------------------------------
   shareWin(selection, odds) {
-    const text = `Another winner from @EliteEdgeTips! ${selection} @ ${odds} \u2705 Join us: https://eliteedgesports.com #EliteEdgeTips #Winner`;
+    const text = `Another winner from @EliteEdgeTips! ${selection} @ ${odds} \u2705 Join us: https://eliteedgessports.co.uk #EliteEdgeTips #Winner`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   },
 
   copyShareText(selection, odds) {
-    const text = `Another winner from EliteEdgeTips! ${selection} @ ${odds} \u2705 Join us: https://eliteedgesports.com`;
+    const text = `Another winner from EliteEdgeTips! ${selection} @ ${odds} \u2705 Join us: https://eliteedgessports.co.uk`;
     navigator.clipboard.writeText(text).then(() => {
       alert('Copied to clipboard!');
     }).catch(() => {
@@ -2132,10 +2132,10 @@ const App = {
             <li><strong>Free Trial:</strong> New Premium subscribers receive their first month (30 days) completely free of charge. No payment is taken during the trial period. You may cancel at any time during the free trial without incurring any charge.</li>
             <li><strong>Auto-Renewal:</strong> <strong>Your subscription will automatically renew at the end of each billing period (including at the end of your free trial) unless you cancel before the renewal date.</strong> By subscribing, you expressly consent to auto-renewal and authorise us to charge your chosen payment method at the then-current subscription rate (&pound;14.99/month or &pound;119.99/year) on each renewal date.</li>
             <li><strong>Billing:</strong> After your free trial ends, subscriptions are billed in advance on a recurring monthly or annual basis. Your payment method will be charged automatically on the same date each month (or year for annual plans). You will receive an email reminder at least 3 days before each renewal.</li>
-            <li><strong>Cancellation:</strong> You may cancel your subscription at any time through your account settings, by emailing support@eliteedgesports.com, or by contacting us via the in-app support form. Cancellation takes effect at the end of the current billing period — you will retain access until that date. <strong>If you cancel during your free trial, you will not be charged.</strong></li>
+            <li><strong>Cancellation:</strong> You may cancel your subscription at any time through your account settings, by emailing support@eliteedgessports.co.uk, or by contacting us via the in-app support form. Cancellation takes effect at the end of the current billing period — you will retain access until that date. <strong>If you cancel during your free trial, you will not be charged.</strong></li>
             <li><strong>Price Changes:</strong> We reserve the right to change subscription prices. We will notify you at least 14 days before any price increase. If you do not agree with the new price, you may cancel before the new rate takes effect.</li>
             <li><strong>Cooling-Off Period:</strong> In accordance with the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013, you have a 14-day cooling-off period from the date of your first paid subscription during which you may request a full refund, provided you have not accessed Premium content during that period.</li>
-            <li><strong>Refunds:</strong> Outside the 14-day cooling-off period, refunds are at our sole discretion. Partial-month refunds are not provided for mid-cycle cancellations. Contact support@eliteedgesports.com for all refund requests.</li>
+            <li><strong>Refunds:</strong> Outside the 14-day cooling-off period, refunds are at our sole discretion. Partial-month refunds are not provided for mid-cycle cancellations. Contact support@eliteedgessports.co.uk for all refund requests.</li>
           </ul>
 
           <h2>7. Intellectual Property</h2>
@@ -2161,7 +2161,7 @@ const App = {
           <p>These Terms and Conditions are governed by and construed in accordance with the laws of England and Wales. Any disputes arising from these Terms shall be subject to the exclusive jurisdiction of the courts of England and Wales.</p>
 
           <h2>11. Contact</h2>
-          <p>For questions about these Terms, contact us at: <a href="mailto:support@eliteedgesports.com">support@eliteedgesports.com</a></p>
+          <p>For questions about these Terms, contact us at: <a href="mailto:support@eliteedgessports.co.uk">support@eliteedgessports.co.uk</a></p>
 
           <p style="margin-top:32px;"><a href="#/" class="text-gold">&larr; Back to Dashboard</a></p>
         </div>
@@ -2235,7 +2235,7 @@ const App = {
             <li><strong>Right to restrict processing:</strong> Request limitation of how we process your data</li>
             <li><strong>Right to object:</strong> Object to processing based on legitimate interests</li>
           </ul>
-          <p>To exercise any of these rights, contact us at: <a href="mailto:privacy@eliteedgesports.com">privacy@eliteedgesports.com</a></p>
+          <p>To exercise any of these rights, contact us at: <a href="mailto:privacy@eliteedgessports.co.uk">privacy@eliteedgessports.co.uk</a></p>
 
           <h2>7. Cookies</h2>
           <p>We use the following types of cookies:</p>
@@ -2253,7 +2253,7 @@ const App = {
           <p>We may update this Privacy Policy from time to time. Changes will be posted on this page with an updated date. We will notify registered users of significant changes by email.</p>
 
           <h2>10. Contact &amp; Complaints</h2>
-          <p>For data protection queries: <a href="mailto:privacy@eliteedgesports.com">privacy@eliteedgesports.com</a></p>
+          <p>For data protection queries: <a href="mailto:privacy@eliteedgessports.co.uk">privacy@eliteedgessports.co.uk</a></p>
           <p>If you are not satisfied with our response, you have the right to lodge a complaint with the Information Commissioner's Office (ICO): <a href="https://ico.org.uk" target="_blank" rel="noopener">ico.org.uk</a></p>
 
           <p style="margin-top:32px;"><a href="#/" class="text-gold">&larr; Back to Dashboard</a></p>
@@ -2764,7 +2764,7 @@ const App = {
     const content = document.getElementById('referral-content');
     if (!content) return;
     const code = this.getReferralCode();
-    const link = 'https://eliteedgesports.com/?ref=' + code;
+    const link = 'https://eliteedgessports.co.uk/?ref=' + code;
     const count = this.getReferralCount();
     const progress = Math.min(count, 3);
     content.innerHTML = `
@@ -3233,7 +3233,7 @@ const App = {
       { q: "What does 'edge' mean?", a: "Edge is the difference between our model's calculated probability and the bookmaker's implied probability (derived from the odds). For example, if we calculate a 50% chance of winning but the odds imply only 33%, we have a 17% edge. Positive edge means we believe the odds are in the bettor's favour." },
       { q: "How is ROI calculated?", a: "ROI (Return on Investment) = (Total Profit / Total Staked) x 100. For example, if we've staked 100 units total and our net profit is 15 units, our ROI is +15%. We track this across all published tips with full transparency." },
       { q: "What's included in Premium?", a: "Premium members get 2-4 carefully selected premium tips daily — we only publish when the edge is genuine. Full deep-dive analysis with probability calculations, staking recommendations, early morning access before 9am, daily email bulletins, and priority Telegram alerts. Quality over quantity — we never publish filler tips." },
-      { q: "Can I cancel my subscription?", a: "Yes, you can cancel anytime with no questions asked. We also offer a 7-day money-back guarantee on all new subscriptions. Simply contact support@eliteedgesports.com to cancel." },
+      { q: "Can I cancel my subscription?", a: "Yes, you can cancel anytime with no questions asked. We also offer a 7-day money-back guarantee on all new subscriptions. Simply contact support@eliteedgessports.co.uk to cancel." },
       { q: "How do I know your results are real?", a: "All tips are published before the event starts with timestamped records. Our full results history is publicly available on the Results page, including every loss. We believe in complete transparency — that's why we show ROI, strike rate, and every individual result." },
       { q: "Do you cover all horse racing meetings?", a: "We currently focus on the major UK and Irish meetings where our model has the strongest historical performance. This includes Cheltenham, Ascot, Newmarket, York, and Kempton, plus selected midweek cards. We're expanding coverage to smaller meetings soon." },
       { q: "What football leagues do you cover?", a: "We cover the Premier League, Champions League, La Liga, Serie A, Bundesliga, and Ligue 1. Our model performs best on leagues with rich statistical data. We plan to add Eredivisie, Liga Portugal, and select South American leagues." },
