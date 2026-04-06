@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 500" width="1500" height="500">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f1320"/>
+      <stop offset="100%" stop-color="#0a0e1a"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e8c555"/>
+      <stop offset="50%" stop-color="#d4a843"/>
+      <stop offset="100%" stop-color="#b8902f"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1500" height="500" rx="20" fill="url(#bg)"/>
+  <rect x="2" y="2" width="1496" height="496" rx="18" fill="none" stroke="url(#gold)" stroke-width="2" opacity="0.3"/>
+
+  <!-- Logo icon -->
+  <circle cx="180" cy="250" r="120" fill="none" stroke="url(#gold)" stroke-width="2.5"/>
+  <path d="M180 140 L270 250 L180 360 L90 250 Z" fill="none" stroke="url(#gold)" stroke-width="2" opacity="0.3"/>
+  <text x="180" y="275" font-family="Inter, Helvetica, Arial, sans-serif" font-weight="900" font-size="100" fill="url(#gold)" text-anchor="middle" letter-spacing="-5">EE</text>
+
+  <!-- Text -->
+  <text x="360" y="220" font-family="Inter, Helvetica, Arial, sans-serif" font-weight="800" font-size="72" fill="url(#gold)" letter-spacing="4">ELITE EDGE</text>
+  <text x="360" y="280" font-family="Inter, Helvetica, Arial, sans-serif" font-weight="400" font-size="42" fill="#8a8fa0" letter-spacing="10">SPORTS TIPS</text>
+
+  <!-- Divider -->
+  <line x1="360" y1="305" x2="780" y2="305" stroke="url(#gold)" stroke-width="1.5" opacity="0.4"/>
+
+  <!-- Tagline -->
+  <text x="360" y="345" font-family="Inter, Helvetica, Arial, sans-serif" font-weight="300" font-size="22" fill="#6b7280" letter-spacing="4">DATA-DRIVEN BETTING INTELLIGENCE</text>
+
+  <!-- Stats -->
+  <text x="360" y="400" font-family="Inter, Helvetica, Arial, sans-serif" font-weight="600" font-size="20" fill="#d4a843" letter-spacing="2">86% Racing Strike Rate  |  +230 Units Profit  |  Free Daily Tips</text>
+
+  <!-- Right side decorative -->
+  <text x="1300" y="260" font-family="Inter, Helvetica, Arial, sans-serif" font-weight="800" font-size="140" fill="url(#gold)" text-anchor="middle" opacity="0.06">EE</text>
+
+  <!-- 18+ badge -->
+  <rect x="1370" y="420" width="50" height="28" rx="4" fill="#d4a843" opacity="0.8"/>
+  <text x="1395" y="440" font-family="Inter, Helvetica, Arial, sans-serif" font-weight="700" font-size="14" fill="#0a0e1a" text-anchor="middle">18+</text>
+
+  <!-- Website -->
+  <text x="1200" y="442" font-family="Inter, Helvetica, Arial, sans-serif" font-weight="400" font-size="16" fill="#6b7280" text-anchor="end">eliteedgessports.co.uk</text>
+</svg>
