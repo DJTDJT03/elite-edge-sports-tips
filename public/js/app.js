@@ -51,9 +51,13 @@ const App = {
   init() {
     this.loadTheme();
     this.loadOddsFormat();
+    this.checkTokenExpiry();
     this.updateAuthUI();
     this.bindNav();
-    window.addEventListener('hashchange', () => this.route());
+    window.addEventListener('hashchange', () => {
+      this.checkTokenExpiry();
+      this.route();
+    });
     this.route();
     this.loadDailyStats();
     this.initNotifications();
@@ -222,6 +226,9 @@ const App = {
   },
 
   async api(endpoint, options = {}) {
+    // Check token expiry before making request
+    this.checkTokenExpiry();
+
     const headers = { 'Content-Type': 'application/json' };
     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
     this._activeRequests++;
@@ -233,7 +240,14 @@ const App = {
     try {
       const res = await fetch(`/api${endpoint}`, { ...options, headers: { ...headers, ...options.headers } });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Request failed');
+      if (!res.ok) {
+        // Handle session expired (login from another device)
+        if (res.status === 401 && data.code === 'session_expired') {
+          this.handleSessionExpired();
+          throw new Error(data.error);
+        }
+        throw new Error(data.error || 'Request failed');
+      }
       // Track key events (Feature #7 - GA placeholder)
       if (endpoint.includes('/auth/login')) trackEvent('auth', 'login', 'success');
       if (endpoint.includes('/auth/register')) trackEvent('auth', 'register', 'success');
@@ -255,6 +269,39 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // SESSION MANAGEMENT
+  // -----------------------------------------------------------------------
+  handleSessionExpired() {
+    this.token = null;
+    this.user = null;
+    localStorage.removeItem('ee_token');
+    localStorage.removeItem('ee_user');
+    localStorage.removeItem('ee_token_expiry');
+    this.updateAuthUI();
+    window.location.hash = '#/';
+    // Show session expired message
+    setTimeout(() => {
+      alert('Your session has ended because your account was logged in on another device. Only one active session is allowed per account.');
+    }, 100);
+  },
+
+  checkTokenExpiry() {
+    const expiry = localStorage.getItem('ee_token_expiry');
+    if (expiry && Date.now() > parseInt(expiry, 10)) {
+      this.token = null;
+      this.user = null;
+      localStorage.removeItem('ee_token');
+      localStorage.removeItem('ee_user');
+      localStorage.removeItem('ee_token_expiry');
+      this.updateAuthUI();
+      window.location.hash = '#/';
+      setTimeout(() => {
+        alert('Your session has expired. Please log in again.');
+      }, 100);
+    }
+  },
+
+  // -----------------------------------------------------------------------
   // AUTH
   // -----------------------------------------------------------------------
   async login(e) {
@@ -262,12 +309,13 @@ const App = {
     const email = document.getElementById('login-email').value;
     const password = document.getElementById('login-password').value;
     try {
-      const { token, user } = await this.api('/auth/login', {
+      const data = await this.api('/auth/login', {
         method: 'POST', body: JSON.stringify({ email, password })
       });
-      this.token = token; this.user = user;
-      localStorage.setItem('ee_token', token);
-      localStorage.setItem('ee_user', JSON.stringify(user));
+      this.token = data.token; this.user = data.user;
+      localStorage.setItem('ee_token', data.token);
+      localStorage.setItem('ee_user', JSON.stringify(data.user));
+      if (data.tokenExpiry) localStorage.setItem('ee_token_expiry', data.tokenExpiry.toString());
       this.updateAuthUI();
       this.closeModal();
       trackEvent('auth', 'login', email);
@@ -281,11 +329,50 @@ const App = {
     }
   },
 
+  validatePasswordClient(pw) {
+    const checks = {
+      length: pw.length >= 8,
+      upper: /[A-Z]/.test(pw),
+      lower: /[a-z]/.test(pw),
+      number: /[0-9]/.test(pw),
+    };
+    const score = Object.values(checks).filter(Boolean).length;
+    return { checks, score };
+  },
+
+  updatePasswordStrength() {
+    const pw = document.getElementById('reg-password').value;
+    const indicator = document.getElementById('pw-strength-indicator');
+    if (!indicator) return;
+    const { checks, score } = this.validatePasswordClient(pw);
+    const labels = ['Too weak', 'Weak', 'Fair', 'Good', 'Strong'];
+    const colors = ['#ef4444', '#ef4444', '#f59e0b', '#22c55e', '#22c55e'];
+    const pct = (score / 4) * 100;
+    indicator.innerHTML = `
+      <div class="pw-strength-bar"><div class="pw-strength-fill" style="width:${pct}%;background:${colors[score]};"></div></div>
+      <div class="pw-strength-label" style="color:${colors[score]};">${pw.length > 0 ? labels[score] : ''}</div>
+      <div class="pw-strength-checks">
+        <span class="${checks.length ? 'pw-check-pass' : 'pw-check-fail'}">8+ chars</span>
+        <span class="${checks.upper ? 'pw-check-pass' : 'pw-check-fail'}">Uppercase</span>
+        <span class="${checks.lower ? 'pw-check-pass' : 'pw-check-fail'}">Lowercase</span>
+        <span class="${checks.number ? 'pw-check-pass' : 'pw-check-fail'}">Number</span>
+      </div>
+    `;
+  },
+
   async register(e) {
     e.preventDefault();
     const name = document.getElementById('reg-name').value;
     const email = document.getElementById('reg-email').value;
     const password = document.getElementById('reg-password').value;
+
+    // Client-side password validation
+    const { score } = this.validatePasswordClient(password);
+    if (score < 4) {
+      document.getElementById('reg-error').textContent = 'Password must be at least 8 characters with uppercase, lowercase, and a number.';
+      return;
+    }
+
     const agreementCheckbox = document.getElementById('reg-agreement');
     if (!agreementCheckbox || !agreementCheckbox.checked) {
       document.getElementById('reg-error').textContent = 'You must agree to the terms and confirm you are 18+ to register.';
@@ -299,16 +386,17 @@ const App = {
       this._updateOddsToggleUI();
     }
     try {
-      const { token, user } = await this.api('/auth/register', {
+      const data = await this.api('/auth/register', {
         method: 'POST', body: JSON.stringify({ name, email, password, agreementTimestamp })
       });
-      this.token = token; this.user = user;
+      this.token = data.token; this.user = data.user;
       // Email verification placeholder (Feature #3)
       // In production: integrate SendGrid here to send verification email
       // e.g. await sendVerificationEmail(user.email, verificationToken);
-      user.emailVerified = false;
-      localStorage.setItem('ee_token', token);
-      localStorage.setItem('ee_user', JSON.stringify(user));
+      data.user.emailVerified = false;
+      localStorage.setItem('ee_token', data.token);
+      localStorage.setItem('ee_user', JSON.stringify(data.user));
+      if (data.tokenExpiry) localStorage.setItem('ee_token_expiry', data.tokenExpiry.toString());
       this.updateAuthUI();
       this.closeModal();
       // Show email verification message
@@ -324,6 +412,7 @@ const App = {
     this.token = null; this.user = null;
     localStorage.removeItem('ee_token');
     localStorage.removeItem('ee_user');
+    localStorage.removeItem('ee_token_expiry');
     this.updateAuthUI();
     window.location.hash = '#/';
   },
@@ -341,7 +430,7 @@ const App = {
       userEl.style.display = 'flex';
       badge.textContent = this.user.name;
       badge.style.cursor = 'pointer';
-      badge.onclick = () => this.showReferral();
+      badge.onclick = () => { window.location.hash = '#/account'; };
       adminLink.style.display = this.user.role === 'admin' ? 'inline-block' : 'none';
       if (myBetsLink) myBetsLink.style.display = 'inline-block';
       if (this.user.subscription === 'free') {
@@ -415,6 +504,7 @@ const App = {
       case 'analysts': this.renderAnalysts(); break;
       case 'support': this.renderSupport(); break;
       case 'admin': this.renderAdmin(); break;
+      case 'account': this.renderAccount(); break;
       case 'tip': this.renderTipDetail(hash.split('/')[1]); break;
       case 'terms': this.renderTerms(); break;
       case 'privacy': this.renderPrivacy(); break;
@@ -2138,17 +2228,54 @@ const App = {
           <h3 class="mb-16">Subscribers (${users.length})</h3>
           <div class="card" style="overflow-x:auto;">
             <table class="results-table">
-              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Subscription</th><th>Joined</th></tr></thead>
+              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Subscription</th><th>Status</th><th>Last Login</th><th>IP</th><th>Joined</th><th>Actions</th></tr></thead>
               <tbody>
-                ${users.map(u => `
+                ${users.map(u => {
+                  const isLocked = u.lockUntil && new Date(u.lockUntil) > new Date();
+                  const isFlagged = u.flagged;
+                  let statusBadge = '<span style="color:var(--green);">Active</span>';
+                  if (isLocked) statusBadge = '<span style="color:var(--red);">Locked</span>';
+                  else if (isFlagged) statusBadge = '<span style="color:#f59e0b;">Flagged</span>';
+                  const lastIP = u.lastLogin ? u.lastLogin.ip : '-';
+                  const lastTime = u.lastLogin ? new Date(u.lastLogin.timestamp).toLocaleString('en-GB') : '-';
+                  return `
                   <tr>
-                    <td>${u.name}</td>
-                    <td>${u.email}</td>
+                    <td>${u.name} ${isFlagged ? '<span title="Suspicious: 3+ IPs in 24h" style="color:#f59e0b;cursor:help;">&#9888;</span>' : ''}</td>
+                    <td class="text-xs">${u.email}</td>
                     <td>${u.role}</td>
                     <td>${u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : 'Free'}</td>
+                    <td>${statusBadge}</td>
+                    <td class="text-xs">${lastTime}</td>
+                    <td class="text-xs">${lastIP}</td>
                     <td>${formatDateUK(u.joined)}</td>
+                    <td style="white-space:nowrap;">
+                      <button class="btn btn-ghost btn-sm" onclick="App.adminForceLogout('${u.id}')" title="Force logout">Logout</button>
+                      ${isLocked
+                        ? `<button class="btn btn-ghost btn-sm" onclick="App.adminUnlockUser('${u.id}')">Unlock</button>`
+                        : `<button class="btn btn-ghost btn-sm" onclick="App.adminLockUser('${u.id}')">Lock</button>`}
+                      <button class="btn btn-ghost btn-sm" onclick="App.adminToggleLoginHistory('${u.id}')" title="Login history">History</button>
+                      <button class="btn btn-ghost btn-sm" onclick="App.adminChangeSubscription('${u.id}','${u.subscription}')" title="Change plan">Plan</button>
+                    </td>
                   </tr>
-                `).join('')}
+                  <tr id="admin-login-history-${u.id}" style="display:none;">
+                    <td colspan="9" style="background:var(--bg-elevated);padding:12px;">
+                      <strong>Login History (${u.loginHistory ? u.loginHistory.length : 0})</strong>
+                      ${(u.loginHistory || []).length === 0 ? '<p class="text-muted text-xs">No history</p>' : `
+                      <table class="results-table" style="margin-top:8px;font-size:11px;">
+                        <thead><tr><th>Time</th><th>IP</th><th>Device</th></tr></thead>
+                        <tbody>
+                          ${(u.loginHistory || []).map(l => {
+                            var dev = 'Desktop';
+                            if (/Mobile|Android|iPhone/i.test(l.userAgent || '')) dev = 'Mobile';
+                            else if (/Windows/i.test(l.userAgent || '')) dev = 'Windows';
+                            else if (/Mac/i.test(l.userAgent || '')) dev = 'Mac';
+                            return '<tr><td>'+new Date(l.timestamp).toLocaleString('en-GB')+'</td><td>'+l.ip+'</td><td>'+dev+'</td></tr>';
+                          }).join('')}
+                        </tbody>
+                      </table>`}
+                    </td>
+                  </tr>`;
+                }).join('')}
               </tbody>
             </table>
           </div>
@@ -2482,6 +2609,54 @@ const App = {
     var eventEl = document.getElementById('at-event');
     if (sportEl) sportEl.value = 'football';
     if (eventEl) eventEl.value = event + (league ? ' (' + league + ')' : '');
+  },
+
+  async adminForceLogout(userId) {
+    if (!confirm('Force logout this user?')) return;
+    try {
+      var result = await this.api('/admin/users/' + userId + '/force-logout', { method: 'POST' });
+      alert(result.message || 'User session invalidated.');
+      this.renderAdmin();
+    } catch (e) { alert('Error: ' + e.message); }
+  },
+
+  async adminLockUser(userId) {
+    if (!confirm('Lock this account?')) return;
+    try {
+      var result = await this.api('/admin/users/' + userId + '/lock', { method: 'POST' });
+      alert(result.message || 'Account locked.');
+      this.renderAdmin();
+    } catch (e) { alert('Error: ' + e.message); }
+  },
+
+  async adminUnlockUser(userId) {
+    try {
+      var result = await this.api('/admin/users/' + userId + '/unlock', { method: 'POST' });
+      alert(result.message || 'Account unlocked.');
+      this.renderAdmin();
+    } catch (e) { alert('Error: ' + e.message); }
+  },
+
+  adminToggleLoginHistory(userId) {
+    var row = document.getElementById('admin-login-history-' + userId);
+    if (row) row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+  },
+
+  async adminChangeSubscription(userId, currentSub) {
+    var newSub = currentSub === 'premium' ? 'free' : 'premium';
+    if (!confirm('Change subscription to ' + newSub + '?')) return;
+    var expiry = null;
+    if (newSub === 'premium') {
+      expiry = prompt('Subscription expiry date (YYYY-MM-DD):', new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+      if (!expiry) return;
+    }
+    try {
+      var result = await this.api('/admin/users/' + userId + '/subscription', {
+        method: 'PUT', body: JSON.stringify({ subscription: newSub, subscriptionExpiry: expiry })
+      });
+      alert(result.message || 'Subscription updated.');
+      this.renderAdmin();
+    } catch (e) { alert('Error: ' + e.message); }
   },
 
   async adminAutoSettle() {
@@ -3293,6 +3468,230 @@ const App = {
     const ref = params.get('ref');
     if (ref) {
       localStorage.setItem('ee_referred_by', ref);
+    }
+  },
+
+  // -----------------------------------------------------------------------
+  // ACCOUNT SETTINGS PAGE
+  // -----------------------------------------------------------------------
+  async renderAccount() {
+    if (!this.user) {
+      document.getElementById('app').innerHTML = `
+        <div class="container text-center" style="padding:80px;">
+          <h2>Account Settings</h2>
+          <p class="text-muted mt-8">Please log in to view your account.</p>
+          <button class="btn btn-gold mt-16" onclick="App.showModal('login')">Log In</button>
+        </div>`;
+      return;
+    }
+
+    const app = document.getElementById('app');
+    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading account...</div></div>';
+
+    let accountData = {};
+    try {
+      accountData = await this.api('/auth/me');
+    } catch (e) { return; }
+
+    const u = accountData.user || {};
+    const loginHistory = u.loginHistory || [];
+    const lastLogin = u.lastLogin || {};
+    const subLabel = u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : 'Free';
+    const expiryLabel = u.subscriptionExpiry ? formatDateUK(u.subscriptionExpiry) : 'N/A';
+
+    function parseUA(ua) {
+      if (!ua) return 'Unknown device';
+      if (/Mobile|Android|iPhone/i.test(ua)) return 'Mobile';
+      if (/Windows/i.test(ua)) return 'Windows PC';
+      if (/Mac/i.test(ua)) return 'Mac';
+      if (/Linux/i.test(ua)) return 'Linux PC';
+      return 'Desktop';
+    }
+
+    app.innerHTML = `
+      <div class="container" style="max-width:720px;">
+        <div class="page-header">
+          <h1><span class="accent">Account</span> Settings</h1>
+          <p>Manage your profile, security, and preferences.</p>
+        </div>
+
+        <!-- Profile Info -->
+        <div class="card mb-16">
+          <h3 class="mb-16">Profile</h3>
+          <div class="account-info-grid">
+            <div class="account-info-item"><span class="account-label">Name</span><span class="account-value">${u.name || '-'}</span></div>
+            <div class="account-info-item"><span class="account-label">Email</span><span class="account-value">${u.email || '-'}</span></div>
+            <div class="account-info-item"><span class="account-label">Subscription</span><span class="account-value">${subLabel}</span></div>
+            <div class="account-info-item"><span class="account-label">Expires</span><span class="account-value">${expiryLabel}</span></div>
+            <div class="account-info-item"><span class="account-label">Member since</span><span class="account-value">${formatDateUK(u.joined)}</span></div>
+          </div>
+        </div>
+
+        <!-- Current Session -->
+        <div class="card mb-16">
+          <h3 class="mb-16">Current Session</h3>
+          <p class="text-sm text-muted">Logged in from <strong>${parseUA(lastLogin.userAgent)}</strong> at <strong>${lastLogin.timestamp ? new Date(lastLogin.timestamp).toLocaleString('en-GB') : '-'}</strong></p>
+          <p class="text-sm text-muted">IP: ${lastLogin.ip || '-'}</p>
+        </div>
+
+        <!-- Change Password -->
+        <div class="card mb-16">
+          <h3 class="mb-16">Change Password</h3>
+          <form onsubmit="App.changePassword(event)">
+            <div class="form-group">
+              <label>Current Password</label>
+              <input type="password" id="acct-current-pw" required>
+            </div>
+            <div class="form-group">
+              <label>New Password</label>
+              <input type="password" id="acct-new-pw" required minlength="8" oninput="App.updateAcctPwStrength()">
+              <div id="acct-pw-strength" class="pw-strength-indicator"></div>
+            </div>
+            <div class="form-group">
+              <label>Confirm New Password</label>
+              <input type="password" id="acct-confirm-pw" required>
+            </div>
+            <div class="form-error" id="acct-pw-error"></div>
+            <div class="form-success" id="acct-pw-success" style="display:none;"></div>
+            <button type="submit" class="btn btn-gold">Update Password</button>
+          </form>
+        </div>
+
+        <!-- Odds Format Preference -->
+        <div class="card mb-16">
+          <h3 class="mb-16">Odds Format</h3>
+          <div style="display:flex;gap:12px;">
+            <label class="radio-label"><input type="radio" name="acct-odds" value="fractional" ${this.oddsFormat === 'fractional' ? 'checked' : ''} onchange="App.setOddsFormatPref(this.value)"> Fractional (e.g. 6/4)</label>
+            <label class="radio-label"><input type="radio" name="acct-odds" value="decimal" ${this.oddsFormat === 'decimal' ? 'checked' : ''} onchange="App.setOddsFormatPref(this.value)"> Decimal (e.g. 2.50)</label>
+          </div>
+        </div>
+
+        <!-- Login History -->
+        <div class="card mb-16">
+          <h3 class="mb-16">Login History (last 5)</h3>
+          ${loginHistory.length === 0 ? '<p class="text-muted text-sm">No login history available.</p>' : `
+          <div style="overflow-x:auto;">
+            <table class="results-table">
+              <thead><tr><th>Time</th><th>Device</th><th>IP</th></tr></thead>
+              <tbody>
+                ${loginHistory.map(l => `
+                  <tr>
+                    <td class="text-sm">${new Date(l.timestamp).toLocaleString('en-GB')}</td>
+                    <td class="text-sm">${parseUA(l.userAgent)}</td>
+                    <td class="text-sm">${l.ip || '-'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          `}
+        </div>
+
+        <!-- Referral -->
+        <div class="card mb-16">
+          <h3 class="mb-16">Refer a Friend</h3>
+          <p class="text-muted text-sm mb-8">Share your referral code and earn free Premium time.</p>
+          <button class="btn btn-outline btn-sm" onclick="App.showReferral()">View Referral Code</button>
+        </div>
+
+        <!-- Actions -->
+        <div class="card mb-16">
+          <h3 class="mb-16">Session & Account</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;">
+            <button class="btn btn-outline btn-sm" onclick="App.logoutAllDevices()">Log Out All Devices</button>
+            <button class="btn btn-sm" style="background:var(--red);color:#fff;" onclick="App.deleteAccount()">Delete Account</button>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  updateAcctPwStrength() {
+    const pw = document.getElementById('acct-new-pw').value;
+    const indicator = document.getElementById('acct-pw-strength');
+    if (!indicator) return;
+    const { checks, score } = this.validatePasswordClient(pw);
+    const labels = ['Too weak', 'Weak', 'Fair', 'Good', 'Strong'];
+    const colors = ['#ef4444', '#ef4444', '#f59e0b', '#22c55e', '#22c55e'];
+    const pct = (score / 4) * 100;
+    indicator.innerHTML = `
+      <div class="pw-strength-bar"><div class="pw-strength-fill" style="width:${pct}%;background:${colors[score]};"></div></div>
+      <div class="pw-strength-label" style="color:${colors[score]};">${pw.length > 0 ? labels[score] : ''}</div>
+      <div class="pw-strength-checks">
+        <span class="${checks.length ? 'pw-check-pass' : 'pw-check-fail'}">8+ chars</span>
+        <span class="${checks.upper ? 'pw-check-pass' : 'pw-check-fail'}">Uppercase</span>
+        <span class="${checks.lower ? 'pw-check-pass' : 'pw-check-fail'}">Lowercase</span>
+        <span class="${checks.number ? 'pw-check-pass' : 'pw-check-fail'}">Number</span>
+      </div>
+    `;
+  },
+
+  async changePassword(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('acct-pw-error');
+    const successEl = document.getElementById('acct-pw-success');
+    const currentPw = document.getElementById('acct-current-pw').value;
+    const newPw = document.getElementById('acct-new-pw').value;
+    const confirmPw = document.getElementById('acct-confirm-pw').value;
+
+    if (newPw !== confirmPw) {
+      errEl.textContent = 'New passwords do not match.';
+      successEl.style.display = 'none';
+      return;
+    }
+    const { score } = this.validatePasswordClient(newPw);
+    if (score < 4) {
+      errEl.textContent = 'Password must be at least 8 characters with uppercase, lowercase, and a number.';
+      successEl.style.display = 'none';
+      return;
+    }
+
+    try {
+      const result = await this.api('/auth/change-password', {
+        method: 'POST', body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw })
+      });
+      errEl.textContent = '';
+      successEl.style.display = 'block';
+      successEl.textContent = result.message || 'Password changed successfully.';
+      document.getElementById('acct-current-pw').value = '';
+      document.getElementById('acct-new-pw').value = '';
+      document.getElementById('acct-confirm-pw').value = '';
+      document.getElementById('acct-pw-strength').innerHTML = '';
+    } catch (err) {
+      errEl.textContent = err.message;
+      successEl.style.display = 'none';
+    }
+  },
+
+  setOddsFormatPref(val) {
+    this.oddsFormat = val;
+    localStorage.setItem('oddsFormat', val);
+    this._updateOddsToggleUI();
+    // Save to server
+    this.api('/auth/preferences', {
+      method: 'PUT', body: JSON.stringify({ oddsFormat: val })
+    }).catch(() => {});
+  },
+
+  async logoutAllDevices() {
+    if (!confirm('This will log you out of all devices, including this one. Continue?')) return;
+    try {
+      await this.api('/auth/logout-all', { method: 'POST' });
+      this.logout();
+    } catch (err) {
+      alert(err.message);
+    }
+  },
+
+  async deleteAccount() {
+    if (!confirm('Are you sure you want to delete your account? This action cannot be undone.')) return;
+    if (!confirm('This will permanently delete all your data. Type OK to confirm.')) return;
+    try {
+      await this.api('/auth/account', { method: 'DELETE' });
+      this.logout();
+      alert('Your account has been deleted.');
+    } catch (err) {
+      alert(err.message);
     }
   },
 

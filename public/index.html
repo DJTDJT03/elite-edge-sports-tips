@@ -218,7 +218,8 @@
       </div>
       <div class="form-group">
         <label>Password</label>
-        <input type="password" id="reg-password" required minlength="6" placeholder="Min 6 characters">
+        <input type="password" id="reg-password" required minlength="8" placeholder="Min 8 chars, upper + lower + number" oninput="App.updatePasswordStrength()">
+        <div id="pw-strength-indicator" class="pw-strength-indicator"></div>
       </div>
       <div style="margin-top:12px;max-height:120px;overflow-y:auto;border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:10px 12px;background:rgba(0,0,0,0.2);">
         <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:10px;color:var(--text-secondary);line-height:1.6;">

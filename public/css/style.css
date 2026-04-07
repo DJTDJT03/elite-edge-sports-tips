@@ -2283,3 +2283,46 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
 .admin-live-runner:last-child { border-bottom: none; }
 .admin-live-runner .runner-name { font-weight: 600; }
 .admin-live-runner .runner-detail { font-size: 11px; color: var(--text-muted); }
+
+/* =========================================================================
+   PASSWORD STRENGTH INDICATOR
+   ========================================================================= */
+.pw-strength-indicator { margin-top: 8px; }
+.pw-strength-bar {
+  width: 100%; height: 4px; background: var(--bg-elevated);
+  border-radius: 2px; overflow: hidden; margin-bottom: 4px;
+}
+.pw-strength-fill {
+  height: 100%; border-radius: 2px;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+.pw-strength-label { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+.pw-strength-checks { display: flex; gap: 8px; flex-wrap: wrap; }
+.pw-check-pass { font-size: 10px; color: var(--green); }
+.pw-check-pass::before { content: '\2713 '; }
+.pw-check-fail { font-size: 10px; color: var(--text-dim); }
+.pw-check-fail::before { content: '\2717 '; }
+
+/* =========================================================================
+   ACCOUNT SETTINGS PAGE
+   ========================================================================= */
+.account-info-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.account-info-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 14px; background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+}
+.account-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.account-value { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.form-success {
+  color: var(--green); font-size: 13px; margin-bottom: 12px;
+  padding: 8px 12px; background: rgba(34,197,94,0.1);
+  border-radius: var(--radius-sm); border: 1px solid rgba(34,197,94,0.2);
+}
+
+@media (max-width: 600px) {
+  .account-info-grid { grid-template-columns: 1fr; }
+}

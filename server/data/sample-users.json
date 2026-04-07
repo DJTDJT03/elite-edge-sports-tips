@@ -9,7 +9,27 @@
     "subscription": "premium",
     "subscriptionExpiry": "2027-12-31",
     "joined": "2024-01-15",
-    "bank": 1000
+    "bank": 1000,
+    "failedAttempts": 5,
+    "lockUntil": "2026-04-07T19:59:33.445Z",
+    "sessionId": "9359472d-7d01-4702-897d-03f79fa4dbf4",
+    "lastLogin": {
+      "ip": "127.0.0.1",
+      "userAgent": "curl/8.7.1",
+      "timestamp": "2026-04-07T19:29:32.946Z",
+      "sessionId": "9359472d-7d01-4702-897d-03f79fa4dbf4"
+    },
+    "loginHistory": [
+      {
+        "ip": "127.0.0.1",
+        "userAgent": "curl/8.7.1",
+        "timestamp": "2026-04-07T19:29:32.946Z",
+        "sessionId": "9359472d-7d01-4702-897d-03f79fa4dbf4"
+      }
+    ],
+    "trustedDevices": [
+      "8706ee88bbbdda48"
+    ]
   },
   {
     "id": "usr_002",

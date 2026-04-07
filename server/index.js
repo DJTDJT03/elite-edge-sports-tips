@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 
@@ -13,6 +14,80 @@ const dataIngestion = require('./services/dataIngestion');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'elite-edge-secret-key-change-in-production';
+
+// ---------------------------------------------------------------------------
+// UUID helper (no external dependency)
+// ---------------------------------------------------------------------------
+function generateSessionId() {
+  return crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
+}
+
+// ---------------------------------------------------------------------------
+// Auth Rate Limiting — 5 login attempts per IP per 15 minutes
+// ---------------------------------------------------------------------------
+const authRateLimitStore = {};
+const AUTH_RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
+const AUTH_RATE_LIMIT_MAX = 5;
+
+function checkAuthRateLimit(ip) {
+  const now = Date.now();
+  if (!authRateLimitStore[ip] || now - authRateLimitStore[ip].start > AUTH_RATE_LIMIT_WINDOW) {
+    authRateLimitStore[ip] = { start: now, count: 0 };
+  }
+  return authRateLimitStore[ip].count >= AUTH_RATE_LIMIT_MAX;
+}
+
+function recordAuthAttempt(ip) {
+  const now = Date.now();
+  if (!authRateLimitStore[ip] || now - authRateLimitStore[ip].start > AUTH_RATE_LIMIT_WINDOW) {
+    authRateLimitStore[ip] = { start: now, count: 1 };
+  } else {
+    authRateLimitStore[ip].count++;
+  }
+}
+
+function resetAuthRateLimit(ip) {
+  delete authRateLimitStore[ip];
+}
+
+// Clean up auth rate limit entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const ip in authRateLimitStore) {
+    if (now - authRateLimitStore[ip].start > AUTH_RATE_LIMIT_WINDOW) {
+      delete authRateLimitStore[ip];
+    }
+  }
+}, 5 * 60 * 1000);
+
+// ---------------------------------------------------------------------------
+// Password validation helper
+// ---------------------------------------------------------------------------
+function validatePassword(password) {
+  if (!password || password.length < 8) return 'Password must be at least 8 characters long';
+  if (!/[A-Z]/.test(password)) return 'Password must contain at least 1 uppercase letter';
+  if (!/[a-z]/.test(password)) return 'Password must contain at least 1 lowercase letter';
+  if (!/[0-9]/.test(password)) return 'Password must contain at least 1 number';
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Device fingerprint helper
+// ---------------------------------------------------------------------------
+function hashDeviceFingerprint(ip, userAgent) {
+  return crypto.createHash('sha256').update((ip || '') + '|' + (userAgent || '')).digest('hex').slice(0, 16);
+}
+
+// ---------------------------------------------------------------------------
+// Suspicious login detection — 3+ different IPs in 24 hours
+// ---------------------------------------------------------------------------
+function checkSuspiciousActivity(user) {
+  if (!user.loginHistory || user.loginHistory.length < 3) return false;
+  const now = Date.now();
+  const last24h = user.loginHistory.filter(l => now - new Date(l.timestamp).getTime() < 24 * 60 * 60 * 1000);
+  const uniqueIPs = new Set(last24h.map(l => l.ip));
+  return uniqueIPs.size >= 3;
+}
 
 // ---------------------------------------------------------------------------
 // Middleware
@@ -119,6 +194,22 @@ function authenticate(req, res, next) {
   }
   try {
     const decoded = jwt.verify(header.split(' ')[1], JWT_SECRET);
+    // Single session enforcement: verify sessionId matches current user record
+    if (decoded.sessionId) {
+      const users = readJSON('sample-users.json');
+      const user = users.find(u => u.id === decoded.id);
+      if (user && user.sessionId && user.sessionId !== decoded.sessionId) {
+        return res.status(401).json({
+          error: 'Session expired — your account was logged in elsewhere',
+          code: 'session_expired'
+        });
+      }
+      // Also check subscription status from DB (not just token) for premium enforcement
+      if (user) {
+        decoded.subscription = user.subscription;
+        decoded.subscriptionExpiry = user.subscriptionExpiry;
+      }
+    }
     req.user = decoded;
     next();
   } catch {
@@ -134,8 +225,17 @@ function requireAdmin(req, res, next) {
 }
 
 function requirePremium(req, res, next) {
-  if (req.user.role !== 'admin' && req.user.subscription !== 'premium') {
-    return res.status(403).json({ error: 'Premium subscription required' });
+  if (req.user.role === 'admin') return next();
+  // Check subscription status from DB (already refreshed in authenticate middleware)
+  if (req.user.subscription !== 'premium') {
+    return res.status(403).json({ error: 'Premium subscription required', code: 'upgrade_required' });
+  }
+  // Check subscription expiry
+  if (req.user.subscriptionExpiry) {
+    const expiry = new Date(req.user.subscriptionExpiry);
+    if (expiry < new Date()) {
+      return res.status(403).json({ error: 'Your premium subscription has expired. Please renew to continue accessing premium content.', code: 'subscription_expired' });
+    }
   }
   next();
 }
@@ -149,11 +249,21 @@ app.post('/api/auth/register', async (req, res) => {
     if (!email || !password || !name) {
       return res.status(400).json({ error: 'Name, email, and password are required' });
     }
+    // Password strength validation
+    const pwError = validatePassword(password);
+    if (pwError) return res.status(400).json({ error: pwError });
+
     const users = readJSON('sample-users.json');
     if (users.find(u => u.email === email)) {
       return res.status(400).json({ error: 'Email already registered' });
     }
     const hashed = await bcrypt.hash(password, 10);
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+    const userAgent = req.headers['user-agent'] || '';
+    const sessionId = generateSessionId();
+    const now = new Date().toISOString();
+    const deviceHash = hashDeviceFingerprint(ip, userAgent);
+
     const user = {
       id: `usr_${Date.now()}`,
       email,
@@ -164,17 +274,25 @@ app.post('/api/auth/register', async (req, res) => {
       subscriptionExpiry: null,
       joined: new Date().toISOString().split('T')[0],
       bank: 100,
-      agreementTimestamp: agreementTimestamp || new Date().toISOString(),
+      agreementTimestamp: agreementTimestamp || now,
       agreementText: 'I confirm I am 18+ and understand this service provides statistical analysis only, not betting advice. I accept full responsibility for any betting decisions I make.',
+      sessionId,
+      failedAttempts: 0,
+      lockUntil: null,
+      flagged: false,
+      lastLogin: { ip, userAgent, timestamp: now, sessionId },
+      loginHistory: [{ ip, userAgent, timestamp: now, sessionId }],
+      trustedDevices: [deviceHash],
     };
     users.push(user);
     writeJSON('sample-users.json', users);
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription },
-      JWT_SECRET, { expiresIn: '7d' }
+      { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, sessionId },
+      JWT_SECRET, { expiresIn: '24h' }
     );
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription } });
+    const tokenExpiry = Date.now() + 24 * 60 * 60 * 1000;
+    res.json({ token, tokenExpiry, user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, joined: user.joined } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -183,28 +301,183 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+    const userAgent = req.headers['user-agent'] || '';
+
+    // Rate limit check
+    if (checkAuthRateLimit(ip)) {
+      return res.status(429).json({ error: 'Too many login attempts. Please try again in 15 minutes.' });
+    }
+
     const users = readJSON('sample-users.json');
     const user = users.find(u => u.email === email);
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user) {
+      recordAuthAttempt(ip);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Account lockout check
+    if (user.lockUntil && new Date(user.lockUntil) > new Date()) {
+      const mins = Math.ceil((new Date(user.lockUntil) - new Date()) / 60000);
+      return res.status(423).json({ error: `Account temporarily locked. Please try again in ${mins} minute${mins !== 1 ? 's' : ''}.` });
+    }
 
     // Support both hashed and plain-text passwords for demo
     let valid = false;
     try { valid = await bcrypt.compare(password, user.password); } catch {}
     if (!valid && user.passwordPlain) { valid = password === user.passwordPlain; }
-    if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+
+    if (!valid) {
+      recordAuthAttempt(ip);
+      // Account lockout: increment failed attempts
+      user.failedAttempts = (user.failedAttempts || 0) + 1;
+      if (user.failedAttempts >= 5) {
+        user.lockUntil = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // Lock 30 mins
+        writeJSON('sample-users.json', users);
+        return res.status(423).json({ error: 'Account temporarily locked due to too many failed attempts. Please try again in 30 minutes.' });
+      }
+      writeJSON('sample-users.json', users);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Successful login — reset counters
+    resetAuthRateLimit(ip);
+    user.failedAttempts = 0;
+    user.lockUntil = null;
+
+    // Generate new session (invalidates any previous session)
+    const sessionId = generateSessionId();
+    user.sessionId = sessionId;
+    const now = new Date().toISOString();
+
+    // Device fingerprinting
+    const deviceHash = hashDeviceFingerprint(ip, userAgent);
+    const loginEntry = { ip, userAgent, timestamp: now, sessionId };
+    user.lastLogin = loginEntry;
+
+    // Maintain login history (last 10)
+    if (!user.loginHistory) user.loginHistory = [];
+    user.loginHistory.unshift(loginEntry);
+    if (user.loginHistory.length > 10) user.loginHistory = user.loginHistory.slice(0, 10);
+
+    // Trusted devices tracking
+    if (!user.trustedDevices) user.trustedDevices = [];
+    const isNewDevice = !user.trustedDevices.includes(deviceHash);
+    if (isNewDevice) {
+      user.trustedDevices.push(deviceHash);
+      // TODO: In production, send "New login detected" email via SendGrid
+      // e.g. const sgMail = require('@sendgrid/mail');
+      //      sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+      //      sgMail.send({ to: user.email, subject: 'New Login Detected', html: `A new login to your Elite Edge account was detected from IP ${ip}...` });
+      console.log(`[Auth] New device login for ${user.email} from IP: ${ip}`);
+    }
+
+    // Suspicious activity flag (3+ IPs in 24h)
+    if (checkSuspiciousActivity(user)) {
+      user.flagged = true;
+      console.log(`[Auth] FLAGGED: ${user.email} has 3+ different IPs in 24 hours`);
+    }
+
+    console.log(`[Auth] Login: ${user.email} | IP: ${ip} | Session: ${sessionId.slice(0, 8)}...`);
+
+    writeJSON('sample-users.json', users);
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription },
-      JWT_SECRET, { expiresIn: '7d' }
+      { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, sessionId },
+      JWT_SECRET, { expiresIn: '24h' }
     );
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription } });
+    const tokenExpiry = Date.now() + 24 * 60 * 60 * 1000;
+    res.json({
+      token,
+      tokenExpiry,
+      user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, joined: user.joined, subscriptionExpiry: user.subscriptionExpiry },
+      isNewDevice
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 app.get('/api/auth/me', authenticate, (req, res) => {
-  res.json({ user: req.user });
+  const users = readJSON('sample-users.json');
+  const user = users.find(u => u.id === req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json({
+    user: {
+      id: user.id, email: user.email, name: user.name, role: user.role,
+      subscription: user.subscription, subscriptionExpiry: user.subscriptionExpiry,
+      joined: user.joined,
+      lastLogin: user.lastLogin,
+      loginHistory: (user.loginHistory || []).slice(0, 5),
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CHANGE PASSWORD
+// ---------------------------------------------------------------------------
+app.post('/api/auth/change-password', authenticate, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new password are required' });
+    }
+    const pwError = validatePassword(newPassword);
+    if (pwError) return res.status(400).json({ error: pwError });
+
+    const users = readJSON('sample-users.json');
+    const user = users.find(u => u.id === req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    let valid = false;
+    try { valid = await bcrypt.compare(currentPassword, user.password); } catch {}
+    if (!valid && user.passwordPlain) { valid = currentPassword === user.passwordPlain; }
+    if (!valid) return res.status(401).json({ error: 'Current password is incorrect' });
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    if (user.passwordPlain) delete user.passwordPlain;
+    writeJSON('sample-users.json', users);
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// LOG OUT ALL DEVICES (invalidate session)
+// ---------------------------------------------------------------------------
+app.post('/api/auth/logout-all', authenticate, (req, res) => {
+  const users = readJSON('sample-users.json');
+  const user = users.find(u => u.id === req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  user.sessionId = generateSessionId(); // New sessionId invalidates all old tokens
+  writeJSON('sample-users.json', users);
+  res.json({ message: 'All sessions have been logged out. Please log in again.' });
+});
+
+// ---------------------------------------------------------------------------
+// DELETE ACCOUNT
+// ---------------------------------------------------------------------------
+app.delete('/api/auth/account', authenticate, (req, res) => {
+  let users = readJSON('sample-users.json');
+  const before = users.length;
+  users = users.filter(u => u.id !== req.user.id);
+  if (users.length === before) return res.status(404).json({ error: 'User not found' });
+  writeJSON('sample-users.json', users);
+  res.json({ message: 'Account deleted successfully' });
+});
+
+// ---------------------------------------------------------------------------
+// UPDATE PREFERENCES (odds format etc.)
+// ---------------------------------------------------------------------------
+app.put('/api/auth/preferences', authenticate, (req, res) => {
+  const users = readJSON('sample-users.json');
+  const user = users.find(u => u.id === req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (req.body.oddsFormat) user.oddsFormat = req.body.oddsFormat;
+  writeJSON('sample-users.json', users);
+  res.json({ message: 'Preferences updated' });
 });
 
 // ---------------------------------------------------------------------------
@@ -541,7 +814,68 @@ app.get('/api/results/performance', (req, res) => {
 // ---------------------------------------------------------------------------
 app.get('/api/admin/users', authenticate, requireAdmin, (req, res) => {
   const users = readJSON('sample-users.json');
-  res.json(users.map(u => ({ id: u.id, email: u.email, name: u.name, role: u.role, subscription: u.subscription, joined: u.joined })));
+  res.json(users.map(u => ({
+    id: u.id, email: u.email, name: u.name, role: u.role,
+    subscription: u.subscription, subscriptionExpiry: u.subscriptionExpiry, joined: u.joined,
+    lastLogin: u.lastLogin || null,
+    loginHistory: u.loginHistory || [],
+    flagged: u.flagged || false,
+    lockUntil: u.lockUntil || null,
+    failedAttempts: u.failedAttempts || 0,
+    sessionId: u.sessionId || null,
+  })));
+});
+
+// ---------------------------------------------------------------------------
+// ADMIN: Force logout a user
+// ---------------------------------------------------------------------------
+app.post('/api/admin/users/:id/force-logout', authenticate, requireAdmin, (req, res) => {
+  const users = readJSON('sample-users.json');
+  const user = users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  user.sessionId = generateSessionId();
+  writeJSON('sample-users.json', users);
+  res.json({ message: `Session invalidated for ${user.email}` });
+});
+
+// ---------------------------------------------------------------------------
+// ADMIN: Lock / Unlock account
+// ---------------------------------------------------------------------------
+app.post('/api/admin/users/:id/lock', authenticate, requireAdmin, (req, res) => {
+  const users = readJSON('sample-users.json');
+  const user = users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  user.lockUntil = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(); // Lock for 1 year (effectively permanent until unlocked)
+  writeJSON('sample-users.json', users);
+  res.json({ message: `Account locked for ${user.email}` });
+});
+
+app.post('/api/admin/users/:id/unlock', authenticate, requireAdmin, (req, res) => {
+  const users = readJSON('sample-users.json');
+  const user = users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  user.lockUntil = null;
+  user.failedAttempts = 0;
+  user.flagged = false;
+  writeJSON('sample-users.json', users);
+  res.json({ message: `Account unlocked for ${user.email}` });
+});
+
+// ---------------------------------------------------------------------------
+// ADMIN: Change user subscription
+// ---------------------------------------------------------------------------
+app.put('/api/admin/users/:id/subscription', authenticate, requireAdmin, (req, res) => {
+  const users = readJSON('sample-users.json');
+  const user = users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const { subscription, subscriptionExpiry } = req.body;
+  if (subscription) {
+    user.subscription = subscription;
+    user.role = subscription === 'premium' ? 'premium' : (user.role === 'admin' ? 'admin' : 'free');
+  }
+  if (subscriptionExpiry !== undefined) user.subscriptionExpiry = subscriptionExpiry;
+  writeJSON('sample-users.json', users);
+  res.json({ message: `Subscription updated for ${user.email}: ${user.subscription}` });
 });
 
 app.post('/api/admin/tips', authenticate, requireAdmin, (req, res) => {
