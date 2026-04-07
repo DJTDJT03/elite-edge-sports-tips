@@ -812,6 +812,154 @@ app.get('*', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// AUTOMATIC RESULT SETTLING (runs every 5 minutes)
+// Checks live APIs for finished events and auto-marks tips as won/lost
+// ---------------------------------------------------------------------------
+async function autoSettleResults() {
+  try {
+    var tips = readJSON('sample-tips.json');
+    var results = readJSON('sample-results.json');
+    var updated = 0;
+    var today = new Date().toISOString().split('T')[0];
+
+    // Only process today's active tips
+    var activeTips = tips.filter(function(t) { return t.status === 'active' && !t.result && t.date === today && !t.isWeeklyAcca; });
+    if (activeTips.length === 0) return;
+
+    // Auto-mark racing results
+    if (racingSource && process.env.RACING_API_KEY) {
+      try {
+        var raceResults = await racingSource.fetchResults(today);
+        if (raceResults && raceResults.results) {
+          activeTips.forEach(function(tip) {
+            if (tip.sport !== 'racing') return;
+            var match = (raceResults.results || []).find(function(r) {
+              return r.runners && r.runners.some(function(runner) {
+                return runner.horse && runner.horse.toLowerCase().indexOf(tip.selection.toLowerCase()) !== -1;
+              });
+            });
+            if (match) {
+              var winner = match.runners.find(function(r) { return r.position === 1; });
+              var tipWon = winner && winner.horse && winner.horse.toLowerCase().indexOf(tip.selection.toLowerCase()) !== -1;
+              var placed = !tipWon && match.runners.some(function(r) { return r.position <= 3 && r.horse && r.horse.toLowerCase().indexOf(tip.selection.toLowerCase()) !== -1; });
+
+              if (tip.market && tip.market.toLowerCase().indexOf('each-way') !== -1 && placed) {
+                tipWon = true; // EW counts as win if placed
+              }
+
+              tip.status = 'settled';
+              tip.result = tipWon ? 'won' : (placed ? 'placed' : 'lost');
+              var stake = parseFloat(tip.staking) || 2;
+              var pnl = tipWon ? ((tip.odds - 1) * stake) : (placed ? ((tip.odds / 4) * stake) : -stake);
+
+              results.push({
+                id: 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                tipId: tip.id, sport: 'racing', event: tip.event, selection: tip.selection,
+                market: tip.market, odds: tip.odds, stake: stake,
+                result: tip.result, pnl: Math.round(pnl * 100) / 100,
+                date: today, isPremium: tip.isPremium, tipsterProfile: tip.tipsterProfile || 'The Edge'
+              });
+              updated++;
+              console.log('[Auto-Settle] Racing: ' + tip.selection + ' = ' + tip.result + ' (' + pnl.toFixed(2) + 'u)');
+            }
+          });
+        }
+      } catch (err) { console.error('[Auto-Settle] Racing error:', err.message); }
+    }
+
+    // Auto-mark football results
+    if (footballSource && process.env.API_FOOTBALL_KEY) {
+      try {
+        var fbRaw = await footballSource.fetchFixturesByDate(today);
+        var fbResults = footballSource.normalise(fbRaw).filter(function(f) { return f.status === 'FT'; });
+
+        activeTips.forEach(function(tip) {
+          if (tip.sport !== 'football') return;
+          var match = fbResults.find(function(f) {
+            var eventLower = (tip.event || '').toLowerCase();
+            return eventLower.indexOf(f.homeTeam.toLowerCase()) !== -1 || eventLower.indexOf(f.awayTeam.toLowerCase()) !== -1;
+          });
+          if (match) {
+            var homeGoals = match.homeGoals || 0;
+            var awayGoals = match.awayGoals || 0;
+            var totalGoals = homeGoals + awayGoals;
+            var won = false;
+
+            var market = (tip.market || '').toLowerCase();
+            var selection = (tip.selection || '').toLowerCase();
+
+            // Match Result
+            if (market.indexOf('result') !== -1 || market.indexOf('match') !== -1) {
+              if (selection.indexOf(match.homeTeam.toLowerCase()) !== -1) won = homeGoals > awayGoals;
+              else if (selection.indexOf(match.awayTeam.toLowerCase()) !== -1) won = awayGoals > homeGoals;
+              else if (selection.indexOf('draw') !== -1) won = homeGoals === awayGoals;
+            }
+            // BTTS
+            else if (market.indexOf('btts') !== -1 || market.indexOf('both teams') !== -1) {
+              won = selection.indexOf('yes') !== -1 ? (homeGoals > 0 && awayGoals > 0) : !(homeGoals > 0 && awayGoals > 0);
+            }
+            // Over/Under
+            else if (market.indexOf('over') !== -1) {
+              if (selection.indexOf('3.5') !== -1) won = totalGoals > 3;
+              else if (selection.indexOf('2.5') !== -1) won = totalGoals > 2;
+              else if (selection.indexOf('1.5') !== -1) won = totalGoals > 1;
+            }
+            else if (market.indexOf('under') !== -1) {
+              if (selection.indexOf('2.5') !== -1) won = totalGoals < 3;
+              else if (selection.indexOf('1.5') !== -1) won = totalGoals < 2;
+            }
+            // Asian Handicap
+            else if (market.indexOf('asian') !== -1 || market.indexOf('handicap') !== -1) {
+              var ahMatch = selection.match(/([\-\+]?\d+\.?\d*)/);
+              if (ahMatch) {
+                var line = parseFloat(ahMatch[1]);
+                if (selection.indexOf(match.homeTeam.toLowerCase()) !== -1) won = (homeGoals - awayGoals) > Math.abs(line);
+                else if (selection.indexOf(match.awayTeam.toLowerCase()) !== -1) won = (awayGoals - homeGoals) > Math.abs(line);
+              }
+            }
+            // Double Chance
+            else if (market.indexOf('double chance') !== -1) {
+              if (selection.indexOf('1x') !== -1 || (selection.indexOf(match.homeTeam.toLowerCase()) !== -1 && selection.indexOf('draw') !== -1)) won = homeGoals >= awayGoals;
+              else if (selection.indexOf('x2') !== -1 || (selection.indexOf(match.awayTeam.toLowerCase()) !== -1 && selection.indexOf('draw') !== -1)) won = awayGoals >= homeGoals;
+              else if (selection.indexOf('12') !== -1) won = homeGoals !== awayGoals;
+            }
+
+            tip.status = 'settled';
+            tip.result = won ? 'won' : 'lost';
+            var stake = parseFloat(tip.staking) || 2;
+            var pnl = won ? ((tip.odds - 1) * stake) : -stake;
+
+            results.push({
+              id: 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+              tipId: tip.id, sport: 'football', event: tip.event, selection: tip.selection,
+              market: tip.market, odds: tip.odds, stake: stake,
+              result: tip.result, pnl: Math.round(pnl * 100) / 100,
+              date: today, isPremium: tip.isPremium, tipsterProfile: tip.tipsterProfile || 'The Edge'
+            });
+            updated++;
+            console.log('[Auto-Settle] Football: ' + tip.selection + ' (' + match.homeTeam + ' ' + homeGoals + '-' + awayGoals + ' ' + match.awayTeam + ') = ' + tip.result + ' (' + pnl.toFixed(2) + 'u)');
+          }
+        });
+      } catch (err) { console.error('[Auto-Settle] Football error:', err.message); }
+    }
+
+    if (updated > 0) {
+      writeJSON('sample-tips.json', tips);
+      writeJSON('sample-results.json', results);
+      console.log('[Auto-Settle] Settled ' + updated + ' tip(s)');
+    }
+  } catch (err) {
+    console.error('[Auto-Settle] Error:', err.message);
+  }
+}
+
+// Run auto-settle every 5 minutes
+setInterval(autoSettleResults, 5 * 60 * 1000);
+
+// Also run once 30 seconds after server starts
+setTimeout(autoSettleResults, 30000);
+
+// ---------------------------------------------------------------------------
 // Start server
 // ---------------------------------------------------------------------------
 app.listen(PORT, '0.0.0.0', () => {
@@ -822,6 +970,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`    Admin:   admin@elite.com / admin123`);
   console.log(`    Free:    free@test.com / test123`);
   console.log(`    Premium: premium@test.com / test123`);
+  console.log(`  ------------------------------------------`);
+  console.log(`  Auto-settle: Running every 5 minutes`);
   console.log(`  ------------------------------------------\n`);
 });
 
