@@ -440,7 +440,7 @@ const App = {
         this.api('/results'),
       ]);
       const today = new Date().toISOString().split('T')[0];
-      const todayTips = tips.length;
+      const todayTips = tips.filter(t => t.date === today && !t.isWeeklyAcca).length;
       const todayResults = results.filter(r => r.date === today);
       const won = todayResults.filter(r => r.result === 'won').length;
       const pnl = todayResults.reduce((s, r) => s + (r.pnl || 0), 0);
