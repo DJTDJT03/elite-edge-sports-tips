@@ -793,5 +793,17 @@
     "date": "2026-03-11",
     "isPremium": false,
     "tipsterProfile": "The Edge"
-  }
+  },
+  {"id":"res_054","tipId":"tip_001","sport":"racing","event":"Wolverhampton 17:15 - GRP Solutions Maiden Stakes","selection":"Chasing Time","market":"Win","odds":1.80,"stake":3,"result":"won","pnl":2.40,"date":"2026-04-04","isPremium":false,"tipsterProfile":"The Professor"},
+  {"id":"res_055","tipId":"tip_006","sport":"football","event":"Southampton vs Arsenal - FA Cup QF","selection":"Arsenal Win","market":"Match Result","odds":1.19,"stake":2,"result":"lost","pnl":-2.00,"date":"2026-04-04","isPremium":false,"tipsterProfile":"The Edge"},
+  {"id":"res_056","tipId":"tip_007","sport":"football","event":"Man City vs Liverpool - FA Cup QF","selection":"Man City Win","market":"Match Result","odds":1.76,"stake":1.5,"result":"won","pnl":1.14,"date":"2026-04-04","isPremium":true,"tipsterProfile":"The Edge"},
+  {"id":"res_057","tipId":"tip_008","sport":"football","event":"Chelsea vs Port Vale - FA Cup QF","selection":"Chelsea -3.5 AH","market":"Asian Handicap","odds":2.10,"stake":1.5,"result":"won","pnl":1.65,"date":"2026-04-04","isPremium":true,"tipsterProfile":"The Scout"},
+  {"id":"res_058","tipId":"tip_009","sport":"football","event":"Atletico Madrid vs Barcelona - La Liga","selection":"Over 2.5 Goals","market":"Over/Under","odds":1.85,"stake":2,"result":"won","pnl":1.70,"date":"2026-04-04","isPremium":false,"tipsterProfile":"The Professor"},
+  {"id":"res_059","tipId":"tip_011","sport":"football","event":"Atletico Madrid vs Barcelona - La Liga","selection":"Atletico or Draw (1X)","market":"Double Chance","odds":1.74,"stake":2,"result":"lost","pnl":-2.00,"date":"2026-04-04","isPremium":true,"tipsterProfile":"The Professor"},
+  {"id":"res_060","tipId":"tip_003","sport":"racing","event":"Wolverhampton 20:00 - Sprint Handicap","selection":"Toomuchforme","market":"Each-Way","odds":3.75,"stake":1.5,"result":"lost","pnl":-1.50,"date":"2026-04-04","isPremium":true,"tipsterProfile":"The Scout"},
+  {"id":"res_061","tipId":"tip_010","sport":"football","event":"West Ham vs Leeds - FA Cup QF","selection":"BTTS Yes","market":"BTTS","odds":1.75,"stake":2,"result":"won","pnl":1.50,"date":"2026-04-05","isPremium":true,"tipsterProfile":"The Edge"},
+  {"id":"res_062","tipId":"tip_004","sport":"racing","event":"Wolverhampton 20:30 - Ina Deans Handicap","selection":"Karakula Dancer","market":"Win","odds":4.00,"stake":1,"result":"lost","pnl":-1.00,"date":"2026-04-04","isPremium":true,"tipsterProfile":"The Scout"},
+  {"id":"res_063","tipId":"tip_002","sport":"racing","event":"Wolverhampton 18:20 - Maiden Fillies","selection":"Lexington Express","market":"Win","odds":3.00,"stake":2,"result":"lost","pnl":-2.00,"date":"2026-04-04","isPremium":true,"tipsterProfile":"The Scout"},
+  {"id":"res_064","tipId":"res_064","sport":"racing","event":"Wolverhampton 17:50 - Aggrey Burke Handicap","selection":"Coloane","market":"Value Outsider","odds":6.00,"stake":0.5,"result":"won","pnl":2.50,"date":"2026-04-04","isPremium":true,"tipsterProfile":"The Scout"},
+  {"id":"res_065","tipId":"tip_015","sport":"football","event":"Inter Milan vs AS Roma - Serie A","selection":"Inter Milan Win","market":"Match Result","odds":1.45,"stake":2,"result":"won","pnl":0.90,"date":"2026-04-05","isPremium":true,"tipsterProfile":"The Professor"}
 ]
