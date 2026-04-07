@@ -399,8 +399,9 @@ const App = {
       if (data.tokenExpiry) localStorage.setItem('ee_token_expiry', data.tokenExpiry.toString());
       this.updateAuthUI();
       this.closeModal();
-      // Show email verification message
+      // Show email verification message + welcome email notice
       this.showEmailVerificationMessage();
+      this.showWelcomeEmailNotice();
       trackEvent('auth', 'register', email);
       this.route();
     } catch (err) {
@@ -3566,6 +3567,33 @@ const App = {
           </div>
         </div>
 
+        <!-- Email Preferences -->
+        <div class="card mb-16">
+          <h3 class="mb-16">Email Preferences</h3>
+          <p class="text-muted text-sm mb-8">Choose which emails you'd like to receive.</p>
+          <div id="email-prefs-loading" class="text-muted text-sm">Loading preferences...</div>
+          <div id="email-prefs-container" style="display:none;">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                <input type="checkbox" id="epref-dailyBulletin" onchange="App.saveEmailPref('dailyBulletin',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <span style="color:#cbd5e1;font-size:14px;"><strong>Daily Tip Bulletin</strong> <span class="text-muted text-sm">(Premium only - morning selections before 9am)</span></span>
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                <input type="checkbox" id="epref-weeklySummary" onchange="App.saveEmailPref('weeklySummary',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <span style="color:#cbd5e1;font-size:14px;"><strong>Weekly Results Summary</strong> <span class="text-muted text-sm">(Sunday evening performance report)</span></span>
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                <input type="checkbox" id="epref-bigWins" onchange="App.saveEmailPref('bigWins',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <span style="color:#cbd5e1;font-size:14px;"><strong>Big Win Alerts</strong> <span class="text-muted text-sm">(Celebration emails when tips win at 5/1+)</span></span>
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                <input type="checkbox" id="epref-marketing" onchange="App.saveEmailPref('marketing',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <span style="color:#cbd5e1;font-size:14px;"><strong>Re-engagement &amp; Marketing</strong> <span class="text-muted text-sm">(Periodic updates if you haven't visited)</span></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
         <!-- Login History -->
         <div class="card mb-16">
           <h3 class="mb-16">Login History (last 5)</h3>
@@ -3604,6 +3632,19 @@ const App = {
         </div>
       </div>
     `;
+
+    // Load email preferences asynchronously
+    this.loadEmailPrefs().then(function(prefs) {
+      var container = document.getElementById('email-prefs-container');
+      var loading = document.getElementById('email-prefs-loading');
+      if (container) container.style.display = 'block';
+      if (loading) loading.style.display = 'none';
+      var fields = ['dailyBulletin', 'weeklySummary', 'bigWins', 'marketing'];
+      fields.forEach(function(f) {
+        var el = document.getElementById('epref-' + f);
+        if (el) el.checked = prefs[f] !== false;
+      });
+    });
   },
 
   updateAcctPwStrength() {
@@ -3847,6 +3888,37 @@ const App = {
         setTimeout(() => { if (b) b.remove(); }, 3000);
       }
     }, 2000);
+  },
+
+  showWelcomeEmailNotice() {
+    const existing = document.getElementById('welcome-email-notice');
+    if (existing) existing.remove();
+    const app = document.getElementById('app');
+    const notice = document.createElement('div');
+    notice.id = 'welcome-email-notice';
+    notice.style.cssText = 'background:rgba(212,168,67,.12);border:1px solid rgba(212,168,67,.3);color:#d4a843;padding:12px 20px;text-align:center;font-size:14px;border-radius:8px;margin:12px auto;max-width:600px;';
+    notice.innerHTML = '&#9993; Check your email for a welcome message! We\'ve sent you everything you need to get started.';
+    app.parentNode.insertBefore(notice, app);
+    setTimeout(function() { var n = document.getElementById('welcome-email-notice'); if (n) n.remove(); }, 8000);
+  },
+
+  async loadEmailPrefs() {
+    try {
+      var data = await this.api('/auth/email-prefs');
+      return data.emailPrefs || { dailyBulletin: true, weeklySummary: true, marketing: true, bigWins: true };
+    } catch (e) {
+      return { dailyBulletin: true, weeklySummary: true, marketing: true, bigWins: true };
+    }
+  },
+
+  async saveEmailPref(key, value) {
+    try {
+      var body = {};
+      body[key] = value;
+      await this.api('/auth/email-prefs', { method: 'PUT', body: JSON.stringify(body) });
+    } catch (e) {
+      console.error('Failed to save email pref:', e.message);
+    }
   },
 
   // -----------------------------------------------------------------------

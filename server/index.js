@@ -283,6 +283,7 @@ app.post('/api/auth/register', async (req, res) => {
       lastLogin: { ip, userAgent, timestamp: now, sessionId },
       loginHistory: [{ ip, userAgent, timestamp: now, sessionId }],
       trustedDevices: [deviceHash],
+      emailPrefs: { dailyBulletin: true, weeklySummary: true, marketing: true, bigWins: true },
     };
     users.push(user);
     writeJSON('sample-users.json', users);
@@ -292,6 +293,12 @@ app.post('/api/auth/register', async (req, res) => {
       JWT_SECRET, { expiresIn: '24h' }
     );
     const tokenExpiry = Date.now() + 24 * 60 * 60 * 1000;
+
+    // Send welcome email (async, non-blocking)
+    emailService.sendWelcome({ name: user.name, email: user.email }).catch(function(err) {
+      console.error('[Email] Welcome email failed:', err.message);
+    });
+
     res.json({ token, tokenExpiry, user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, joined: user.joined } });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -478,6 +485,30 @@ app.put('/api/auth/preferences', authenticate, (req, res) => {
   if (req.body.oddsFormat) user.oddsFormat = req.body.oddsFormat;
   writeJSON('sample-users.json', users);
   res.json({ message: 'Preferences updated' });
+});
+
+// ---------------------------------------------------------------------------
+// EMAIL PREFERENCES
+// ---------------------------------------------------------------------------
+app.get('/api/auth/email-prefs', authenticate, (req, res) => {
+  const users = readJSON('sample-users.json');
+  const user = users.find(u => u.id === req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const prefs = user.emailPrefs || { dailyBulletin: true, weeklySummary: true, marketing: true, bigWins: true };
+  res.json({ emailPrefs: prefs });
+});
+
+app.put('/api/auth/email-prefs', authenticate, (req, res) => {
+  const users = readJSON('sample-users.json');
+  const user = users.find(u => u.id === req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const allowed = ['dailyBulletin', 'weeklySummary', 'marketing', 'bigWins'];
+  if (!user.emailPrefs) user.emailPrefs = { dailyBulletin: true, weeklySummary: true, marketing: true, bigWins: true };
+  for (var key of allowed) {
+    if (req.body[key] !== undefined) user.emailPrefs[key] = !!req.body[key];
+  }
+  writeJSON('sample-users.json', users);
+  res.json({ message: 'Email preferences updated', emailPrefs: user.emailPrefs });
 });
 
 // ---------------------------------------------------------------------------
@@ -869,12 +900,28 @@ app.put('/api/admin/users/:id/subscription', authenticate, requireAdmin, (req, r
   const user = users.find(u => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const { subscription, subscriptionExpiry } = req.body;
+  var wasFree = user.subscription !== 'premium';
   if (subscription) {
     user.subscription = subscription;
     user.role = subscription === 'premium' ? 'premium' : (user.role === 'admin' ? 'admin' : 'free');
   }
   if (subscriptionExpiry !== undefined) user.subscriptionExpiry = subscriptionExpiry;
+
+  // Initialise default email preferences if missing
+  if (!user.emailPrefs) {
+    user.emailPrefs = { dailyBulletin: true, weeklySummary: true, marketing: true, bigWins: true };
+  }
+
   writeJSON('sample-users.json', users);
+
+  // Send premium welcome email if upgrading from free to premium
+  if (wasFree && subscription === 'premium') {
+    var chargeDate = subscriptionExpiry || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    emailService.sendPremiumWelcome({ name: user.name, email: user.email, chargeDate: chargeDate }).catch(function(err) {
+      console.error('[Email] Premium welcome email failed:', err.message);
+    });
+  }
+
   res.json({ message: `Subscription updated for ${user.email}: ${user.subscription}` });
 });
 
@@ -1439,6 +1486,27 @@ async function autoSettleResults() {
       writeJSON('sample-tips.json', tips);
       writeJSON('sample-results.json', results);
       console.log('[Auto-Settle] Settled ' + updated + ' tip(s)');
+
+      // Send big win emails for tips that just won at odds >= 6.0 (only newly settled ones)
+      var newlySettledIds = results.slice(-updated).map(function(r) { return r.tipId; });
+      var bigWins = tips.filter(function(t) { return t.result === 'won' && t.odds >= 6.0 && newlySettledIds.indexOf(t.id) !== -1; });
+      if (bigWins.length > 0) {
+        var allUsers = readJSON('sample-users.json');
+        bigWins.forEach(function(bw) {
+          var recipients = bw.isPremium
+            ? allUsers.filter(function(u) { return u.subscription === 'premium' && (!u.emailPrefs || u.emailPrefs.bigWins !== false); })
+            : allUsers.filter(function(u) { return !u.emailPrefs || u.emailPrefs.bigWins !== false; });
+
+          recipients.forEach(function(u) {
+            emailService.sendBigWin({
+              name: u.name, email: u.email,
+              selection: bw.selection, event: bw.event, odds: bw.odds,
+              summary: bw.analysis ? bw.analysis.summary : ''
+            }).catch(function(err) { console.error('[Email] Big win email failed for ' + u.email + ':', err.message); });
+          });
+          console.log('[Auto-Settle] Big win email triggered: ' + bw.selection + ' @ ' + bw.odds + ' to ' + recipients.length + ' users');
+        });
+      }
     }
   } catch (err) {
     console.error('[Auto-Settle] Error:', err.message);
@@ -1450,6 +1518,268 @@ setInterval(autoSettleResults, 5 * 60 * 1000);
 
 // Also run once 30 seconds after server starts
 setTimeout(autoSettleResults, 30000);
+
+// ---------------------------------------------------------------------------
+// SCHEDULED EMAIL WORKFLOWS
+// ---------------------------------------------------------------------------
+
+// Helper: get current UK time
+function getUKTime() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+}
+
+// Track last-run dates to prevent duplicate sends
+var lastDailyBulletinDate = '';
+var lastWeeklySummaryDate = '';
+var lastReengagementDate = '';
+var lastExpiryWarningDate = '';
+
+// --- 3. DAILY TIP BULLETIN (8:45am UK time, premium subscribers) ---
+async function scheduleDailyBulletin() {
+  try {
+    var uk = getUKTime();
+    var hour = uk.getHours();
+    var minute = uk.getMinutes();
+    var dateStr = uk.toISOString().split('T')[0];
+
+    // Run between 8:45-8:59 UK time, once per day
+    if (hour !== 8 || minute < 45 || lastDailyBulletinDate === dateStr) return;
+
+    var tips = readJSON('sample-tips.json');
+    var todayTips = tips.filter(function(t) { return t.date === dateStr && t.status === 'active' && !t.isWeeklyAcca; });
+    if (todayTips.length === 0) return;
+
+    var nap = todayTips.filter(function(t) { return !t.isPremium; }).sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); })[0] || null;
+    var premiumTips = todayTips.filter(function(t) { return t.isPremium; });
+
+    // Get yesterday's results
+    var yesterday = new Date(uk);
+    yesterday.setDate(yesterday.getDate() - 1);
+    var yesterdayStr = yesterday.toISOString().split('T')[0];
+    var allResults = readJSON('sample-results.json');
+    var yesterdayResults = allResults.filter(function(r) { return r.date === yesterdayStr; });
+
+    var users = readJSON('sample-users.json');
+    var premiumUsers = users.filter(function(u) {
+      return u.subscription === 'premium' && (!u.emailPrefs || u.emailPrefs.dailyBulletin !== false);
+    });
+
+    var sentCount = 0;
+    for (var i = 0; i < premiumUsers.length; i++) {
+      var u = premiumUsers[i];
+      emailService.sendDailyBulletin({
+        name: u.name, email: u.email,
+        nap: nap, premiumTips: premiumTips,
+        yesterdayResults: yesterdayResults.length > 0 ? yesterdayResults : null
+      }).catch(function(err) { console.error('[Email] Daily bulletin failed:', err.message); });
+      sentCount++;
+    }
+
+    lastDailyBulletinDate = dateStr;
+    console.log('[Email] Daily bulletin sent to ' + sentCount + ' premium user(s) with ' + todayTips.length + ' tip(s)');
+  } catch (err) {
+    console.error('[Email] Daily bulletin error:', err.message);
+  }
+}
+
+// --- 4. WEEKLY RESULTS SUMMARY (Sunday 8pm UK time, all subscribers) ---
+async function scheduleWeeklySummary() {
+  try {
+    var uk = getUKTime();
+    var day = uk.getDay(); // 0 = Sunday
+    var hour = uk.getHours();
+    var dateStr = uk.toISOString().split('T')[0];
+
+    // Run on Sunday between 20:00-20:29, once per week
+    if (day !== 0 || hour !== 20 || lastWeeklySummaryDate === dateStr) return;
+
+    var allResults = readJSON('sample-results.json');
+
+    // This week's results (last 7 days)
+    var weekAgo = new Date(uk);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    var weekAgoStr = weekAgo.toISOString().split('T')[0];
+    var weekResults = allResults.filter(function(r) { return r.date >= weekAgoStr; });
+    var weekWon = weekResults.filter(function(r) { return r.result === 'won'; });
+    var weekPnl = weekResults.reduce(function(sum, r) { return sum + (r.pnl || 0); }, 0);
+
+    var weekStats = {
+      total: weekResults.length,
+      won: weekWon.length,
+      pnl: Math.round(weekPnl * 100) / 100
+    };
+
+    // Overall stats
+    var overallWon = allResults.filter(function(r) { return r.result === 'won'; });
+    var overallPnl = allResults.reduce(function(sum, r) { return sum + (r.pnl || 0); }, 0);
+    var overallStake = allResults.reduce(function(sum, r) { return sum + (r.stake || 1); }, 0);
+    var overallStats = {
+      total: allResults.length,
+      won: overallWon.length,
+      pnl: Math.round(overallPnl * 100) / 100,
+      bank: Math.round((100 + overallPnl) * 100) / 100,
+      roi: overallStake > 0 ? Math.round((overallPnl / overallStake) * 10000) / 100 : 0
+    };
+
+    // Best winner this week
+    var bestWinner = weekWon.sort(function(a, b) { return (b.odds || 0) - (a.odds || 0); })[0] || null;
+
+    // Weekly acca
+    var tips = readJSON('sample-tips.json');
+    var weeklyAcca = tips.find(function(t) { return t.isWeeklyAcca; }) || null;
+
+    var users = readJSON('sample-users.json');
+    var recipients = users.filter(function(u) {
+      return u.role !== 'admin' && (!u.emailPrefs || u.emailPrefs.weeklySummary !== false);
+    });
+
+    var sentCount = 0;
+    for (var i = 0; i < recipients.length; i++) {
+      var u = recipients[i];
+      emailService.sendWeeklySummary({
+        name: u.name, email: u.email,
+        weekStats: weekStats, overallStats: overallStats,
+        bestWinner: bestWinner, weeklyAcca: weeklyAcca
+      }).catch(function(err) { console.error('[Email] Weekly summary failed:', err.message); });
+      sentCount++;
+    }
+
+    lastWeeklySummaryDate = dateStr;
+    console.log('[Email] Weekly summary sent to ' + sentCount + ' user(s)');
+  } catch (err) {
+    console.error('[Email] Weekly summary error:', err.message);
+  }
+}
+
+// --- 5. INACTIVITY RE-ENGAGEMENT (daily check, 7 days no login) ---
+async function scheduleReengagement() {
+  try {
+    var uk = getUKTime();
+    var hour = uk.getHours();
+    var dateStr = uk.toISOString().split('T')[0];
+
+    // Run once per day at 10am UK time
+    if (hour !== 10 || lastReengagementDate === dateStr) return;
+
+    var users = readJSON('sample-users.json');
+    var now = Date.now();
+    var sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+    // Recent results for the re-engagement content
+    var allResults = readJSON('sample-results.json');
+    var recentResults = allResults.filter(function(r) {
+      var rDate = new Date(r.date);
+      return (now - rDate.getTime()) < sevenDaysMs;
+    });
+    var recentWon = recentResults.filter(function(r) { return r.result === 'won'; });
+    var recentProfit = recentResults.reduce(function(sum, r) { return sum + (r.pnl > 0 ? r.pnl : 0); }, 0);
+    var bigWinner = recentWon.sort(function(a, b) { return (b.odds || 0) - (a.odds || 0); })[0] || null;
+
+    var sentCount = 0;
+    users.forEach(function(u) {
+      if (u.role === 'admin') return;
+      if (u.emailPrefs && u.emailPrefs.marketing === false) return;
+
+      var lastLoginTime = u.lastLogin ? new Date(u.lastLogin.timestamp).getTime() : 0;
+      if (lastLoginTime === 0 || (now - lastLoginTime) < sevenDaysMs) return;
+      // Don't send re-engagement more than once every 14 days
+      if (u.lastReengagementEmail && (now - new Date(u.lastReengagementEmail).getTime()) < 14 * 24 * 60 * 60 * 1000) return;
+
+      emailService.sendReengagement({
+        name: u.name, email: u.email,
+        tipsPublished: recentResults.length,
+        winners: recentWon.length,
+        profit: recentProfit,
+        bigWinner: bigWinner
+      }).catch(function(err) { console.error('[Email] Re-engagement failed for ' + u.email + ':', err.message); });
+
+      u.lastReengagementEmail = new Date().toISOString();
+      sentCount++;
+    });
+
+    if (sentCount > 0) {
+      writeJSON('sample-users.json', users);
+    }
+
+    lastReengagementDate = dateStr;
+    if (sentCount > 0) console.log('[Email] Re-engagement sent to ' + sentCount + ' inactive user(s)');
+  } catch (err) {
+    console.error('[Email] Re-engagement error:', err.message);
+  }
+}
+
+// --- 6. SUBSCRIPTION EXPIRY WARNING (daily check, 3 days before) ---
+async function scheduleExpiryWarning() {
+  try {
+    var uk = getUKTime();
+    var hour = uk.getHours();
+    var dateStr = uk.toISOString().split('T')[0];
+
+    // Run once per day at 9am UK time
+    if (hour !== 9 || lastExpiryWarningDate === dateStr) return;
+
+    var users = readJSON('sample-users.json');
+    var now = new Date();
+    var threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+    var allResults = readJSON('sample-results.json');
+
+    var sentCount = 0;
+    users.forEach(function(u) {
+      if (u.subscription !== 'premium' || !u.subscriptionExpiry) return;
+
+      var expiry = new Date(u.subscriptionExpiry);
+      var timeUntilExpiry = expiry.getTime() - now.getTime();
+
+      // Send if expiry is between 2-4 days away (3 day window)
+      if (timeUntilExpiry < 2 * 24 * 60 * 60 * 1000 || timeUntilExpiry > 4 * 24 * 60 * 60 * 1000) return;
+
+      // Don't send if already warned
+      if (u.expiryWarned === dateStr) return;
+
+      // Calculate stats since joining
+      var joinDate = u.joined || '2024-01-01';
+      var userResults = allResults.filter(function(r) { return r.date >= joinDate && r.isPremium; });
+      var userWon = userResults.filter(function(r) { return r.result === 'won'; });
+      var userPnl = userResults.reduce(function(sum, r) { return sum + (r.pnl || 0); }, 0);
+
+      emailService.sendExpiryWarning({
+        name: u.name, email: u.email,
+        expiryDate: u.subscriptionExpiry,
+        tipsReceived: userResults.length,
+        winners: userWon.length,
+        pnl: Math.round(userPnl * 100) / 100
+      }).catch(function(err) { console.error('[Email] Expiry warning failed for ' + u.email + ':', err.message); });
+
+      u.expiryWarned = dateStr;
+      sentCount++;
+    });
+
+    if (sentCount > 0) {
+      writeJSON('sample-users.json', users);
+      console.log('[Email] Expiry warning sent to ' + sentCount + ' user(s)');
+    }
+
+    lastExpiryWarningDate = dateStr;
+  } catch (err) {
+    console.error('[Email] Expiry warning error:', err.message);
+  }
+}
+
+// Run email schedulers every 15 minutes
+setInterval(function() {
+  scheduleDailyBulletin();
+  scheduleWeeklySummary();
+  scheduleReengagement();
+  scheduleExpiryWarning();
+}, 15 * 60 * 1000);
+
+// Also run checks 45 seconds after server start
+setTimeout(function() {
+  scheduleDailyBulletin();
+  scheduleWeeklySummary();
+  scheduleReengagement();
+  scheduleExpiryWarning();
+}, 45000);
 
 // ---------------------------------------------------------------------------
 // Start server
@@ -1464,6 +1794,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`    Premium: premium@test.com / test123`);
   console.log(`  ------------------------------------------`);
   console.log(`  Auto-settle: Running every 5 minutes`);
+  console.log(`  Email workflows: Daily bulletin, weekly summary,`);
+  console.log(`    re-engagement, expiry warnings, big win alerts`);
   console.log(`  ------------------------------------------\n`);
 });
 
