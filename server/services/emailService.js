@@ -15,7 +15,7 @@
 class EmailService {
   constructor() {
     this.transport = null;
-    this.fromAddress = 'tips@eliteedgessports.co.uk';
+    this.fromAddress = 'tips@eliteedgesports.co.uk';
     this.fromName = 'Elite Edge Sports Tips';
     this.sentEmails = []; // In-memory log for demo
     this.scheduledEmails = [];
@@ -254,7 +254,7 @@ class EmailService {
       `${tip.sport === 'racing' ? 'RACING' : 'FOOTBALL'}: ${tip.selection} @ ${tip.odds} | ${tip.event} | ${tip.market} | Confidence: ${tip.confidence}/10 | Edge: ${(tip.edge * 100).toFixed(1)}%\n${tip.analysis?.summary || ''}`
     ).join('\n\n---\n\n');
 
-    return `ELITE EDGE SPORTS TIPS\n${subject}\n\n${summary}\n\n${tipLines}\n\n---\nView all tips at eliteedgessports.co.uk\nGamble responsibly. 18+`;
+    return `ELITE EDGE SPORTS TIPS\n${subject}\n\n${summary}\n\n${tipLines}\n\n---\nView all tips at eliteedgesports.co.uk\nGamble responsibly. 18+`;
   }
 }
 

@@ -608,7 +608,7 @@ app.post('/api/chat', (req, res) => {
     response = 'Our confidence scores (1-10) are calculated using a multi-factor weighted model. For racing, we analyse form, going, class, trainer/jockey stats, course record, draw, weight, speed ratings, and market support. For football, we use xG, form, H2H, injuries, home/away splits, motivation, shots, and schedule congestion. The edge % shows how much our probability exceeds the bookmaker\'s implied probability.';
     suggestions = ['How is ROI calculated?', "Today's best tips?", 'How do I upgrade?'];
   } else if (lower.includes('help') || lower.includes('support') || lower.includes('contact')) {
-    response = 'Need help? You can submit a support ticket via the Contact page, or email us at support@eliteedgessports.co.uk. We typically respond within 2 hours during business hours.';
+    response = 'Need help? You can submit a support ticket via the Contact page, or email us at support@eliteedgesports.co.uk. We typically respond within 2 hours during business hours.';
     suggestions = ["Today's best tips?", 'How do I upgrade?', 'How is ROI calculated?'];
   } else if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
     response = 'Hello! Welcome to Elite Edge Sports Tips. I can help you find today\'s best tips, explain our scoring model, or guide you through our Premium features. What would you like to know?';

@@ -237,7 +237,7 @@ Tomorrow we go again. NAP at 9am.
 │                                  │
 │  [2-line analysis summary]      │
 │                                  │
-│  eliteedgessports.co.uk            │
+│  eliteedgesports.co.uk            │
 │  18+ | BeGambleAware.org        │
 └─────────────────────────────────┘
 ```
@@ -256,7 +256,7 @@ Tomorrow we go again. NAP at 9am.
 │  Today: 3/4 | +X.XX units      │
 │  Overall: XX% SR | +XXX units  │
 │                                  │
-│  eliteedgessports.co.uk            │
+│  eliteedgesports.co.uk            │
 │  18+ | BeGambleAware.org        │
 └─────────────────────────────────┘
 ```
@@ -276,7 +276,7 @@ Tomorrow we go again. NAP at 9am.
 │  Best Winner:                   │
 │  [Selection] @ [Odds] ✅       │
 │                                  │
-│  Join free: eliteedgessports.co.uk │
+│  Join free: eliteedgesports.co.uk │
 │  18+ | BeGambleAware.org        │
 └─────────────────────────────────┘
 ```
@@ -345,7 +345,7 @@ Tomorrow we go again. NAP at 9am.
 
 Charlie Appleby/Godolphin debutant. Sea The Stars gelding with Billy Loughnane up. Just 3 runners. Stable doesn't send them to Wolves without a plan.
 
-🔒 Premium members get 2-3 more selections — eliteedgessports.co.uk
+🔒 Premium members get 2-3 more selections — eliteedgesports.co.uk
 
 18+ | Entertainment only | BeGambleAware.org
 ```

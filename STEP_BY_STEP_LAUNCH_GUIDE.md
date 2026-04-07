@@ -37,7 +37,7 @@ Everything you need to do, in order, with exact links and instructions.
 
 ### Step 5: Buy the Domain
 - Go to: https://www.namecheap.com
-- Search for: `eliteedgessports.co.uk`
+- Search for: `eliteedgesports.co.uk`
 - Buy it (approximately £10/year)
 - If taken, try: `eliteedgetips.com` or `eliteedgesportstips.com`
 
@@ -50,7 +50,7 @@ Everything you need to do, in order, with exact links and instructions.
 5. Select `DJTDJT03/elite-edge-sports-tips`
 6. Railway auto-detects Node.js
 7. It will run `npm install` and `npm start` automatically
-8. Go to Settings → add custom domain: `eliteedgessports.co.uk`
+8. Go to Settings → add custom domain: `eliteedgesports.co.uk`
 9. Add environment variables:
    - `JWT_SECRET` = (make up a long random string, e.g. `EE-s3cret-k3y-2026-pr0duct10n`)
    - `GEO_RESTRICT` = `true`
@@ -71,7 +71,7 @@ Everything you need to do, in order, with exact links and instructions.
 2. Railway/Render will give you a CNAME record to add
 3. Add it in Namecheap DNS settings
 4. Wait 15-30 minutes for DNS to propagate
-5. Visit https://eliteedgessports.co.uk — should show your app with SSL
+5. Visit https://eliteedgesports.co.uk — should show your app with SSL
 
 ---
 
@@ -112,7 +112,7 @@ Everything you need to do, in order, with exact links and instructions.
 3. Free tier: 100 emails/day (enough to start)
 4. Go to Settings → Sender Authentication → verify your domain
    - Add DNS records they provide to Namecheap
-   - This lets you send from `tips@eliteedgessports.co.uk`
+   - This lets you send from `tips@eliteedgesports.co.uk`
 5. Go to Settings → API Keys → Create API Key
 6. Add to environment variables: `SENDGRID_API_KEY` = `SG.xxxxx`
 7. The email service in the code is already architected for SendGrid
@@ -145,7 +145,7 @@ In SendGrid:
 2. Create: @eliteedgetips
 3. Switch to Professional Account → Business
 4. Bio: "🏇 86% Racing Strike Rate | ⚽ European Football Intel | 📊 Data, Not Guesswork | Free tips daily 👇"
-5. Link: eliteedgessports.co.uk
+5. Link: eliteedgesports.co.uk
 
 **TikTok:**
 1. Go to: https://www.tiktok.com/signup
@@ -206,16 +206,16 @@ In SendGrid:
 1. Go to: https://analytics.google.com
 2. Sign in with business Gmail
 3. Create Account → "Elite Edge Sports Tips"
-4. Create Property → web → `eliteedgessports.co.uk`
+4. Create Property → web → `eliteedgesports.co.uk`
 5. Get Measurement ID: `G-XXXXXXXXXX`
 6. In your code, uncomment the GA4 script in index.html and add the ID
 7. Push the code update to GitHub → Railway auto-deploys
 
 ### Step 16: Set Up Google Search Console
 1. Go to: https://search.google.com/search-console
-2. Add property → `eliteedgessports.co.uk`
+2. Add property → `eliteedgesports.co.uk`
 3. Verify via DNS (add TXT record in Namecheap)
-4. Submit sitemap: `https://eliteedgessports.co.uk/sitemap.xml`
+4. Submit sitemap: `https://eliteedgesports.co.uk/sitemap.xml`
 5. This tells Google to index your site
 
 ### Step 17: Set Up Meta Pixel (Facebook/Instagram Ads)
@@ -300,7 +300,7 @@ Apply to all of these — it's free:
 
 Before you announce publicly, verify ALL of these:
 
-- [ ] Website loads at https://eliteedgessports.co.uk
+- [ ] Website loads at https://eliteedgesports.co.uk
 - [ ] SSL certificate shows (green padlock)
 - [ ] Registration works (test with a new email)
 - [ ] Login works
@@ -343,7 +343,7 @@ Before you announce publicly, verify ALL of these:
 ### Daily Routine (30-45 minutes)
 
 **Morning (before 9am):**
-1. Open admin panel at eliteedgessports.co.uk/#/admin
+1. Open admin panel at eliteedgesports.co.uk/#/admin
 2. Review today's fixtures (API data or manual research)
 3. Add 1 free NAP + 1-3 premium selections via admin panel
 4. Trigger email bulletin to premium subscribers
