@@ -747,6 +747,7 @@ const App = {
     var tomorrow = this._getTomorrow();
     var yesterday = this._getYesterday();
     var tips = allTips.filter(function(t) {
+      if (t.isWeeklyAcca) return true; // Always show the free weekly acca
       if (!t.date) return true;
       return t.date >= yesterday;
     });
