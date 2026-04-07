@@ -110,6 +110,9 @@
             <div class="notif-list" id="notif-list"><p class="text-muted text-sm" style="padding:12px;">No notifications yet</p></div>
           </div>
         </div>
+        <span class="odds-format-toggle" id="odds-format-toggle" onclick="App.toggleOddsFormat()" title="Switch odds format">
+          <span id="fmt-frac" class="fmt-active">Frac</span><span class="fmt-sep">|</span><span id="fmt-dec">Dec</span>
+        </span>
         <button class="theme-toggle" id="theme-toggle" onclick="App.toggleTheme()" title="Toggle Light/Dark Mode">&#9790;</button>
         <div id="nav-auth-guest">
           <button class="btn btn-outline btn-sm" onclick="App.showModal('login')">Log In</button>
@@ -222,6 +225,11 @@
           <input type="checkbox" id="reg-agreement" required style="margin-top:3px;flex-shrink:0;">
           <span>I confirm I am 18+ and understand that Elite Edge Sports Tips provides statistical analysis and entertainment content ONLY. This is NOT financial advice, betting advice, or any guarantee of profit. All content is opinion and statistical modelling only. Any decision to place bets is at my own risk. I take full responsibility for any losses. Elite Edge Sports Tips Ltd accepts no liability for losses. I have read and agree to the <a href="#/terms" onclick="event.stopPropagation();" style="color:#d4a843;">Terms &amp; Conditions</a>, <a href="#/privacy" onclick="event.stopPropagation();" style="color:#d4a843;">Privacy Policy</a>, and <a href="#/disclaimer" onclick="event.stopPropagation();" style="color:#d4a843;">Full Disclaimer</a>.</span>
         </label>
+      </div>
+      <div class="reg-odds-group">
+        <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px;">Odds Format Preference</label>
+        <label class="radio-label"><input type="radio" name="reg-odds-format" value="fractional" checked> Fractional (e.g. 6/4)</label>
+        <label class="radio-label"><input type="radio" name="reg-odds-format" value="decimal"> Decimal (e.g. 2.50)</label>
       </div>
       <div class="form-group">
         <label>Referral Code (optional)</label>

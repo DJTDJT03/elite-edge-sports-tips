@@ -1905,3 +1905,225 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   text-transform: uppercase;
   letter-spacing: .5px;
 }
+
+/* =========================================================================
+   ODDS FORMAT TOGGLE
+   ========================================================================= */
+.odds-format-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  transition: all var(--transition);
+  user-select: none;
+}
+.odds-format-toggle:hover { border-color: var(--gold); color: var(--gold); }
+.odds-format-toggle .fmt-active { color: var(--gold); font-weight: 700; }
+.odds-format-toggle .fmt-sep { color: var(--border-light); }
+.reg-odds-group { margin-top: 12px; }
+.reg-odds-group label.radio-label {
+  display: inline-flex; align-items: center; gap: 6px;
+  cursor: pointer; font-size: 13px; color: var(--text-secondary); margin-right: 16px;
+}
+.reg-odds-group label.radio-label input[type="radio"] { accent-color: var(--gold); }
+
+/* =========================================================================
+   LIVE DATA SECTIONS
+   ========================================================================= */
+.live-data-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px; flex-wrap: wrap; gap: 8px;
+}
+.live-data-header .live-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--green);
+}
+.live-data-header .live-badge::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--green); animation: livePulse 1.5s infinite;
+}
+@keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+.live-updated {
+  font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;
+}
+.refresh-btn {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-muted); cursor: pointer; padding: 4px 10px; font-size: 11px;
+  transition: all var(--transition);
+}
+.refresh-btn:hover { border-color: var(--gold); color: var(--gold); }
+.refresh-btn.spinning svg { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Meeting / Fixture cards for live data */
+.meeting-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px; margin-bottom: 16px;
+}
+.meeting-card h3 {
+  font-size: 16px; font-weight: 700; color: var(--gold); margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.meeting-card .race-row {
+  display: flex; align-items: center; gap: 12px; padding: 8px 0;
+  border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.meeting-card .race-row:last-child { border-bottom: none; }
+.meeting-card .race-time { font-weight: 700; color: var(--text-primary); min-width: 48px; }
+.meeting-card .race-name { flex: 1; color: var(--text-secondary); }
+.meeting-card .race-info { font-size: 11px; color: var(--text-muted); }
+
+.runner-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.runner-table th {
+  text-align: left; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text-muted); padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.runner-table td { padding: 6px 8px; border-bottom: 1px solid rgba(30,38,64,.5); }
+.runner-table tr:hover td { background: rgba(212,168,67,.03); }
+
+.fixture-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  transition: all var(--transition);
+}
+.fixture-card:hover { border-color: var(--border-light); }
+.fixture-card .fixture-teams { font-weight: 700; font-size: 14px; flex: 1; }
+.fixture-card .fixture-vs { color: var(--text-muted); font-weight: 400; margin: 0 4px; }
+.fixture-card .fixture-meta { font-size: 11px; color: var(--text-muted); text-align: right; }
+.fixture-card .fixture-league { font-size: 10px; color: var(--gold); text-transform: uppercase; letter-spacing: .5px; }
+.fixture-card .fixture-score {
+  font-size: 20px; font-weight: 800; color: var(--green);
+  min-width: 60px; text-align: center;
+}
+.fixture-card .fixture-live-badge {
+  font-size: 9px; font-weight: 700; color: var(--red); text-transform: uppercase;
+  letter-spacing: .5px; animation: livePulse 1.5s infinite;
+}
+
+/* Date tabs */
+.date-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+.date-tab {
+  padding: 6px 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  color: var(--text-muted); cursor: pointer; transition: all var(--transition);
+}
+.date-tab:hover { border-color: var(--gold); color: var(--gold); }
+.date-tab.active { background: var(--gold); color: var(--bg-deep); border-color: var(--gold); }
+
+/* Loading spinner (inline) */
+.inline-spinner {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text-muted); padding: 20px;
+}
+.inline-spinner::before {
+  content: ''; width: 18px; height: 18px; border: 2px solid var(--border);
+  border-top-color: var(--gold); border-radius: 50%; animation: spin .6s linear infinite;
+}
+
+/* =========================================================================
+   ENHANCED TIP DETAIL
+   ========================================================================= */
+.premium-analysis-header {
+  background: linear-gradient(135deg, rgba(212,168,67,.12), rgba(212,168,67,.03));
+  border: 1px solid rgba(212,168,67,.25); border-radius: var(--radius);
+  padding: 20px 24px; margin-bottom: 24px;
+  display: flex; align-items: center; gap: 14px;
+}
+.premium-analysis-header .pa-icon { font-size: 28px; }
+.premium-analysis-header h3 {
+  font-size: 18px; font-weight: 800; color: var(--gold); margin-bottom: 2px;
+}
+.premium-analysis-header p { font-size: 12px; color: var(--text-secondary); }
+
+.analysis-section-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 20px; margin-bottom: 12px;
+  transition: all var(--transition);
+}
+.analysis-section-card:hover { border-color: var(--border-light); }
+.analysis-section-card .as-header {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;
+}
+.analysis-section-card .as-icon { font-size: 18px; }
+.analysis-section-card .as-body { font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
+
+.confidence-meter { margin-bottom: 20px; }
+.confidence-meter-label {
+  display: flex; justify-content: space-between; font-size: 12px;
+  color: var(--text-muted); margin-bottom: 6px;
+}
+.confidence-meter-track {
+  height: 12px; background: var(--bg-elevated); border-radius: 6px;
+  overflow: hidden; position: relative;
+}
+.confidence-meter-fill {
+  height: 100%; border-radius: 6px; transition: width .5s ease;
+  background: linear-gradient(90deg, var(--red), #f59e0b, var(--green));
+}
+.confidence-meter-markers {
+  display: flex; justify-content: space-between; margin-top: 4px;
+}
+.confidence-meter-markers span { font-size: 9px; color: var(--text-dim); }
+
+.verdict-box {
+  background: linear-gradient(135deg, rgba(212,168,67,.1), rgba(212,168,67,.03));
+  border: 1px solid rgba(212,168,67,.3); border-radius: var(--radius);
+  padding: 20px 24px; margin-top: 20px;
+}
+.verdict-box h4 {
+  font-size: 14px; font-weight: 800; color: var(--gold);
+  margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;
+}
+.verdict-box p { font-size: 14px; color: var(--text-primary); line-height: 1.8; }
+
+.form-visual { display: flex; gap: 4px; flex-wrap: wrap; }
+.form-visual .fv-badge {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800;
+}
+.form-visual .fv-1 { background: rgba(34,197,94,.2); color: var(--green); }
+.form-visual .fv-23 { background: rgba(245,158,11,.2); color: #f59e0b; }
+.form-visual .fv-other { background: rgba(100,116,139,.2); color: var(--text-muted); }
+.form-visual .fv-W { background: rgba(34,197,94,.2); color: var(--green); }
+.form-visual .fv-D { background: rgba(245,158,11,.2); color: #f59e0b; }
+.form-visual .fv-L { background: rgba(239,68,68,.2); color: var(--red); }
+
+/* =========================================================================
+   ADMIN LIVE DATA PANEL
+   ========================================================================= */
+.api-status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+.api-status-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 14px 16px; text-align: center;
+}
+.api-status-card .api-name { font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+.api-status-card .api-indicator {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600;
+}
+.api-status-card .api-indicator.connected { color: var(--green); }
+.api-status-card .api-indicator.disconnected { color: var(--red); }
+.api-status-card .api-indicator::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%;
+}
+.api-status-card .api-indicator.connected::before { background: var(--green); }
+.api-status-card .api-indicator.disconnected::before { background: var(--red); }
+
+.admin-live-runner {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.admin-live-runner:last-child { border-bottom: none; }
+.admin-live-runner .runner-name { font-weight: 600; }
+.admin-live-runner .runner-detail { font-size: 11px; color: var(--text-muted); }

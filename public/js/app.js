@@ -42,12 +42,15 @@ const App = {
   accaSelections: [],
   notifications: JSON.parse(localStorage.getItem('ee_notifications') || '[]'),
   notifEnabled: localStorage.getItem('ee_notif_enabled') === 'true',
+  oddsFormat: localStorage.getItem('oddsFormat') || 'fractional',
+  _liveCache: {},
 
   // -----------------------------------------------------------------------
   // INIT
   // -----------------------------------------------------------------------
   init() {
     this.loadTheme();
+    this.loadOddsFormat();
     this.updateAuthUI();
     this.bindNav();
     window.addEventListener('hashchange', () => this.route());
@@ -56,6 +59,146 @@ const App = {
     this.initNotifications();
     this.checkReferralParam();
     this.initCookieConsent();
+  },
+
+  // -----------------------------------------------------------------------
+  // ODDS FORMAT SYSTEM
+  // -----------------------------------------------------------------------
+  _commonFractions: [
+    {dec: 1.10, frac: '1/10'}, {dec: 1.20, frac: '1/5'}, {dec: 1.25, frac: '1/4'},
+    {dec: 1.33, frac: '1/3'}, {dec: 1.40, frac: '2/5'}, {dec: 1.50, frac: '1/2'},
+    {dec: 1.57, frac: '4/7'}, {dec: 1.62, frac: '8/13'}, {dec: 1.67, frac: '4/6'},
+    {dec: 1.73, frac: '8/11'}, {dec: 1.80, frac: '4/5'}, {dec: 1.83, frac: '5/6'},
+    {dec: 1.91, frac: '10/11'}, {dec: 2.00, frac: 'evens'}, {dec: 2.10, frac: '11/10'},
+    {dec: 2.20, frac: '6/5'}, {dec: 2.25, frac: '5/4'}, {dec: 2.38, frac: '11/8'},
+    {dec: 2.50, frac: '6/4'}, {dec: 2.62, frac: '13/8'}, {dec: 2.75, frac: '7/4'},
+    {dec: 2.88, frac: '15/8'}, {dec: 3.00, frac: '2/1'}, {dec: 3.25, frac: '9/4'},
+    {dec: 3.50, frac: '5/2'}, {dec: 3.75, frac: '11/4'}, {dec: 4.00, frac: '3/1'},
+    {dec: 4.33, frac: '10/3'}, {dec: 4.50, frac: '7/2'}, {dec: 5.00, frac: '4/1'},
+    {dec: 5.50, frac: '9/2'}, {dec: 6.00, frac: '5/1'}, {dec: 6.50, frac: '11/2'},
+    {dec: 7.00, frac: '6/1'}, {dec: 7.50, frac: '13/2'}, {dec: 8.00, frac: '7/1'},
+    {dec: 8.50, frac: '15/2'}, {dec: 9.00, frac: '8/1'}, {dec: 10.00, frac: '9/1'},
+    {dec: 11.00, frac: '10/1'}, {dec: 12.00, frac: '11/1'}, {dec: 13.00, frac: '12/1'},
+    {dec: 15.00, frac: '14/1'}, {dec: 17.00, frac: '16/1'}, {dec: 21.00, frac: '20/1'},
+    {dec: 26.00, frac: '25/1'}, {dec: 34.00, frac: '33/1'}, {dec: 41.00, frac: '40/1'},
+    {dec: 51.00, frac: '50/1'}, {dec: 67.00, frac: '66/1'}, {dec: 101.00, frac: '100/1'},
+  ],
+
+  formatOdds(decimalOdds, format) {
+    if (!decimalOdds || decimalOdds <= 1) return '-';
+    var fmt = format || this.oddsFormat;
+    if (fmt === 'decimal') return parseFloat(decimalOdds).toFixed(2);
+    // Find nearest common fraction
+    var best = this._commonFractions[0];
+    var bestDiff = Math.abs(decimalOdds - best.dec);
+    for (var i = 1; i < this._commonFractions.length; i++) {
+      var diff = Math.abs(decimalOdds - this._commonFractions[i].dec);
+      if (diff < bestDiff) { best = this._commonFractions[i]; bestDiff = diff; }
+    }
+    return best.frac;
+  },
+
+  loadOddsFormat() {
+    this.oddsFormat = localStorage.getItem('oddsFormat') || 'fractional';
+    this._updateOddsToggleUI();
+  },
+
+  toggleOddsFormat() {
+    this.oddsFormat = this.oddsFormat === 'fractional' ? 'decimal' : 'fractional';
+    localStorage.setItem('oddsFormat', this.oddsFormat);
+    this._updateOddsToggleUI();
+    this.route(); // Re-render current page
+  },
+
+  _updateOddsToggleUI() {
+    var fracEl = document.getElementById('fmt-frac');
+    var decEl = document.getElementById('fmt-dec');
+    if (fracEl && decEl) {
+      fracEl.className = this.oddsFormat === 'fractional' ? 'fmt-active' : '';
+      decEl.className = this.oddsFormat === 'decimal' ? 'fmt-active' : '';
+    }
+  },
+
+  // -----------------------------------------------------------------------
+  // LIVE DATA CACHE HELPERS
+  // -----------------------------------------------------------------------
+  _getCached(key, maxAgeMs) {
+    var cached = this._liveCache[key];
+    if (cached && (Date.now() - cached.ts < maxAgeMs)) return cached.data;
+    return null;
+  },
+
+  _setCache(key, data) {
+    this._liveCache[key] = { data: data, ts: Date.now() };
+  },
+
+  async fetchLiveRacing(forceRefresh) {
+    if (!forceRefresh) {
+      var cached = this._getCached('racing', 180000); // 3 min
+      if (cached) return cached;
+    }
+    try {
+      var data = await this.api('/racing/live-cards');
+      if (data) this._setCache('racing', data);
+      return data;
+    } catch (e) { return { live: false, racecards: [] }; }
+  },
+
+  async fetchLiveFootball(forceRefresh) {
+    if (!forceRefresh) {
+      var cached = this._getCached('football', 600000); // 10 min
+      if (cached) return cached;
+    }
+    try {
+      var data = await this.api('/football/live-fixtures');
+      if (data) this._setCache('football', data);
+      return data;
+    } catch (e) { return { live: false, fixtures: [] }; }
+  },
+
+  async fetchLiveOdds(forceRefresh) {
+    if (!forceRefresh) {
+      var cached = this._getCached('odds', 120000); // 2 min
+      if (cached) return cached;
+    }
+    try {
+      var data = await this.api('/odds/live');
+      if (data) this._setCache('odds', data);
+      return data;
+    } catch (e) { return { live: false, odds: [] }; }
+  },
+
+  // -----------------------------------------------------------------------
+  // DATE HELPERS
+  // -----------------------------------------------------------------------
+  _getToday() { return new Date().toISOString().split('T')[0]; },
+  _getTomorrow() {
+    var d = new Date(); d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  },
+  _getYesterday() {
+    var d = new Date(); d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  },
+  _isToday(dateStr) { return dateStr === this._getToday(); },
+  _isTomorrow(dateStr) { return dateStr === this._getTomorrow(); },
+  _isThisWeekend() {
+    var d = new Date(); var day = d.getDay();
+    return day === 0 || day === 6 || day === 5;
+  },
+  _getWeekendDates() {
+    var dates = [];
+    var d = new Date();
+    while (d.getDay() !== 5) d.setDate(d.getDate() + 1);
+    for (var i = 0; i < 3; i++) {
+      dates.push(new Date(d).toISOString().split('T')[0]);
+      d.setDate(d.getDate() + 1);
+    }
+    return dates;
+  },
+  _daysSince(dateStr) {
+    if (!dateStr) return 999;
+    return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
   },
 
   // -----------------------------------------------------------------------
@@ -149,6 +292,12 @@ const App = {
       return;
     }
     const agreementTimestamp = new Date().toISOString();
+    var oddsFormatRadio = document.querySelector('input[name="reg-odds-format"]:checked');
+    if (oddsFormatRadio) {
+      this.oddsFormat = oddsFormatRadio.value;
+      localStorage.setItem('oddsFormat', this.oddsFormat);
+      this._updateOddsToggleUI();
+    }
     try {
       const { token, user } = await this.api('/auth/register', {
         method: 'POST', body: JSON.stringify({ name, email, password, agreementTimestamp })
@@ -436,7 +585,7 @@ const App = {
             return `<tr>
               <td>${formatDateUK(b.date)}</td>
               <td>${b.selection}</td>
-              <td>${b.odds}</td>
+              <td>${this.formatOdds(b.odds)}</td>
               <td class="${b.result === 'won' ? 'result-won' : b.result === 'lost' ? 'result-lost' : ''}">${b.result ? b.result.toUpperCase() : 'PENDING'}</td>
               <td class="${bpnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${bpnl >= 0 ? '+' : ''}${bpnl.toFixed(2)}</td>
             </tr>`;
@@ -489,13 +638,13 @@ const App = {
     bar.classList.add('active');
     items.innerHTML = this.accaSelections.map(a => `
       <div class="acca-item">
-        <span>${a.selection} @ ${a.odds}</span>
+        <span>${a.selection} @ ${this.formatOdds(a.odds)}</span>
         <span class="acca-remove" onclick="App.removeAcca('${a.tipId}')">&times;</span>
       </div>
     `).join('');
 
     const combined = this.accaSelections.reduce((acc, a) => acc * a.odds, 1);
-    oddsEl.textContent = combined.toFixed(2);
+    oddsEl.textContent = this.formatOdds(combined);
     returnEl.textContent = '\u00a3' + (combined * 10).toFixed(2);
   },
 
@@ -534,10 +683,10 @@ const App = {
     };
     return `<div class="odds-comparison" onclick="event.stopPropagation();">
       ${entries.map(([k, v]) => `
-        <a href="${urls[k] || '#'}" target="_blank" rel="noopener nofollow" class="affiliate-btn ${v === bestOdds ? 'best-price' : ''}" title="Place bet at ${names[k] || k}">
+        <a href="${urls[k] || '#'}" target="_blank" rel="noopener nofollow" class="affiliate-btn ${v === bestOdds ? 'best-price' : ''}" title="Place bet at ${names[k] || k}" style="${v === bestOdds ? 'border-color:var(--gold);box-shadow:0 0 8px rgba(212,168,67,.2);' : ''}">
           <span style="font-size:9px;text-transform:uppercase;">${names[k] || k}</span>
-          <span style="font-weight:800;font-size:13px;">${v.toFixed(2)}</span>
-          ${v === bestOdds ? '<span style="font-size:8px;">BEST</span>' : ''}
+          <span style="font-weight:800;font-size:13px;${v === bestOdds ? 'color:var(--gold);' : ''}">${this.formatOdds(v)}</span>
+          ${v === bestOdds ? '<span style="font-size:8px;color:var(--gold);">BEST</span>' : ''}
         </a>
       `).join('')}
     </div>
@@ -587,11 +736,23 @@ const App = {
       this.performance = perf;
     } catch { /* use cached */ }
 
-    const tips = this.tips;
+    const allTips = this.tips;
     const perf = this.performance || { roi: 0, strikeRate: 0, runningBank: 100, totalPnl: 0, totalTips: 0, wins: 0 };
     const allResults = await this.api('/results').catch(() => []);
     const recentWins = allResults.filter(r => r.result === 'won').slice(-8);
     const streak = this.calculateStreak(allResults);
+
+    // Date-aware: filter to today/tomorrow, archive older
+    var today = this._getToday();
+    var tomorrow = this._getTomorrow();
+    var yesterday = this._getYesterday();
+    var tips = allTips.filter(function(t) {
+      if (!t.date) return true;
+      return t.date >= yesterday;
+    });
+    var todayTips = tips.filter(function(t) { return !t.date || t.date === today; });
+    var tomorrowTips = tips.filter(function(t) { return t.date === tomorrow; });
+    var recentTips = tips.filter(function(t) { return t.date === yesterday; });
 
     // Find NAP of the day
     const napTip = tips.find(t => t.isNap && !t.locked);
@@ -630,7 +791,7 @@ const App = {
               <div class="ticker-item">
                 <span class="win-tag">WIN</span>
                 <span>${w.selection}</span>
-                <span class="odds-tag">@ ${w.odds}</span>
+                <span class="odds-tag">@ ${this.formatOdds(w.odds)}</span>
                 <span class="text-muted">(+${w.pnl > 0 ? w.pnl.toFixed(2) : '0'} units)</span>
                 <button class="share-btn" onclick="event.stopPropagation();App.shareWin('${w.selection.replace(/'/g, "\\'")}', ${w.odds})" title="Share on X/Twitter">Share</button>
               </div>
@@ -651,7 +812,7 @@ const App = {
                   <div style="font-size:11px;color:var(--text-muted);">${formatDateUK(w.date)}</div>
                 </div>
                 <div style="text-align:right;">
-                  <div style="font-weight:800;font-size:18px;color:#22c55e;">@ ${w.odds}</div>
+                  <div style="font-weight:800;font-size:18px;color:#22c55e;">@ ${this.formatOdds(w.odds)}</div>
                   <div style="font-size:12px;color:#22c55e;font-weight:600;">+${w.pnl > 0 ? w.pnl.toFixed(2) : '0'} units</div>
                 </div>
               </div>
@@ -673,7 +834,7 @@ const App = {
                 <span class="badge-premium">${napTip.valueRating || 'Elite'}</span>
               </div>
               <div>
-                <div class="tip-odds">${napTip.odds} ${this.renderOddsMovement(napTip.odds, napTip.openingOdds)}</div>
+                <div class="tip-odds">${this.formatOdds(napTip.odds)} ${this.renderOddsMovement(napTip.odds, napTip.openingOdds)}</div>
                 <div class="tip-odds-label">${napTip.market || ''}</div>
               </div>
             </div>
@@ -694,7 +855,12 @@ const App = {
 
         <!-- Today's Tips -->
         <div class="section">
-          <div class="section-title"><span class="icon">&#9826;</span> Today's Selections (${tips.length} tips)</div>
+          <div class="section-title"><span class="icon">&#9826;</span> Today's Selections (${todayTips.length} tips)</div>
+          <div class="date-tabs">
+            <button class="date-tab active" onclick="App.filterDashDate('today',this)">Today</button>
+            ${tomorrowTips.length ? '<button class="date-tab" onclick="App.filterDashDate(\'tomorrow\',this)">Tomorrow (' + tomorrowTips.length + ')</button>' : ''}
+            ${recentTips.length ? '<button class="date-tab" onclick="App.filterDashDate(\'recent\',this)">Yesterday (' + recentTips.length + ')</button>' : ''}
+          </div>
           <div class="tabs">
             <button class="tab active" onclick="App.filterDashTips('all', this)">All</button>
             <button class="tab" onclick="App.filterDashTips('racing', this)">Racing</button>
@@ -747,11 +913,35 @@ const App = {
     `;
   },
 
+  _dashDateFilter: 'today',
+
+  filterDashDate(dateFilter, btn) {
+    document.querySelectorAll('.date-tabs .date-tab').forEach(function(t) { t.classList.remove('active'); });
+    if (btn) btn.classList.add('active');
+    this._dashDateFilter = dateFilter;
+    var today = this._getToday();
+    var tomorrow = this._getTomorrow();
+    var yesterday = this._getYesterday();
+    var container = document.getElementById('dash-tips');
+    var filtered = this.tips.filter(function(t) { return !t.isNap && !t.isWeeklyAcca; });
+    if (dateFilter === 'today') filtered = filtered.filter(function(t) { return !t.date || t.date === today; });
+    else if (dateFilter === 'tomorrow') filtered = filtered.filter(function(t) { return t.date === tomorrow; });
+    else if (dateFilter === 'recent') filtered = filtered.filter(function(t) { return t.date === yesterday; });
+    container.innerHTML = filtered.map(function(t) { return App.renderTipCard(t); }).join('');
+  },
+
   filterDashTips(filter, btn) {
     document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
     if (btn) btn.classList.add('active');
     const container = document.getElementById('dash-tips');
+    var today = this._getToday();
+    var tomorrow = this._getTomorrow();
+    var yesterday = this._getYesterday();
     let filtered = this.tips.filter(t => !t.isNap && !t.isWeeklyAcca);
+    // Apply date filter
+    if (this._dashDateFilter === 'today') filtered = filtered.filter(function(t) { return !t.date || t.date === today; });
+    else if (this._dashDateFilter === 'tomorrow') filtered = filtered.filter(function(t) { return t.date === tomorrow; });
+    else if (this._dashDateFilter === 'recent') filtered = filtered.filter(function(t) { return t.date === yesterday; });
     if (filter === 'racing') filtered = filtered.filter(t => t.sport === 'racing');
     if (filter === 'football') filtered = filtered.filter(t => t.sport === 'football');
     if (filter === 'free') filtered = filtered.filter(t => !t.isPremium);
@@ -780,7 +970,7 @@ const App = {
             ${tip.tipsterProfile ? `<span class="analyst-badge ${tip.tipsterProfile === 'The Professor' ? 'professor' : tip.tipsterProfile === 'The Scout' ? 'scout' : 'edge'}">${tip.tipsterProfile}</span>` : ''}
           </div>
           <div>
-            <div class="tip-odds">${tip.locked ? '?.??' : tip.odds} ${!isLocked ? this.renderOddsMovement(tip.odds, tip.openingOdds) : ''}</div>
+            <div class="tip-odds">${tip.locked ? '?.??' : this.formatOdds(tip.odds)} ${!isLocked ? this.renderOddsMovement(tip.odds, tip.openingOdds) : ''}</div>
             <div class="tip-odds-label">${tip.market || ''}</div>
           </div>
         </div>
@@ -843,25 +1033,39 @@ const App = {
       }
 
       const a = tip.analysis || {};
-      const analysisFields = tip.sport === 'racing'
-        ? ['form','speedRatings','paceAnalysis','drawBias','goingSuitability','courseRecord','trainerJockeyStats','classMovement','weight','marketSupport','valueReasoning']
-        : ['xG','form','homeAway','shots','injuries','h2h','scheduleCongestion','motivationContext','valueReasoning'];
+      var analysisSections = this._buildAnalysisSections(tip, a);
 
-      const fieldLabels = {
-        form:'Form Analysis', speedRatings:'Speed Ratings', paceAnalysis:'Pace Analysis',
-        drawBias:'Draw Bias', goingSuitability:'Going Suitability', courseRecord:'Course Record',
-        trainerJockeyStats:'Trainer & Jockey', classMovement:'Class Movement', weight:'Weight Analysis',
-        marketSupport:'Market Support', valueReasoning:'Value Reasoning',
-        xG:'Expected Goals (xG)', homeAway:'Home/Away Split', shots:'Shot Analysis',
-        injuries:'Injuries & Team News', h2h:'Head to Head', scheduleCongestion:'Schedule & Fatigue',
-        motivationContext:'Motivation & Context',
-      };
+      // Build visual form display
+      var formVisualHtml = '';
+      if (tip.recentForm && tip.recentForm.length) {
+        if (tip.sport === 'racing') {
+          formVisualHtml = '<div class="form-visual">' + tip.recentForm.map(function(f) {
+            var pos = parseInt(f);
+            var cls = pos === 1 ? 'fv-1' : (pos >= 2 && pos <= 3) ? 'fv-23' : 'fv-other';
+            return '<span class="fv-badge ' + cls + '">' + f + '</span>';
+          }).join('') + '</div>';
+        } else {
+          formVisualHtml = '<div class="form-visual">' + tip.recentForm.map(function(f) {
+            var cls = f === 'W' ? 'fv-W' : f === 'D' ? 'fv-D' : 'fv-L';
+            return '<span class="fv-badge ' + cls + '">' + f + '</span>';
+          }).join('') + '</div>';
+        }
+      }
 
       app.innerHTML = `
         <div class="container">
           <p class="mb-16"><a href="#/" class="text-gold">&larr; Back to Dashboard</a></p>
 
           ${tip.isNap ? `<div class="nap-card-wrapper mb-16"><div class="nap-label"><span class="star">\u2605</span> NAP OF THE DAY <span class="star">\u2605</span></div></div>` : ''}
+
+          <!-- Premium Analysis Header -->
+          <div class="premium-analysis-header">
+            <div class="pa-icon">\ud83d\udd2c</div>
+            <div>
+              <h3>Premium Analysis</h3>
+              <p>Data-driven breakdown by ${tip.tipsterProfile || 'Elite Edge'} | Published ${formatDateUK(tip.date)}</p>
+            </div>
+          </div>
 
           <div class="detail-header">
             <div class="tip-badges mb-8">
@@ -875,7 +1079,7 @@ const App = {
 
           <div class="detail-grid">
             <div class="detail-stat">
-              <div class="detail-stat-value text-green">${tip.odds} ${this.renderOddsMovement(tip.odds, tip.openingOdds)}</div>
+              <div class="detail-stat-value text-green">${this.formatOdds(tip.odds)} ${this.renderOddsMovement(tip.odds, tip.openingOdds)}</div>
               <div class="detail-stat-label">Odds</div>
             </div>
             <div class="detail-stat">
@@ -892,18 +1096,32 @@ const App = {
             </div>
           </div>
 
-          <!-- Bookmaker Odds Comparison (Enhancement #1) -->
+          <!-- Visual Confidence Meter -->
+          <div class="confidence-meter">
+            <div class="confidence-meter-label">
+              <span>Confidence</span>
+              <span>${tip.confidence}/10</span>
+            </div>
+            <div class="confidence-meter-track">
+              <div class="confidence-meter-fill" style="width:${(tip.confidence || 0) * 10}%"></div>
+            </div>
+            <div class="confidence-meter-markers">
+              <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+            </div>
+          </div>
+
+          <!-- Visual Form -->
+          ${formVisualHtml ? `
+          <div class="card mb-24">
+            <h4 class="text-gold text-xs mb-8" style="letter-spacing:1px;">FORM STRING</h4>
+            ${formVisualHtml}
+          </div>` : ''}
+
+          <!-- Bookmaker Odds Comparison -->
           ${tip.bookmakerOdds ? `
           <div class="card mb-24">
             <h4 class="text-gold text-xs mb-8" style="letter-spacing:1px;">LIVE ODDS COMPARISON</h4>
             ${this.renderBookmakerOdds(tip.bookmakerOdds)}
-          </div>` : ''}
-
-          <!-- Form Guide (Enhancement #5) -->
-          ${tip.recentForm ? `
-          <div class="card mb-24">
-            <h4 class="text-gold text-xs mb-8" style="letter-spacing:1px;">RECENT FORM</h4>
-            ${this.renderFormGuide(tip.recentForm, tip.sport)}
           </div>` : ''}
 
           <!-- Probability comparison -->
@@ -929,37 +1147,20 @@ const App = {
             </div>
           </div>
 
-          <!-- Summary -->
-          <div class="detail-section">
-            <h4>Summary</h4>
-            <p>${a.summary || ''}</p>
-          </div>
+          <!-- Structured Analysis Sections -->
+          ${analysisSections.map(function(sec) {
+            var body = sec.body || '';
+            if (!body && sec.fields) {
+              body = sec.fields.filter(function(f) { return a[f]; }).map(function(f) { return '<p>' + a[f] + '</p>'; }).join('');
+            }
+            if (!body) return '';
+            return '<div class="analysis-section-card"><div class="as-header"><span class="as-icon">' + sec.icon + '</span> ' + sec.title + '</div><div class="as-body">' + body + '</div></div>';
+          }).join('')}
 
-          <!-- Risk assessment -->
-          <div class="card mb-24">
-            <div class="flex-between">
-              <div>
-                <div class="text-xs text-muted mb-8" style="letter-spacing:1px;">RISK ASSESSMENT</div>
-                <div style="font-size:18px;font-weight:700;">${tip.riskLevel || 'Medium'}</div>
-              </div>
-              <div class="text-right">
-                <div class="text-xs text-muted mb-8" style="letter-spacing:1px;">RECOMMENDED STAKE</div>
-                <div style="font-size:18px;font-weight:700;color:var(--gold);">${tip.staking || '1 unit'}</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Detailed Analysis -->
-          <div class="detail-section">
-            <h4>Detailed Analysis</h4>
-            <div class="analysis-grid">
-              ${analysisFields.filter(f => a[f]).map(f => `
-                <div class="analysis-item">
-                  <h5>${fieldLabels[f] || f}</h5>
-                  <p>${a[f]}</p>
-                </div>
-              `).join('')}
-            </div>
+          <!-- Verdict Box -->
+          <div class="verdict-box">
+            <h4>\ud83c\udfaf Verdict</h4>
+            <p>${this._getVerdictText(a, tip)}</p>
           </div>
 
           <!-- Discussion / Comments -->
@@ -981,16 +1182,41 @@ const App = {
   // -----------------------------------------------------------------------
   // RACING PAGE
   // -----------------------------------------------------------------------
+  _racingDateTab: 'today',
+
   async renderRacing() {
     const app = document.getElementById('app');
     app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading racing tips...</div></div>';
 
+    var liveData = null;
     try {
-      this.tips = await this.api('/tips?sport=racing');
-    } catch {}
+      var results = await Promise.all([
+        this.api('/tips?sport=racing'),
+        this.fetchLiveRacing()
+      ]);
+      this.tips = results[0];
+      liveData = results[1];
+    } catch { try { this.tips = await this.api('/tips?sport=racing'); } catch {} }
 
     const tips = this.tips.filter(t => t.sport === 'racing');
     const meetings = [...new Set(tips.map(t => t.meeting))];
+    var hasLiveCards = liveData && liveData.live && liveData.racecards && liveData.racecards.length > 0;
+    var racecards = hasLiveCards ? liveData.racecards : [];
+    var liveUpdatedAt = liveData && liveData.fetchedAt ? new Date(liveData.fetchedAt) : null;
+
+    // Group live racecards by meeting
+    var liveMeetings = {};
+    racecards.forEach(function(r) {
+      var key = r.meeting || 'Unknown';
+      if (!liveMeetings[key]) liveMeetings[key] = [];
+      liveMeetings[key].push(r);
+    });
+
+    // Date tabs for tips
+    var today = this._getToday();
+    var tomorrow = this._getTomorrow();
+    var weekendDates = this._getWeekendDates();
+    var tomorrowTips = tips.filter(function(t) { return t.date === tomorrow; });
 
     app.innerHTML = `
       <div class="container">
@@ -998,6 +1224,45 @@ const App = {
           <h1><span class="accent">Horse Racing</span> Tips</h1>
           <p>Daily race cards, selections, and deep form analysis across UK & Irish meetings</p>
         </div>
+
+        <!-- Date Tabs -->
+        <div class="date-tabs">
+          <button class="date-tab active" onclick="App._racingDateTab='today';App.renderRacing()">Today</button>
+          ${tomorrowTips.length ? '<button class="date-tab" onclick="App._racingDateTab=\'tomorrow\';App.renderRacing()">Tomorrow</button>' : ''}
+          <button class="date-tab" onclick="App._racingDateTab='weekend';App.renderRacing()">This Weekend</button>
+        </div>
+
+        <!-- Live Race Cards -->
+        ${hasLiveCards ? `
+        <div class="section">
+          <div class="live-data-header">
+            <span class="live-badge">Live Race Cards</span>
+            <div class="live-updated">
+              ${liveUpdatedAt ? 'Updated ' + this.timeAgo(liveUpdatedAt.toISOString()) : ''}
+              <button class="refresh-btn" onclick="App.refreshRacingData(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Refresh
+              </button>
+            </div>
+          </div>
+          ${Object.keys(liveMeetings).map(function(meetingName) {
+            var races = liveMeetings[meetingName];
+            return '<div class="meeting-card"><h3>\ud83c\udfc7 ' + meetingName + ' (' + races.length + ' races)</h3>' +
+              races.map(function(race) {
+                var runnersHtml = '';
+                if (race.runners && race.runners.length) {
+                  runnersHtml = '<table class="runner-table"><thead><tr><th>Draw</th><th>Horse</th><th>Jockey</th><th>Trainer</th><th>Form</th><th>OR</th><th>Wt</th><th>Odds</th></tr></thead><tbody>' +
+                    race.runners.map(function(r) {
+                      return '<tr><td>' + (r.draw || '-') + '</td><td style="font-weight:600;">' + (r.horseName || '-') + '</td><td>' + (r.jockey || '-') + '</td><td>' + (r.trainer || '-') + '</td><td>' + (r.form || '-') + '</td><td>' + (r.officialRating || '-') + '</td><td>' + (r.weight || '-') + '</td><td style="font-weight:700;color:var(--gold);">' + (r.odds ? App.formatOdds(parseFloat(r.odds)) : '-') + '</td></tr>';
+                    }).join('') +
+                    '</tbody></table>';
+                }
+                return '<div style="margin-bottom:12px;padding:10px 0;border-bottom:1px solid var(--border);">' +
+                  '<div class="race-row"><span class="race-time">' + (race.time || '-') + '</span><span class="race-name">' + (race.raceName || '') + '</span><span class="race-info">' + [race.raceClass, race.distance, race.going].filter(Boolean).join(' | ') + '</span></div>' +
+                  runnersHtml + '</div>';
+              }).join('') + '</div>';
+          }).join('')}
+        </div>` : ''}
 
         <div class="filter-bar">
           <select onchange="App.filterRacing(this.value, 'meeting')">
@@ -1060,6 +1325,15 @@ const App = {
     `;
   },
 
+  async refreshRacingData(btn) {
+    if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+    try {
+      await this.fetchLiveRacing(true);
+      this.renderRacing();
+    } catch (e) { console.error('Refresh failed:', e); }
+    if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+  },
+
   async filterRacing(value, type) {
     let tips = this.tips.filter(t => t.sport === 'racing');
     if (value && type === 'meeting') tips = tips.filter(t => t.meeting === value);
@@ -1076,12 +1350,34 @@ const App = {
     const app = document.getElementById('app');
     app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading football tips...</div></div>';
 
+    var liveData = null;
     try {
-      this.tips = await this.api('/tips?sport=football');
-    } catch {}
+      var results = await Promise.all([
+        this.api('/tips?sport=football'),
+        this.fetchLiveFootball()
+      ]);
+      this.tips = results[0];
+      liveData = results[1];
+    } catch { try { this.tips = await this.api('/tips?sport=football'); } catch {} }
 
     const tips = this.tips.filter(t => t.sport === 'football');
     const leagues = [...new Set(tips.map(t => t.league))];
+    var hasLiveFixtures = liveData && liveData.live && liveData.fixtures && liveData.fixtures.length > 0;
+    var fixtures = hasLiveFixtures ? liveData.fixtures : [];
+    var liveUpdatedAt = liveData && liveData.fetchedAt ? new Date(liveData.fetchedAt) : null;
+
+    // Group fixtures by league
+    var fixturesByLeague = {};
+    fixtures.forEach(function(f) {
+      var key = f.league || 'Other';
+      if (!fixturesByLeague[key]) fixturesByLeague[key] = [];
+      fixturesByLeague[key].push(f);
+    });
+
+    // Date tabs
+    var today = this._getToday();
+    var tomorrow = this._getTomorrow();
+    var tomorrowTips = tips.filter(function(t) { return t.date === tomorrow; });
 
     app.innerHTML = `
       <div class="container">
@@ -1089,6 +1385,47 @@ const App = {
           <h1><span class="accent">Football</span> Tips</h1>
           <p>Data-driven selections across Europe's top leagues with xG analysis and injury intelligence</p>
         </div>
+
+        <!-- Date Tabs -->
+        <div class="date-tabs">
+          <button class="date-tab active" onclick="App.renderFootball()">Today</button>
+          ${tomorrowTips.length ? '<button class="date-tab">Tomorrow (' + tomorrowTips.length + ')</button>' : ''}
+          <button class="date-tab">This Weekend</button>
+        </div>
+
+        <!-- Live Fixtures -->
+        ${hasLiveFixtures ? `
+        <div class="section">
+          <div class="live-data-header">
+            <span class="live-badge">Live Fixtures</span>
+            <div class="live-updated">
+              ${liveUpdatedAt ? 'Updated ' + this.timeAgo(liveUpdatedAt.toISOString()) : ''}
+              <button class="refresh-btn" onclick="App.refreshFootballData(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Refresh
+              </button>
+            </div>
+          </div>
+          ${Object.keys(fixturesByLeague).map(function(leagueName) {
+            var leagueFixtures = fixturesByLeague[leagueName];
+            return '<div class="meeting-card"><h3>\u26bd ' + leagueName + '</h3><div style="display:grid;gap:8px;">' +
+              leagueFixtures.map(function(f) {
+                var isLive = f.status === '1H' || f.status === '2H' || f.status === 'HT' || f.status === 'LIVE';
+                var isFT = f.status === 'FT';
+                var kickoffTime = f.kickoff ? new Date(f.kickoff).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '';
+                return '<div class="fixture-card">' +
+                  '<div style="flex:1;">' +
+                    '<div class="fixture-league">' + leagueName + '</div>' +
+                    '<div class="fixture-teams">' + f.homeTeam + ' <span class="fixture-vs">vs</span> ' + f.awayTeam + '</div>' +
+                    '<div class="fixture-meta">' + (f.venue || '') + (kickoffTime ? ' | ' + kickoffTime : '') + '</div>' +
+                  '</div>' +
+                  (isLive ? '<div><div class="fixture-live-badge">LIVE ' + (f.elapsed || '') + '\'</div><div class="fixture-score">' + (f.homeGoals != null ? f.homeGoals : '-') + ' - ' + (f.awayGoals != null ? f.awayGoals : '-') + '</div></div>' :
+                   isFT ? '<div><div style="font-size:10px;color:var(--text-muted);">FT</div><div class="fixture-score" style="color:var(--text-primary);">' + (f.homeGoals||0) + ' - ' + (f.awayGoals||0) + '</div></div>' :
+                   '<div class="fixture-meta">' + kickoffTime + '</div>') +
+                  '</div>';
+              }).join('') + '</div></div>';
+          }).join('')}
+        </div>` : ''}
 
         <div class="filter-bar">
           <select onchange="App.filterFootball(this.value, 'league')">
@@ -1143,6 +1480,15 @@ const App = {
         </div>` : ''}
       </div>
     `;
+  },
+
+  async refreshFootballData(btn) {
+    if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+    try {
+      await this.fetchLiveFootball(true);
+      this.renderFootball();
+    } catch (e) { console.error('Refresh failed:', e); }
+    if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
   },
 
   async filterFootball(value, type) {
@@ -1277,7 +1623,7 @@ const App = {
                     <td>${r.event}</td>
                     <td>${r.selection}</td>
                     <td>${r.market}</td>
-                    <td>${r.odds}</td>
+                    <td>${this.formatOdds(r.odds)}</td>
                     <td>${r.stake}</td>
                     <td class="result-${r.result}">${r.result.toUpperCase()}</td>
                     <td class="${r.pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${r.pnl > 0 ? '+' : ''}${r.pnl.toFixed(2)}</td>
@@ -1409,7 +1755,7 @@ const App = {
         <td>${r.event}</td>
         <td>${r.selection}</td>
         <td>${r.market}</td>
-        <td>${r.odds}</td>
+        <td>${App.formatOdds(r.odds)}</td>
         <td>${r.stake}</td>
         <td class="result-${r.result}">${r.result.toUpperCase()}</td>
         <td class="${r.pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${r.pnl > 0 ? '+' : ''}${r.pnl.toFixed(2)}</td>
@@ -1696,6 +2042,7 @@ const App = {
           <button class="admin-tab" onclick="App.switchAdminTab('users', this)">Users</button>
           <button class="admin-tab" onclick="App.switchAdminTab('email', this)">Email</button>
           <button class="admin-tab" onclick="App.switchAdminTab('support', this)">Support (${support.filter(s=>s.status==='open').length})</button>
+          <button class="admin-tab" onclick="App.switchAdminTab('livedata', this)">Live Data</button>
           <button class="admin-tab" onclick="App.switchAdminTab('chat', this)">Chat Logs</button>
           <button class="admin-tab" onclick="App.switchAdminTab('notifications', this)">Notifications</button>
         </div>
@@ -1877,6 +2224,31 @@ const App = {
           `).join('')}
         </div>
 
+        <!-- LIVE DATA PANEL -->
+        <div class="admin-panel" id="panel-livedata">
+          <h3 class="mb-16">Live Data Sources</h3>
+          <div class="api-status-grid" id="api-status-grid">
+            <div class="api-status-card">
+              <div class="api-name">Racing API</div>
+              <div class="api-indicator" id="api-racing-status">Checking...</div>
+            </div>
+            <div class="api-status-card">
+              <div class="api-name">API-Football</div>
+              <div class="api-indicator" id="api-football-status">Checking...</div>
+            </div>
+            <div class="api-status-card">
+              <div class="api-name">Odds API</div>
+              <div class="api-indicator" id="api-odds-status">Checking...</div>
+            </div>
+          </div>
+          <div class="flex gap-8 mb-16">
+            <button class="btn btn-gold btn-sm" onclick="App.adminAutoSettle()">Auto-Settle Results</button>
+            <button class="btn btn-outline btn-sm" onclick="App.adminLoadLiveData()">Refresh All Live Data</button>
+          </div>
+          <div id="admin-live-racing" class="mb-16"><div class="inline-spinner">Loading live racing data...</div></div>
+          <div id="admin-live-football"><div class="inline-spinner">Loading live football data...</div></div>
+        </div>
+
         <!-- CHAT LOGS -->
         <div class="admin-panel" id="panel-chat">
           <h3 class="mb-16">Chat Logs (${chatLogs.length})</h3>
@@ -1914,8 +2286,10 @@ const App = {
   switchAdminTab(panel, btn) {
     document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById(`panel-${panel}`).classList.add('active');
+    if (btn) btn.classList.add('active');
+    var panelEl = document.getElementById('panel-' + panel);
+    if (panelEl) panelEl.classList.add('active');
+    if (panel === 'livedata') this.adminLoadLiveData();
   },
 
   showAddTipForm() {
@@ -2022,6 +2396,102 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // ADMIN LIVE DATA
+  // -----------------------------------------------------------------------
+  async adminLoadLiveData() {
+    // Check API statuses and load live data
+    var racingEl = document.getElementById('admin-live-racing');
+    var footballEl = document.getElementById('admin-live-football');
+    var racingStatus = document.getElementById('api-racing-status');
+    var footballStatus = document.getElementById('api-football-status');
+    var oddsStatus = document.getElementById('api-odds-status');
+
+    try {
+      var racing = await this.fetchLiveRacing(true);
+      if (racingStatus) {
+        racingStatus.className = 'api-indicator ' + (racing && racing.live ? 'connected' : 'disconnected');
+        racingStatus.textContent = racing && racing.live ? 'Connected' : 'Not Connected';
+      }
+      if (racingEl && racing && racing.live && racing.racecards && racing.racecards.length) {
+        racingEl.innerHTML = '<h4 class="mb-8">Live Racing Cards (' + racing.racecards.length + ' races)</h4>' +
+          racing.racecards.slice(0, 10).map(function(race) {
+            var runners = (race.runners || []).slice(0, 5);
+            return '<div class="card mb-8" style="padding:12px;"><div style="font-weight:700;color:var(--gold);margin-bottom:6px;">' + (race.time || '') + ' ' + (race.meeting || '') + ' - ' + (race.raceName || '') + '</div>' +
+              runners.map(function(r) {
+                return '<div class="admin-live-runner"><div><span class="runner-name">' + (r.horseName || '-') + '</span> <span class="runner-detail">(' + (r.jockey || '-') + ' / ' + (r.trainer || '-') + ')</span></div>' +
+                  '<button class="btn btn-gold btn-sm" onclick="App.createTipFromRunner(\'' + (r.horseName || '').replace(/'/g, "\\'") + '\',\'' + (race.time || '') + ' ' + (race.meeting || '').replace(/'/g, "\\'") + '\',\'' + (r.odds || '') + '\')">Create Tip</button></div>';
+              }).join('') + '</div>';
+          }).join('');
+      } else if (racingEl) {
+        racingEl.innerHTML = '<p class="text-muted">No live racing data available. ' + (racing && racing.message ? racing.message : '') + '</p>';
+      }
+    } catch (e) {
+      if (racingStatus) { racingStatus.className = 'api-indicator disconnected'; racingStatus.textContent = 'Error'; }
+      if (racingEl) racingEl.innerHTML = '<p class="text-muted">Failed to load racing data.</p>';
+    }
+
+    try {
+      var football = await this.fetchLiveFootball(true);
+      if (footballStatus) {
+        footballStatus.className = 'api-indicator ' + (football && football.live ? 'connected' : 'disconnected');
+        footballStatus.textContent = football && football.live ? 'Connected' : 'Not Connected';
+      }
+      if (footballEl && football && football.live && football.fixtures && football.fixtures.length) {
+        footballEl.innerHTML = '<h4 class="mb-8">Live Fixtures (' + football.fixtures.length + ')</h4>' +
+          football.fixtures.slice(0, 15).map(function(f) {
+            return '<div class="admin-live-runner"><div><span class="runner-name">' + f.homeTeam + ' vs ' + f.awayTeam + '</span> <span class="runner-detail">' + (f.league || '') + ' | ' + (f.status || '') + '</span></div>' +
+              '<button class="btn btn-gold btn-sm" onclick="App.createTipFromFixture(\'' + (f.homeTeam + ' vs ' + f.awayTeam).replace(/'/g, "\\'") + '\',\'' + (f.league || '').replace(/'/g, "\\'") + '\')">Create Tip</button></div>';
+          }).join('');
+      } else if (footballEl) {
+        footballEl.innerHTML = '<p class="text-muted">No live football data available. ' + (football && football.message ? football.message : '') + '</p>';
+      }
+    } catch (e) {
+      if (footballStatus) { footballStatus.className = 'api-indicator disconnected'; footballStatus.textContent = 'Error'; }
+      if (footballEl) footballEl.innerHTML = '<p class="text-muted">Failed to load football data.</p>';
+    }
+
+    try {
+      var odds = await this.fetchLiveOdds(true);
+      if (oddsStatus) {
+        oddsStatus.className = 'api-indicator ' + (odds && odds.live ? 'connected' : 'disconnected');
+        oddsStatus.textContent = odds && odds.live ? 'Connected' : 'Not Connected';
+      }
+    } catch (e) {
+      if (oddsStatus) { oddsStatus.className = 'api-indicator disconnected'; oddsStatus.textContent = 'Error'; }
+    }
+  },
+
+  createTipFromRunner(horseName, event, odds) {
+    this.switchAdminTab('tips', document.querySelector('.admin-tab'));
+    this.showAddTipForm();
+    var sportEl = document.getElementById('at-sport');
+    var eventEl = document.getElementById('at-event');
+    var selEl = document.getElementById('at-selection');
+    var oddsEl = document.getElementById('at-odds');
+    if (sportEl) sportEl.value = 'racing';
+    if (eventEl) eventEl.value = event || '';
+    if (selEl) selEl.value = horseName || '';
+    if (oddsEl && odds) oddsEl.value = odds;
+  },
+
+  createTipFromFixture(event, league) {
+    this.switchAdminTab('tips', document.querySelector('.admin-tab'));
+    this.showAddTipForm();
+    var sportEl = document.getElementById('at-sport');
+    var eventEl = document.getElementById('at-event');
+    if (sportEl) sportEl.value = 'football';
+    if (eventEl) eventEl.value = event + (league ? ' (' + league + ')' : '');
+  },
+
+  async adminAutoSettle() {
+    try {
+      var result = await this.api('/admin/auto-results', { method: 'POST' });
+      alert(result.message || 'Auto-settle complete. ' + (result.updated || 0) + ' tips updated.');
+      this.renderAdmin();
+    } catch (e) { alert('Error: ' + e.message); }
+  },
+
+  // -----------------------------------------------------------------------
   // CHATBOT
   // -----------------------------------------------------------------------
   toggleChat() {
@@ -2066,6 +2536,48 @@ const App = {
     return div.innerHTML;
   },
 
+  _getVerdictText(a, tip) {
+    if (a && a.valueReasoning) return a.valueReasoning;
+    if (a && a.summary) return a.summary;
+    var edgePct = ((tip.edge || 0) * 100).toFixed(1);
+    var verdict = 'Our model identifies genuine value in this selection with a ' + edgePct + '% edge over the bookmaker price. ';
+    if (tip.confidence >= 8) verdict += 'This is one of our strongest plays today.';
+    else if (tip.confidence >= 6) verdict += 'A solid selection with clear value.';
+    else verdict += 'A speculative play - consider smaller stakes.';
+    return verdict;
+  },
+
+  _buildModelText(a, tip) {
+    if (a.summary) return '<p>' + a.summary + '</p>';
+    var c = tip.confidence || 0;
+    var edgePct = ((tip.edge || 0) * 100).toFixed(1);
+    var implPct = ((tip.impliedProbability || 0) * 100).toFixed(1);
+    var modPct = ((tip.modelProbability || 0) * 100).toFixed(1);
+    return '<p>Our model gives this selection a <strong>' + c + '/10</strong> confidence rating with a <strong>' + edgePct + '%</strong> edge. Implied probability: ' + implPct + '%. Model probability: ' + modPct + '%.</p>';
+  },
+
+  _buildAnalysisSections(tip, a) {
+    var self = this;
+    if (tip.sport === 'racing') {
+      return [
+        { icon: '\ud83d\udcca', title: 'Model Assessment', body: self._buildModelText(a, tip) },
+        { icon: '\ud83d\udcc8', title: 'Form Analysis', fields: ['form', 'speedRatings'] },
+        { icon: '\u26a1', title: 'Key Factors', fields: ['paceAnalysis', 'goingSuitability', 'courseRecord', 'drawBias'] },
+        { icon: '\u26a0\ufe0f', title: 'Risk Assessment', body: '<p>Risk Level: <strong>' + (tip.riskLevel || 'Medium') + '</strong></p>' + (a.classMovement ? '<p>' + a.classMovement + '</p>' : '') + (a.weight ? '<p>' + a.weight + '</p>' : '') },
+        { icon: '\ud83d\udca1', title: 'Why This Is Value', fields: ['valueReasoning', 'marketSupport'] },
+        { icon: '\ud83c\udfaf', title: 'Staking Recommendation', body: '<p>Recommended stake: <strong>' + (tip.staking || '1 unit') + '</strong>. ' + (a.trainerJockeyStats ? 'Trainer/Jockey: ' + a.trainerJockeyStats : '') + '</p>' },
+      ];
+    }
+    return [
+      { icon: '\ud83d\udcca', title: 'Model Assessment', body: self._buildModelText(a, tip) },
+      { icon: '\ud83d\udcc8', title: 'Form Analysis', fields: ['form', 'homeAway'] },
+      { icon: '\u26a1', title: 'Key Factors', fields: ['xG', 'shots'] },
+      { icon: '\u26a0\ufe0f', title: 'Risk Assessment', body: '<p>Risk Level: <strong>' + (tip.riskLevel || 'Medium') + '</strong></p>' + (a.injuries ? '<p>' + a.injuries + '</p>' : '') + (a.scheduleCongestion ? '<p>' + a.scheduleCongestion + '</p>' : '') },
+      { icon: '\ud83d\udca1', title: 'Why This Is Value', fields: ['valueReasoning', 'motivationContext'] },
+      { icon: '\ud83c\udfaf', title: 'Staking Recommendation', body: '<p>Recommended stake: <strong>' + (tip.staking || '1 unit') + '</strong>. ' + (a.h2h ? 'H2H: ' + a.h2h : '') + '</p>' },
+    ];
+  },
+
   // -----------------------------------------------------------------------
   // FREE WEEKLY ACCA
   // -----------------------------------------------------------------------
@@ -2086,12 +2598,12 @@ const App = {
                 <div class="acca-selection-pick">${s.selection} &bull; ${s.league}</div>
                 <div class="acca-selection-reasoning">${s.reasoning}</div>
               </div>
-              <div class="acca-selection-odds">${s.odds.toFixed(2)}</div>
+              <div class="acca-selection-odds">${this.formatOdds(s.odds)}</div>
             </div>
           `).join('')}
           <div class="acca-total-row">
             <div class="acca-total-label">Combined Odds</div>
-            <div class="acca-total-value">${(acca.odds || acca.accaCombinedOdds || 0).toFixed(2)}</div>
+            <div class="acca-total-value">${this.formatOdds(acca.odds || acca.accaCombinedOdds || 0)}</div>
           </div>
           <div class="acca-return-info">
             <div class="return-label">&pound;10 Stake Returns</div>
@@ -2831,10 +3343,10 @@ const App = {
     };
     return `<div class="odds-comparison" onclick="event.stopPropagation();">
       ${entries.map(([k, v]) => `
-        <a href="${urls[k] || '#'}" target="_blank" rel="noopener nofollow" class="affiliate-btn ${v === bestOdds ? 'best-price' : ''}" title="Place bet at ${names[k] || k}">
+        <a href="${urls[k] || '#'}" target="_blank" rel="noopener nofollow" class="affiliate-btn ${v === bestOdds ? 'best-price' : ''}" title="Place bet at ${names[k] || k}" style="${v === bestOdds ? 'border-color:var(--gold);box-shadow:0 0 8px rgba(212,168,67,.2);' : ''}">
           <span style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;">${names[k] || k}</span>
-          <span style="font-weight:800;font-size:13px;">${v.toFixed(2)}</span>
-          ${v === bestOdds ? '<span style="font-size:8px;">BEST</span>' : ''}
+          <span style="font-weight:800;font-size:13px;${v === bestOdds ? 'color:var(--gold);' : ''}">${this.formatOdds(v)}</span>
+          ${v === bestOdds ? '<span style="font-size:8px;color:var(--gold);">BEST</span>' : ''}
         </a>
       `).join('')}
     </div>

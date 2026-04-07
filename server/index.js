@@ -793,14 +793,19 @@ app.get('/api/chat/logs', authenticate, requireAdmin, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// SPA fallback
+// API STATUS
 // ---------------------------------------------------------------------------
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+app.get('/api/status', (req, res) => {
+  res.json({
+    racing: { connected: !!(racingSource && process.env.RACING_API_KEY) },
+    football: { connected: !!(footballSource && process.env.API_FOOTBALL_KEY) },
+    odds: { connected: !!(oddsSource && process.env.ODDS_API_KEY) },
+    ingestion: dataIngestion.getStatus ? dataIngestion.getStatus() : {}
+  });
 });
 
 // ---------------------------------------------------------------------------
-// SPA catch-all — serve index.html for any non-API, non-static route
+// SPA fallback
 // ---------------------------------------------------------------------------
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
