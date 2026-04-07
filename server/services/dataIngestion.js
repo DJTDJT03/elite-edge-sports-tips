@@ -80,35 +80,99 @@ class FootballFixturesSource extends DataSource {
   constructor() {
     super('football-fixtures', {
       refreshInterval: 600000, // 10 minutes
-      // apiUrl: 'https://v3.football.api-sports.io',
-      // apiKey: process.env.FOOTBALL_API_KEY,
+      apiUrl: 'https://v3.football.api-sports.io',
+      apiKey: process.env.API_FOOTBALL_KEY || '',
     });
+    // League IDs for API-Football: PL=39, CL=2, LaLiga=140, SerieA=135, Bundesliga=78, Ligue1=61, FACup=45
+    this.leagueIds = [39, 2, 140, 135, 78, 61, 45];
   }
 
   async fetch() {
-    // PLACEHOLDER: Replace with real API call
-    // Example real implementation:
-    // const res = await fetch(`${this.config.apiUrl}/fixtures?date=${today}`, {
-    //   headers: { 'x-apisports-key': this.config.apiKey }
-    // });
-    // return res.json();
+    if (!this.config.apiKey) {
+      console.log('[${this.name}] No API key — set API_FOOTBALL_KEY env var. Sign up: https://www.api-football.com/');
+      return { response: [] };
+    }
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const data = await this._apiGet('/fixtures?date=' + today + '&league=' + this.leagueIds.join('-') + '&season=2025');
+      console.log('[football-fixtures] Fetched ' + (data.response || []).length + ' fixtures for ' + today);
+      return data;
+    } catch (err) {
+      console.error('[football-fixtures] Error: ' + err.message);
+      return { response: [] };
+    }
+  }
 
-    console.log(`[${this.name}] Fetch called — using sample data (no API key configured)`);
-    return { fixtures: [] }; // Returns empty; app falls back to sample-tips.json
+  async fetchFixturesByDate(date) {
+    if (!this.config.apiKey) return { response: [] };
+    return this._apiGet('/fixtures?date=' + date + '&league=' + this.leagueIds.join('-') + '&season=2025');
+  }
+
+  async fetchLiveScores() {
+    if (!this.config.apiKey) return { response: [] };
+    return this._apiGet('/fixtures?live=all');
+  }
+
+  async fetchFixtureStats(fixtureId) {
+    if (!this.config.apiKey) return { response: [] };
+    return this._apiGet('/fixtures/statistics?fixture=' + fixtureId);
+  }
+
+  async fetchTeamForm(teamId) {
+    if (!this.config.apiKey) return { response: [] };
+    return this._apiGet('/teams/statistics?team=' + teamId + '&season=2025&league=39');
+  }
+
+  async fetchInjuries(fixtureId) {
+    if (!this.config.apiKey) return { response: [] };
+    return this._apiGet('/injuries?fixture=' + fixtureId);
+  }
+
+  async fetchH2H(team1Id, team2Id) {
+    if (!this.config.apiKey) return { response: [] };
+    return this._apiGet('/fixtures/headtohead?h2h=' + team1Id + '-' + team2Id + '&last=10');
+  }
+
+  _apiGet(path) {
+    return new Promise((resolve, reject) => {
+      const https = require('https');
+      const options = {
+        hostname: 'v3.football.api-sports.io',
+        path: path,
+        method: 'GET',
+        headers: { 'x-apisports-key': this.config.apiKey }
+      };
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try { resolve(JSON.parse(data)); }
+          catch (e) { reject(new Error('Invalid JSON')); }
+        });
+      });
+      req.on('error', reject);
+      req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout')); });
+      req.end();
+    });
   }
 
   normalise(raw) {
-    // Transform API-Football response to internal fixture schema:
-    // { id, league, homeTeam, awayTeam, kickoff, venue, status, odds }
-    if (!raw.fixtures || !raw.fixtures.length) return [];
-    return raw.fixtures.map(f => ({
-      id: f.fixture?.id,
-      league: f.league?.name,
-      homeTeam: f.teams?.home?.name,
-      awayTeam: f.teams?.away?.name,
-      kickoff: f.fixture?.date,
-      venue: f.fixture?.venue?.name,
-      status: f.fixture?.status?.short,
+    if (!raw.response || !raw.response.length) return [];
+    return raw.response.map(f => ({
+      id: f.fixture.id,
+      league: f.league.name,
+      leagueId: f.league.id,
+      homeTeam: f.teams.home.name,
+      homeTeamId: f.teams.home.id,
+      awayTeam: f.teams.away.name,
+      awayTeamId: f.teams.away.id,
+      kickoff: f.fixture.date,
+      venue: f.fixture.venue ? f.fixture.venue.name : '',
+      status: f.fixture.status.short,
+      statusLong: f.fixture.status.long,
+      homeGoals: f.goals.home,
+      awayGoals: f.goals.away,
+      elapsed: f.fixture.status.elapsed
     }));
   }
 }
@@ -126,25 +190,78 @@ class FootballOddsSource extends DataSource {
   constructor() {
     super('football-odds', {
       refreshInterval: 120000, // 2 minutes — odds change fast
-      // apiUrl: 'https://api.the-odds-api.com/v4',
-      // apiKey: process.env.ODDS_API_KEY,
+      apiUrl: 'https://api.the-odds-api.com/v4',
+      apiKey: process.env.ODDS_API_KEY || '',
     });
+    // The Odds API sport keys for our leagues
+    this.sportKeys = ['soccer_epl', 'soccer_uefa_champs_league', 'soccer_spain_la_liga', 'soccer_italy_serie_a', 'soccer_germany_bundesliga', 'soccer_france_ligue_one', 'soccer_fa_cup'];
   }
 
   async fetch() {
-    // PLACEHOLDER: Replace with real API call
-    // const res = await fetch(
-    //   `${this.config.apiUrl}/sports/soccer_epl/odds?regions=uk&markets=h2h,totals,btts&apiKey=${this.config.apiKey}`
-    // );
-    // return res.json();
+    if (!this.config.apiKey) {
+      console.log('[football-odds] No API key — set ODDS_API_KEY env var. Sign up: https://the-odds-api.com/');
+      return [];
+    }
+    try {
+      var allOdds = [];
+      // Fetch odds for each sport (to manage credit usage, just do PL + featured)
+      for (var i = 0; i < Math.min(this.sportKeys.length, 3); i++) {
+        var data = await this._apiGet('/sports/' + this.sportKeys[i] + '/odds/?regions=uk&markets=h2h,totals&oddsFormat=decimal&apiKey=' + this.config.apiKey);
+        if (Array.isArray(data)) allOdds = allOdds.concat(data);
+      }
+      console.log('[football-odds] Fetched odds for ' + allOdds.length + ' events');
+      return allOdds;
+    } catch (err) {
+      console.error('[football-odds] Error: ' + err.message);
+      return [];
+    }
+  }
 
-    console.log(`[${this.name}] Fetch called — using sample data`);
-    return [];
+  _apiGet(path) {
+    return new Promise((resolve, reject) => {
+      var https = require('https');
+      var options = {
+        hostname: 'api.the-odds-api.com',
+        path: '/v4' + path,
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      };
+      var req = https.request(options, function(res) {
+        var data = '';
+        res.on('data', function(chunk) { data += chunk; });
+        res.on('end', function() {
+          try { resolve(JSON.parse(data)); }
+          catch (e) { reject(new Error('Invalid JSON')); }
+        });
+      });
+      req.on('error', reject);
+      req.setTimeout(15000, function() { req.destroy(); reject(new Error('Timeout')); });
+      req.end();
+    });
   }
 
   normalise(raw) {
-    // Transform to: { fixtureId, market, bookmaker, selection, odds, timestamp }
-    return raw;
+    if (!Array.isArray(raw)) return [];
+    return raw.map(function(event) {
+      var bookmakerOdds = {};
+      (event.bookmakers || []).forEach(function(bk) {
+        var market = (bk.markets || []).find(function(m) { return m.key === 'h2h'; });
+        if (market && market.outcomes) {
+          bookmakerOdds[bk.key] = {};
+          market.outcomes.forEach(function(o) {
+            bookmakerOdds[bk.key][o.name] = o.price;
+          });
+        }
+      });
+      return {
+        eventId: event.id,
+        sport: event.sport_key,
+        homeTeam: event.home_team,
+        awayTeam: event.away_team,
+        kickoff: event.commence_time,
+        bookmakerOdds: bookmakerOdds
+      };
+    });
   }
 }
 

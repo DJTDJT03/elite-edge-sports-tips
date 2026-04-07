@@ -291,6 +291,166 @@ app.get('/api/racing/horse/:horseId', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// LIVE FOOTBALL DATA (API-Football)
+// Set env: API_FOOTBALL_KEY
+// Sign up: https://www.api-football.com/
+// ---------------------------------------------------------------------------
+const footballSource = dataIngestion.sources ? dataIngestion.sources.get('football-fixtures') : null;
+const oddsSource = dataIngestion.sources ? dataIngestion.sources.get('football-odds') : null;
+
+app.get('/api/football/live-fixtures', async (req, res) => {
+  try {
+    if (!footballSource || !process.env.API_FOOTBALL_KEY) {
+      return res.json({ live: false, message: 'API-Football not configured. Set API_FOOTBALL_KEY.', fixtures: [] });
+    }
+    var date = req.query.date || new Date().toISOString().split('T')[0];
+    var raw = await footballSource.fetchFixturesByDate(date);
+    var normalised = footballSource.normalise(raw);
+    res.json({ live: true, fixtures: normalised, fetchedAt: new Date().toISOString() });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/football/live-scores', async (req, res) => {
+  try {
+    if (!footballSource || !process.env.API_FOOTBALL_KEY) {
+      return res.json({ live: false, fixtures: [] });
+    }
+    var raw = await footballSource.fetchLiveScores();
+    var normalised = footballSource.normalise(raw);
+    res.json({ live: true, fixtures: normalised, fetchedAt: new Date().toISOString() });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/football/h2h/:team1/:team2', async (req, res) => {
+  try {
+    if (!footballSource || !process.env.API_FOOTBALL_KEY) return res.json({ live: false });
+    var raw = await footballSource.fetchH2H(req.params.team1, req.params.team2);
+    res.json({ live: true, matches: footballSource.normalise(raw) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ---------------------------------------------------------------------------
+// LIVE ODDS DATA (The Odds API)
+// Set env: ODDS_API_KEY
+// Sign up: https://the-odds-api.com/
+// ---------------------------------------------------------------------------
+app.get('/api/odds/live', async (req, res) => {
+  try {
+    if (!oddsSource || !process.env.ODDS_API_KEY) {
+      return res.json({ live: false, message: 'Odds API not configured. Set ODDS_API_KEY.', odds: [] });
+    }
+    var raw = await oddsSource.fetch();
+    var normalised = oddsSource.normalise(raw);
+    res.json({ live: true, odds: normalised, fetchedAt: new Date().toISOString() });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ---------------------------------------------------------------------------
+// AUTO-RESULT MARKING
+// Checks live results and auto-marks tips as won/lost
+// Call from admin panel or schedule with cron
+// ---------------------------------------------------------------------------
+app.post('/api/admin/auto-results', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+
+  try {
+    var tips = readJSON('sample-tips.json');
+    var results = readJSON('sample-results.json');
+    var updated = 0;
+
+    // Auto-mark racing results if Racing API connected
+    if (racingSource && process.env.RACING_API_KEY) {
+      var today = new Date().toISOString().split('T')[0];
+      var raceResults = await racingSource.fetchResults(today);
+      if (raceResults.results) {
+        tips.forEach(function(tip) {
+          if (tip.sport !== 'racing' || tip.status !== 'active' || tip.result) return;
+          // Match by selection name in today's results
+          var match = (raceResults.results || []).find(function(r) {
+            return r.runners && r.runners.some(function(runner) {
+              return runner.horse && runner.horse.toLowerCase() === tip.selection.toLowerCase() && runner.position === 1;
+            });
+          });
+          if (match) {
+            tip.status = 'settled';
+            tip.result = 'won';
+            // Add to results
+            results.push({
+              id: 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+              tipId: tip.id, sport: tip.sport, event: tip.event, selection: tip.selection,
+              market: tip.market, odds: tip.odds, stake: parseFloat(tip.staking) || 2,
+              result: 'won', pnl: ((tip.odds - 1) * (parseFloat(tip.staking) || 2)),
+              date: today, isPremium: tip.isPremium, tipsterProfile: tip.tipsterProfile || 'The Edge'
+            });
+            updated++;
+          }
+        });
+      }
+    }
+
+    // Auto-mark football results if API-Football connected
+    if (footballSource && process.env.API_FOOTBALL_KEY) {
+      var todayFb = new Date().toISOString().split('T')[0];
+      var fbRaw = await footballSource.fetchFixturesByDate(todayFb);
+      var fbResults = footballSource.normalise(fbRaw).filter(function(f) { return f.status === 'FT'; });
+
+      tips.forEach(function(tip) {
+        if (tip.sport !== 'football' || tip.status !== 'active' || tip.result) return;
+        // Match by team names
+        var match = fbResults.find(function(f) {
+          var eventLower = (tip.event || '').toLowerCase();
+          return eventLower.indexOf(f.homeTeam.toLowerCase()) !== -1 || eventLower.indexOf(f.awayTeam.toLowerCase()) !== -1;
+        });
+        if (match) {
+          var homeGoals = match.homeGoals || 0;
+          var awayGoals = match.awayGoals || 0;
+          var totalGoals = homeGoals + awayGoals;
+          var won = false;
+
+          // Check common market types
+          var market = (tip.market || '').toLowerCase();
+          var selection = (tip.selection || '').toLowerCase();
+
+          if (market.indexOf('result') !== -1) {
+            if (selection.indexOf('home') !== -1 || selection.indexOf(match.homeTeam.toLowerCase()) !== -1) won = homeGoals > awayGoals;
+            else if (selection.indexOf('away') !== -1 || selection.indexOf(match.awayTeam.toLowerCase()) !== -1) won = awayGoals > homeGoals;
+            else if (selection.indexOf('draw') !== -1) won = homeGoals === awayGoals;
+          } else if (market.indexOf('btts') !== -1 || market.indexOf('both teams') !== -1) {
+            won = selection.indexOf('yes') !== -1 ? (homeGoals > 0 && awayGoals > 0) : !(homeGoals > 0 && awayGoals > 0);
+          } else if (market.indexOf('over') !== -1) {
+            if (selection.indexOf('2.5') !== -1) won = totalGoals > 2;
+            else if (selection.indexOf('1.5') !== -1) won = totalGoals > 1;
+            else if (selection.indexOf('3.5') !== -1) won = totalGoals > 3;
+          } else if (market.indexOf('under') !== -1) {
+            if (selection.indexOf('2.5') !== -1) won = totalGoals < 3;
+            else if (selection.indexOf('1.5') !== -1) won = totalGoals < 2;
+          }
+
+          tip.status = 'settled';
+          tip.result = won ? 'won' : 'lost';
+          var stake = parseFloat(tip.staking) || 2;
+          results.push({
+            id: 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+            tipId: tip.id, sport: tip.sport, event: tip.event, selection: tip.selection,
+            market: tip.market, odds: tip.odds, stake: stake,
+            result: won ? 'won' : 'lost', pnl: won ? ((tip.odds - 1) * stake) : -stake,
+            date: todayFb, isPremium: tip.isPremium, tipsterProfile: tip.tipsterProfile || 'The Edge'
+          });
+          updated++;
+        }
+      });
+    }
+
+    if (updated > 0) {
+      writeJSON('sample-tips.json', tips);
+      writeJSON('sample-results.json', results);
+    }
+
+    res.json({ success: true, updated: updated, message: updated + ' tip(s) auto-settled' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ---------------------------------------------------------------------------
 // TIPS ROUTES
 // ---------------------------------------------------------------------------
 app.get('/api/tips', (req, res) => {
