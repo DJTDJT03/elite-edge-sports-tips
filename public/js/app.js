@@ -638,6 +638,30 @@ const App = {
           </div>
         </div>` : ''}
 
+        <!-- Recent Winners Grid (permanent, high visibility) -->
+        ${recentWins.length ? `
+        <div class="section" style="margin-bottom:24px;">
+          <div class="section-title"><span style="color:#22c55e;">&#10003;</span> Verified Recent Winners</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+            ${recentWins.slice(-6).reverse().map(w => `
+              <div style="background:var(--card-bg);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-weight:700;font-size:14px;color:#fff;">${w.selection}</div>
+                  <div style="font-size:12px;color:var(--text-secondary);">${w.event || ''}</div>
+                  <div style="font-size:11px;color:var(--text-muted);">${formatDateUK(w.date)}</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-weight:800;font-size:18px;color:#22c55e;">@ ${w.odds}</div>
+                  <div style="font-size:12px;color:#22c55e;font-weight:600;">+${w.pnl > 0 ? w.pnl.toFixed(2) : '0'} units</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div style="text-align:center;margin-top:12px;">
+            <a href="#/results" style="color:var(--accent);font-size:13px;font-weight:600;">View Full Results &amp; Performance History &rarr;</a>
+          </div>
+        </div>` : ''}
+
         <!-- NAP OF THE DAY (Enhancement #4) -->
         ${napTip ? `
         <div class="nap-card-wrapper">
