@@ -11,13 +11,20 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "helmet": "^7.1.0"
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^8.0.5"
   },
-  "keywords": ["sports", "betting", "tips", "horse-racing", "football"],
+  "keywords": [
+    "sports",
+    "betting",
+    "tips",
+    "horse-racing",
+    "football"
+  ],
   "author": "Elite Edge Sports Tips Ltd",
   "license": "UNLICENSED",
   "private": true

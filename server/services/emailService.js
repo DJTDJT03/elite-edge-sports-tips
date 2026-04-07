@@ -70,17 +70,55 @@ class EmailService {
      * };
      */
 
-    // Default: console transport (logs to server console for demo)
+    // Auto-detect: if SMTP credentials are set, use Nodemailer; otherwise console
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        var nodemailer = require('nodemailer');
+        var transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: parseInt(process.env.SMTP_PORT) || 587,
+          secure: parseInt(process.env.SMTP_PORT) === 465,
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS
+          }
+        });
+        this.fromAddress = process.env.SMTP_USER;
+        this.transport = {
+          name: 'smtp',
+          send: async (msg) => {
+            var result = await transporter.sendMail({
+              from: '"' + (this.fromName) + '" <' + this.fromAddress + '>',
+              to: msg.to,
+              subject: msg.subject,
+              text: msg.text || '',
+              html: msg.html || ''
+            });
+            console.log('[EmailService] SENT to: ' + msg.to + ', subject: ' + msg.subject + ', messageId: ' + result.messageId);
+            return result;
+          }
+        };
+        console.log('[EmailService] Initialized with SMTP transport (' + process.env.SMTP_HOST + ')');
+      } catch (err) {
+        console.error('[EmailService] SMTP setup failed:', err.message);
+        console.log('[EmailService] Falling back to console transport');
+        this._initConsoleTransport();
+      }
+    } else {
+      this._initConsoleTransport();
+    }
+  }
+
+  _initConsoleTransport() {
     this.transport = {
       name: 'console',
       send: async (msg) => {
-        console.log(`[EmailService] SEND to: ${msg.to}, subject: ${msg.subject}`);
-        console.log(`[EmailService] Preview: ${msg.text?.substring(0, 200)}...`);
-        return { messageId: `demo_${Date.now()}`, status: 'logged' };
+        console.log('[EmailService] SEND to: ' + msg.to + ', subject: ' + msg.subject);
+        console.log('[EmailService] Preview: ' + (msg.text || '').substring(0, 200) + '...');
+        return { messageId: 'demo_' + Date.now(), status: 'logged' };
       },
     };
-
-    console.log(`[EmailService] Initialized with ${this.transport.name} transport`);
+    console.log('[EmailService] Initialized with console transport (set SMTP_HOST, SMTP_USER, SMTP_PASS to send real emails)');
   }
 
   // -----------------------------------------------------------------------
