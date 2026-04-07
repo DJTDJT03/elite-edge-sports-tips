@@ -640,9 +640,16 @@ app.get('*', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// SPA catch-all — serve index.html for any non-API, non-static route
+// ---------------------------------------------------------------------------
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
+
+// ---------------------------------------------------------------------------
 // Start server
 // ---------------------------------------------------------------------------
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  Elite Edge Sports Tips`);
   console.log(`  Server running at http://localhost:${PORT}`);
   console.log(`  ------------------------------------------`);
