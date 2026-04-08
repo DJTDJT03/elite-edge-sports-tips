@@ -332,7 +332,16 @@ app.post('/api/auth/login', async (req, res) => {
     // Support both hashed and plain-text passwords for demo
     let valid = false;
     try { valid = await bcrypt.compare(password, user.password); } catch {}
-    if (!valid && user.passwordPlain) { valid = password === user.passwordPlain; }
+
+    // Migrate any legacy plain-text passwords to bcrypt on first successful login
+    if (!valid && user.passwordPlain) {
+      valid = password === user.passwordPlain;
+      if (valid) {
+        user.password = await bcrypt.hash(password, 10);
+        delete user.passwordPlain;
+        writeJSON('sample-users.json', users);
+      }
+    }
 
     if (!valid) {
       recordAuthAttempt(ip);
@@ -442,7 +451,7 @@ app.post('/api/auth/change-password', authenticate, async (req, res) => {
     if (!valid) return res.status(401).json({ error: 'Current password is incorrect' });
 
     user.password = await bcrypt.hash(newPassword, 10);
-    if (user.passwordPlain) delete user.passwordPlain;
+    delete user.passwordPlain;
     writeJSON('sample-users.json', users);
 
     res.json({ message: 'Password changed successfully' });
@@ -528,12 +537,23 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const message = 'If an account exists with this email, a password reset link has been sent.';
 
     if (user) {
-      // Demo mode: actually reset the password to "reset123"
-      const hashed = await bcrypt.hash('reset123', 10);
+      // Generate a secure random temporary password
+      const crypto = require('crypto');
+      const tempPass = crypto.randomBytes(6).toString('hex');
+      const hashed = await bcrypt.hash(tempPass, 10);
       user.password = hashed;
-      if (user.passwordPlain) user.passwordPlain = 'reset123';
+      user.mustResetPassword = true;
       writeJSON('sample-users.json', users);
-      return res.json({ message, demo: true, demoMessage: 'Demo mode: password reset to reset123' });
+
+      // Send reset email via emailService
+      try {
+        if (emailService && emailService.sendPasswordReset) {
+          await emailService.sendPasswordReset(user.email, tempPass);
+        }
+      } catch (emailErr) {
+        console.error('[Auth] Failed to send password reset email:', emailErr.message);
+      }
+      return res.json({ message });
     }
 
     res.json({ message });
@@ -1702,14 +1722,23 @@ async function autoSettleResults() {
     var updated = 0;
     var today = new Date().toISOString().split('T')[0];
 
-    // Only process today's active tips
-    var activeTips = tips.filter(function(t) { return t.status === 'active' && !t.result && t.date === today && !t.isWeeklyAcca; });
+    // Process today's AND yesterday's active tips (handles late finishes / missed settle windows)
+    var yesterday = new Date(new Date(today).getTime() - 86400000).toISOString().split('T')[0];
+    var activeTips = tips.filter(function(t) { return t.status === 'active' && !t.result && (t.date === today || t.date === yesterday) && !t.isWeeklyAcca; });
     if (activeTips.length === 0) return;
 
-    // Auto-mark racing results
+    // Auto-mark racing results — fetch today + yesterday
     if (racingSource && process.env.RACING_API_KEY) {
       try {
         var raceResults = await racingSource.fetchResults(today);
+        // Also fetch yesterday's results for any unsettled tips
+        try {
+          var yesterdayResults = await racingSource.fetchResults(yesterday);
+          if (yesterdayResults && yesterdayResults.results) {
+            raceResults = raceResults || { results: [] };
+            raceResults.results = (raceResults.results || []).concat(yesterdayResults.results);
+          }
+        } catch (e) { /* yesterday fetch optional */ }
         if (raceResults && raceResults.results) {
           activeTips.forEach(function(tip) {
             if (tip.sport !== 'racing') return;
@@ -1730,7 +1759,7 @@ async function autoSettleResults() {
               tip.status = 'settled';
               tip.result = tipWon ? 'won' : (placed ? 'placed' : 'lost');
               var stake = parseFloat(tip.staking) || 2;
-              var pnl = tipWon ? ((tip.odds - 1) * stake) : (placed ? ((tip.odds / 4) * stake) : -stake);
+              var pnl = tipWon ? ((tip.odds - 1) * stake) : (placed ? (((tip.odds - 1) / 4) * stake) : -stake);
 
               results.push({
                 id: 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -1747,11 +1776,17 @@ async function autoSettleResults() {
       } catch (err) { console.error('[Auto-Settle] Racing error:', err.message); }
     }
 
-    // Auto-mark football results
+    // Auto-mark football results (today + yesterday)
     if (footballSource && process.env.API_FOOTBALL_KEY) {
       try {
         var fbRaw = await footballSource.fetchFixturesByDate(today);
         var fbResults = footballSource.normalise(fbRaw).filter(function(f) { return f.status === 'FT'; });
+        // Also fetch yesterday's finished fixtures for any unsettled tips
+        try {
+          var fbYesterday = await footballSource.fetchFixturesByDate(yesterday);
+          var fbYestResults = footballSource.normalise(fbYesterday).filter(function(f) { return f.status === 'FT'; });
+          fbResults = fbResults.concat(fbYestResults);
+        } catch (e) { /* yesterday fetch optional */ }
 
         activeTips.forEach(function(tip) {
           if (tip.sport !== 'football') return;
@@ -2224,15 +2259,10 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  Elite Edge Sports Tips`);
   console.log(`  Server running at http://localhost:${PORT}`);
   console.log(`  ------------------------------------------`);
-  console.log(`  Demo accounts:`);
-  console.log(`    Admin:   admin@elite.com / admin123`);
-  console.log(`    Free:    free@test.com / test123`);
-  console.log(`    Premium: premium@test.com / test123`);
-  console.log(`  ------------------------------------------`);
   console.log(`  Auto-tips: Daily at 7:30am UK (every 10 min check)`);
   console.log(`  Auto-settle: Running every 5 minutes`);
-  console.log(`  Email workflows: Daily bulletin, weekly summary,`);
-  console.log(`    re-engagement, expiry warnings, big win alerts`);
+  console.log(`  Data refresh: 1am / 11am / 5pm / 11pm UK`);
+  console.log(`  Email workflows: Active`);
   console.log(`  ------------------------------------------\n`);
 });
 

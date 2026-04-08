@@ -867,7 +867,7 @@ const App = {
             <div style="font-size:36px;">&#127943;</div>
             <div style="flex:1;">
               <div style="font-weight:900;font-size:18px;color:#d4a843;margin-bottom:4px;">Grand National Festival &mdash; Live This Week</div>
-              <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">21 races. 3 days. Elite analysis for every race.</div>
+              <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">18 races. 3 days. Elite analysis for every race.</div>
               <div style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:8px 20px;border-radius:8px;font-weight:700;font-size:13px;">View Festival Guide &rarr;</div>
             </div>
           </div>
@@ -1553,7 +1553,8 @@ const App = {
   },
 
   async filterRacing(value, type) {
-    let tips = this.tips.filter(t => t.sport === 'racing');
+    const todayStr = new Date().toISOString().split('T')[0];
+    let tips = this.tips.filter(t => t.sport === 'racing' && t.status === 'active' && t.date >= todayStr);
     if (value && type === 'meeting') tips = tips.filter(t => t.meeting === value);
     if (value && type === 'market') tips = tips.filter(t => t.market === value);
     if (value && type === 'going') tips = tips.filter(t => t.going === value);
@@ -1717,7 +1718,8 @@ const App = {
   },
 
   async filterFootball(value, type) {
-    let tips = this.tips.filter(t => t.sport === 'football');
+    const todayStr = new Date().toISOString().split('T')[0];
+    let tips = this.tips.filter(t => t.sport === 'football' && t.status === 'active' && t.date >= todayStr);
     if (value && type === 'league') tips = tips.filter(t => t.league === value);
     if (value && type === 'market') tips = tips.filter(t => t.market === value);
     if (value && type === 'analyst') tips = tips.filter(t => t.tipsterProfile === value);
@@ -1881,7 +1883,7 @@ const App = {
 
       '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(184,144,47,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:20px;margin-bottom:24px;text-align:center;">' +
         '<div style="display:flex;justify-content:center;gap:32px;flex-wrap:wrap;">' +
-          '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">21</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Races</div></div>' +
+          '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">18</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Races</div></div>' +
           '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">3</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Days</div></div>' +
           '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">15+</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Selections</div></div>' +
           '<div><div style="font-size:28px;font-weight:900;color:#22c55e;">Grade 1</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Level Analysis</div></div>' +
@@ -1920,6 +1922,7 @@ const App = {
         this.api('/results/performance'),
       ]);
       this.results = results;
+      this._allResults = results;
       this.performance = perf;
     } catch {}
 
@@ -1948,8 +1951,8 @@ const App = {
         </div>
 
         <!-- Results Sponsor -->
-        <div class="results-sponsor" id="sponsor-results">
-          Results powered by <span class="sponsor-name">[ Partner Name ]</span> - Your trusted source for live odds and results
+        <div class="results-sponsor" id="sponsor-results" style="font-size:12px;color:var(--text-muted);text-align:center;margin-bottom:16px;">
+          All results verified via live API data &mdash; settled automatically every 5 minutes
         </div>
 
         <!-- Advanced Chart Filters -->
@@ -1978,8 +1981,15 @@ const App = {
             </select>
             <select id="cf-month" onchange="App.updateCharts()">
               <option value="">All Time</option>
-              <option value="2026-03">March 2026</option>
-              <option value="2026-04">April 2026</option>
+              ${(() => {
+                const months = new Set();
+                (this._allResults || []).forEach(r => { if (r.date) months.add(r.date.substring(0, 7)); });
+                return Array.from(months).sort().reverse().map(m => {
+                  const [y, mo] = m.split('-');
+                  const name = new Date(y, parseInt(mo) - 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+                  return '<option value="' + m + '">' + name + '</option>';
+                }).join('');
+              })()}
             </select>
           </div>
 
@@ -2284,7 +2294,7 @@ const App = {
               ${this.user?.subscription === 'premium' ? 'Current Plan' : 'Start Free Month'}
             </button>
             <button class="btn btn-outline btn-full mt-8" data-plan="annual" data-price="19999" data-currency="gbp" onclick="App.showModal('stripe')">
-              Annual Plan - &pound;199.99/yr (Save &pound;60)
+              Annual Plan - &pound;199.99/yr (Save &pound;40)
             </button>
             <div class="stripe-badge mt-8">
               <span>Secure payment powered by</span>
@@ -2322,7 +2332,7 @@ const App = {
           <p class="text-muted mb-16">Enter your email below and we'll send you a free sample of our Premium analysis so you can see the quality for yourself.</p>
           <div style="display:flex;gap:8px;max-width:400px;margin:0 auto;">
             <input type="email" placeholder="your@email.com" style="flex:1;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);outline:none;">
-            <button class="btn btn-gold" onclick="alert('Thanks! Check your inbox for a sample Premium tip.')">Send Sample</button>
+            <button class="btn btn-gold" onclick="const e=this.previousElementSibling;if(e&&e.value&&e.value.includes('@')){App.api('/support',{method:'POST',body:JSON.stringify({email:e.value,subject:'Sample Request',message:'Please send me a free sample tip.'})});this.textContent='Sent!';this.disabled=true;}else{this.textContent='Enter valid email';}">Send Sample</button>
           </div>
         </div>
       </div>
@@ -3075,7 +3085,10 @@ const App = {
   // FREE WEEKLY ACCA
   // -----------------------------------------------------------------------
   renderWeeklyAcca(tips) {
-    const acca = tips.find(t => t.isWeeklyAcca);
+    // Find the most recent weekly acca that's within the current/upcoming week
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString().split('T')[0];
+    const acca = tips.filter(t => t.isWeeklyAcca && t.date >= weekAgo).sort((a, b) => b.date.localeCompare(a.date))[0];
     if (!acca || !acca.accaSelections) return '';
     return `
       <div class="acca-free-card-wrapper">
@@ -3467,14 +3480,9 @@ const App = {
         if (prompt) prompt.style.display = 'block';
       }, 3000);
     }
-    // Seed some notifications for demo
+    // Load notifications from localStorage (populated by real events)
     if (!this.notifications.length) {
-      this.notifications = [
-        { id: 'n1', text: 'New tip: Arsenal vs Southampton - Arsenal Win', time: new Date(Date.now() - 3600000).toISOString(), read: false },
-        { id: 'n2', text: 'Result: Gaelic Warrior WON +7.50u', time: new Date(Date.now() - 7200000).toISOString(), read: false },
-        { id: 'n3', text: 'Weekly acca is live - 5 selections at 4.97', time: new Date(Date.now() - 14400000).toISOString(), read: true },
-      ];
-      localStorage.setItem('ee_notifications', JSON.stringify(this.notifications));
+      this.notifications = JSON.parse(localStorage.getItem('ee_notifications') || '[]');
       this.updateNotifBadge();
     }
   },
@@ -3675,17 +3683,7 @@ const App = {
   },
 
   seedComments(tipId) {
-    const existing = this.getComments(tipId);
-    if (existing.length) return existing;
-    const seeds = [
-      { user: 'JamesR_2026', text: 'Great analysis here, really detailed breakdown of the form. Backing this one.', time: new Date(Date.now() - 7200000).toISOString(), likes: 5 },
-      { user: 'PunterPete', text: 'Been following these tips for 2 months now. The edge calculations are spot on more often than not.', time: new Date(Date.now() - 5400000).toISOString(), likes: 3 },
-      { user: 'FormStudentUK', text: 'The pace analysis is what sets this apart from other services. Really useful insight.', time: new Date(Date.now() - 3600000).toISOString(), likes: 7 },
-      { user: 'RacingDave', text: 'Odds have shortened since this was posted which confirms the value was there. Good spot.', time: new Date(Date.now() - 1800000).toISOString(), likes: 2 },
-      { user: 'AccaBuilder', text: 'Adding this to my acca. The confidence level gives me reassurance.', time: new Date(Date.now() - 900000).toISOString(), likes: 1 },
-    ];
-    this.saveComments(tipId, seeds);
-    return seeds;
+    return this.getComments(tipId);
   },
 
   renderCommentSection(tipId) {
@@ -4247,11 +4245,34 @@ const App = {
           <h1>How Elite Edge Works</h1>
           <p style="color:var(--text-secondary);margin-bottom:24px;">Everything you need to know about our system, how to read our tips, and how to bet smarter.</p>
 
-          <!-- Video Section -->
-          <div style="background:#0a0e1a;border-radius:12px;padding:48px 24px;text-align:center;margin-bottom:32px;border:1px solid #2a2d45;">
-            <div style="font-size:56px;margin-bottom:16px;">&#9654;</div>
-            <div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:8px;">Video Guide Coming Soon</div>
-            <div style="font-size:14px;color:#8a8fa0;max-width:400px;margin:0 auto;">We're producing a full walkthrough video explaining our model, how to read tips, and betting strategy. Subscribe to be notified when it's live.</div>
+          <!-- Quick Start Guide -->
+          <div style="background:linear-gradient(135deg,#0a0e1a,#1a1a2e);border-radius:12px;padding:32px 24px;margin-bottom:32px;border:1px solid #2a2d45;">
+            <div style="text-align:center;margin-bottom:20px;">
+              <div style="font-size:36px;margin-bottom:8px;">&#128640;</div>
+              <div style="font-size:18px;font-weight:700;color:#fff;">Quick Start Guide</div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
+              <div style="background:rgba(212,168,67,0.08);border-radius:10px;padding:16px;text-align:center;">
+                <div style="font-size:24px;margin-bottom:6px;">1&#65039;&#8419;</div>
+                <div style="font-weight:700;color:#d4a843;font-size:13px;margin-bottom:4px;">Check Daily Tips</div>
+                <div style="font-size:12px;color:#8a8fa0;">Published by 7:30am UK. Racing &amp; football selections with full analysis.</div>
+              </div>
+              <div style="background:rgba(212,168,67,0.08);border-radius:10px;padding:16px;text-align:center;">
+                <div style="font-size:24px;margin-bottom:6px;">2&#65039;&#8419;</div>
+                <div style="font-weight:700;color:#d4a843;font-size:13px;margin-bottom:4px;">Read The Edge Score</div>
+                <div style="font-size:12px;color:#8a8fa0;">Our model calculates the probability edge — only selections with real value are published.</div>
+              </div>
+              <div style="background:rgba(212,168,67,0.08);border-radius:10px;padding:16px;text-align:center;">
+                <div style="font-size:24px;margin-bottom:6px;">3&#65039;&#8419;</div>
+                <div style="font-weight:700;color:#d4a843;font-size:13px;margin-bottom:4px;">Follow The Staking</div>
+                <div style="font-size:12px;color:#8a8fa0;">Each tip has a recommended unit stake based on confidence and edge size.</div>
+              </div>
+              <div style="background:rgba(212,168,67,0.08);border-radius:10px;padding:16px;text-align:center;">
+                <div style="font-size:24px;margin-bottom:6px;">4&#65039;&#8419;</div>
+                <div style="font-weight:700;color:#d4a843;font-size:13px;margin-bottom:4px;">Track Results</div>
+                <div style="font-size:12px;color:#8a8fa0;">Results auto-settle every 5 minutes. Full P/L tracked in your results dashboard.</div>
+              </div>
+            </div>
           </div>
 
           <h2>&#127919; Understanding Confidence Scores</h2>
