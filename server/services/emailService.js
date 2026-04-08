@@ -867,6 +867,24 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
   }
 
   // -----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // Password Reset Email
+  // -----------------------------------------------------------------------
+  async sendPasswordReset(email, tempPassword) {
+    const subject = 'Elite Edge Sports Tips — Password Reset';
+    const html = this._wrapHTML(`
+      <h2 style="color:#d4a843;margin-bottom:16px;">Password Reset</h2>
+      <p>Your password has been reset. Here is your temporary password:</p>
+      <div style="background:#1a1a2e;border:2px solid #d4a843;border-radius:10px;padding:20px;text-align:center;margin:20px 0;">
+        <span style="font-size:24px;font-weight:700;color:#d4a843;letter-spacing:2px;">${this._esc(tempPassword)}</span>
+      </div>
+      <p>Please log in and change your password immediately via <strong>My Account &rarr; Change Password</strong>.</p>
+      <p style="color:#9ca3af;font-size:12px;margin-top:20px;">If you did not request this reset, please contact us at admin@eliteedgesports.co.uk immediately.</p>
+    `, 'Your password has been reset');
+    const text = `Your password has been reset. Temporary password: ${tempPassword}. Please log in and change it immediately.`;
+    return this._sendEmail({ to: email, subject, html, text, emailType: 'password_reset' });
+  }
+
   // Utility helpers
   // -----------------------------------------------------------------------
   _esc(str) {
