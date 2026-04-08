@@ -943,20 +943,18 @@ const App = {
         </div>` : `
         <div class="nap-card-wrapper">
           <div class="nap-label"><span class="star">\u2605</span> NAP OF THE DAY — Premium Only <span class="star">\u2605</span></div>
-          <div class="nap-card" style="position:relative;overflow:hidden;cursor:pointer;" onclick="window.location.hash='#/pricing'">
-            <div style="filter:blur(8px);pointer-events:none;">
-              <div class="tip-top">
-                <div class="tip-badges"><span class="tip-sport-badge badge-racing">${napTip.sport === 'racing' ? 'Racing' : 'Football'}</span><span class="badge-premium">Elite</span></div>
-                <div><div class="tip-odds">???</div></div>
+          <div class="nap-card" style="position:relative;min-height:280px;cursor:pointer;" onclick="window.location.hash='#/pricing'">
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#141828,#1a1f35);border-radius:12px;padding:24px;">
+              <div style="font-size:42px;margin-bottom:14px;">&#128274;</div>
+              <div style="font-size:20px;font-weight:800;color:#d4a843;margin-bottom:8px;">Today's NAP is Ready</div>
+              <div style="font-size:14px;color:#8a8fa0;margin-bottom:8px;text-align:center;max-width:320px;">Our highest-confidence selection of the day</div>
+              <div style="display:flex;gap:16px;margin-bottom:20px;">
+                <div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#22c55e;">${napTip.confidence}/10</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Confidence</div></div>
+                <div style="width:1px;background:#2a2d45;"></div>
+                <div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#d4a843;">${((napTip.edge||0)*100).toFixed(1)}%</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Edge</div></div>
               </div>
-              <div class="tip-selection" style="font-size:22px;">Premium Selection Locked</div>
-              <div class="tip-event">${napTip.event ? napTip.event.split(' - ')[0] + ' — ' : ''}Locked</div>
-            </div>
-            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,14,26,0.85);border-radius:12px;">
-              <div style="font-size:36px;margin-bottom:12px;">&#128274;</div>
-              <div style="font-size:18px;font-weight:800;color:#d4a843;margin-bottom:6px;">Today's NAP is Ready</div>
-              <div style="font-size:13px;color:#8a8fa0;margin-bottom:16px;text-align:center;max-width:300px;">Our highest-confidence selection of the day. Confidence: ${napTip.confidence}/10. Edge: ${((napTip.edge||0)*100).toFixed(1)}%</div>
-              <div style="background:#d4a843;color:#0a0e1a;padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px;">Unlock — First Month FREE</div>
+              <div style="background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:15px;">Unlock — First Month FREE</div>
+              <div style="font-size:11px;color:#555;margin-top:10px;">Then &pound;14.99/mo. Cancel anytime.</div>
             </div>
           </div>
         </div>`) : ''}

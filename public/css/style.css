@@ -839,7 +839,7 @@ main { min-height: calc(100vh - 64px); }
   box-shadow: 0 0 24px rgba(212,168,67,.18), inset 0 0 0 1px rgba(212,168,67,.12);
 }
 .nap-card:hover { box-shadow: 0 0 32px rgba(212,168,67,.30); transform: translateY(-2px); }
-.nap-card-wrapper { border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 24px; }
+.nap-card-wrapper { border-radius: var(--radius-lg); overflow: visible; margin-bottom: 24px; }
 .nap-label {
   display: flex; align-items: center; gap: 8px;
   background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--gold-dark));
