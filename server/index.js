@@ -1846,14 +1846,12 @@ async function scheduledDataRefresh() {
     var results = readJSON('sample-results.json');
     var changed = false;
 
-    // 1. Archive old unsettled tips (older than 2 days)
-    var twoDaysAgo = new Date(uk);
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-    var archiveDate = twoDaysAgo.toISOString().split('T')[0];
+    // 1. Archive ALL unsettled tips from before today — no stale content allowed
+    var todayStr = uk.toISOString().split('T')[0];
 
     tips.forEach(function(tip) {
       if (tip.isWeeklyAcca) return;
-      if (tip.date && tip.date < archiveDate && tip.status === 'active' && !tip.result) {
+      if (tip.date && tip.date < todayStr && tip.status === 'active' && !tip.result) {
         tip.status = 'expired';
         tip.result = 'void';
         console.log('[Refresh] Archived expired tip: ' + tip.selection + ' (' + tip.date + ')');

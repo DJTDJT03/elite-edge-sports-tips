@@ -840,16 +840,18 @@ const App = {
     var tomorrow = this._getTomorrow();
     var yesterday = this._getYesterday();
     var tips = allTips.filter(function(t) {
-      if (t.isWeeklyAcca) return true; // Always show the free weekly acca
+      if (t.isWeeklyAcca) return true;
+      // Only show active tips from today or future — never show stale content
+      if (t.status && t.status !== 'active') return false;
       if (!t.date) return true;
-      return t.date >= yesterday;
+      return t.date >= today;
     });
-    var todayTips = tips.filter(function(t) { return !t.date || t.date === today; });
-    var tomorrowTips = tips.filter(function(t) { return t.date === tomorrow; });
-    var recentTips = tips.filter(function(t) { return t.date === yesterday; });
+    var todayTips = tips.filter(function(t) { return !t.isWeeklyAcca && (!t.date || t.date === today); });
+    var tomorrowTips = tips.filter(function(t) { return !t.isWeeklyAcca && t.date === tomorrow; });
+    var upcomingTips = tips.filter(function(t) { return !t.isWeeklyAcca && t.date > tomorrow; });
 
-    // Find NAP of the day
-    const napTip = tips.find(t => t.isNap && !t.locked);
+    // Find NAP — must be from today only
+    const napTip = tips.find(t => t.isNap && t.date === today && t.status === 'active');
 
     app.innerHTML = `
       <div class="container">
@@ -1069,7 +1071,7 @@ const App = {
           <div class="date-tabs">
             <button class="date-tab active" onclick="App.filterDashDate('today',this)">Today</button>
             ${tomorrowTips.length ? '<button class="date-tab" onclick="App.filterDashDate(\'tomorrow\',this)">Tomorrow (' + tomorrowTips.length + ')</button>' : ''}
-            ${recentTips.length ? '<button class="date-tab" onclick="App.filterDashDate(\'recent\',this)">Yesterday (' + recentTips.length + ')</button>' : ''}
+            ${upcomingTips.length ? '<button class="date-tab" onclick="App.filterDashDate(\'upcoming\',this)">Upcoming (' + upcomingTips.length + ')</button>' : ''}
           </div>
           <div class="tabs">
             <button class="tab active" onclick="App.filterDashTips('all', this)">All</button>
