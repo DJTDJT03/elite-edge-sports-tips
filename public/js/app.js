@@ -1410,7 +1410,13 @@ const App = {
       liveData = results[1];
     } catch { try { this.tips = await this.api('/tips?sport=racing'); } catch {} }
 
-    const tips = this.tips.filter(t => t.sport === 'racing');
+    var todayDateR = this._getToday();
+    const tips = this.tips.filter(function(t) {
+      if (t.sport !== 'racing') return false;
+      if (t.status && t.status !== 'active') return false;
+      if (t.date && t.date < todayDateR) return false;
+      return true;
+    });
     const meetings = [...new Set(tips.map(t => t.meeting))];
     var hasLiveCards = liveData && liveData.live && liveData.racecards && liveData.racecards.length > 0;
     var racecards = hasLiveCards ? liveData.racecards : [];
@@ -1572,7 +1578,14 @@ const App = {
       liveData = results[1];
     } catch { try { this.tips = await this.api('/tips?sport=football'); } catch {} }
 
-    const tips = this.tips.filter(t => t.sport === 'football');
+    var todayDate = this._getToday();
+    const tips = this.tips.filter(function(t) {
+      if (t.sport !== 'football') return false;
+      if (t.isWeeklyAcca) return false;
+      if (t.status && t.status !== 'active') return false;
+      if (t.date && t.date < todayDate) return false;
+      return true;
+    });
     const leagues = [...new Set(tips.map(t => t.league))];
     var hasLiveFixtures = liveData && liveData.live && liveData.fixtures && liveData.fixtures.length > 0;
     var fixtures = hasLiveFixtures ? liveData.fixtures : [];
