@@ -760,7 +760,16 @@ app.post('/api/admin/auto-results', authenticate, async (req, res) => {
 app.get('/api/tips', (req, res) => {
   const tips = readJSON('sample-tips.json');
   const { sport, date, premium } = req.query;
-  let filtered = tips;
+  var todayStr = new Date().toISOString().split('T')[0];
+
+  // Only return active tips from today onwards (plus weekly acca)
+  let filtered = tips.filter(function(t) {
+    if (t.isWeeklyAcca) return true;
+    if (t.status && t.status !== 'active') return false;
+    if (t.date && t.date < todayStr) return false;
+    return true;
+  });
+
   if (sport) filtered = filtered.filter(t => t.sport === sport);
   if (date) filtered = filtered.filter(t => t.date === date);
   if (premium === 'true') filtered = filtered.filter(t => t.isPremium);
