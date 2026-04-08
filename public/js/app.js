@@ -1395,6 +1395,7 @@ const App = {
   // RACING PAGE
   // -----------------------------------------------------------------------
   _racingDateTab: 'today',
+  _footballDateTab: 'today',
 
   async renderRacing() {
     const app = document.getElementById('app');
@@ -1430,11 +1431,26 @@ const App = {
       liveMeetings[key].push(r);
     });
 
-    // Date tabs for tips
+    // Date tabs for tips with state
     var today = this._getToday();
     var tomorrow = this._getTomorrow();
     var weekendDates = this._getWeekendDates();
-    var tomorrowTips = tips.filter(function(t) { return t.date === tomorrow; });
+    var dateTab = this._racingDateTab || 'today';
+    var allRacingTips = this.tips.filter(function(t) { return t.sport === 'racing' && t.status === 'active' && t.date >= today; });
+    var tomorrowTips = allRacingTips.filter(function(t) { return t.date === tomorrow; });
+    var weekendTips = allRacingTips.filter(function(t) { return weekendDates.indexOf(t.date) !== -1; });
+
+    // Re-filter based on selected date tab
+    var displayTips = tips;
+    if (dateTab === 'tomorrow') {
+      displayTips = tomorrowTips;
+    } else if (dateTab === 'weekend') {
+      displayTips = weekendTips;
+    } else {
+      displayTips = tips.filter(function(t) { return t.date === today; });
+      if (displayTips.length === 0) displayTips = tips;
+    }
+    var displayMeetings = [...new Set(displayTips.map(t => t.meeting))];
 
     app.innerHTML = `
       <div class="container">
@@ -1445,9 +1461,9 @@ const App = {
 
         <!-- Date Tabs -->
         <div class="date-tabs">
-          <button class="date-tab active" onclick="App._racingDateTab='today';App.renderRacing()">Today</button>
-          ${tomorrowTips.length ? '<button class="date-tab" onclick="App._racingDateTab=\'tomorrow\';App.renderRacing()">Tomorrow</button>' : ''}
-          <button class="date-tab" onclick="App._racingDateTab='weekend';App.renderRacing()">This Weekend</button>
+          <button class="date-tab ${dateTab === 'today' ? 'active' : ''}" onclick="App._racingDateTab='today';App.renderRacing()">Today</button>
+          ${tomorrowTips.length ? '<button class="date-tab ' + (dateTab === 'tomorrow' ? 'active' : '') + '" onclick="App._racingDateTab=\'tomorrow\';App.renderRacing()">Tomorrow (' + tomorrowTips.length + ')</button>' : ''}
+          <button class="date-tab ${dateTab === 'weekend' ? 'active' : ''}" onclick="App._racingDateTab='weekend';App.renderRacing()">This Weekend${weekendTips.length ? ' (' + weekendTips.length + ')' : ''}</button>
         </div>
 
         <!-- Live Race Cards -->
@@ -1485,7 +1501,7 @@ const App = {
         <div class="filter-bar">
           <select onchange="App.filterRacing(this.value, 'meeting')">
             <option value="">All Meetings</option>
-            ${meetings.map(m => `<option value="${m}">${m}</option>`).join('')}
+            ${displayMeetings.map(m => `<option value="${m}">${m}</option>`).join('')}
           </select>
           <select onchange="App.filterRacing(this.value, 'market')">
             <option value="">All Markets</option>
@@ -1511,10 +1527,10 @@ const App = {
 
         <!-- Race Card Summary -->
         <div class="card mb-24">
-          <h3 class="mb-16">Today's Meetings</h3>
+          <h3 class="mb-16">${dateTab === 'today' ? "Today's" : dateTab === 'tomorrow' ? "Tomorrow's" : "Weekend"} Meetings</h3>
           <div class="grid grid-4">
-            ${meetings.map(m => {
-              const mTips = tips.filter(t => t.meeting === m);
+            ${displayMeetings.length ? displayMeetings.map(m => {
+              const mTips = displayTips.filter(t => t.meeting === m);
               return `
                 <div class="stat-card" style="cursor:pointer;" onclick="App.filterRacing('${m}','meeting')">
                   <div style="font-size:18px;font-weight:700;margin-bottom:4px;">${m}</div>
@@ -1522,14 +1538,14 @@ const App = {
                   <div class="text-xs text-gold mt-8">${mTips.map(t => t.raceTime).join(', ')}</div>
                 </div>
               `;
-            }).join('')}
+            }).join('') : '<div class="text-muted" style="grid-column:1/-1;text-align:center;padding:20px;">No meetings for this period yet. Tips are published daily by 7:30am UK.</div>'}
           </div>
         </div>
 
         <div class="section">
           <div class="section-title"><span class="icon">&#9826;</span> Racing Selections</div>
           <div class="grid grid-2" id="racing-tips">
-            ${tips.map(t => this.renderTipCard(t)).join('')}
+            ${displayTips.length ? displayTips.map(t => this.renderTipCard(t)).join('') : '<p class="text-muted" style="text-align:center;padding:30px;grid-column:1/-1;">No selections for this period. Check back at 7:30am UK for the latest tips.</p>'}
           </div>
         </div>
 
@@ -1600,10 +1616,26 @@ const App = {
       fixturesByLeague[key].push(f);
     });
 
-    // Date tabs
+    // Date tabs with state
     var today = this._getToday();
     var tomorrow = this._getTomorrow();
-    var tomorrowTips = tips.filter(function(t) { return t.date === tomorrow; });
+    var weekendDates = this._getWeekendDates();
+    var dateTab = this._footballDateTab || 'today';
+    var tomorrowTips = this.tips.filter(function(t) { return t.sport === 'football' && t.status === 'active' && t.date === tomorrow && !t.isWeeklyAcca; });
+    var weekendTips = this.tips.filter(function(t) { return t.sport === 'football' && t.status === 'active' && weekendDates.indexOf(t.date) !== -1 && !t.isWeeklyAcca; });
+
+    // Re-filter tips based on selected date tab
+    var displayTips = tips;
+    if (dateTab === 'tomorrow') {
+      displayTips = tomorrowTips;
+    } else if (dateTab === 'weekend') {
+      displayTips = weekendTips;
+    } else {
+      displayTips = tips.filter(function(t) { return t.date === today; });
+      // If no today tips, show all upcoming
+      if (displayTips.length === 0) displayTips = tips;
+    }
+    var displayLeagues = [...new Set(displayTips.map(t => t.league))];
 
     app.innerHTML = `
       <div class="container">
@@ -1614,9 +1646,9 @@ const App = {
 
         <!-- Date Tabs -->
         <div class="date-tabs">
-          <button class="date-tab active" onclick="App.renderFootball()">Today</button>
-          ${tomorrowTips.length ? '<button class="date-tab">Tomorrow (' + tomorrowTips.length + ')</button>' : ''}
-          <button class="date-tab">This Weekend</button>
+          <button class="date-tab ${dateTab === 'today' ? 'active' : ''}" onclick="App._footballDateTab='today';App.renderFootball()">Today</button>
+          ${tomorrowTips.length ? '<button class="date-tab ' + (dateTab === 'tomorrow' ? 'active' : '') + '" onclick="App._footballDateTab=\'tomorrow\';App.renderFootball()">Tomorrow (' + tomorrowTips.length + ')</button>' : ''}
+          <button class="date-tab ${dateTab === 'weekend' ? 'active' : ''}" onclick="App._footballDateTab='weekend';App.renderFootball()">This Weekend${weekendTips.length ? ' (' + weekendTips.length + ')' : ''}</button>
         </div>
 
         <!-- Live Fixtures -->
@@ -1656,7 +1688,7 @@ const App = {
         <div class="filter-bar">
           <select onchange="App.filterFootball(this.value, 'league')">
             <option value="">All Leagues</option>
-            ${leagues.map(l => `<option value="${l}">${l}</option>`).join('')}
+            ${displayLeagues.map(l => `<option value="${l}">${l}</option>`).join('')}
           </select>
           <select onchange="App.filterFootball(this.value, 'market')">
             <option value="">All Markets</option>
@@ -1676,10 +1708,10 @@ const App = {
 
         <!-- League Badges -->
         <div class="card mb-24">
-          <h3 class="mb-16">Today's Fixtures by League</h3>
+          <h3 class="mb-16">${dateTab === 'today' ? "Today's" : dateTab === 'tomorrow' ? "Tomorrow's" : "Weekend"} Fixtures by League</h3>
           <div class="grid grid-3">
-            ${leagues.map(l => {
-              const lTips = tips.filter(t => t.league === l);
+            ${displayLeagues.length ? displayLeagues.map(l => {
+              const lTips = displayTips.filter(t => t.league === l);
               return `
                 <div class="stat-card" style="cursor:pointer;" onclick="App.filterFootball('${l}','league')">
                   <div style="font-size:16px;font-weight:700;margin-bottom:4px;">${l}</div>
@@ -1687,14 +1719,14 @@ const App = {
                   <div class="text-xs text-gold mt-8">${lTips.map(t => t.event).join(' | ')}</div>
                 </div>
               `;
-            }).join('')}
+            }).join('') : '<div class="text-muted" style="grid-column:1/-1;text-align:center;padding:20px;">No fixtures for this period yet. Tips are published daily by 7:30am UK.</div>'}
           </div>
         </div>
 
         <div class="section">
           <div class="section-title"><span class="icon">&#9917;</span> Football Selections</div>
           <div class="grid grid-2" id="football-tips">
-            ${tips.map(t => this.renderTipCard(t)).join('')}
+            ${displayTips.length ? displayTips.map(t => this.renderTipCard(t)).join('') : '<p class="text-muted" style="text-align:center;padding:30px;grid-column:1/-1;">No selections for this period. Check back at 7:30am UK for the latest tips.</p>'}
           </div>
         </div>
 

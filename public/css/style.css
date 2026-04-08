@@ -806,6 +806,83 @@ main { min-height: calc(100vh - 64px); }
 }
 
 /* =========================================================================
+   ADDITIONAL MOBILE OPTIMISATIONS
+   ========================================================================= */
+
+/* Results table mobile: card layout */
+@media (max-width: 768px) {
+  .results-table-wrap table { min-width: 700px; }
+  .results-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+
+  /* Festival tabs mobile */
+  .festival-tabs { display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .festival-tabs button { white-space: nowrap; flex-shrink: 0; }
+
+  /* Date tabs mobile scroll */
+  .date-tabs { display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; scrollbar-width: none; }
+  .date-tabs::-webkit-scrollbar { display: none; }
+  .date-tab { white-space: nowrap; flex-shrink: 0; }
+
+  /* Fixture cards mobile */
+  .fixture-card { flex-direction: column; gap: 8px; align-items: flex-start !important; }
+  .fixture-teams { font-size: 14px; }
+  .fixture-meta { font-size: 11px; }
+  .fixture-score { font-size: 18px; }
+
+  /* Meeting cards mobile */
+  .meeting-card { padding: 12px; margin-bottom: 12px; }
+  .meeting-card h3 { font-size: 15px; }
+
+  /* Live data header mobile */
+  .live-data-header { flex-direction: column; gap: 8px; align-items: flex-start; }
+  .live-updated { font-size: 11px; }
+
+  /* Chart containers mobile */
+  .chart-container { min-height: 200px; }
+  .multi-chart-grid { grid-template-columns: 1fr; gap: 12px; }
+  .chart-panel { padding: 12px; }
+  .chart-filter-bar { flex-direction: column; gap: 6px; }
+  .chart-filter-bar select { width: 100%; }
+
+  /* Stat cards mobile */
+  .stat-card { padding: 12px; }
+  .stat-value { font-size: 22px; }
+  .stat-label { font-size: 10px; }
+
+  /* Results sponsor */
+  .results-sponsor { font-size: 11px; padding: 8px; }
+
+  /* Share/Copy buttons */
+  .share-btn, .copy-btn { font-size: 10px; padding: 3px 8px; }
+
+  /* Grand National banner mobile */
+  div[onclick*="festival"] { padding: 14px 16px !important; }
+  div[onclick*="festival"] div[style*="font-size:36px"] { font-size: 24px !important; }
+  div[onclick*="festival"] div[style*="font-size:18px"] { font-size: 14px !important; }
+  div[onclick*="festival"] div[style*="font-size:13px"] { font-size: 11px !important; }
+}
+
+@media (max-width: 480px) {
+  /* Results page stat cards */
+  .grid.grid-4 .stat-card { padding: 10px 8px; }
+  .grid.grid-4 .stat-value { font-size: 18px; }
+
+  /* Quick start guide mobile */
+  div[style*="grid-template-columns:repeat(auto-fit,minmax(200px"] { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+
+  /* Festival stats row */
+  div[style*="display:flex;justify-content:center;gap:32px"] { gap: 16px !important; }
+  div[style*="font-size:28px;font-weight:900;color:#d4a843"] { font-size: 20px !important; }
+
+  /* Tip analysis sections compact */
+  .analysis-section-card { margin-bottom: 6px; }
+  .as-body { font-size: 12px; line-height: 1.5; }
+
+  /* Export CSV button */
+  button[onclick*="exportCSV"] { font-size: 11px; padding: 6px 12px; }
+}
+
+/* =========================================================================
    ANIMATIONS
    ========================================================================= */
 @keyframes fadeIn {
