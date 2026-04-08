@@ -915,8 +915,8 @@ const App = {
           </div>
         </div>` : ''}
 
-        <!-- NAP OF THE DAY (Enhancement #4) -->
-        ${napTip ? `
+        <!-- NAP OF THE DAY — Premium Only -->
+        ${napTip ? (this.user && this.user.subscription === 'premium' ? `
         <div class="nap-card-wrapper">
           <div class="nap-label"><span class="star">\u2605</span> NAP OF THE DAY — Our Strongest Selection <span class="star">\u2605</span></div>
           <div class="nap-card" onclick="window.location.hash='#/tip/${napTip.id}'">
@@ -939,6 +939,63 @@ const App = {
             </div>
             ${this.renderBookmakerOdds(napTip.bookmakerOdds)}
             ${this.renderFormGuide(napTip.recentForm, napTip.sport)}
+          </div>
+        </div>` : `
+        <div class="nap-card-wrapper">
+          <div class="nap-label"><span class="star">\u2605</span> NAP OF THE DAY — Premium Only <span class="star">\u2605</span></div>
+          <div class="nap-card" style="position:relative;overflow:hidden;cursor:pointer;" onclick="window.location.hash='#/pricing'">
+            <div style="filter:blur(8px);pointer-events:none;">
+              <div class="tip-top">
+                <div class="tip-badges"><span class="tip-sport-badge badge-racing">${napTip.sport === 'racing' ? 'Racing' : 'Football'}</span><span class="badge-premium">Elite</span></div>
+                <div><div class="tip-odds">???</div></div>
+              </div>
+              <div class="tip-selection" style="font-size:22px;">Premium Selection Locked</div>
+              <div class="tip-event">${napTip.event ? napTip.event.split(' - ')[0] + ' — ' : ''}Locked</div>
+            </div>
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,14,26,0.85);border-radius:12px;">
+              <div style="font-size:36px;margin-bottom:12px;">&#128274;</div>
+              <div style="font-size:18px;font-weight:800;color:#d4a843;margin-bottom:6px;">Today's NAP is Ready</div>
+              <div style="font-size:13px;color:#8a8fa0;margin-bottom:16px;text-align:center;max-width:300px;">Our highest-confidence selection of the day. Confidence: ${napTip.confidence}/10. Edge: ${((napTip.edge||0)*100).toFixed(1)}%</div>
+              <div style="background:#d4a843;color:#0a0e1a;padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px;">Unlock — First Month FREE</div>
+            </div>
+          </div>
+        </div>`) : ''}
+
+        <!-- Market Intelligence Briefing (Free Users) -->
+        ${!this.user || this.user.subscription !== 'premium' ? `
+        <div style="background:linear-gradient(135deg,#141828,#1a1f35);border:1px solid rgba(212,168,67,0.2);border-radius:14px;padding:24px;margin-bottom:24px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+            <div style="font-size:28px;">&#128200;</div>
+            <div>
+              <div style="font-size:16px;font-weight:800;color:#d4a843;">Today's Market Intelligence Briefing</div>
+              <div style="font-size:12px;color:#8a8fa0;">Free daily insight — what our model is watching today</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px;">
+            <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;">
+              <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Races Today</div>
+              <div style="font-size:22px;font-weight:800;color:#fff;">${todayTips.filter(t => t.sport === 'racing').length > 0 ? todayTips.filter(t => t.sport === 'racing').length + ' meetings' : 'Cards loading...'}</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;">
+              <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Football Fixtures</div>
+              <div style="font-size:22px;font-weight:800;color:#fff;">${todayTips.filter(t => t.sport === 'football').length > 0 ? todayTips.filter(t => t.sport === 'football').length + ' matches' : 'Fixtures loading...'}</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;">
+              <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Model Status</div>
+              <div style="font-size:22px;font-weight:800;color:#22c55e;">&#9679; Active</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;">
+              <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Selections Published</div>
+              <div style="font-size:22px;font-weight:800;color:#d4a843;">${todayTips.filter(t => !t.isWeeklyAcca).length} tips</div>
+            </div>
+          </div>
+          <div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.15);border-radius:10px;padding:16px;margin-bottom:16px;">
+            <div style="font-size:13px;font-weight:600;color:#d4a843;margin-bottom:8px;">&#128161; Today's Free Insight</div>
+            <div style="font-size:13px;color:#c0c4d0;line-height:1.6;">Our model has identified <strong style="color:#fff;">${todayTips.filter(t => !t.isWeeklyAcca).length} edge opportunities</strong> today across racing and football. The strongest selection carries a confidence rating of <strong style="color:#d4a843;">${napTip ? napTip.confidence + '/10' : '—'}</strong> with an edge of <strong style="color:#22c55e;">${napTip ? ((napTip.edge||0)*100).toFixed(1) + '%' : '—'}</strong> against the market. Premium members have full access to all selections, analysis, and staking recommendations.</div>
+          </div>
+          <div style="text-align:center;">
+            <a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;">Unlock All Selections — First Month FREE</a>
+            <div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;14.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>
           </div>
         </div>` : ''}
 
