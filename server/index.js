@@ -1520,6 +1520,103 @@ setInterval(autoSettleResults, 5 * 60 * 1000);
 setTimeout(autoSettleResults, 30000);
 
 // ---------------------------------------------------------------------------
+// SCHEDULED DATA REFRESH (1am, 11am, 5pm, 11pm UK time)
+// Archives old tips, refreshes live data, cleans up settled tips
+// ---------------------------------------------------------------------------
+var lastRefreshHour = -1;
+var REFRESH_HOURS = [1, 11, 17, 23]; // 1am, 11am, 5pm, 11pm UK
+
+async function scheduledDataRefresh() {
+  var uk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+  var hour = uk.getHours();
+  var today = uk.toISOString().split('T')[0];
+
+  // Only run at the specified hours, once per hour
+  if (REFRESH_HOURS.indexOf(hour) === -1 || lastRefreshHour === hour) return;
+  lastRefreshHour = hour;
+
+  console.log('[Refresh] Running scheduled data refresh at ' + hour + ':00 UK time');
+
+  try {
+    var tips = readJSON('sample-tips.json');
+    var results = readJSON('sample-results.json');
+    var changed = false;
+
+    // 1. Archive old unsettled tips (older than 2 days)
+    var twoDaysAgo = new Date(uk);
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    var archiveDate = twoDaysAgo.toISOString().split('T')[0];
+
+    tips.forEach(function(tip) {
+      if (tip.isWeeklyAcca) return;
+      if (tip.date && tip.date < archiveDate && tip.status === 'active' && !tip.result) {
+        tip.status = 'expired';
+        tip.result = 'void';
+        console.log('[Refresh] Archived expired tip: ' + tip.selection + ' (' + tip.date + ')');
+        changed = true;
+      }
+    });
+
+    // 2. Pull fresh racing data and cache it
+    if (racingSource && process.env.RACING_API_KEY) {
+      try {
+        var raceData = await racingSource.fetch();
+        var races = racingSource.normalise(raceData);
+        if (races.length > 0) {
+          console.log('[Refresh] Cached ' + races.length + ' live race cards');
+        }
+      } catch (err) { console.log('[Refresh] Racing data fetch skipped:', err.message); }
+    }
+
+    // 3. Pull fresh football data and cache it
+    if (footballSource && process.env.API_FOOTBALL_KEY) {
+      try {
+        var fbData = await footballSource.fetch();
+        var fixtures = footballSource.normalise(fbData);
+        if (fixtures.length > 0) {
+          console.log('[Refresh] Cached ' + fixtures.length + ' football fixtures');
+        }
+      } catch (err) { console.log('[Refresh] Football data fetch skipped:', err.message); }
+    }
+
+    // 4. Pull fresh odds data
+    if (oddsSource && process.env.ODDS_API_KEY) {
+      try {
+        var oddsData = await oddsSource.fetch();
+        var odds = oddsSource.normalise(oddsData);
+        if (odds.length > 0) {
+          console.log('[Refresh] Cached ' + odds.length + ' odds events');
+        }
+      } catch (err) { console.log('[Refresh] Odds data fetch skipped:', err.message); }
+    }
+
+    // 5. Auto-settle any pending results
+    await autoSettleResults();
+
+    // 6. Update performance stats
+    var perf = scoringModel.calculatePerformance(readJSON('sample-results.json'));
+    console.log('[Refresh] Performance: ' + perf.totalTips + ' tips, ' + perf.strikeRate + '% SR, ' + perf.roi + '% ROI');
+
+    // 7. Save any changes
+    if (changed) {
+      writeJSON('sample-tips.json', tips);
+      console.log('[Refresh] Tips file updated');
+    }
+
+    console.log('[Refresh] Completed at ' + hour + ':00 UK time');
+
+  } catch (err) {
+    console.error('[Refresh] Error:', err.message);
+  }
+}
+
+// Check every 10 minutes if it's time for a scheduled refresh
+setInterval(scheduledDataRefresh, 10 * 60 * 1000);
+
+// Run on startup after 45 seconds
+setTimeout(scheduledDataRefresh, 45000);
+
+// ---------------------------------------------------------------------------
 // SCHEDULED EMAIL WORKFLOWS
 // ---------------------------------------------------------------------------
 
