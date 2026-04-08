@@ -806,6 +806,90 @@ main { min-height: calc(100vh - 64px); }
 }
 
 /* =========================================================================
+   RACE INTELLIGENCE — Premium race-by-race analysis
+   ========================================================================= */
+.race-intel-card, .race-intel-locked {
+  margin-top: 12px;
+  background: linear-gradient(135deg, rgba(212,168,67,0.06), rgba(212,168,67,0.02));
+  border: 1px solid rgba(212,168,67,0.25);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.race-intel-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  font-size: 13px; font-weight: 700; color: var(--gold);
+  border-bottom: 1px solid rgba(212,168,67,0.15);
+  background: rgba(212,168,67,0.05);
+}
+.race-intel-badge {
+  background: var(--gold); color: var(--bg-deep);
+  font-size: 9px; font-weight: 800; letter-spacing: 1px;
+  padding: 2px 8px; border-radius: 4px;
+}
+.race-intel-body { padding: 14px 16px; }
+.race-intel-overview {
+  font-size: 13px; color: var(--text-secondary); line-height: 1.6;
+  margin-bottom: 14px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.race-intel-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  margin-bottom: 14px;
+}
+.race-intel-section {
+  background: var(--bg-elevated); border-radius: 8px; padding: 10px 12px;
+}
+.race-intel-label {
+  font-size: 10px; font-weight: 700; color: var(--gold);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  margin-bottom: 4px;
+}
+.race-intel-text { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+.race-intel-runners { margin-bottom: 10px; }
+.race-intel-runner {
+  padding: 10px 12px; margin-bottom: 6px;
+  background: var(--bg-elevated); border-radius: 8px;
+  font-size: 13px;
+}
+.race-intel-runner strong { color: var(--text-primary); margin-right: 8px; }
+.runner-tag {
+  display: inline-block; font-size: 9px; font-weight: 800; letter-spacing: 0.5px;
+  padding: 2px 6px; border-radius: 4px; margin-right: 8px; vertical-align: middle;
+}
+.runner-tag.fav { background: var(--gold); color: var(--bg-deep); }
+.runner-tag.danger { background: var(--red); color: #fff; }
+.runner-tag.outsider { background: var(--green); color: #fff; }
+.runner-meta { font-size: 11px; color: var(--text-muted); margin-left: 8px; }
+.runner-insight { font-size: 12px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5; }
+.race-intel-stats {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  font-size: 11px; color: var(--text-muted); padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.race-intel-stats span::before { content: '\25C6'; color: var(--gold); margin-right: 4px; font-size: 8px; }
+
+/* Locked state */
+.race-intel-preview { position: relative; padding: 14px 16px; }
+.race-intel-cta {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  text-align: center; z-index: 2; background: var(--bg-card);
+  padding: 20px 24px; border-radius: 12px;
+  border: 1px solid rgba(212,168,67,0.3);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+@media (max-width: 768px) {
+  .race-intel-grid { grid-template-columns: 1fr; }
+  .race-intel-body { padding: 10px 12px; }
+  .race-intel-header { padding: 8px 12px; font-size: 12px; }
+  .race-intel-overview { font-size: 12px; }
+  .race-intel-runner { padding: 8px 10px; }
+  .race-intel-stats { gap: 10px; }
+  .race-intel-cta { padding: 14px 16px; width: 80%; }
+}
+
+/* =========================================================================
    ADDITIONAL MOBILE OPTIMISATIONS
    ========================================================================= */
 

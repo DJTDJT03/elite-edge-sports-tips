@@ -148,6 +148,18 @@ const App = {
     } catch (e) { return { live: false, racecards: [] }; }
   },
 
+  async fetchRaceIntelligence(forceRefresh) {
+    if (!forceRefresh) {
+      var cached = this._getCached('race-intel', 300000); // 5 min
+      if (cached) return cached;
+    }
+    try {
+      var data = await this.api('/racing/intelligence');
+      if (data) this._setCache('race-intel', data);
+      return data;
+    } catch (e) { return { live: false, races: [] }; }
+  },
+
   async fetchLiveFootball(forceRefresh) {
     if (!forceRefresh) {
       var cached = this._getCached('football', 600000); // 10 min
@@ -1402,14 +1414,19 @@ const App = {
     app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading racing tips...</div></div>';
 
     var liveData = null;
+    var intelData = null;
     try {
       var results = await Promise.all([
         this.api('/tips?sport=racing'),
-        this.fetchLiveRacing()
+        this.fetchLiveRacing(),
+        this.fetchRaceIntelligence()
       ]);
       this.tips = results[0];
       liveData = results[1];
+      intelData = results[2];
     } catch { try { this.tips = await this.api('/tips?sport=racing'); } catch {} }
+    var hasIntel = intelData && intelData.live && intelData.races && intelData.races.length > 0;
+    var intelRaces = hasIntel ? intelData.races : [];
 
     var todayDateR = this._getToday();
     const tips = this.tips.filter(function(t) {
@@ -1466,7 +1483,7 @@ const App = {
           <button class="date-tab ${dateTab === 'weekend' ? 'active' : ''}" onclick="App._racingDateTab='weekend';App.renderRacing()">This Weekend${weekendTips.length ? ' (' + weekendTips.length + ')' : ''}</button>
         </div>
 
-        <!-- Live Race Cards -->
+        <!-- Live Race Cards with Intelligence -->
         ${hasLiveCards ? `
         <div class="section">
           <div class="live-data-header">
@@ -1491,9 +1508,52 @@ const App = {
                     }).join('') +
                     '</tbody></table>';
                 }
-                return '<div style="margin-bottom:12px;padding:10px 0;border-bottom:1px solid var(--border);">' +
+                // Find matching intelligence for this race
+                var intel = intelRaces.find(function(ir) {
+                  return ir.meeting === race.meeting && ir.time === race.time;
+                });
+                var isPremium = App.user && App.user.subscription === 'premium';
+                var intelHtml = '';
+                if (intel) {
+                  if (isPremium) {
+                    intelHtml = '<div class="race-intel-card">' +
+                      '<div class="race-intel-header"><span class="race-intel-badge">PREMIUM</span> Elite Edge Race Intelligence</div>' +
+                      '<div class="race-intel-body">' +
+                        '<div class="race-intel-overview">' + (intel.insights.overview || '') + '</div>' +
+                        '<div class="race-intel-grid">' +
+                          '<div class="race-intel-section"><div class="race-intel-label">Pace Analysis</div><div class="race-intel-text">' + (intel.insights.paceAnalysis || '') + '</div></div>' +
+                          '<div class="race-intel-section"><div class="race-intel-label">Going Analysis</div><div class="race-intel-text">' + (intel.insights.goingAnalysis || '') + '</div></div>' +
+                          '<div class="race-intel-section"><div class="race-intel-label">Class Profile</div><div class="race-intel-text">' + (intel.insights.classAnalysis || '') + '</div></div>' +
+                          (intel.insights.keyAngle ? '<div class="race-intel-section"><div class="race-intel-label">Key Angle</div><div class="race-intel-text" style="color:var(--gold);">' + intel.insights.keyAngle + '</div></div>' : '') +
+                        '</div>' +
+                        '<div class="race-intel-runners">' +
+                          (intel.favourite ? '<div class="race-intel-runner"><span class="runner-tag fav">FAV</span><strong>' + intel.favourite.name + '</strong> ' + (intel.favourite.odds ? App.formatOdds(parseFloat(intel.favourite.odds)) : '') + '<span class="runner-meta">' + [intel.favourite.jockey, intel.favourite.trainer].filter(Boolean).join(' / ') + '</span><div class="runner-insight">' + (intel.insights.favouriteAnalysis || '') + '</div></div>' : '') +
+                          (intel.danger ? '<div class="race-intel-runner"><span class="runner-tag danger">DANGER</span><strong>' + intel.danger.name + '</strong> ' + (intel.danger.odds ? App.formatOdds(parseFloat(intel.danger.odds)) : '') + '<span class="runner-meta">' + [intel.danger.jockey, intel.danger.trainer].filter(Boolean).join(' / ') + '</span><div class="runner-insight">' + (intel.insights.dangerAnalysis || '') + '</div></div>' : '') +
+                          (intel.outsider ? '<div class="race-intel-runner"><span class="runner-tag outsider">VALUE</span><strong>' + intel.outsider.name + '</strong> ' + (intel.outsider.odds ? App.formatOdds(parseFloat(intel.outsider.odds)) : '') + '<div class="runner-insight">' + (intel.insights.outsiderInsight || '') + '</div></div>' : '') +
+                        '</div>' +
+                        (intel.fieldSize ? '<div class="race-intel-stats"><span>' + intel.fieldSize + ' runners</span>' + (intel.avgRating ? '<span>Avg OR: ' + intel.avgRating + '</span>' : '') + (intel.topRated ? '<span>Top rated: ' + intel.topRated.name + ' (' + intel.topRated.rating + ')</span>' : '') + '</div>' : '') +
+                      '</div>' +
+                    '</div>';
+                  } else {
+                    intelHtml = '<div class="race-intel-locked">' +
+                      '<div class="race-intel-header"><span class="race-intel-badge">PREMIUM</span> Elite Edge Race Intelligence</div>' +
+                      '<div class="race-intel-preview">' +
+                        '<div style="filter:blur(6px);pointer-events:none;user-select:none;opacity:0.5;">' +
+                          '<div class="race-intel-overview">' + (intel.insights.overview || '') + '</div>' +
+                          '<div style="padding:8px 0;color:var(--text-secondary);font-size:13px;">Pace analysis, going insights, key runners, value angles...</div>' +
+                        '</div>' +
+                        '<div class="race-intel-cta">' +
+                          '<div style="font-size:14px;font-weight:700;margin-bottom:6px;">Unlock Race Intelligence for every race</div>' +
+                          '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Pace analysis, going insights, key runners, and value angles — updated live for every race card.</div>' +
+                          '<a href="#/pricing" class="btn btn-gold btn-sm">Upgrade to Premium</a>' +
+                        '</div>' +
+                      '</div>' +
+                    '</div>';
+                  }
+                }
+                return '<div style="margin-bottom:16px;padding:12px 0;border-bottom:1px solid var(--border);">' +
                   '<div class="race-row"><span class="race-time">' + (race.time || '-') + '</span><span class="race-name">' + (race.raceName || '') + '</span><span class="race-info">' + [race.raceClass, race.distance, race.going].filter(Boolean).join(' | ') + '</span></div>' +
-                  runnersHtml + '</div>';
+                  runnersHtml + intelHtml + '</div>';
               }).join('') + '</div>';
           }).join('')}
         </div>` : ''}
