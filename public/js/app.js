@@ -517,6 +517,7 @@ const App = {
         else this.renderBlogListing();
         break;
       }
+      case 'how-it-works': this.renderHowItWorks(); break;
       default: this.render404();
     }
   },
@@ -954,7 +955,7 @@ const App = {
                 <div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#d4a843;">${((napTip.edge||0)*100).toFixed(1)}%</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Edge</div></div>
               </div>
               <div style="background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:15px;">Unlock — First Month FREE</div>
-              <div style="font-size:11px;color:#555;margin-top:10px;">Then &pound;14.99/mo. Cancel anytime.</div>
+              <div style="font-size:11px;color:#555;margin-top:10px;">Then &pound;19.99/mo. Cancel anytime.</div>
             </div>
           </div>
         </div>`) : ''}
@@ -993,12 +994,60 @@ const App = {
           </div>
           <div style="text-align:center;">
             <a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;">Unlock All Selections — First Month FREE</a>
-            <div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;14.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;19.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>
           </div>
         </div>` : ''}
 
         <!-- Free Weekly Acca -->
         ${this.renderWeeklyAcca(tips)}
+
+        <!-- How It Works — Educational Section -->
+        <div style="background:linear-gradient(135deg,#141828,#1a1f35);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:24px;">
+          <div style="padding:24px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+              <div style="font-size:28px;">&#127891;</div>
+              <div>
+                <div style="font-size:18px;font-weight:800;color:#d4a843;">How Elite Edge Works</div>
+                <div style="font-size:12px;color:#8a8fa0;">Understanding our system, scores, and how to use our tips</div>
+              </div>
+            </div>
+
+            <!-- Video placeholder -->
+            <div style="position:relative;background:#0a0e1a;border-radius:10px;padding:40px 20px;text-align:center;margin-bottom:20px;border:1px solid #2a2d45;cursor:pointer;" onclick="window.location.hash='#/how-it-works'">
+              <div style="font-size:48px;margin-bottom:12px;">&#9654;</div>
+              <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">Watch: How to Use Elite Edge</div>
+              <div style="font-size:13px;color:#8a8fa0;">3 minute guide — understanding our model, scores, and how to bet smarter</div>
+            </div>
+
+            <!-- Quick guide cards -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+              <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
+                <div style="font-size:24px;margin-bottom:8px;">&#127919;</div>
+                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">Confidence Score (1-10)</div>
+                <div style="font-size:12px;color:#8a8fa0;line-height:1.5;">How strongly our model rates each selection. 7+ is strong, 9-10 is elite. We only publish tips rated 6 or higher.</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
+                <div style="font-size:24px;margin-bottom:8px;">&#128200;</div>
+                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">Edge Percentage</div>
+                <div style="font-size:12px;color:#8a8fa0;line-height:1.5;">The gap between what our model thinks the probability is vs what the bookmaker's odds imply. Higher edge = more value. We need 5%+ to publish.</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
+                <div style="font-size:24px;margin-bottom:8px;">&#128176;</div>
+                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">Staking & Units</div>
+                <div style="font-size:12px;color:#8a8fa0;line-height:1.5;">We stake in 'units' not pounds. 1 unit = 1% of your bankroll. If your bank is &pound;500, 1 unit = &pound;5. Our tips typically suggest 1-3 units based on confidence.</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
+                <div style="font-size:24px;margin-bottom:8px;">&#128202;</div>
+                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">ROI & Strike Rate</div>
+                <div style="font-size:12px;color:#8a8fa0;line-height:1.5;">ROI = Return on Investment (profit divided by total staked). Strike rate = percentage of winning tips. Both are tracked transparently on our Results page.</div>
+              </div>
+            </div>
+
+            <div style="text-align:center;margin-top:16px;">
+              <a href="#/how-it-works" style="color:#d4a843;font-size:13px;font-weight:600;text-decoration:none;">Read the Full Beginner's Guide &rarr;</a>
+            </div>
+          </div>
+        </div>
 
         <!-- Today's Tips -->
         <div class="section">
@@ -1054,7 +1103,7 @@ const App = {
           <h2 style="margin-bottom:8px;">Unlock Premium Tips</h2>
           <p class="text-muted mb-24">Join thousands of winning bettors. Get full access to all selections, deep analysis, and priority alerts.</p>
           <a href="#/pricing" class="btn btn-gold btn-lg">View Premium Plans</a>
-          <p class="text-xs text-muted mt-16">First month FREE, then &pound;14.99/month. Cancel anytime.</p>
+          <p class="text-xs text-muted mt-16">First month FREE, then &pound;19.99/month. Cancel anytime.</p>
         </div>` : ''}
       </div>
     `;
@@ -2003,8 +2052,8 @@ const App = {
             <div style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">🎉 FIRST MONTH FREE — LIMITED OFFER</div>
             <h3>Premium</h3>
             <p class="text-muted">Every edge play, every day — quality not quantity</p>
-            <div class="pricing-price"><span style="text-decoration:line-through;color:var(--text-muted);font-size:18px;">&pound;14.99</span> <span class="currency">&pound;</span>0<span style="font-size:20px;">.00</span><span class="period">/1st month</span></div>
-            <p class="text-xs text-gold mb-8">Then &pound;14.99/month | or &pound;119.99/year (save &pound;60)</p>
+            <div class="pricing-price"><span style="text-decoration:line-through;color:var(--text-muted);font-size:18px;">&pound;19.99</span> <span class="currency">&pound;</span>0<span style="font-size:20px;">.00</span><span class="period">/1st month</span></div>
+            <p class="text-xs text-gold mb-8">Then &pound;19.99/month | or &pound;199.99/year (save &pound;40)</p>
             <ul class="pricing-features">
               <li><strong>First month completely FREE</strong></li>
               <li>2-4 premium selections daily (quality over quantity)</li>
@@ -2022,14 +2071,14 @@ const App = {
             <button class="btn btn-gold btn-full" data-plan="monthly" data-price="0" data-trial="30" data-currency="gbp" onclick="trackEvent('upgrade','click_monthly_trial','pricing');App.showModal('stripe')">
               ${this.user?.subscription === 'premium' ? 'Current Plan' : 'Start Free Month'}
             </button>
-            <button class="btn btn-outline btn-full mt-8" data-plan="annual" data-price="11999" data-currency="gbp" onclick="App.showModal('stripe')">
-              Annual Plan - &pound;119.99/yr (Save &pound;60)
+            <button class="btn btn-outline btn-full mt-8" data-plan="annual" data-price="19999" data-currency="gbp" onclick="App.showModal('stripe')">
+              Annual Plan - &pound;199.99/yr (Save &pound;60)
             </button>
             <div class="stripe-badge mt-8">
               <span>Secure payment powered by</span>
               <span class="stripe-logo">Stripe</span>
             </div>
-            <p class="text-xs text-muted mt-8">Free for 30 days, then auto-renews at &pound;14.99/month. Cancel anytime before your trial ends to avoid charges. No commitment.</p>
+            <p class="text-xs text-muted mt-8">Free for 30 days, then auto-renews at &pound;19.99/month. Cancel anytime before your trial ends to avoid charges. No commitment.</p>
           </div>
         </div>
 
@@ -2896,9 +2945,9 @@ const App = {
           <h2>6. Subscription Terms, Free Trial &amp; Auto-Renewal</h2>
           <ul>
             <li><strong>Free Tier:</strong> Limited access to one daily NAP selection and basic analysis. No payment required.</li>
-            <li><strong>Premium Tier:</strong> Full access to all tips, detailed analysis, email bulletins, and priority support. Pricing: &pound;14.99/month or &pound;119.99/year.</li>
+            <li><strong>Premium Tier:</strong> Full access to all tips, detailed analysis, email bulletins, and priority support. Pricing: &pound;19.99/month or &pound;199.99/year.</li>
             <li><strong>Free Trial:</strong> New Premium subscribers receive their first month (30 days) completely free of charge. No payment is taken during the trial period. You may cancel at any time during the free trial without incurring any charge.</li>
-            <li><strong>Auto-Renewal:</strong> <strong>Your subscription will automatically renew at the end of each billing period (including at the end of your free trial) unless you cancel before the renewal date.</strong> By subscribing, you expressly consent to auto-renewal and authorise us to charge your chosen payment method at the then-current subscription rate (&pound;14.99/month or &pound;119.99/year) on each renewal date.</li>
+            <li><strong>Auto-Renewal:</strong> <strong>Your subscription will automatically renew at the end of each billing period (including at the end of your free trial) unless you cancel before the renewal date.</strong> By subscribing, you expressly consent to auto-renewal and authorise us to charge your chosen payment method at the then-current subscription rate (&pound;19.99/month or &pound;199.99/year) on each renewal date.</li>
             <li><strong>Billing:</strong> After your free trial ends, subscriptions are billed in advance on a recurring monthly or annual basis. Your payment method will be charged automatically on the same date each month (or year for annual plans). You will receive an email reminder at least 3 days before each renewal.</li>
             <li><strong>Cancellation:</strong> You may cancel your subscription at any time through your account settings, by emailing support@eliteedgesports.co.uk, or by contacting us via the in-app support form. Cancellation takes effect at the end of the current billing period — you will retain access until that date. <strong>If you cancel during your free trial, you will not be charged.</strong></li>
             <li><strong>Price Changes:</strong> We reserve the right to change subscription prices. We will notify you at least 14 days before any price increase. If you do not agree with the new price, you may cancel before the new rate takes effect.</li>
@@ -3979,6 +4028,123 @@ const App = {
   // -----------------------------------------------------------------------
   // 404 PAGE (Feature #5)
   // -----------------------------------------------------------------------
+  renderHowItWorks() {
+    document.getElementById('app').innerHTML = `
+      <div class="container">
+        <div class="legal-page">
+          <h1>How Elite Edge Works</h1>
+          <p style="color:var(--text-secondary);margin-bottom:24px;">Everything you need to know about our system, how to read our tips, and how to bet smarter.</p>
+
+          <!-- Video Section -->
+          <div style="background:#0a0e1a;border-radius:12px;padding:48px 24px;text-align:center;margin-bottom:32px;border:1px solid #2a2d45;">
+            <div style="font-size:56px;margin-bottom:16px;">&#9654;</div>
+            <div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:8px;">Video Guide Coming Soon</div>
+            <div style="font-size:14px;color:#8a8fa0;max-width:400px;margin:0 auto;">We're producing a full walkthrough video explaining our model, how to read tips, and betting strategy. Subscribe to be notified when it's live.</div>
+          </div>
+
+          <h2>&#127919; Understanding Confidence Scores</h2>
+          <p>Every tip we publish has a <strong>confidence score from 1 to 10</strong>. This is our model's assessment of how likely the selection is to win, factoring in all available data.</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+            <tr style="border-bottom:1px solid var(--border);"><td style="padding:8px;font-weight:700;color:#ef4444;">1-4</td><td style="padding:8px;">Low confidence — we would never publish these</td></tr>
+            <tr style="border-bottom:1px solid var(--border);"><td style="padding:8px;font-weight:700;color:#f59e0b;">5-6</td><td style="padding:8px;">Moderate — only published if edge is very strong</td></tr>
+            <tr style="border-bottom:1px solid var(--border);"><td style="padding:8px;font-weight:700;color:#22c55e;">7-8</td><td style="padding:8px;">Strong — the majority of our selections</td></tr>
+            <tr><td style="padding:8px;font-weight:700;color:#d4a843;">9-10</td><td style="padding:8px;">Elite — our strongest conviction picks (NAP territory)</td></tr>
+          </table>
+          <p>We only publish tips with a confidence of <strong>6 or higher</strong>. Our NAP of the Day must be <strong>7+</strong>.</p>
+
+          <h2>&#128200; What is Edge?</h2>
+          <p>Edge is the difference between <strong>what we think the probability is</strong> and <strong>what the bookmaker's odds imply</strong>.</p>
+          <div style="background:#0a0e1a;border-radius:8px;padding:20px;margin:16px 0;font-family:monospace;font-size:14px;color:#22c55e;">
+            Edge = Our Model Probability - Bookmaker Implied Probability<br><br>
+            <span style="color:#8a8fa0;">Example:</span><br>
+            Our model says a horse has a <span style="color:#d4a843;">35%</span> chance of winning<br>
+            The bookmaker's odds of 4/1 imply a <span style="color:#fff;">20%</span> chance<br>
+            Edge = 35% - 20% = <span style="color:#22c55e;font-weight:700;">+15% edge</span> ← this is a strong bet
+          </div>
+          <p>We require a <strong>minimum 5% edge</strong> for racing and <strong>4% for football</strong> before publishing. If no selections meet this threshold, we say "no bet today" — we never publish filler.</p>
+
+          <h2>&#128176; Understanding Units & Staking</h2>
+          <p>We measure all stakes and profits in <strong>units</strong>, not pounds. This lets everyone follow regardless of bankroll size.</p>
+          <div style="background:#0a0e1a;border-radius:8px;padding:20px;margin:16px 0;">
+            <div style="font-size:14px;color:#fff;margin-bottom:12px;"><strong>What is 1 unit?</strong></div>
+            <div style="font-size:13px;color:#8a8fa0;line-height:1.7;">
+              1 unit = <strong style="color:#d4a843;">1% of your total bankroll</strong><br><br>
+              If your bankroll is &pound;500 → 1 unit = &pound;5<br>
+              If your bankroll is &pound;1,000 → 1 unit = &pound;10<br>
+              If your bankroll is &pound;200 → 1 unit = &pound;2<br><br>
+              <strong style="color:#fff;">Our staking guide:</strong><br>
+              Low confidence (6) → 1 unit<br>
+              Medium confidence (7-8) → 1.5-2 units<br>
+              High confidence (9-10) → 2.5-3 units<br>
+              NAP → Maximum 3 units
+            </div>
+          </div>
+          <p style="color:#ef4444;font-weight:600;">Never stake more than 3% of your bankroll on a single bet. This protects you during losing runs.</p>
+
+          <h2>&#128202; ROI & Strike Rate Explained</h2>
+          <p><strong>Strike Rate</strong> = percentage of tips that win. If we publish 10 tips and 7 win, that's 70%.</p>
+          <p><strong>ROI (Return on Investment)</strong> = total profit divided by total staked, as a percentage.</p>
+          <div style="background:#0a0e1a;border-radius:8px;padding:20px;margin:16px 0;font-family:monospace;font-size:14px;color:#22c55e;">
+            <span style="color:#8a8fa0;">Example:</span><br>
+            Total staked: 100 units<br>
+            Total returned: 223 units<br>
+            Profit: 123 units<br>
+            ROI = 123 / 100 = <span style="color:#d4a843;font-weight:700;">+123% ROI</span>
+          </div>
+          <p>Our full results are <strong>publicly verifiable</strong> on the Results page — every tip, every outcome, no hiding losses.</p>
+
+          <h2>&#9971; How to Read a Racing Tip</h2>
+          <p>Each racing selection includes:</p>
+          <ul style="font-size:14px;line-height:2;color:var(--text-secondary);">
+            <li><strong style="color:#fff;">Selection</strong> — the horse we're backing</li>
+            <li><strong style="color:#fff;">Meeting & Time</strong> — where and when the race is</li>
+            <li><strong style="color:#fff;">Market</strong> — Win, Each-Way, or Value Outsider</li>
+            <li><strong style="color:#fff;">Odds</strong> — the current price with best bookmaker highlighted</li>
+            <li><strong style="color:#fff;">Form</strong> — recent finishing positions (1 = won, 2 = second, etc.)</li>
+            <li><strong style="color:#fff;">Going</strong> — the ground conditions and whether the horse suits them</li>
+            <li><strong style="color:#fff;">Analysis</strong> — our full reasoning, every factor considered</li>
+          </ul>
+          <p><strong>Each-Way explained:</strong> Your stake is split in half — one half on the horse to win, the other on it to place (usually top 3). If it wins, both halves pay out. If it places but doesn't win, the place half pays at a fraction (usually 1/4 or 1/5) of the win odds.</p>
+
+          <h2>&#9917; How to Read a Football Tip</h2>
+          <p>Each football selection includes:</p>
+          <ul style="font-size:14px;line-height:2;color:var(--text-secondary);">
+            <li><strong style="color:#fff;">Fixture</strong> — the match and league</li>
+            <li><strong style="color:#fff;">Market</strong> — Match Result, BTTS, Over/Under, Asian Handicap, Double Chance</li>
+            <li><strong style="color:#fff;">Odds</strong> — current price across bookmakers</li>
+            <li><strong style="color:#fff;">Form</strong> — W/D/L record for both teams (last 5 games)</li>
+            <li><strong style="color:#fff;">Analysis</strong> — xG, injuries, H2H, motivation, market value</li>
+          </ul>
+          <p><strong>Common markets explained:</strong></p>
+          <ul style="font-size:14px;line-height:2;color:var(--text-secondary);">
+            <li><strong style="color:#d4a843;">BTTS</strong> — Both Teams to Score. Wins if both sides score at least 1 goal.</li>
+            <li><strong style="color:#d4a843;">Over 2.5 Goals</strong> — Wins if the match has 3 or more total goals.</li>
+            <li><strong style="color:#d4a843;">Asian Handicap -1.5</strong> — Your team must win by 2+ goals for the bet to win.</li>
+            <li><strong style="color:#d4a843;">Double Chance (1X)</strong> — Wins if the home team wins OR draws. Only loses if the away team wins.</li>
+          </ul>
+
+          <h2>&#128640; Getting Started</h2>
+          <ol style="font-size:14px;line-height:2.2;color:var(--text-secondary);">
+            <li>Set your <strong style="color:#fff;">bankroll</strong> — the total amount you're comfortable using (e.g. &pound;500)</li>
+            <li>Calculate <strong style="color:#fff;">1 unit</strong> — that's 1% of your bankroll (e.g. &pound;5)</li>
+            <li>Check the <strong style="color:#fff;">dashboard every morning</strong> for today's selections</li>
+            <li>Read the <strong style="color:#fff;">full analysis</strong> before backing anything</li>
+            <li>Stake according to <strong style="color:#fff;">our recommendation</strong> (1-3 units per tip)</li>
+            <li>Track your <strong style="color:#fff;">results</strong> using the My Bets feature or a spreadsheet</li>
+            <li><strong style="color:#ef4444;">Never chase losses</strong> — stick to the staking plan</li>
+          </ol>
+
+          <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:20px;margin:24px 0;">
+            <div style="font-size:14px;font-weight:700;color:#d4a843;margin-bottom:8px;">&#9888; Important Reminder</div>
+            <div style="font-size:13px;color:#8a8fa0;line-height:1.6;">Elite Edge provides statistical analysis and entertainment content only. We do not guarantee profits. All betting carries risk — you can and may lose money. Only bet what you can afford to lose. If you feel you have a gambling problem, visit <a href="https://www.begambleaware.org" target="_blank" style="color:#d4a843;">BeGambleAware.org</a> or call the National Gambling Helpline on <strong style="color:#fff;">0808 8020 133</strong>.</div>
+          </div>
+
+          <p style="margin-top:24px;"><a href="#/" class="text-gold">&larr; Back to Dashboard</a></p>
+        </div>
+      </div>
+    `;
+  },
+
   render404() {
     const app = document.getElementById('app');
     app.innerHTML = `
@@ -4242,7 +4408,7 @@ const App = {
     { title: 'Welcome to Elite Edge', desc: 'Your new home for data-driven betting intelligence. We use statistical models to identify value in horse racing and football markets, giving you a genuine edge over the bookmakers.' },
     { title: 'Browse Tips', desc: 'Our dashboard shows today\'s top selections with confidence scores, edge percentages, and detailed analysis. Free members get 1 daily tip. Premium members get 2-4 carefully selected edge plays — we never publish tips just to fill a quota.' },
     { title: 'Track Performance', desc: 'Visit the Results page to see our full, transparent track record. Every tip is recorded with P/L, strike rate, and ROI. Use the "I backed this" button to track your own personal performance.' },
-    { title: 'Go Premium', desc: 'Unlock all tips, full analysis, staking recommendations, and priority alerts. First month is completely FREE. Then just \u00a314.99/month, cancel anytime. Your edge starts here.' },
+    { title: 'Go Premium', desc: 'Unlock all tips, full analysis, staking recommendations, and priority alerts. First month is completely FREE. Then just \u00a319.99/month, cancel anytime. Your edge starts here.' },
   ],
 
   _renderOnboardingStep() {
