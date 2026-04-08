@@ -2133,6 +2133,27 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
 .blog-card .blog-excerpt { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 12px; }
 .blog-card .blog-author { font-size: 12px; color: var(--gold); font-weight: 600; }
 .blog-card .blog-read-more { font-size: 13px; color: var(--gold); font-weight: 600; }
+
+/* Weekly Review Badge */
+.blog-weekly-badge {
+  display: inline-block; background: var(--gold); color: var(--bg-deep);
+  font-size: 9px; font-weight: 800; letter-spacing: 1.5px;
+  padding: 3px 10px; border-radius: 4px; margin-bottom: 8px;
+}
+
+/* Stats bar on weekly review cards */
+.blog-stats-bar {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  padding: 10px 0; margin-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.blog-stat {
+  font-size: 11px; font-weight: 700; color: var(--text-secondary);
+  background: var(--bg-elevated); padding: 3px 8px; border-radius: 4px;
+}
+.blog-stat.positive { color: #22c55e; }
+.blog-stat.negative { color: #ef4444; }
+
 .blog-post { max-width: 800px; margin: 0 auto; }
 .blog-post h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
 .blog-post .blog-post-meta { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }

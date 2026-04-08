@@ -1358,6 +1358,180 @@ app.get('/api/status', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// WEEKLY BLOG REVIEW — Auto-generated from results data
+// ---------------------------------------------------------------------------
+function generateWeeklyReview() {
+  var results = readJSON('sample-results.json');
+  var tips = readJSON('sample-tips.json');
+  var now = new Date();
+  var weekEnd = new Date(now); weekEnd.setDate(weekEnd.getDate() - weekEnd.getDay()); // Last Sunday
+  var weekStart = new Date(weekEnd); weekStart.setDate(weekStart.getDate() - 6); // Previous Monday
+  var weekEndStr = weekEnd.toISOString().split('T')[0];
+  var weekStartStr = weekStart.toISOString().split('T')[0];
+
+  // Get this week's results
+  var weekResults = results.filter(function(r) { return r.date >= weekStartStr && r.date <= weekEndStr; });
+  if (weekResults.length === 0) return null;
+
+  // Calculate stats
+  var wins = weekResults.filter(function(r) { return r.result === 'won'; });
+  var losses = weekResults.filter(function(r) { return r.result === 'lost'; });
+  var totalStaked = weekResults.reduce(function(s, r) { return s + (r.stake || 0); }, 0);
+  var totalPnL = weekResults.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+  var roi = totalStaked > 0 ? ((totalPnL / totalStaked) * 100).toFixed(1) : '0.0';
+  var strikeRate = weekResults.length > 0 ? ((wins.length / weekResults.length) * 100).toFixed(1) : '0.0';
+
+  var racingResults = weekResults.filter(function(r) { return r.sport === 'racing'; });
+  var footballResults = weekResults.filter(function(r) { return r.sport === 'football'; });
+  var racingWins = racingResults.filter(function(r) { return r.result === 'won'; });
+  var footballWins = footballResults.filter(function(r) { return r.result === 'won'; });
+  var racingPnL = racingResults.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+  var footballPnL = footballResults.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+
+  // Best winner
+  var bestWin = wins.sort(function(a, b) { return (b.pnl || 0) - (a.pnl || 0); })[0];
+
+  // Biggest loss
+  var worstLoss = losses.sort(function(a, b) { return (a.pnl || 0) - (b.pnl || 0); })[0];
+
+  // Streak analysis
+  var currentStreak = 0; var streakType = '';
+  var sortedByDate = weekResults.sort(function(a, b) { return b.date.localeCompare(a.date); });
+  for (var i = 0; i < sortedByDate.length; i++) {
+    if (i === 0) { streakType = sortedByDate[i].result === 'won' ? 'winning' : 'losing'; currentStreak = 1; }
+    else if (sortedByDate[i].result === (streakType === 'winning' ? 'won' : 'lost')) { currentStreak++; }
+    else break;
+  }
+
+  // By market breakdown
+  var markets = {};
+  weekResults.forEach(function(r) {
+    var m = r.market || 'Other';
+    if (!markets[m]) markets[m] = { total: 0, wins: 0, pnl: 0 };
+    markets[m].total++;
+    if (r.result === 'won') markets[m].wins++;
+    markets[m].pnl += (r.pnl || 0);
+  });
+  var bestMarket = Object.keys(markets).sort(function(a, b) { return markets[b].pnl - markets[a].pnl; })[0];
+
+  // Format date range for display
+  var startDisplay = new Date(weekStartStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+  var endDisplay = new Date(weekEndStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  // Determine overall tone
+  var tone = totalPnL > 5 ? 'outstanding' : totalPnL > 0 ? 'profitable' : totalPnL > -2 ? 'steady' : 'challenging';
+
+  // Build the article content
+  var content = '<p>Here is our full transparent breakdown of the week ending ' + endDisplay + '. Every result, every P/L — nothing hidden.</p>';
+
+  // Stats summary
+  content += '<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:20px;margin:20px 0;">' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:16px;text-align:center;">' +
+    '<div><div style="font-size:24px;font-weight:900;color:var(--gold);">' + weekResults.length + '</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;">Total Tips</div></div>' +
+    '<div><div style="font-size:24px;font-weight:900;color:#22c55e;">' + wins.length + '</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;">Winners</div></div>' +
+    '<div><div style="font-size:24px;font-weight:900;color:' + (totalPnL >= 0 ? '#22c55e' : '#ef4444') + ';">' + (totalPnL >= 0 ? '+' : '') + totalPnL.toFixed(2) + 'u</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;">P/L</div></div>' +
+    '<div><div style="font-size:24px;font-weight:900;color:var(--gold);">' + strikeRate + '%</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;">Strike Rate</div></div>' +
+    '<div><div style="font-size:24px;font-weight:900;color:' + (parseFloat(roi) >= 0 ? '#22c55e' : '#ef4444') + ';">' + (parseFloat(roi) >= 0 ? '+' : '') + roi + '%</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;">ROI</div></div>' +
+    '</div></div>';
+
+  // Opening paragraph
+  if (tone === 'outstanding') content += '<h2>An Outstanding Week</h2><p>This was an exceptional week for Elite Edge. We delivered ' + wins.length + ' winners from ' + weekResults.length + ' selections with a ' + strikeRate + '% strike rate and <strong>+' + totalPnL.toFixed(2) + ' units</strong> profit. These are the weeks that build bankrolls.</p>';
+  else if (tone === 'profitable') content += '<h2>Another Profitable Week</h2><p>A solid week with ' + wins.length + ' winners from ' + weekResults.length + ' selections. The strike rate of ' + strikeRate + '% kept us in profit at <strong>+' + totalPnL.toFixed(2) + ' units</strong>. Consistency is everything in this game.</p>';
+  else if (tone === 'steady') content += '<h2>A Steady Week</h2><p>A mixed week with ' + wins.length + ' winners from ' + weekResults.length + ' selections. We finished close to level at <strong>' + (totalPnL >= 0 ? '+' : '') + totalPnL.toFixed(2) + ' units</strong>. Flat weeks are part of the journey — the model remains disciplined and the edge is there long-term.</p>';
+  else content += '<h2>A Tough Week</h2><p>A challenging week with results going against us — ' + wins.length + ' winners from ' + weekResults.length + ' selections, finishing at <strong>' + totalPnL.toFixed(2) + ' units</strong>. Variance is real. Our edge remains positive and these weeks are factored into the long-term model.</p>';
+
+  // Racing breakdown
+  if (racingResults.length > 0) {
+    content += '<h2>Racing Breakdown</h2>' +
+      '<p>' + racingWins.length + ' winner' + (racingWins.length !== 1 ? 's' : '') + ' from ' + racingResults.length + ' selection' + (racingResults.length !== 1 ? 's' : '') + ' — <strong>' + (racingPnL >= 0 ? '+' : '') + racingPnL.toFixed(2) + ' units</strong>.</p>';
+    // List individual results
+    content += '<ul>';
+    racingResults.forEach(function(r) {
+      var icon = r.result === 'won' ? '<span style="color:#22c55e;">&#10004;</span>' : '<span style="color:#ef4444;">&#10008;</span>';
+      content += '<li>' + icon + ' <strong>' + r.selection + '</strong> — ' + r.event + ' | ' + r.market + ' @ ' + r.odds + ' | ' + (r.pnl >= 0 ? '+' : '') + r.pnl.toFixed(2) + 'u</li>';
+    });
+    content += '</ul>';
+  }
+
+  // Football breakdown
+  if (footballResults.length > 0) {
+    content += '<h2>Football Breakdown</h2>' +
+      '<p>' + footballWins.length + ' winner' + (footballWins.length !== 1 ? 's' : '') + ' from ' + footballResults.length + ' selection' + (footballResults.length !== 1 ? 's' : '') + ' — <strong>' + (footballPnL >= 0 ? '+' : '') + footballPnL.toFixed(2) + ' units</strong>.</p>';
+    content += '<ul>';
+    footballResults.forEach(function(r) {
+      var icon = r.result === 'won' ? '<span style="color:#22c55e;">&#10004;</span>' : '<span style="color:#ef4444;">&#10008;</span>';
+      content += '<li>' + icon + ' <strong>' + r.selection + '</strong> — ' + r.event + ' | ' + r.market + ' @ ' + r.odds + ' | ' + (r.pnl >= 0 ? '+' : '') + r.pnl.toFixed(2) + 'u</li>';
+    });
+    content += '</ul>';
+  }
+
+  // Best winner highlight
+  if (bestWin) {
+    content += '<h2>Star Pick of the Week</h2>' +
+      '<p>Our standout selection was <strong>' + bestWin.selection + '</strong> in ' + bestWin.event + '. Tipped at odds of ' + bestWin.odds + ' in the ' + bestWin.market + ' market, this returned <strong>+' + bestWin.pnl.toFixed(2) + ' units</strong>. ' +
+      (bestWin.sport === 'racing' ? 'The form analysis and going assessment were spot-on here — exactly what our model is built to find.' : 'Our xG and form model identified this as a genuine edge play, and it delivered.') + '</p>';
+  }
+
+  // Market analysis
+  if (bestMarket && markets[bestMarket]) {
+    content += '<h2>Market Insight</h2>' +
+      '<p>Our best-performing market this week was <strong>' + bestMarket + '</strong> with ' + markets[bestMarket].wins + '/' + markets[bestMarket].total + ' winners and <strong>' + (markets[bestMarket].pnl >= 0 ? '+' : '') + markets[bestMarket].pnl.toFixed(2) + ' units</strong> profit. ';
+    if (bestMarket === 'Win') content += 'Straight win selections remain the backbone of our racing portfolio — when the model identifies genuine value at the win price, it tends to deliver.</p>';
+    else if (bestMarket === 'BTTS' || bestMarket === 'Both Teams to Score') content += 'BTTS continues to be one of our most consistent football markets — our xG-based model excels at identifying high-scoring fixture profiles.</p>';
+    else if (bestMarket.indexOf('Over') !== -1) content += 'Goals markets were kind to us this week — the fixture profiles we targeted delivered the attacking football our model predicted.</p>';
+    else if (bestMarket === 'Match Result') content += 'Match result selections hit at a strong rate — these are our highest-confidence football plays and they delivered again.</p>';
+    else content += 'This market provided excellent value this week and our model identified the edge accurately.</p>';
+  }
+
+  // Looking ahead
+  content += '<h2>Looking Ahead</h2>';
+  var upcomingTips = tips.filter(function(t) { return t.status === 'active' && t.date > weekEndStr; });
+  var hasAintree = upcomingTips.some(function(t) { return t.event && t.event.indexOf('Aintree') !== -1; });
+  var hasCL = upcomingTips.some(function(t) { return t.event && t.event.indexOf('Champions League') !== -1; });
+
+  if (hasAintree) content += '<p>The <strong>Grand National Festival</strong> is upon us — three days of world-class racing at Aintree. Our model has been running the numbers on every race and we have 15+ selections prepared across all three days. Premium subscribers will have full access to our race-by-race intelligence.</p>';
+  else if (hasCL) content += '<p>The <strong>Champions League</strong> returns this week with some elite fixtures. Our football model is primed and ready — expect our usual data-driven approach with xG analysis and form-based value plays.</p>';
+  else content += '<p>Another full week of racing and football ahead. Our model continues to process live data daily, and tips will be published by 7:30am UK as always. Quality over quantity remains our philosophy — we only tip when the edge is real.</p>';
+
+  content += '<p style="color:var(--text-muted);font-size:12px;margin-top:24px;font-style:italic;">All results are fully transparent and verifiable on our <a href="#/results" style="color:var(--gold);">Results page</a>. Past performance does not guarantee future results. Please gamble responsibly. 18+.</p>';
+
+  // Build the review object
+  var slug = 'weekly-review-' + weekEndStr;
+  var title = 'Week in Review: ' + startDisplay + ' — ' + endDisplay;
+  var excerpt = wins.length + ' winners from ' + weekResults.length + ' selections | ' + strikeRate + '% strike rate | ' + (totalPnL >= 0 ? '+' : '') + totalPnL.toFixed(2) + 'u P/L | ROI: ' + (parseFloat(roi) >= 0 ? '+' : '') + roi + '%';
+
+  return {
+    slug: slug,
+    title: title,
+    date: weekEndStr,
+    author: 'Elite Edge Team',
+    excerpt: excerpt,
+    content: content,
+    isAutoGenerated: true,
+    stats: { tips: weekResults.length, wins: wins.length, pnl: Math.round(totalPnL * 100) / 100, roi: parseFloat(roi), strikeRate: parseFloat(strikeRate) }
+  };
+}
+
+// Generate and store weekly reviews
+function updateWeeklyBlog() {
+  var reviews = readJSON('blog-reviews.json') || [];
+  var latest = generateWeeklyReview();
+  if (!latest) return;
+  // Don't duplicate
+  if (reviews.some(function(r) { return r.slug === latest.slug; })) return;
+  reviews.unshift(latest);
+  // Keep last 12 weeks
+  if (reviews.length > 12) reviews = reviews.slice(0, 12);
+  writeJSON('blog-reviews.json', reviews);
+  console.log('[Blog] Generated weekly review: ' + latest.title);
+}
+
+app.get('/api/blog/weekly-reviews', (req, res) => {
+  var reviews = readJSON('blog-reviews.json') || [];
+  res.json(reviews);
+});
+
+// ---------------------------------------------------------------------------
 // SPA fallback
 // ---------------------------------------------------------------------------
 app.get('*', (req, res) => {
@@ -2145,6 +2319,12 @@ async function scheduledDataRefresh() {
       console.log('[Refresh] Tips file updated');
     }
 
+    // 8. Generate weekly blog review on Mondays at 11am
+    var dayOfWeek = uk.getDay();
+    if (dayOfWeek === 1 && hour === 11) {
+      updateWeeklyBlog();
+    }
+
     console.log('[Refresh] Completed at ' + hour + ':00 UK time');
 
   } catch (err) {
@@ -2157,6 +2337,11 @@ setInterval(scheduledDataRefresh, 10 * 60 * 1000);
 
 // Run on startup after 45 seconds
 setTimeout(scheduledDataRefresh, 45000);
+
+// Generate initial weekly blog review on startup
+setTimeout(function() {
+  updateWeeklyBlog();
+}, 5000);
 
 // ---------------------------------------------------------------------------
 // SCHEDULED EMAIL WORKFLOWS
