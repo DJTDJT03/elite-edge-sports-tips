@@ -1873,7 +1873,7 @@ const App = {
         '</div>' +
       '</div>' +
 
-      '<div style="display:flex;gap:10px;margin-bottom:20px;justify-content:center;flex-wrap:wrap;">' + tabsHtml + '</div>' +
+      '<div style="display:flex;gap:10px;margin-bottom:20px;margin-top:8px;justify-content:center;flex-wrap:wrap;overflow:visible;">' + tabsHtml + '</div>' +
 
       '<div style="margin-bottom:12px;">' +
         '<h2 style="font-size:18px;color:#d4a843;margin-bottom:4px;">' + day.label + '</h2>' +
