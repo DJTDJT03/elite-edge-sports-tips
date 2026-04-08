@@ -972,12 +972,12 @@ const App = {
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px;">
             <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;">
-              <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Races Today</div>
-              <div style="font-size:22px;font-weight:800;color:#fff;">${todayTips.filter(t => t.sport === 'racing').length > 0 ? todayTips.filter(t => t.sport === 'racing').length + ' meetings' : 'Cards loading...'}</div>
+              <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Racing Selections</div>
+              <div style="font-size:22px;font-weight:800;color:#fff;">${todayTips.filter(t => t.sport === 'racing' && !t.isWeeklyAcca).length || 'None today'}</div>
             </div>
             <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;">
-              <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Football Fixtures</div>
-              <div style="font-size:22px;font-weight:800;color:#fff;">${todayTips.filter(t => t.sport === 'football').length > 0 ? todayTips.filter(t => t.sport === 'football').length + ' matches' : 'Fixtures loading...'}</div>
+              <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Football Selections</div>
+              <div style="font-size:22px;font-weight:800;color:#fff;">${todayTips.filter(t => t.sport === 'football' && !t.isWeeklyAcca).length || 'None today'}</div>
             </div>
             <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;">
               <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Model Status</div>
