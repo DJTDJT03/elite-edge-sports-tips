@@ -500,6 +500,7 @@ const App = {
       case 'dashboard': case '': this.renderDashboard(); break;
       case 'racing': this.renderRacing(); break;
       case 'football': this.renderFootball(); break;
+      case 'festival': this.renderFestival(); break;
       case 'results': this.renderResults(); break;
       case 'pricing': this.renderPricing(); break;
       case 'analysts': this.renderAnalysts(); break;
@@ -857,9 +858,22 @@ const App = {
           <p>Today's premium betting intelligence — ${new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}</p>
         </div>
 
+        <!-- Grand National Festival Banner -->
+        <div style="background:linear-gradient(135deg,rgba(212,168,67,0.15),rgba(184,144,47,0.08));border:2px solid rgba(212,168,67,0.5);border-radius:14px;padding:20px 24px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;" onclick="window.location.hash='#/festival'">
+          <div style="position:absolute;top:0;right:0;width:200px;height:100%;background:linear-gradient(135deg,transparent 40%,rgba(212,168,67,0.08));pointer-events:none;"></div>
+          <div style="display:flex;align-items:center;gap:16px;">
+            <div style="font-size:36px;">&#127943;</div>
+            <div style="flex:1;">
+              <div style="font-weight:900;font-size:18px;color:#d4a843;margin-bottom:4px;">Grand National Festival &mdash; Live This Week</div>
+              <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">21 races. 3 days. Elite analysis for every race.</div>
+              <div style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:8px 20px;border-radius:8px;font-weight:700;font-size:13px;">View Festival Guide &rarr;</div>
+            </div>
+          </div>
+        </div>
+
         <!-- Quality Philosophy Banner -->
         <div style="background:linear-gradient(135deg, rgba(212,168,67,0.1), rgba(212,168,67,0.02));border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;">
-          <div style="font-size:28px;">🎯</div>
+          <div style="font-size:28px;">&#127919;</div>
           <div>
             <div style="font-weight:700;font-size:14px;color:#d4a843;margin-bottom:2px;">Quality Over Quantity — We Only Tip When The Edge Is Real</div>
             <div style="font-size:12px;color:var(--text-secondary);">We publish 2-4 selections daily maximum. If there's no genuine edge, we say "no bet today". We never publish filler tips to hit a quota. Every selection has a calculated statistical edge.</div>
@@ -1693,6 +1707,189 @@ const App = {
     if (value && type === 'market') tips = tips.filter(t => t.market === value);
     if (value && type === 'analyst') tips = tips.filter(t => t.tipsterProfile === value);
     document.getElementById('football-tips').innerHTML = tips.map(t => this.renderTipCard(t)).join('') || '<p class="text-muted">No tips match these filters.</p>';
+  },
+
+  // -----------------------------------------------------------------------
+  // GRAND NATIONAL FESTIVAL PAGE
+  // -----------------------------------------------------------------------
+  _festivalTab: 'thursday',
+
+  async renderFestival() {
+    var app = document.getElementById('app');
+    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading Festival Guide...</div></div>';
+
+    try {
+      var tips = await this.api('/tips');
+      this.tips = tips;
+    } catch(e) { /* use cached */ }
+
+    var self = this;
+    var allTips = this.tips || [];
+    var isPremium = this.user && this.user.subscription === 'premium';
+    var tab = this._festivalTab || 'thursday';
+
+    // Festival race schedule
+    var festivalDays = {
+      thursday: {
+        label: 'Thursday 9 April — Opening Day',
+        date: '2026-04-09',
+        races: [
+          { time: '13:45', name: 'Boodles Anniversary Juvenile Hurdle', grade: 'Grade 1' },
+          { time: '14:20', name: 'Manifesto Novices\' Chase', grade: 'Grade 1' },
+          { time: '14:55', name: 'Bowl Chase', grade: 'Grade 1' },
+          { time: '15:30', name: 'Foxhunters\' Chase', grade: 'Class 2' },
+          { time: '16:05', name: 'Aintree Hurdle', grade: 'Grade 1' },
+          { time: '16:40', name: 'Red Rum Handicap Chase', grade: 'Grade 3 Handicap' }
+        ]
+      },
+      friday: {
+        label: 'Friday 10 April — Ladies Day',
+        date: '2026-04-10',
+        races: [
+          { time: '13:45', name: 'Handicap Hurdle', grade: 'Class 2 Handicap' },
+          { time: '14:20', name: 'Mildmay Novices\' Chase', grade: 'Grade 1' },
+          { time: '14:55', name: 'Top Novices\' Hurdle', grade: 'Grade 1' },
+          { time: '15:30', name: 'Melling Chase', grade: 'Grade 1' },
+          { time: '16:05', name: 'Topham Handicap Chase (National Fences)', grade: 'Grade 3 Handicap' },
+          { time: '16:40', name: 'Sefton Novices\' Hurdle', grade: 'Grade 1' }
+        ]
+      },
+      saturday: {
+        label: 'Saturday 11 April — Grand National Day',
+        date: '2026-04-11',
+        races: [
+          { time: '13:20', name: 'Handicap Hurdle', grade: 'Class 2 Handicap' },
+          { time: '13:55', name: 'Mersey Novices\' Hurdle', grade: 'Grade 1' },
+          { time: '14:30', name: 'Freebooter Handicap Chase', grade: 'Handicap' },
+          { time: '15:05', name: 'Liverpool Hurdle', grade: 'Grade 1' },
+          { time: '16:00', name: 'Randox Grand National', grade: 'Grade 3' },
+          { time: '17:00', name: 'Maghull Novices\' Chase', grade: 'Grade 1' }
+        ]
+      }
+    };
+
+    var day = festivalDays[tab];
+    var dayTips = allTips.filter(function(t) { return t.meeting === 'Aintree' && t.date === day.date; });
+
+    // Build race cards
+    var raceCardsHtml = '';
+    for (var ri = 0; ri < day.races.length; ri++) {
+      var race = day.races[ri];
+      var raceTips = dayTips.filter(function(t) { return t.raceTime === race.time; });
+      var hasTip = raceTips.length > 0;
+
+      var tipsHtml = '';
+      if (hasTip) {
+        for (var ti = 0; ti < raceTips.length; ti++) {
+          var tip = raceTips[ti];
+          var expandId = 'fest-expand-' + tab + '-' + ri + '-' + ti;
+          if (isPremium) {
+            tipsHtml += '<div style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:14px 18px;margin-top:10px;">';
+            tipsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
+            tipsHtml += '<div>';
+            tipsHtml += '<div style="font-weight:800;font-size:16px;color:#fff;">' + tip.selection + (tip.isNap ? ' <span style="background:#d4a843;color:#0a0e1a;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;vertical-align:middle;">NAP</span>' : '') + '</div>';
+            tipsHtml += '<div style="font-size:12px;color:var(--text-secondary);">' + (tip.market || 'Win') + ' &bull; Confidence: ' + tip.confidence + '/10 &bull; Stake: ' + (tip.staking || '-') + '</div>';
+            tipsHtml += '</div>';
+            tipsHtml += '<div style="font-weight:900;font-size:22px;color:#d4a843;">' + self.formatOdds(tip.odds) + '</div>';
+            tipsHtml += '</div>';
+            tipsHtml += '<div style="margin-top:8px;font-size:13px;color:var(--text-secondary);line-height:1.6;">' + (tip.analysis ? tip.analysis.summary : '') + '</div>';
+            tipsHtml += '<button onclick="var el=document.getElementById(\'' + expandId + '\');el.style.display=el.style.display===\'none\'?\'block\':\'none\';" style="background:none;border:1px solid rgba(212,168,67,0.3);color:#d4a843;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;margin-top:10px;font-weight:600;">Expand Full Analysis</button>';
+            tipsHtml += '<div id="' + expandId + '" style="display:none;margin-top:12px;font-size:12px;color:var(--text-secondary);line-height:1.7;">';
+            if (tip.analysis) {
+              if (tip.analysis.form) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Form:</strong> ' + tip.analysis.form + '</div>';
+              if (tip.analysis.goingSuitability) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Going:</strong> ' + tip.analysis.goingSuitability + '</div>';
+              if (tip.analysis.courseRecord) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Course:</strong> ' + tip.analysis.courseRecord + '</div>';
+              if (tip.analysis.trainerForm) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Trainer:</strong> ' + tip.analysis.trainerForm + '</div>';
+              if (tip.analysis.riskNotes) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#ef4444;">Risk:</strong> ' + tip.analysis.riskNotes + '</div>';
+            }
+            tipsHtml += '</div>';
+            tipsHtml += '</div>';
+          } else {
+            // Locked / blurred for free users
+            tipsHtml += '<div style="background:rgba(212,168,67,0.04);border:1px solid rgba(212,168,67,0.15);border-radius:10px;padding:14px 18px;margin-top:10px;position:relative;overflow:hidden;">';
+            tipsHtml += '<div style="filter:blur(8px);pointer-events:none;">';
+            tipsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+            tipsHtml += '<div><div style="font-weight:800;font-size:16px;color:#fff;">Premium Selection</div>';
+            tipsHtml += '<div style="font-size:12px;color:var(--text-secondary);">Win &bull; Confidence: 8/10</div></div>';
+            tipsHtml += '<div style="font-weight:900;font-size:22px;color:#d4a843;">3/1</div>';
+            tipsHtml += '</div>';
+            tipsHtml += '<div style="margin-top:8px;font-size:13px;color:var(--text-secondary);">Elite-level analysis with form, going, course and trainer insights...</div>';
+            tipsHtml += '</div>';
+            tipsHtml += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,14,26,0.7);backdrop-filter:blur(2px);">';
+            tipsHtml += '<div style="font-size:28px;margin-bottom:6px;">&#128274;</div>';
+            tipsHtml += '<div style="font-weight:700;font-size:14px;color:#d4a843;margin-bottom:4px;">Premium Selection</div>';
+            tipsHtml += '<a href="#/pricing" style="background:#d4a843;color:#0a0e1a;padding:8px 20px;border-radius:6px;font-weight:700;font-size:12px;text-decoration:none;">Unlock All Festival Tips</a>';
+            tipsHtml += '</div>';
+            tipsHtml += '</div>';
+          }
+        }
+      } else {
+        if (tab === 'saturday') {
+          tipsHtml += '<div style="background:rgba(100,100,100,0.1);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px 18px;margin-top:10px;font-size:13px;color:var(--text-secondary);">Tips coming soon &mdash; check back closer to race day.</div>';
+        } else {
+          tipsHtml += '<div style="background:rgba(100,100,100,0.1);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px 18px;margin-top:10px;font-size:13px;color:var(--text-secondary);">Analysis in progress.</div>';
+        }
+      }
+
+      var gradeColor = race.grade.indexOf('Grade 1') > -1 ? '#d4a843' : (race.grade.indexOf('Grade') > -1 ? '#a0a0a0' : '#6b7280');
+      var isNational = race.name.indexOf('Grand National') > -1;
+
+      raceCardsHtml += '<div style="background:var(--card-bg);border:1px solid ' + (isNational ? 'rgba(212,168,67,0.4)' : 'var(--border)') + ';border-radius:12px;padding:18px 20px;margin-bottom:14px;' + (isNational ? 'box-shadow:0 0 20px rgba(212,168,67,0.1);' : '') + '">';
+      raceCardsHtml += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">';
+      raceCardsHtml += '<div style="background:rgba(212,168,67,0.15);color:#d4a843;font-weight:800;font-size:15px;padding:6px 14px;border-radius:8px;min-width:60px;text-align:center;">' + race.time + '</div>';
+      raceCardsHtml += '<div style="flex:1;min-width:200px;">';
+      raceCardsHtml += '<div style="font-weight:700;font-size:15px;color:#fff;">' + race.name + (isNational ? ' &#127942;' : '') + '</div>';
+      raceCardsHtml += '<div style="font-size:12px;color:' + gradeColor + ';font-weight:600;">' + race.grade + '</div>';
+      raceCardsHtml += '</div>';
+      raceCardsHtml += '</div>';
+      raceCardsHtml += tipsHtml;
+      raceCardsHtml += '</div>';
+    }
+
+    // Tab buttons
+    var tabsHtml = '';
+    var tabs = ['thursday', 'friday', 'saturday'];
+    var tabLabels = ['Thursday', 'Friday', 'Saturday'];
+    for (var i = 0; i < tabs.length; i++) {
+      var isActive = tabs[i] === tab;
+      tabsHtml += '<button onclick="App._festivalTab=\'' + tabs[i] + '\';App.renderFestival();" style="padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;border:' + (isActive ? '2px solid #d4a843' : '1px solid rgba(255,255,255,0.1)') + ';background:' + (isActive ? 'rgba(212,168,67,0.15)' : 'rgba(255,255,255,0.03)') + ';color:' + (isActive ? '#d4a843' : 'var(--text-secondary)') + ';">' + tabLabels[i] + '</button>';
+    }
+
+    // Tip count for this day
+    var tipCount = dayTips.length;
+
+    app.innerHTML = '<div class="container">' +
+      '<div class="page-header" style="text-align:center;margin-bottom:8px;">' +
+        '<h1 style="font-size:28px;">&#127943; Grand National Festival 2026</h1>' +
+        '<p style="font-size:15px;color:var(--text-secondary);">Aintree &mdash; 9-11 April &mdash; Elite Analysis For Every Race</p>' +
+      '</div>' +
+
+      '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(184,144,47,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:20px;margin-bottom:24px;text-align:center;">' +
+        '<div style="display:flex;justify-content:center;gap:32px;flex-wrap:wrap;">' +
+          '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">21</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Races</div></div>' +
+          '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">3</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Days</div></div>' +
+          '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">15+</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Selections</div></div>' +
+          '<div><div style="font-size:28px;font-weight:900;color:#22c55e;">Grade 1</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Level Analysis</div></div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="display:flex;gap:10px;margin-bottom:20px;justify-content:center;flex-wrap:wrap;">' + tabsHtml + '</div>' +
+
+      '<div style="margin-bottom:12px;">' +
+        '<h2 style="font-size:18px;color:#d4a843;margin-bottom:4px;">' + day.label + '</h2>' +
+        '<p style="font-size:13px;color:var(--text-secondary);">' + day.races.length + ' races &bull; ' + tipCount + ' selection' + (tipCount !== 1 ? 's' : '') + ' published</p>' +
+      '</div>' +
+
+      raceCardsHtml +
+
+      (!isPremium ? '<div style="text-align:center;margin-top:24px;margin-bottom:24px;">' +
+        '<div style="font-size:18px;font-weight:800;color:#d4a843;margin-bottom:8px;">Unlock All 15+ Festival Selections</div>' +
+        '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Full analysis, staking plans, and live updates for every race across all 3 days.</div>' +
+        '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:14px 36px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">Subscribe Now &mdash; First Month FREE</a>' +
+        '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;19.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>' +
+      '</div>' : '') +
+
+    '</div>';
   },
 
   // -----------------------------------------------------------------------
