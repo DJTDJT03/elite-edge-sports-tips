@@ -2136,7 +2136,8 @@ const App = {
               <option value="placed">Placed</option>
             </select>
           </div>
-          <div class="card" style="overflow-x:auto;">
+          <!-- Desktop: table view. Mobile: card view -->
+          <div class="card results-table-wrap">
             <table class="results-table" id="results-table">
               <thead>
                 <tr>
@@ -2146,16 +2147,16 @@ const App = {
               <tbody>
                 ${results.sort((a,b) => new Date(b.date) - new Date(a.date)).map(r => `
                   <tr>
-                    <td>${formatDateUK(r.date)}</td>
-                    <td>${r.sport === 'racing' ? 'Racing' : 'Football'}</td>
-                    <td>${r.event}</td>
-                    <td>${r.selection}</td>
-                    <td>${r.market}</td>
-                    <td>${this.formatOdds(r.odds)}</td>
-                    <td>${r.stake}</td>
-                    <td class="result-${r.result}">${r.result.toUpperCase()}</td>
-                    <td class="${r.pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${r.pnl > 0 ? '+' : ''}${r.pnl.toFixed(2)}</td>
-                    <td>${r.result === 'won' ? `<button class="share-btn" onclick="App.shareWin('${r.selection.replace(/'/g, "\\'")}',${r.odds})">Share</button> <button class="share-btn" onclick="App.copyShareText('${r.selection.replace(/'/g, "\\'")}',${r.odds})">Copy</button>` : ''}</td>
+                    <td data-label="Date">${formatDateUK(r.date)}</td>
+                    <td data-label="Sport">${r.sport === 'racing' ? 'Racing' : 'Football'}</td>
+                    <td data-label="Event">${r.event}</td>
+                    <td data-label="Selection"><strong>${r.selection}</strong></td>
+                    <td data-label="Market">${r.market}</td>
+                    <td data-label="Odds">${this.formatOdds(r.odds)}</td>
+                    <td data-label="Stake">${r.stake}u</td>
+                    <td data-label="Result" class="result-${r.result}">${r.result.toUpperCase()}</td>
+                    <td data-label="P/L" class="${r.pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${r.pnl > 0 ? '+' : ''}${r.pnl.toFixed(2)}u</td>
+                    <td data-label="" class="results-actions">${r.result === 'won' ? `<button class="share-btn" onclick="App.shareWin('${r.selection.replace(/'/g, "\\'")}',${r.odds})">Share</button> <button class="share-btn" onclick="App.copyShareText('${r.selection.replace(/'/g, "\\'")}',${r.odds})">Copy</button>` : ''}</td>
                   </tr>
                 `).join('')}
               </tbody>

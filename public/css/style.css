@@ -975,8 +975,88 @@ main { min-height: calc(100vh - 64px); }
 
 /* Results table mobile: card layout */
 @media (max-width: 768px) {
-  .results-table-wrap table { min-width: 700px; }
-  .results-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+  /* Mobile results: stack each row as a card - NO horizontal scroll */
+  .results-table-wrap { overflow: visible; padding: 0 !important; background: transparent; border: none; box-shadow: none; }
+  .results-table { display: block; min-width: 0; border: none; background: transparent; }
+  .results-table thead { display: none; }
+  .results-table tbody { display: block; }
+  .results-table tr {
+    display: block;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .results-table tr:hover td { background: transparent; }
+  .results-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border: none;
+    font-size: 13px;
+    text-align: right;
+  }
+  .results-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 10px;
+    text-align: left;
+  }
+  /* Event and Selection get full-width top layout */
+  .results-table td[data-label="Event"],
+  .results-table td[data-label="Selection"] {
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .results-table td[data-label="Event"]::before,
+  .results-table td[data-label="Selection"]::before {
+    margin-right: 0;
+    margin-bottom: 3px;
+  }
+  .results-table td[data-label="Event"] {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .results-table td[data-label="Selection"] {
+    font-size: 15px;
+    color: var(--text-primary);
+  }
+  .results-table td[data-label="Selection"] strong { font-weight: 700; }
+  /* Result badge styling */
+  .results-table td[data-label="Result"] { font-weight: 800; font-size: 12px; }
+  .results-table td.result-won { color: #22c55e; }
+  .results-table td.result-lost { color: #ef4444; }
+  .results-table td.result-placed { color: #d4a843; }
+  /* P/L big and bold */
+  .results-table td[data-label="P/L"] { font-weight: 800; font-size: 15px; }
+  /* Actions row - full width */
+  .results-table td.results-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-top: 8px;
+    margin-top: 4px;
+    border-top: 1px solid var(--border);
+  }
+  .results-table td.results-actions::before { display: none; }
+  .results-table td.results-actions:empty { display: none; }
+  .results-table td.results-actions .share-btn {
+    flex: 1;
+    max-width: 120px;
+    padding: 6px 10px;
+    font-size: 11px;
+  }
 
   /* Festival tabs mobile */
   .festival-tabs { display: flex; gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
