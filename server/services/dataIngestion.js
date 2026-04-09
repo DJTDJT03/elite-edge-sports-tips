@@ -89,14 +89,18 @@ class FootballFixturesSource extends DataSource {
 
   async fetch() {
     if (!this.config.apiKey) {
-      console.log('[${this.name}] No API key — set API_FOOTBALL_KEY env var. Sign up: https://www.api-football.com/');
+      console.log('[football-fixtures] No API key — set API_FOOTBALL_KEY env var.');
       return { response: [] };
     }
     try {
       const today = new Date().toISOString().split('T')[0];
-      const data = await this._apiGet('/fixtures?date=' + today + '&league=' + this.leagueIds.join('-') + '&season=2025');
-      console.log('[football-fixtures] Fetched ' + (data.response || []).length + ' fixtures for ' + today);
-      return data;
+      // API-Football: /fixtures?date=X returns all fixtures for the date (no league filter needed)
+      const data = await this._apiGet('/fixtures?date=' + today);
+      const all = data.response || [];
+      // Filter client-side to our target leagues
+      const filtered = all.filter(f => this.leagueIds.indexOf(f.league.id) !== -1);
+      console.log('[football-fixtures] Fetched ' + all.length + ' total fixtures, ' + filtered.length + ' in top leagues for ' + today);
+      return { response: filtered };
     } catch (err) {
       console.error('[football-fixtures] Error: ' + err.message);
       return { response: [] };
@@ -105,7 +109,15 @@ class FootballFixturesSource extends DataSource {
 
   async fetchFixturesByDate(date) {
     if (!this.config.apiKey) return { response: [] };
-    return this._apiGet('/fixtures?date=' + date + '&league=' + this.leagueIds.join('-') + '&season=2025');
+    try {
+      const data = await this._apiGet('/fixtures?date=' + date);
+      const all = data.response || [];
+      const filtered = all.filter(f => this.leagueIds.indexOf(f.league.id) !== -1);
+      return { response: filtered };
+    } catch (err) {
+      console.error('[football-fixtures] fetchByDate Error: ' + err.message);
+      return { response: [] };
+    }
   }
 
   async fetchLiveScores() {

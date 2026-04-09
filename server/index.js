@@ -631,6 +631,37 @@ app.get('/api/racing/race/:id', async (req, res) => {
   }
 });
 
+// Diagnostic: API-Football status check
+app.get('/api/football/diagnostic', async (req, res) => {
+  try {
+    if (!process.env.API_FOOTBALL_KEY) return res.json({ error: 'Not configured' });
+    const https = require('https');
+    const endpoints = ['/status', '/fixtures?date=' + new Date().toISOString().split('T')[0]];
+    const results = {};
+    for (const path of endpoints) {
+      try {
+        const data = await new Promise((resolve, reject) => {
+          const r = https.request({
+            hostname: 'v3.football.api-sports.io',
+            path: path,
+            method: 'GET',
+            headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY }
+          }, (resp) => {
+            let b = '';
+            resp.on('data', c => b += c);
+            resp.on('end', () => resolve({ status: resp.statusCode, body: b.substring(0, 1500) }));
+          });
+          r.on('error', reject);
+          r.setTimeout(15000, () => { r.destroy(); reject(new Error('Timeout')); });
+          r.end();
+        });
+        results[path] = data;
+      } catch (e) { results[path] = { error: e.message }; }
+    }
+    res.json(results);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Dedicated endpoint for big-races (future festival cards)
 app.get('/api/racing/big-races', async (req, res) => {
   try {
