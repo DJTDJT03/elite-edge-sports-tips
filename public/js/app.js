@@ -1858,11 +1858,12 @@ const App = {
         date: '2026-04-09',
         races: [
           { time: '13:45', name: 'Boodles Anniversary Juvenile Hurdle', grade: 'Grade 1' },
-          { time: '14:20', name: 'Manifesto Novices\' Chase', grade: 'Grade 1' },
-          { time: '14:55', name: 'Bowl Chase', grade: 'Grade 1' },
-          { time: '15:30', name: 'Foxhunters\' Chase', grade: 'Class 2' },
-          { time: '16:05', name: 'Aintree Hurdle', grade: 'Grade 1' },
-          { time: '16:40', name: 'Red Rum Handicap Chase', grade: 'Grade 3 Handicap' }
+          { time: '14:20', name: 'William Hill Manifesto Novices\' Chase', grade: 'Grade 1' },
+          { time: '14:55', name: 'Racing Welfare Bowl Chase', grade: 'Grade 1' },
+          { time: '15:30', name: 'Randox Foxhunters\' Open Hunters\' Chase', grade: 'Class 2' },
+          { time: '16:05', name: 'William Hill Aintree Hurdle', grade: 'Grade 1' },
+          { time: '16:40', name: 'Close Brothers Red Rum Handicap Chase', grade: 'Premier Handicap' },
+          { time: '17:15', name: 'Goffs Nickel Coin Mares\' Standard Open NH Flat Race', grade: 'Grade 2' }
         ]
       },
       friday: {
