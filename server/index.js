@@ -564,6 +564,19 @@ app.put('/api/auth/email-prefs', authenticate, (req, res) => {
 // In demo mode: resets password to "reset123"
 // In production: integrate with SendGrid/Mailgun for actual reset email
 // ---------------------------------------------------------------------------
+// TEMPORARY: One-time user wipe (remove after use)
+app.post('/api/admin/wipe-user', async (req, res) => {
+  try {
+    const { secret, email } = req.body;
+    if (secret !== 'ee-wipe-2026-darren') return res.status(403).json({ error: 'forbidden' });
+    const users = readJSON('sample-users.json');
+    const before = users.length;
+    const filtered = users.filter(u => u.email !== email);
+    writeJSON('sample-users.json', filtered);
+    res.json({ removed: before - filtered.length, remaining: filtered.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Reset password using the JWT token from the email link
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
