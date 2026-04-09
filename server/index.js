@@ -602,6 +602,35 @@ app.get('/api/racing/live-results', async (req, res) => {
   }
 });
 
+// Full race detail by race_id (pulls runners for a single race)
+app.get('/api/racing/race/:id', async (req, res) => {
+  try {
+    if (!process.env.RACING_API_KEY) return res.json({ error: 'Not configured' });
+    const https = require('https');
+    const auth = Buffer.from(`${process.env.RACING_API_KEY}:${process.env.RACING_API_SECRET}`).toString('base64');
+    const data = await new Promise((resolve, reject) => {
+      const r = https.request({
+        hostname: 'api.theracingapi.com',
+        path: '/v1/racecards/big-races',
+        method: 'GET',
+        headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+      }, (resp) => {
+        let b = '';
+        resp.on('data', c => b += c);
+        resp.on('end', () => { try { resolve(JSON.parse(b)); } catch (e) { reject(e); } });
+      });
+      r.on('error', reject);
+      r.setTimeout(15000, () => { r.destroy(); reject(new Error('Timeout')); });
+      r.end();
+    });
+    const race = (data.racecards || []).find(r => r.race_id === req.params.id);
+    if (!race) return res.status(404).json({ error: 'Race not found' });
+    res.json(race);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Dedicated endpoint for big-races (future festival cards)
 app.get('/api/racing/big-races', async (req, res) => {
   try {
@@ -623,9 +652,16 @@ app.get('/api/racing/big-races', async (req, res) => {
       r.setTimeout(15000, () => { r.destroy(); reject(new Error('Timeout')); });
       r.end();
     });
-    // Summarise by date + return Aintree only with runner lists
+    // Return Aintree races with full runner data for a specific target
     const aintree = (data.racecards || []).filter(r => r.course === 'Aintree');
+    const target = req.query.race_id;
+    if (target) {
+      const race = aintree.find(r => r.race_id === target);
+      return res.json(race || { error: 'not found' });
+    }
+    // Summary view — just race headers + runner count
     const summary = aintree.map(r => ({
+      race_id: r.race_id,
       date: r.date,
       time: r.off_time,
       raceName: r.race_name,
@@ -634,17 +670,7 @@ app.get('/api/racing/big-races', async (req, res) => {
       going: r.going || r.going_detailed || '',
       prize: r.prize,
       fieldSize: r.field_size,
-      runners: (r.runners || []).map(rn => ({
-        horse: rn.horse,
-        horseId: rn.horse_id,
-        jockey: rn.jockey,
-        trainer: rn.trainer,
-        age: rn.age,
-        weight: rn.lbs || rn.weight,
-        form: rn.form,
-        or: rn.ofr || rn.or,
-        odds: (rn.odds && rn.odds[0] && rn.odds[0].fractional) || '',
-      }))
+      runnerCount: (r.runners || []).length
     }));
     res.json({ count: aintree.length, aintree: summary });
   } catch (err) {
