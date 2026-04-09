@@ -577,6 +577,23 @@ app.post('/api/admin/wipe-user', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// TEMPORARY: One-time user upgrade (remove after use)
+app.post('/api/admin/upgrade-user', async (req, res) => {
+  try {
+    const { secret, email } = req.body;
+    if (secret !== 'ee-wipe-2026-darren') return res.status(403).json({ error: 'forbidden' });
+    const users = readJSON('sample-users.json');
+    const user = users.find(u => u.email === email);
+    if (!user) return res.status(404).json({ error: 'user not found' });
+    user.role = 'admin';
+    user.subscription = 'premium';
+    user.subscriptionExpiry = '2027-12-31';
+    user.bank = 1000;
+    writeJSON('sample-users.json', users);
+    res.json({ upgraded: true, user: { email: user.email, name: user.name, role: user.role, subscription: user.subscription, expiry: user.subscriptionExpiry } });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Reset password using the JWT token from the email link
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
