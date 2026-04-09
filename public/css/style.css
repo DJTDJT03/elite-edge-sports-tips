@@ -833,8 +833,26 @@ main { min-height: calc(100vh - 64px); }
   .logo-sub { display: none; }
   .logo-svg { width: 28px; height: 28px; }
   .tip-odds { font-size: 18px; }
-  .chat-window { bottom: 70px; right: 8px; left: 8px; width: auto; max-height: 70vh; }
-  .chat-bubble { bottom: 12px; right: 12px; width: 44px; height: 44px; }
+  .chat-window {
+    bottom: 70px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: 70vh;
+    z-index: 200;
+  }
+  .chat-bubble {
+    bottom: 78px;  /* Lifted above the disclaimer bar */
+    right: 14px;
+    width: 52px;
+    height: 52px;
+    z-index: 200;
+    box-shadow: 0 4px 24px rgba(212,168,67,0.5);
+  }
+  .chat-tease {
+    bottom: 142px;  /* Above the bubble */
+    right: 14px;
+  }
 
   /* Page & containers */
   .container { padding: 12px 10px; }
