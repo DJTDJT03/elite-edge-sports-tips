@@ -291,27 +291,38 @@ class RacingCardsSource extends DataSource {
   async fetch() {
     if (!this.config.apiKey || !this.config.apiSecret) {
       console.log(`[${this.name}] No API credentials — set RACING_API_KEY and RACING_API_SECRET`);
-      console.log(`[${this.name}] Sign up free trial: https://www.theracingapi.com/`);
       return { racecards: [] };
     }
 
     try {
       const auth = Buffer.from(`${this.config.apiKey}:${this.config.apiSecret}`).toString('base64');
-      // The Racing API correct endpoints: /racecards/pro (best), /racecards/standard, /racecards/basic, /racecards/free
-      // Try pro first (premium plan), fall back to standard, then basic, then free
+      // Tier-aware: try pro → standard → basic → free until one returns data
       const endpoints = ['/racecards/pro', '/racecards/standard', '/racecards/basic', '/racecards/free'];
       for (const endpoint of endpoints) {
         try {
           const racecards = await this._apiGet(endpoint, auth);
           if (racecards && racecards.racecards && racecards.racecards.length > 0) {
             console.log(`[${this.name}] Fetched ${racecards.racecards.length} races via ${endpoint}`);
+            // Also fetch big-races (future festival headline races) and merge
+            try {
+              const bigRaces = await this._apiGet('/racecards/big-races', auth);
+              if (bigRaces && bigRaces.racecards) {
+                // Merge big-races that aren't already in the main list
+                const existingIds = new Set(racecards.racecards.map(r => r.race_id));
+                const extras = bigRaces.racecards.filter(r => !existingIds.has(r.race_id));
+                if (extras.length > 0) {
+                  racecards.racecards = racecards.racecards.concat(extras);
+                  console.log(`[${this.name}] Added ${extras.length} big-races from future dates`);
+                }
+              }
+            } catch (e) { /* big-races is optional */ }
             return racecards;
           }
         } catch (e) {
           // Try next endpoint
         }
       }
-      console.log(`[${this.name}] All endpoints returned empty — no races today`);
+      console.log(`[${this.name}] All endpoints returned empty`);
       return { racecards: [] };
     } catch (err) {
       console.error(`[${this.name}] API Error: ${err.message}`);
@@ -320,15 +331,23 @@ class RacingCardsSource extends DataSource {
     }
   }
 
-  // Fetch results for a specific date
+  // Fetch results — Standard plan endpoint: /results/today or /results
   async fetchResults(date) {
     if (!this.config.apiKey || !this.config.apiSecret) return { results: [] };
     try {
       const auth = Buffer.from(`${this.config.apiKey}:${this.config.apiSecret}`).toString('base64');
-      // Correct endpoint: /results (no date param, returns recent results) or /results/{date}
-      const results = await this._apiGet(`/results`, auth);
-      console.log(`[${this.name}] Fetched ${(results.results || []).length} results`);
-      return results;
+      // Standard plan supports /results/today and /results for recent results
+      const endpoints = ['/results/today', '/results'];
+      for (const endpoint of endpoints) {
+        try {
+          const results = await this._apiGet(endpoint, auth);
+          if (results && results.results && results.results.length > 0) {
+            console.log(`[${this.name}] Fetched ${results.results.length} results via ${endpoint}`);
+            return results;
+          }
+        } catch (e) { /* try next */ }
+      }
+      return { results: [] };
     } catch (err) {
       console.error(`[${this.name}] Results Error: ${err.message}`);
       return { results: [] };

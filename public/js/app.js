@@ -1870,25 +1870,17 @@ const App = {
         label: 'Friday 10 April — Ladies Day',
         date: '2026-04-10',
         races: [
-          { time: '13:45', name: 'Handicap Hurdle', grade: 'Class 2 Handicap' },
-          { time: '14:20', name: 'Mildmay Novices\' Chase', grade: 'Grade 1' },
-          { time: '14:55', name: 'Top Novices\' Hurdle', grade: 'Grade 1' },
-          { time: '15:30', name: 'Melling Chase', grade: 'Grade 1' },
-          { time: '16:05', name: 'Topham Handicap Chase (National Fences)', grade: 'Grade 3 Handicap' },
-          { time: '16:40', name: 'Sefton Novices\' Hurdle', grade: 'Grade 1' }
-        ]
+          { time: '16:05', name: 'Randox Topham Handicap Chase (National Fences)', grade: 'Class 1 Premier Handicap' }
+        ],
+        notice: 'Other Friday races will publish automatically at 7:30am Friday morning once the full card is released by the Racing API.'
       },
       saturday: {
         label: 'Saturday 11 April — Grand National Day',
         date: '2026-04-11',
         races: [
-          { time: '13:20', name: 'Handicap Hurdle', grade: 'Class 2 Handicap' },
-          { time: '13:55', name: 'Mersey Novices\' Hurdle', grade: 'Grade 1' },
-          { time: '14:30', name: 'Freebooter Handicap Chase', grade: 'Handicap' },
-          { time: '15:05', name: 'Liverpool Hurdle', grade: 'Grade 1' },
-          { time: '16:00', name: 'Randox Grand National', grade: 'Grade 3' },
-          { time: '17:00', name: 'Maghull Novices\' Chase', grade: 'Grade 1' }
-        ]
+          { time: '16:00', name: 'Randox Grand National Handicap Chase', grade: 'Class 1 Premier Handicap' }
+        ],
+        notice: 'Other Saturday races will publish automatically at 7:30am Saturday morning once the full card is released by the Racing API.'
       }
     };
 
@@ -1897,6 +1889,9 @@ const App = {
 
     // Build race cards
     var raceCardsHtml = '';
+    if (day.notice) {
+      raceCardsHtml += '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.25);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;"><div style="font-size:22px;">&#9432;</div><div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">' + day.notice + '</div></div>';
+    }
     for (var ri = 0; ri < day.races.length; ri++) {
       var race = day.races[ri];
       var raceTips = dayTips.filter(function(t) { return t.raceTime === race.time; });
