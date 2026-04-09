@@ -988,18 +988,21 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
   // -----------------------------------------------------------------------
   // Password Reset Email
   // -----------------------------------------------------------------------
-  async sendPasswordReset(email, tempPassword) {
-    const subject = 'Elite Edge Sports Tips — Password Reset';
+  async sendPasswordReset(email, resetLink) {
+    const subject = 'Elite Edge Sports Tips — Reset Your Password';
     const html = this._wrapHTML(`
-      <h2 style="color:#d4a843;margin-bottom:16px;">Password Reset</h2>
-      <p>Your password has been reset. Here is your temporary password:</p>
-      <div style="background:#1a1a2e;border:2px solid #d4a843;border-radius:10px;padding:20px;text-align:center;margin:20px 0;">
-        <span style="font-size:24px;font-weight:700;color:#d4a843;letter-spacing:2px;">${this._esc(tempPassword)}</span>
+      <h2 style="color:#d4a843;margin-bottom:16px;">Reset Your Password</h2>
+      <p>We received a request to reset your password for your Elite Edge Sports Tips account.</p>
+      <p>Click the button below to set a new password. This link will expire in <strong>30 minutes</strong>.</p>
+      <div style="text-align:center;margin:30px 0;">
+        <a href="${resetLink}" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:14px 32px;border-radius:8px;font-weight:700;text-decoration:none;font-size:15px;">Reset My Password</a>
       </div>
-      <p>Please log in and change your password immediately via <strong>My Account &rarr; Change Password</strong>.</p>
-      <p style="color:#9ca3af;font-size:12px;margin-top:20px;">If you did not request this reset, please contact us at admin@eliteedgesports.co.uk immediately.</p>
-    `, 'Your password has been reset');
-    const text = `Your password has been reset. Temporary password: ${tempPassword}. Please log in and change it immediately.`;
+      <p style="color:#9ca3af;font-size:12px;">Or copy and paste this link into your browser:</p>
+      <p style="color:#9ca3af;font-size:11px;word-break:break-all;background:#0a0e1a;padding:10px;border-radius:6px;border:1px solid #2a2d45;">${resetLink}</p>
+      <p style="color:#9ca3af;font-size:12px;margin-top:24px;">If you did not request this password reset, you can safely ignore this email. Your password will not be changed unless you click the link above.</p>
+      <p style="color:#9ca3af;font-size:12px;">For security questions, contact us at <a href="mailto:admin@eliteedgesports.co.uk" style="color:#d4a843;">admin@eliteedgesports.co.uk</a>.</p>
+    `, 'Reset your Elite Edge password');
+    const text = `Reset your Elite Edge Sports Tips password by clicking this link (expires in 30 minutes): ${resetLink}\n\nIf you did not request this reset, please ignore this email.`;
     return this._sendEmail({ to: email, subject, html, text, emailType: 'password_reset' });
   }
 

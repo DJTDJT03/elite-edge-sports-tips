@@ -320,6 +320,30 @@ main { min-height: calc(100vh - 64px); }
 .form-error { color: var(--red); font-size: 13px; margin-bottom: 12px; min-height: 18px; }
 .form-footer { text-align: center; font-size: 13px; color: var(--text-muted); margin-top: 16px; }
 
+/* Password input with show/hide toggle */
+.password-input-wrapper { position: relative; display: block; }
+.password-input-wrapper input { padding-right: 44px !important; }
+.password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+.password-toggle:hover { color: var(--gold); }
+.password-toggle:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
+.password-toggle.active { color: var(--gold); }
+.password-toggle.active svg path:first-of-type { stroke-dasharray: 4 2; }
+
 /* =========================================================================
    MODALS
    ========================================================================= */

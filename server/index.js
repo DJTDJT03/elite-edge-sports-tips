@@ -525,6 +525,41 @@ app.put('/api/auth/email-prefs', authenticate, (req, res) => {
 // In demo mode: resets password to "reset123"
 // In production: integrate with SendGrid/Mailgun for actual reset email
 // ---------------------------------------------------------------------------
+// Reset password using the JWT token from the email link
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
+    if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+    let payload;
+    try {
+      payload = jwt.verify(token, JWT_SECRET);
+    } catch (e) {
+      return res.status(400).json({ error: 'Reset link is invalid or has expired. Please request a new one.' });
+    }
+
+    if (payload.purpose !== 'password_reset') {
+      return res.status(400).json({ error: 'Invalid reset token' });
+    }
+
+    const users = readJSON('sample-users.json');
+    const user = users.find(u => u.email === payload.email);
+    if (!user) return res.status(400).json({ error: 'Account not found' });
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    delete user.passwordPlain;
+    delete user.mustResetPassword;
+    // Invalidate all existing sessions
+    user.sessionId = crypto.randomBytes(16).toString('hex');
+    writeJSON('sample-users.json', users);
+
+    res.json({ success: true, message: 'Password has been reset successfully. You can now log in with your new password.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -537,18 +572,18 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const message = 'If an account exists with this email, a password reset link has been sent.';
 
     if (user) {
-      // Generate a secure random temporary password
-      const crypto = require('crypto');
-      const tempPass = crypto.randomBytes(6).toString('hex');
-      const hashed = await bcrypt.hash(tempPass, 10);
-      user.password = hashed;
-      user.mustResetPassword = true;
-      writeJSON('sample-users.json', users);
+      // Generate a JWT reset token (30 min expiry) — survives Railway redeploys
+      const resetToken = jwt.sign(
+        { email: user.email, purpose: 'password_reset' },
+        JWT_SECRET,
+        { expiresIn: '30m' }
+      );
+      const resetLink = `https://eliteedgesports.co.uk/#/reset-password?token=${resetToken}`;
 
       // Send reset email via emailService
       try {
         if (emailService && emailService.sendPasswordReset) {
-          await emailService.sendPasswordReset(user.email, tempPass);
+          await emailService.sendPasswordReset(user.email, resetLink);
         }
       } catch (emailErr) {
         console.error('[Auth] Failed to send password reset email:', emailErr.message);

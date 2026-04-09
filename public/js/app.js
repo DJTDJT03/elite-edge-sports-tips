@@ -320,6 +320,7 @@ const App = {
     e.preventDefault();
     const email = document.getElementById('login-email').value;
     const password = document.getElementById('login-password').value;
+    const remember = document.getElementById('login-remember') && document.getElementById('login-remember').checked;
     try {
       const data = await this.api('/auth/login', {
         method: 'POST', body: JSON.stringify({ email, password })
@@ -328,6 +329,12 @@ const App = {
       localStorage.setItem('ee_token', data.token);
       localStorage.setItem('ee_user', JSON.stringify(data.user));
       if (data.tokenExpiry) localStorage.setItem('ee_token_expiry', data.tokenExpiry.toString());
+      // Remember email for next login
+      if (remember) {
+        localStorage.setItem('ee_remembered_email', email);
+      } else {
+        localStorage.removeItem('ee_remembered_email');
+      }
       this.updateAuthUI();
       this.closeModal();
       trackEvent('auth', 'login', email);
@@ -338,6 +345,66 @@ const App = {
       this.route();
     } catch (err) {
       document.getElementById('login-error').textContent = err.message;
+    }
+  },
+
+  // Toggle password visibility (eye icon)
+  togglePasswordVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (input.type === 'password') {
+      input.type = 'text';
+      btn.classList.add('active');
+      btn.setAttribute('aria-label', 'Hide password');
+    } else {
+      input.type = 'password';
+      btn.classList.remove('active');
+      btn.setAttribute('aria-label', 'Show password');
+    }
+  },
+
+  // Reset password handler (called from reset-password modal)
+  async resetPassword(e) {
+    e.preventDefault();
+    const newPass = document.getElementById('reset-password-new').value;
+    const confirmPass = document.getElementById('reset-password-confirm').value;
+    const errorEl = document.getElementById('reset-error');
+    const successEl = document.getElementById('reset-success');
+    errorEl.textContent = '';
+    successEl.style.display = 'none';
+
+    if (newPass !== confirmPass) {
+      errorEl.textContent = 'Passwords do not match';
+      return;
+    }
+    if (newPass.length < 8) {
+      errorEl.textContent = 'Password must be at least 8 characters';
+      return;
+    }
+    if (!/[A-Z]/.test(newPass) || !/[a-z]/.test(newPass) || !/[0-9]/.test(newPass)) {
+      errorEl.textContent = 'Password must include uppercase, lowercase, and number';
+      return;
+    }
+
+    const token = this._resetToken;
+    if (!token) {
+      errorEl.textContent = 'Reset link is missing or invalid. Please request a new one.';
+      return;
+    }
+    try {
+      const data = await this.api('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token, newPassword: newPass })
+      });
+      successEl.style.display = 'block';
+      successEl.textContent = data.message || 'Password reset! Redirecting to login...';
+      setTimeout(() => {
+        this.closeModal();
+        window.location.hash = '#/';
+        this.showModal('login');
+      }, 2000);
+    } catch (err) {
+      errorEl.textContent = err.message || 'Failed to reset password';
     }
   },
 
@@ -482,6 +549,23 @@ const App = {
     if (modal) modal.style.display = 'block';
     if (type === 'calculator') this.calculateStakes();
     if (type === 'mybets') this.renderMyBets();
+    // Pre-fill remembered email on login modal
+    if (type === 'login') {
+      const remembered = localStorage.getItem('ee_remembered_email');
+      const emailInput = document.getElementById('login-email');
+      const rememberCheckbox = document.getElementById('login-remember');
+      if (emailInput && remembered) {
+        emailInput.value = remembered;
+        if (rememberCheckbox) rememberCheckbox.checked = true;
+        // Focus the password field since email is pre-filled
+        setTimeout(() => {
+          const pwField = document.getElementById('login-password');
+          if (pwField) pwField.focus();
+        }, 100);
+      } else if (emailInput) {
+        setTimeout(() => emailInput.focus(), 100);
+      }
+    }
   },
 
   closeModal() {
@@ -539,8 +623,24 @@ const App = {
         break;
       }
       case 'how-it-works': this.renderHowItWorks(); break;
+      case 'reset-password': this.handleResetPasswordRoute(); break;
       default: this.render404();
     }
+  },
+
+  handleResetPasswordRoute() {
+    // Parse token from query string in hash: #/reset-password?token=xxx
+    const hash = window.location.hash;
+    const tokenMatch = hash.match(/[?&]token=([^&]+)/);
+    const token = tokenMatch ? tokenMatch[1] : null;
+    if (!token) {
+      this.renderDashboard();
+      setTimeout(() => alert('Reset link is missing the token. Please request a new password reset.'), 100);
+      return;
+    }
+    this._resetToken = token;
+    this.renderDashboard();
+    setTimeout(() => this.showModal('resetpassword'), 200);
   },
 
   // -----------------------------------------------------------------------
