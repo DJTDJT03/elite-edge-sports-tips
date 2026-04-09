@@ -274,16 +274,17 @@ function requirePremium(req, res, next) {
 // ---------------------------------------------------------------------------
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { email, password, name, agreementTimestamp } = req.body;
+    let { email, password, name, agreementTimestamp } = req.body;
     if (!email || !password || !name) {
       return res.status(400).json({ error: 'Name, email, and password are required' });
     }
+    email = email.trim().toLowerCase(); // Normalize email
     // Password strength validation
     const pwError = validatePassword(password);
     if (pwError) return res.status(400).json({ error: pwError });
 
     const users = readJSON('sample-users.json');
-    if (users.find(u => u.email === email)) {
+    if (users.find(u => (u.email || '').toLowerCase() === email)) {
       return res.status(400).json({ error: 'Email already registered' });
     }
     const hashed = await bcrypt.hash(password, 10);
@@ -346,7 +347,8 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+    email = (email || '').trim().toLowerCase(); // Normalize for case-insensitive lookup
     const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
     const userAgent = req.headers['user-agent'] || '';
 
@@ -356,7 +358,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const users = readJSON('sample-users.json');
-    const user = users.find(u => u.email === email);
+    const user = users.find(u => (u.email || '').toLowerCase() === email);
     if (!user) {
       recordAuthAttempt(ip);
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -577,6 +579,21 @@ app.post('/api/admin/wipe-user', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// TEMPORARY: Diagnostic to check users in DB
+app.get('/api/admin/list-users', (req, res) => {
+  if (req.query.secret !== 'ee-wipe-2026-darren') return res.status(403).json({ error: 'forbidden' });
+  const users = readJSON('sample-users.json');
+  res.json(users.map(u => ({
+    email: u.email,
+    name: u.name,
+    role: u.role,
+    subscription: u.subscription,
+    hasPassword: !!u.password,
+    passwordLen: u.password ? u.password.length : 0,
+    joined: u.joined
+  })));
+});
+
 // TEMPORARY: One-time user upgrade (remove after use)
 app.post('/api/admin/upgrade-user', async (req, res) => {
   try {
@@ -631,11 +648,12 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
-    const { email } = req.body;
+    let { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
+    email = email.trim().toLowerCase();
 
     const users = readJSON('sample-users.json');
-    const user = users.find(u => u.email === email);
+    const user = users.find(u => (u.email || '').toLowerCase() === email);
 
     // Always return success message to prevent email enumeration
     const message = 'If an account exists with this email, a password reset link has been sent.';
