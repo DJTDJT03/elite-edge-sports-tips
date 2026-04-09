@@ -89,6 +89,9 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
 .nav-link-admin { color: var(--purple) !important; }
 .nav-right { display: flex; align-items: center; gap: 10px; }
 .nav-toggle { display: none; background: none; border: none; color: var(--text-primary); font-size: 24px; cursor: pointer; padding: 4px 8px; }
+
+/* Mobile-only items hidden on desktop (shown only when nav is in mobile dropdown mode) */
+#nav-auth-guest-mobile, #nav-auth-user-mobile, .mobile-menu-tools { display: none !important; }
 .user-badge {
   font-size: 12px; font-weight: 600; padding: 4px 12px;
   border-radius: 20px; background: var(--bg-elevated); color: var(--gold);
@@ -784,9 +787,9 @@ main { min-height: calc(100vh - 64px); }
   /* Logo must not overflow */
   .logo { flex-shrink: 1; min-width: 0; overflow: hidden; }
 
-  /* Show auth buttons inside the dropdown menu */
-  .nav-links #nav-auth-guest-mobile,
-  .nav-links #nav-auth-user-mobile {
+  /* Show auth buttons inside the OPEN dropdown menu only */
+  .nav-links.open #nav-auth-guest-mobile,
+  .nav-links.open #nav-auth-user-mobile {
     display: flex !important;
     flex-direction: column;
     gap: 8px;
@@ -794,16 +797,17 @@ main { min-height: calc(100vh - 64px); }
     margin-top: 8px;
     border-top: 1px solid var(--border);
   }
-  .nav-links #nav-auth-guest-mobile .btn,
-  .nav-links #nav-auth-user-mobile .btn { width: 100%; }
+  .nav-links.open #nav-auth-guest-mobile .btn,
+  .nav-links.open #nav-auth-user-mobile .btn { width: 100%; }
 
-  /* Show odds/theme toggles inside dropdown menu */
-  .nav-links .mobile-menu-tools {
-    display: flex; gap: 12px; align-items: center; justify-content: center;
+  /* Show odds/theme toggles inside open dropdown menu */
+  .nav-links.open .mobile-menu-tools {
+    display: flex !important;
+    gap: 12px; align-items: center; justify-content: center;
     padding: 12px 0; border-top: 1px solid var(--border); margin-top: 8px;
   }
-  .nav-links .mobile-menu-tools .odds-format-toggle,
-  .nav-links .mobile-menu-tools .theme-toggle { display: inline-flex; font-size: 14px; }
+  .nav-links.open .mobile-menu-tools .odds-format-toggle,
+  .nav-links.open .mobile-menu-tools .theme-toggle { display: inline-flex; font-size: 14px; }
   .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
   .pricing-grid { grid-template-columns: 1fr; }
   .pricing-card.featured { transform: none; }
