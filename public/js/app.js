@@ -1255,11 +1255,20 @@ const App = {
     var tomorrow = this._getTomorrow();
     var yesterday = this._getYesterday();
     var container = document.getElementById('dash-tips');
-    var filtered = this.tips.filter(function(t) { return !t.isNap && !t.isWeeklyAcca; });
+    // For TODAY: exclude NAP + Acca (they have their own dedicated cards above)
+    // For TOMORROW/UPCOMING: include NAP + Acca so users can see them
+    var includeAll = dateFilter !== 'today';
+    var filtered = this.tips.filter(function(t) {
+      if (includeAll) return true;
+      return !t.isNap && !t.isWeeklyAcca;
+    });
     if (dateFilter === 'today') filtered = filtered.filter(function(t) { return !t.date || t.date === today; });
     else if (dateFilter === 'tomorrow') filtered = filtered.filter(function(t) { return t.date === tomorrow; });
+    else if (dateFilter === 'upcoming') filtered = filtered.filter(function(t) { return t.date && t.date > tomorrow; });
     else if (dateFilter === 'recent') filtered = filtered.filter(function(t) { return t.date === yesterday; });
-    container.innerHTML = filtered.map(function(t) { return App.renderTipCard(t); }).join('');
+    container.innerHTML = filtered.length
+      ? filtered.map(function(t) { return App.renderTipCard(t); }).join('')
+      : '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-muted);">No selections published for this period yet. Tips publish daily by 7:30am UK.</div>';
   },
 
   filterDashTips(filter, btn) {
@@ -1269,16 +1278,20 @@ const App = {
     var today = this._getToday();
     var tomorrow = this._getTomorrow();
     var yesterday = this._getYesterday();
-    let filtered = this.tips.filter(t => !t.isNap && !t.isWeeklyAcca);
+    var includeAll = this._dashDateFilter !== 'today';
+    let filtered = this.tips.filter(t => includeAll ? true : (!t.isNap && !t.isWeeklyAcca));
     // Apply date filter
     if (this._dashDateFilter === 'today') filtered = filtered.filter(function(t) { return !t.date || t.date === today; });
     else if (this._dashDateFilter === 'tomorrow') filtered = filtered.filter(function(t) { return t.date === tomorrow; });
+    else if (this._dashDateFilter === 'upcoming') filtered = filtered.filter(function(t) { return t.date && t.date > tomorrow; });
     else if (this._dashDateFilter === 'recent') filtered = filtered.filter(function(t) { return t.date === yesterday; });
     if (filter === 'racing') filtered = filtered.filter(t => t.sport === 'racing');
     if (filter === 'football') filtered = filtered.filter(t => t.sport === 'football');
     if (filter === 'free') filtered = filtered.filter(t => !t.isPremium);
     if (filter === 'premium') filtered = filtered.filter(t => t.isPremium);
-    container.innerHTML = filtered.map(t => this.renderTipCard(t)).join('');
+    container.innerHTML = filtered.length
+      ? filtered.map(t => this.renderTipCard(t)).join('')
+      : '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-muted);">No selections match these filters.</div>';
   },
 
   // -----------------------------------------------------------------------
