@@ -566,51 +566,6 @@ app.put('/api/auth/email-prefs', authenticate, (req, res) => {
 // In demo mode: resets password to "reset123"
 // In production: integrate with SendGrid/Mailgun for actual reset email
 // ---------------------------------------------------------------------------
-// TEMPORARY: One-time user wipe (remove after use)
-app.post('/api/admin/wipe-user', async (req, res) => {
-  try {
-    const { secret, email } = req.body;
-    if (secret !== 'ee-wipe-2026-darren') return res.status(403).json({ error: 'forbidden' });
-    const users = readJSON('sample-users.json');
-    const before = users.length;
-    const filtered = users.filter(u => u.email !== email);
-    writeJSON('sample-users.json', filtered);
-    res.json({ removed: before - filtered.length, remaining: filtered.length });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// TEMPORARY: Diagnostic to check users in DB
-app.get('/api/admin/list-users', (req, res) => {
-  if (req.query.secret !== 'ee-wipe-2026-darren') return res.status(403).json({ error: 'forbidden' });
-  const users = readJSON('sample-users.json');
-  res.json(users.map(u => ({
-    email: u.email,
-    name: u.name,
-    role: u.role,
-    subscription: u.subscription,
-    hasPassword: !!u.password,
-    passwordLen: u.password ? u.password.length : 0,
-    joined: u.joined
-  })));
-});
-
-// TEMPORARY: One-time user upgrade (remove after use)
-app.post('/api/admin/upgrade-user', async (req, res) => {
-  try {
-    const { secret, email } = req.body;
-    if (secret !== 'ee-wipe-2026-darren') return res.status(403).json({ error: 'forbidden' });
-    const users = readJSON('sample-users.json');
-    const user = users.find(u => u.email === email);
-    if (!user) return res.status(404).json({ error: 'user not found' });
-    user.role = 'admin';
-    user.subscription = 'premium';
-    user.subscriptionExpiry = '2027-12-31';
-    user.bank = 1000;
-    writeJSON('sample-users.json', users);
-    res.json({ upgraded: true, user: { email: user.email, name: user.name, role: user.role, subscription: user.subscription, expiry: user.subscriptionExpiry } });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 // Reset password using the JWT token from the email link
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
@@ -797,8 +752,9 @@ app.post('/api/email/test', async (req, res) => {
   }
 });
 
-// Diagnostic: API-Football status check
-app.get('/api/football/diagnostic', async (req, res) => {
+// Diagnostic: API-Football status check (admin only)
+app.get('/api/football/diagnostic', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'admin only' });
   try {
     if (!process.env.API_FOOTBALL_KEY) return res.json({ error: 'Not configured' });
     const https = require('https');
@@ -875,8 +831,9 @@ app.get('/api/racing/big-races', async (req, res) => {
   }
 });
 
-// Diagnostic: raw Racing API response for debugging
-app.get('/api/racing/diagnostic', async (req, res) => {
+// Diagnostic: raw Racing API response for debugging (admin only)
+app.get('/api/racing/diagnostic', authenticate, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'admin only' });
   try {
     if (!racingSource || !process.env.RACING_API_KEY) {
       return res.json({ error: 'Racing API not configured' });
