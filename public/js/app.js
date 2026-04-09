@@ -63,6 +63,7 @@ const App = {
     this.initNotifications();
     this.checkReferralParam();
     this.initCookieConsent();
+    this.initChatTease();
   },
 
   // -----------------------------------------------------------------------
@@ -588,7 +589,9 @@ const App = {
   },
 
   route() {
-    const hash = window.location.hash.replace('#/', '') || 'dashboard';
+    // Strip any query string (?token=xxx etc) before parsing the page
+    const hashRaw = window.location.hash.replace('#/', '') || 'dashboard';
+    const hash = hashRaw.split('?')[0]; // Remove query string
     const page = hash.split('/')[0] || 'dashboard';
     this.currentPage = page;
 
@@ -653,9 +656,19 @@ const App = {
         this.api('/results'),
       ]);
       const today = new Date().toISOString().split('T')[0];
-      const todayTips = tips.filter(t => t.date === today && !t.isWeeklyAcca).length;
+
+      // Count today's tips: includes active (unsettled) AND settled (from results)
+      // Active tips not yet settled
+      const activeToday = tips.filter(t => t.date === today && !t.isWeeklyAcca);
+      // Settled tips from today's results (each result = one settled tip)
       const todayResults = results.filter(r => r.date === today);
-      const won = todayResults.filter(r => r.result === 'won').length;
+      // Total = active + settled, deduped by tipId
+      const seenTipIds = new Set(activeToday.map(t => t.id));
+      todayResults.forEach(r => seenTipIds.add(r.tipId || r.id));
+      const todayTips = seenTipIds.size;
+
+      // "Won" includes both outright wins AND placed (each-way placed)
+      const won = todayResults.filter(r => r.result === 'won' || r.result === 'placed').length;
       const pnl = todayResults.reduce((s, r) => s + (r.pnl || 0), 0);
       const streak = this.calculateStreak(results);
 
@@ -3223,7 +3236,80 @@ const App = {
   // -----------------------------------------------------------------------
   toggleChat() {
     const w = document.getElementById('chat-window');
+    const tease = document.getElementById('chat-tease');
     w.style.display = w.style.display === 'none' ? 'flex' : 'none';
+    if (tease) tease.style.display = 'none';
+    // Mark tease as dismissed so it doesn't pop again this session
+    sessionStorage.setItem('ee_chat_dismissed', 'true');
+    if (w.style.display === 'flex') {
+      // Personalise opening message based on auth state
+      const messages = document.getElementById('chat-messages');
+      if (messages && !messages.dataset.personalised) {
+        messages.dataset.personalised = 'true';
+        const isGuest = !this.user;
+        const isFree = this.user && this.user.subscription === 'free';
+        if (isGuest) {
+          messages.innerHTML = '<div class="chat-msg bot">Hi! 👋 Welcome to <strong>Elite Edge Sports Tips</strong>.</div>' +
+            '<div class="chat-msg bot">We\'re running at <strong>76.8% strike rate</strong> and <strong>+225% ROI</strong> this season — fully verified.</div>' +
+            '<div class="chat-msg bot">Want to see today\'s premium tips? <strong>Your first month is FREE</strong> 🎁</div>' +
+            '<div class="chat-suggestions" id="chat-suggestions">' +
+              '<button onclick="App.chatSend(\'Show me today\\\'s tips\')">Show me today\'s tips</button>' +
+              '<button onclick="App.closeChat();App.showModal(\'register\')">Start FREE month</button>' +
+              '<button onclick="App.chatSend(\'How does it work?\')">How does it work?</button>' +
+            '</div>';
+        } else if (isFree) {
+          messages.innerHTML = '<div class="chat-msg bot">Hi ' + (this.user.name || 'there') + '! 👋</div>' +
+            '<div class="chat-msg bot">You\'re on the Free plan. Upgrade to Premium for <strong>2-4 daily picks</strong>, full analysis, and the daily bulletin email.</div>' +
+            '<div class="chat-msg bot"><strong>First month is FREE</strong> 🎁 then £19.99/mo. Cancel anytime.</div>' +
+            '<div class="chat-suggestions" id="chat-suggestions">' +
+              '<button onclick="App.closeChat();window.location.hash=\'#/pricing\'">Upgrade to Premium</button>' +
+              '<button onclick="App.chatSend(\'What\\\'s included?\')">What\'s included?</button>' +
+              '<button onclick="App.chatSend(\'Today\\\'s tips?\')">Today\'s tips?</button>' +
+            '</div>';
+        }
+      }
+    }
+  },
+
+  closeChat() {
+    document.getElementById('chat-window').style.display = 'none';
+  },
+
+  // Auto-tease the chat bubble for non-logged-in users
+  initChatTease() {
+    if (this.user) return; // Logged in - skip
+    if (sessionStorage.getItem('ee_chat_dismissed')) return; // Already dismissed
+    setTimeout(() => {
+      const bubble = document.getElementById('chat-bubble');
+      if (!bubble || sessionStorage.getItem('ee_chat_dismissed')) return;
+      // Add a pulsing notification dot
+      if (!bubble.querySelector('.chat-tease-dot')) {
+        const dot = document.createElement('div');
+        dot.className = 'chat-tease-dot';
+        bubble.appendChild(dot);
+      }
+      // Add a teaser bubble that appears next to the chat bubble
+      if (!document.getElementById('chat-tease')) {
+        const tease = document.createElement('div');
+        tease.id = 'chat-tease';
+        tease.className = 'chat-tease';
+        tease.innerHTML = '<button class="chat-tease-close" onclick="App.dismissChatTease(event)">&times;</button>' +
+          '<div class="chat-tease-title">🎁 First month FREE</div>' +
+          '<div class="chat-tease-text">Get 2-4 premium tips daily. 76.8% strike rate. Start your free month now.</div>' +
+          '<button class="chat-tease-cta" onclick="App.dismissChatTease();App.toggleChat();">Tell me more</button>';
+        document.body.appendChild(tease);
+        setTimeout(() => tease.classList.add('show'), 50);
+      }
+    }, 12000); // 12 seconds after page load
+  },
+
+  dismissChatTease(e) {
+    if (e) e.stopPropagation();
+    sessionStorage.setItem('ee_chat_dismissed', 'true');
+    const tease = document.getElementById('chat-tease');
+    if (tease) tease.remove();
+    const dot = document.querySelector('.chat-tease-dot');
+    if (dot) dot.remove();
   },
 
   async chatSend(text) {
