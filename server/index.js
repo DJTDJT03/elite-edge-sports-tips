@@ -752,6 +752,36 @@ app.post('/api/email/test', async (req, res) => {
   }
 });
 
+// Public minimal status — shows plan tier only (no secrets)
+app.get('/api/football/plan', async (req, res) => {
+  try {
+    if (!process.env.API_FOOTBALL_KEY) return res.json({ error: 'Not configured' });
+    const https = require('https');
+    const data = await new Promise((resolve, reject) => {
+      const r = https.request({
+        hostname: 'v3.football.api-sports.io',
+        path: '/status',
+        method: 'GET',
+        headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY }
+      }, (resp) => {
+        let b = '';
+        resp.on('data', c => b += c);
+        resp.on('end', () => { try { resolve(JSON.parse(b)); } catch (e) { reject(e); } });
+      });
+      r.on('error', reject);
+      r.setTimeout(15000, () => { r.destroy(); reject(new Error('Timeout')); });
+      r.end();
+    });
+    res.json({
+      plan: data.response?.subscription?.plan || 'unknown',
+      active: data.response?.subscription?.active,
+      end: data.response?.subscription?.end,
+      requestsToday: data.response?.requests?.current || 0,
+      dailyLimit: data.response?.requests?.limit_day || 0
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Diagnostic: API-Football status check (admin only)
 app.get('/api/football/diagnostic', authenticate, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'admin only' });
