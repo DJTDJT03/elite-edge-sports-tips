@@ -631,6 +631,40 @@ app.get('/api/racing/race/:id', async (req, res) => {
   }
 });
 
+// Email diagnostic — check which transport is active
+app.get('/api/email/diagnostic', (req, res) => {
+  res.json({
+    transport: emailService.transport ? emailService.transport.name : 'none',
+    fromAddress: emailService.fromAddress,
+    env: {
+      RESEND_API_KEY: process.env.RESEND_API_KEY ? 'SET' : 'NOT SET',
+      SENDGRID_API_KEY: process.env.SENDGRID_API_KEY ? 'SET' : 'NOT SET',
+      SMTP_HOST: process.env.SMTP_HOST ? 'SET' : 'NOT SET',
+      SMTP_USER: process.env.SMTP_USER ? 'SET' : 'NOT SET',
+      EMAIL_FROM: process.env.EMAIL_FROM || '(default)'
+    }
+  });
+});
+
+// Test email send (admin only — sends a test email to specified address)
+app.post('/api/email/test', async (req, res) => {
+  try {
+    var to = req.body.to;
+    if (!to) return res.status(400).json({ error: 'Missing "to" field' });
+    var result = await emailService._sendEmail({
+      to: to,
+      subject: 'Elite Edge Test Email',
+      html: '<h2>Email System Test</h2><p>If you are reading this, your email transport is working correctly.</p><p>Transport: <strong>' + emailService.transport.name + '</strong></p><p>Sent: ' + new Date().toISOString() + '</p>',
+      text: 'Email System Test. Transport: ' + emailService.transport.name,
+      emailType: 'test'
+    });
+    res.json({ success: true, transport: emailService.transport.name, result });
+  } catch (err) {
+    console.error('[Email Test] Failed:', err.message);
+    res.status(500).json({ error: err.message, transport: emailService.transport ? emailService.transport.name : 'none' });
+  }
+});
+
 // Diagnostic: API-Football status check
 app.get('/api/football/diagnostic', async (req, res) => {
   try {

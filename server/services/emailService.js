@@ -70,7 +70,19 @@ class EmailService {
      * };
      */
 
-    // Auto-detect: if SMTP credentials are set, use Nodemailer; otherwise console
+    // PRIORITY 1: Resend (HTTP-based, works on Railway/Vercel/Heroku)
+    if (process.env.RESEND_API_KEY) {
+      this._initResendTransport();
+      return;
+    }
+
+    // PRIORITY 2: SendGrid (HTTP-based)
+    if (process.env.SENDGRID_API_KEY) {
+      this._initSendGridTransport();
+      return;
+    }
+
+    // PRIORITY 3: SMTP via Nodemailer (blocked by Railway/Vercel — last resort)
     if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
       try {
         var nodemailer = require('nodemailer');
@@ -107,6 +119,112 @@ class EmailService {
     } else {
       this._initConsoleTransport();
     }
+  }
+
+  // Resend HTTP API transport — works on Railway (no SMTP needed)
+  _initResendTransport() {
+    var self = this;
+    var fromEmail = process.env.EMAIL_FROM || 'tips@eliteedgesports.co.uk';
+    self.fromAddress = fromEmail;
+    self.transport = {
+      name: 'resend',
+      send: async (msg) => {
+        return new Promise(function(resolve, reject) {
+          var https = require('https');
+          var payload = JSON.stringify({
+            from: '"' + self.fromName + '" <' + self.fromAddress + '>',
+            to: Array.isArray(msg.to) ? msg.to : [msg.to],
+            subject: msg.subject,
+            html: msg.html || '',
+            text: msg.text || ''
+          });
+          var req = https.request({
+            hostname: 'api.resend.com',
+            path: '/emails',
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + process.env.RESEND_API_KEY,
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(payload)
+            }
+          }, function(res) {
+            var body = '';
+            res.on('data', function(c) { body += c; });
+            res.on('end', function() {
+              try {
+                var data = JSON.parse(body);
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                  console.log('[EmailService] Resend SENT to: ' + msg.to + ', subject: ' + msg.subject + ', id: ' + (data.id || '?'));
+                  resolve({ messageId: data.id, status: 'sent' });
+                } else {
+                  console.error('[EmailService] Resend FAILED to: ' + msg.to + ', status: ' + res.statusCode + ', body: ' + body);
+                  reject(new Error('Resend ' + res.statusCode + ': ' + body));
+                }
+              } catch (e) { reject(e); }
+            });
+          });
+          req.on('error', function(err) {
+            console.error('[EmailService] Resend network error:', err.message);
+            reject(err);
+          });
+          req.setTimeout(15000, function() { req.destroy(); reject(new Error('Resend timeout')); });
+          req.write(payload);
+          req.end();
+        });
+      }
+    };
+    console.log('[EmailService] Initialized with Resend HTTP transport (' + fromEmail + ')');
+  }
+
+  // SendGrid HTTP API transport — works on Railway
+  _initSendGridTransport() {
+    var self = this;
+    var fromEmail = process.env.EMAIL_FROM || 'tips@eliteedgesports.co.uk';
+    self.fromAddress = fromEmail;
+    self.transport = {
+      name: 'sendgrid',
+      send: async (msg) => {
+        return new Promise(function(resolve, reject) {
+          var https = require('https');
+          var payload = JSON.stringify({
+            personalizations: [{ to: [{ email: msg.to }] }],
+            from: { email: self.fromAddress, name: self.fromName },
+            subject: msg.subject,
+            content: [
+              { type: 'text/plain', value: msg.text || ' ' },
+              { type: 'text/html', value: msg.html || ' ' }
+            ]
+          });
+          var req = https.request({
+            hostname: 'api.sendgrid.com',
+            path: '/v3/mail/send',
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + process.env.SENDGRID_API_KEY,
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(payload)
+            }
+          }, function(res) {
+            var body = '';
+            res.on('data', function(c) { body += c; });
+            res.on('end', function() {
+              if (res.statusCode >= 200 && res.statusCode < 300) {
+                console.log('[EmailService] SendGrid SENT to: ' + msg.to + ', subject: ' + msg.subject);
+                resolve({ messageId: res.headers['x-message-id'] || 'sendgrid_' + Date.now(), status: 'sent' });
+              } else {
+                console.error('[EmailService] SendGrid FAILED to: ' + msg.to + ', status: ' + res.statusCode + ', body: ' + body);
+                reject(new Error('SendGrid ' + res.statusCode + ': ' + body));
+              }
+            });
+          });
+          req.on('error', function(err) { reject(err); });
+          req.setTimeout(15000, function() { req.destroy(); reject(new Error('SendGrid timeout')); });
+          req.write(payload);
+          req.end();
+        });
+      }
+    };
+    console.log('[EmailService] Initialized with SendGrid HTTP transport (' + fromEmail + ')');
   }
 
   _initConsoleTransport() {
