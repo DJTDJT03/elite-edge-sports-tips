@@ -95,22 +95,6 @@
         <a href="#/admin" class="nav-link nav-link-admin" data-page="admin" id="nav-admin" style="display:none;">Admin</a>
         <a href="#" class="nav-link" onclick="App.showModal('calculator');return false;" title="Staking Calculator">Calc</a>
         <a href="#" class="nav-link" id="nav-mybets" onclick="App.showModal('mybets');return false;" style="display:none;">My Bets</a>
-
-        <!-- Mobile-only items shown inside dropdown menu -->
-        <div id="nav-auth-guest-mobile" style="display:none;">
-          <button class="btn btn-outline btn-sm" onclick="App.showModal('login')">Log In</button>
-          <button class="btn btn-gold btn-sm" onclick="App.showModal('register')">Sign Up</button>
-        </div>
-        <div id="nav-auth-user-mobile" style="display:none;">
-          <span class="user-badge" id="user-badge-mobile"></span>
-          <button class="btn btn-outline btn-sm" onclick="App.logout()">Log Out</button>
-        </div>
-        <div class="mobile-menu-tools">
-          <span class="odds-format-toggle" onclick="App.toggleOddsFormat()" title="Switch odds format">
-            <span class="fmt-mobile-frac fmt-active">Frac</span><span class="fmt-sep">|</span><span class="fmt-mobile-dec">Dec</span>
-          </span>
-          <button class="theme-toggle" onclick="App.toggleTheme()" title="Toggle Light/Dark Mode">&#9790;</button>
-        </div>
       </div>
       <div class="nav-right">
         <!-- Notification Bell -->
