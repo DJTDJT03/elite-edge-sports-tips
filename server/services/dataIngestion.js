@@ -83,8 +83,12 @@ class FootballFixturesSource extends DataSource {
       apiUrl: 'https://v3.football.api-sports.io',
       apiKey: process.env.API_FOOTBALL_KEY || '',
     });
-    // League IDs for API-Football: PL=39, CL=2, LaLiga=140, SerieA=135, Bundesliga=78, Ligue1=61, FACup=45
-    this.leagueIds = [39, 2, 140, 135, 78, 61, 45];
+    // Top leagues (API-Football IDs):
+    // Premier League=39, Championship=40, FA Cup=45, EFL Cup=48
+    // Champions League=2, Europa League=3, Conference League=848
+    // La Liga=140, Serie A=135, Bundesliga=78, Ligue 1=61
+    // Eredivisie=88, Liga Portugal=94, Scottish Prem=179
+    this.leagueIds = [39, 40, 45, 48, 2, 3, 848, 140, 135, 78, 61, 88, 94, 179];
   }
 
   async fetch() {
