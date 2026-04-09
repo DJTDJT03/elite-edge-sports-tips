@@ -172,7 +172,36 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // ---------------------------------------------------------------------------
 // Data helpers — read/write JSON files
 // ---------------------------------------------------------------------------
-const dataDir = path.join(__dirname, 'data');
+// Persistent storage support — Railway Volume mounted at /data overrides bundled data
+// Falls back to bundled data dir for local development
+const PERSISTENT_DIR = process.env.PERSISTENT_DATA_DIR || '/data';
+const BUNDLED_DIR = path.join(__dirname, 'data');
+const usePersistent = (() => {
+  try {
+    fs.mkdirSync(PERSISTENT_DIR, { recursive: true });
+    fs.accessSync(PERSISTENT_DIR, fs.constants.W_OK);
+    return true;
+  } catch { return false; }
+})();
+const dataDir = usePersistent ? PERSISTENT_DIR : BUNDLED_DIR;
+console.log('[Storage] Using ' + (usePersistent ? 'PERSISTENT volume at ' + PERSISTENT_DIR : 'BUNDLED ephemeral data at ' + BUNDLED_DIR));
+
+// On first run with persistent volume, copy bundled data into the volume so it's seeded
+if (usePersistent) {
+  try {
+    const bundledFiles = fs.readdirSync(BUNDLED_DIR);
+    bundledFiles.forEach(file => {
+      const persistentPath = path.join(PERSISTENT_DIR, file);
+      // Only copy if persistent file doesn't exist (don't overwrite live data)
+      if (!fs.existsSync(persistentPath)) {
+        fs.copyFileSync(path.join(BUNDLED_DIR, file), persistentPath);
+        console.log('[Storage] Seeded ' + file + ' into persistent volume');
+      }
+    });
+  } catch (err) {
+    console.error('[Storage] Failed to seed persistent volume:', err.message);
+  }
+}
 
 function readJSON(file) {
   try {
@@ -297,6 +326,16 @@ app.post('/api/auth/register', async (req, res) => {
     // Send welcome email (async, non-blocking)
     emailService.sendWelcome({ name: user.name, email: user.email }).catch(function(err) {
       console.error('[Email] Welcome email failed:', err.message);
+    });
+
+    // Send admin notification of new subscriber (async, non-blocking)
+    var adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || 'darren@ecocleaningsystems.co.uk';
+    emailService.sendAdminNewSubscriber({
+      adminEmail: adminEmail,
+      newUser: { name: user.name, email: user.email, joined: user.joined, ip: ip },
+      totalUsers: users.length
+    }).catch(function(err) {
+      console.error('[Email] Admin notification failed:', err.message);
     });
 
     res.json({ token, tokenExpiry, user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, joined: user.joined } });
@@ -579,16 +618,26 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         { expiresIn: '30m' }
       );
       const resetLink = `https://eliteedgesports.co.uk/#/reset-password?token=${resetToken}`;
+      console.log('[Auth] Password reset requested for ' + user.email + ' — generating token and sending email');
 
-      // Send reset email via emailService
+      // Send reset email via emailService — surface errors for debugging
+      let emailResult = null;
       try {
-        if (emailService && emailService.sendPasswordReset) {
-          await emailService.sendPasswordReset(user.email, resetLink);
-        }
+        if (!emailService) throw new Error('emailService is null');
+        if (!emailService.sendPasswordReset) throw new Error('sendPasswordReset method missing');
+        emailResult = await emailService.sendPasswordReset(user.email, resetLink);
+        console.log('[Auth] Password reset email result:', JSON.stringify(emailResult));
       } catch (emailErr) {
-        console.error('[Auth] Failed to send password reset email:', emailErr.message);
+        console.error('[Auth] Failed to send password reset email:', emailErr.message, emailErr.stack);
+        return res.status(500).json({ error: 'Email send failed: ' + emailErr.message });
       }
-      return res.json({ message });
+
+      // If the email service returned a failure status, surface it
+      if (emailResult && emailResult.status === 'failed') {
+        return res.status(500).json({ error: 'Email failed to send: ' + (emailResult.error || 'unknown') });
+      }
+
+      return res.json({ message, debug: { sent: true, transport: emailService.transport && emailService.transport.name } });
     }
 
     res.json({ message });

@@ -988,6 +988,32 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
   // -----------------------------------------------------------------------
   // Password Reset Email
   // -----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // Admin notification — new subscriber registered
+  // -----------------------------------------------------------------------
+  async sendAdminNewSubscriber({ adminEmail, newUser, totalUsers }) {
+    const subject = '🎉 New Elite Edge Subscriber: ' + newUser.name;
+    const html = this._wrapHTML(`
+      <h2 style="color:#d4a843;margin-bottom:16px;">New Subscriber Alert</h2>
+      <p>A new user has just registered for Elite Edge Sports Tips.</p>
+      <div style="background:#1a1a2e;border:1px solid #2a2d45;border-radius:10px;padding:20px;margin:20px 0;">
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+          <tr><td style="color:#9ca3af;padding:6px 0;">Name:</td><td style="color:#fff;font-weight:600;text-align:right;">${this._esc(newUser.name)}</td></tr>
+          <tr><td style="color:#9ca3af;padding:6px 0;">Email:</td><td style="color:#fff;text-align:right;">${this._esc(newUser.email)}</td></tr>
+          <tr><td style="color:#9ca3af;padding:6px 0;">Joined:</td><td style="color:#fff;text-align:right;">${this._esc(newUser.joined)}</td></tr>
+          <tr><td style="color:#9ca3af;padding:6px 0;">IP:</td><td style="color:#fff;text-align:right;font-size:12px;">${this._esc(newUser.ip || 'unknown')}</td></tr>
+          <tr><td colspan="2" style="border-top:1px solid #2a2d45;padding-top:8px;"></td></tr>
+          <tr><td style="color:#9ca3af;padding:6px 0;">Total subscribers:</td><td style="color:#d4a843;font-weight:700;text-align:right;font-size:16px;">${totalUsers}</td></tr>
+        </table>
+      </div>
+      <div style="text-align:center;margin:20px 0;">
+        <a href="https://eliteedgesports.co.uk/#/admin" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:10px 24px;border-radius:8px;font-weight:700;text-decoration:none;font-size:13px;">View Admin Dashboard</a>
+      </div>
+    `, 'New subscriber: ' + newUser.name);
+    const text = `New Elite Edge subscriber: ${newUser.name} (${newUser.email}) joined ${newUser.joined}. Total: ${totalUsers}`;
+    return this._sendEmail({ to: adminEmail, subject, html, text, emailType: 'admin_new_subscriber' });
+  }
+
   async sendPasswordReset(email, resetLink) {
     const subject = 'Elite Edge Sports Tips — Reset Your Password';
     const html = this._wrapHTML(`
