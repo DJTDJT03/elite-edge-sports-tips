@@ -296,14 +296,23 @@ class RacingCardsSource extends DataSource {
     }
 
     try {
-      const https = require('https');
       const auth = Buffer.from(`${this.config.apiKey}:${this.config.apiSecret}`).toString('base64');
-      const today = new Date().toISOString().split('T')[0];
-
-      // Fetch today's racecards
-      const racecards = await this._apiGet(`/racecards?date=${today}`, auth);
-      console.log(`[${this.name}] Fetched ${(racecards.racecards || []).length} races for ${today}`);
-      return racecards;
+      // The Racing API correct endpoints: /racecards/pro (best), /racecards/standard, /racecards/basic, /racecards/free
+      // Try pro first (premium plan), fall back to standard, then basic, then free
+      const endpoints = ['/racecards/pro', '/racecards/standard', '/racecards/basic', '/racecards/free'];
+      for (const endpoint of endpoints) {
+        try {
+          const racecards = await this._apiGet(endpoint, auth);
+          if (racecards && racecards.racecards && racecards.racecards.length > 0) {
+            console.log(`[${this.name}] Fetched ${racecards.racecards.length} races via ${endpoint}`);
+            return racecards;
+          }
+        } catch (e) {
+          // Try next endpoint
+        }
+      }
+      console.log(`[${this.name}] All endpoints returned empty — no races today`);
+      return { racecards: [] };
     } catch (err) {
       console.error(`[${this.name}] API Error: ${err.message}`);
       this.errorCount++;
@@ -316,8 +325,9 @@ class RacingCardsSource extends DataSource {
     if (!this.config.apiKey || !this.config.apiSecret) return { results: [] };
     try {
       const auth = Buffer.from(`${this.config.apiKey}:${this.config.apiSecret}`).toString('base64');
-      const results = await this._apiGet(`/results?date=${date || new Date().toISOString().split('T')[0]}`, auth);
-      console.log(`[${this.name}] Fetched ${(results.results || []).length} results for ${date}`);
+      // Correct endpoint: /results (no date param, returns recent results) or /results/{date}
+      const results = await this._apiGet(`/results`, auth);
+      console.log(`[${this.name}] Fetched ${(results.results || []).length} results`);
       return results;
     } catch (err) {
       console.error(`[${this.name}] Results Error: ${err.message}`);

@@ -602,6 +602,45 @@ app.get('/api/racing/live-results', async (req, res) => {
   }
 });
 
+// Diagnostic: raw Racing API response for debugging
+app.get('/api/racing/diagnostic', async (req, res) => {
+  try {
+    if (!racingSource || !process.env.RACING_API_KEY) {
+      return res.json({ error: 'Racing API not configured' });
+    }
+    const https = require('https');
+    const auth = Buffer.from(`${process.env.RACING_API_KEY}:${process.env.RACING_API_SECRET}`).toString('base64');
+    const serverDate = new Date().toISOString();
+    const endpoints = ['/racecards/pro', '/racecards/standard', '/racecards/basic', '/racecards/free', '/racecards', '/results'];
+    const results = {};
+    for (const path of endpoints) {
+      try {
+        const data = await new Promise((resolve, reject) => {
+          const req = https.request({
+            hostname: 'api.theracingapi.com',
+            path: `/v1${path}`,
+            method: 'GET',
+            headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+          }, (r) => {
+            let body = '';
+            r.on('data', c => body += c);
+            r.on('end', () => resolve({ status: r.statusCode, body: body.substring(0, 2000) }));
+          });
+          req.on('error', reject);
+          req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')); });
+          req.end();
+        });
+        results[path] = data;
+      } catch (e) {
+        results[path] = { error: e.message };
+      }
+    }
+    res.json({ serverDate, endpoints: results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/racing/horse/:horseId', async (req, res) => {
   try {
     if (!racingSource || !process.env.RACING_API_KEY) {
