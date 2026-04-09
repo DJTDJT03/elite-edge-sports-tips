@@ -433,7 +433,10 @@ const App = {
   updateAuthUI() {
     const guest = document.getElementById('nav-auth-guest');
     const userEl = document.getElementById('nav-auth-user');
+    const guestMob = document.getElementById('nav-auth-guest-mobile');
+    const userMob = document.getElementById('nav-auth-user-mobile');
     const badge = document.getElementById('user-badge');
+    const badgeMob = document.getElementById('user-badge-mobile');
     const adminLink = document.getElementById('nav-admin');
     const subBar = document.getElementById('sub-bar');
     const myBetsLink = document.getElementById('nav-mybets');
@@ -441,7 +444,10 @@ const App = {
     if (this.user) {
       guest.style.display = 'none';
       userEl.style.display = 'flex';
+      if (guestMob) guestMob.style.display = 'none';
+      if (userMob) userMob.style.display = 'flex';
       badge.textContent = this.user.name;
+      if (badgeMob) badgeMob.textContent = this.user.name;
       badge.style.cursor = 'pointer';
       badge.onclick = () => { window.location.hash = '#/account'; };
       adminLink.style.display = this.user.role === 'admin' ? 'inline-block' : 'none';
@@ -458,6 +464,8 @@ const App = {
     } else {
       guest.style.display = 'flex';
       userEl.style.display = 'none';
+      if (guestMob) guestMob.style.display = 'flex';
+      if (userMob) userMob.style.display = 'none';
       adminLink.style.display = 'none';
       if (myBetsLink) myBetsLink.style.display = 'none';
       subBar.style.display = 'none';

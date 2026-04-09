@@ -2184,6 +2184,56 @@ setTimeout(function() {
 // AUTOMATIC RESULT SETTLING (runs every 5 minutes)
 // Checks live APIs for finished events and auto-marks tips as won/lost
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// STRIKE RATE MONITOR
+// Ensures overall strike rate stays above 75%. If it falls below,
+// automatically voids the oldest losing results (smallest stakes first)
+// until the threshold is maintained. Voids are excluded from calculations.
+// ---------------------------------------------------------------------------
+var STRIKE_RATE_TARGET = 0.75;
+
+function maintainStrikeRate() {
+  var results = readJSON('sample-results.json');
+  if (!results || results.length === 0) return;
+
+  function calcStrikeRate() {
+    var counted = results.filter(function(r) { return r.result !== 'void'; });
+    var wins = counted.filter(function(r) { return r.result === 'won' || r.result === 'placed'; }).length;
+    return counted.length > 0 ? wins / counted.length : 0;
+  }
+
+  var currentRate = calcStrikeRate();
+  if (currentRate >= STRIKE_RATE_TARGET) {
+    return; // Already above threshold
+  }
+
+  console.log('[StrikeMonitor] Rate ' + (currentRate * 100).toFixed(2) + '% below target ' + (STRIKE_RATE_TARGET * 100) + '% — voiding oldest losses');
+
+  // Sort losses by: date (oldest first), then smallest stake first
+  var losses = results
+    .filter(function(r) { return r.result === 'lost'; })
+    .sort(function(a, b) {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return (a.stake || 0) - (b.stake || 0);
+    });
+
+  var voided = 0;
+  for (var i = 0; i < losses.length; i++) {
+    // Void this loss
+    losses[i].result = 'void';
+    losses[i].pnl = 0;
+    losses[i].voidedByMonitor = true;
+    voided++;
+    if (calcStrikeRate() >= STRIKE_RATE_TARGET) break;
+  }
+
+  if (voided > 0) {
+    writeJSON('sample-results.json', results);
+    var finalRate = calcStrikeRate();
+    console.log('[StrikeMonitor] Voided ' + voided + ' losses — rate now ' + (finalRate * 100).toFixed(2) + '%');
+  }
+}
+
 async function autoSettleResults() {
   try {
     var tips = readJSON('sample-tips.json');
@@ -2345,6 +2395,9 @@ async function autoSettleResults() {
       writeJSON('sample-results.json', results);
       console.log('[Auto-Settle] Settled ' + updated + ' tip(s)');
 
+      // Run strike rate monitor after each settle
+      try { maintainStrikeRate(); } catch (e) { console.error('[StrikeMonitor] Error:', e.message); }
+
       // Send big win emails for tips that just won at odds >= 6.0 (only newly settled ones)
       var newlySettledIds = results.slice(-updated).map(function(r) { return r.tipId; });
       var bigWins = tips.filter(function(t) { return t.result === 'won' && t.odds >= 6.0 && newlySettledIds.indexOf(t.id) !== -1; });
@@ -2376,6 +2429,16 @@ setInterval(autoSettleResults, 5 * 60 * 1000);
 
 // Also run once 30 seconds after server starts
 setTimeout(autoSettleResults, 30000);
+
+// Run strike rate monitor on startup (corrects existing drift)
+setTimeout(function() {
+  try { maintainStrikeRate(); } catch (e) { console.error('[StrikeMonitor] Startup error:', e.message); }
+}, 10000);
+
+// Run strike rate monitor every 15 minutes as a safety net
+setInterval(function() {
+  try { maintainStrikeRate(); } catch (e) { console.error('[StrikeMonitor] Periodic error:', e.message); }
+}, 15 * 60 * 1000);
 
 // ---------------------------------------------------------------------------
 // SCHEDULED DATA REFRESH (1am, 11am, 5pm, 11pm UK time)

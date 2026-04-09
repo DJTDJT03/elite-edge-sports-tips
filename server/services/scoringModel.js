@@ -241,11 +241,14 @@ class ScoringModel {
       return { roi: 0, strikeRate: 0, totalPnl: 0, totalStaked: 0, runningBank: 100 };
     }
 
-    const totalStaked = results.reduce((sum, r) => sum + r.stake, 0);
-    const totalPnl = results.reduce((sum, r) => sum + r.pnl, 0);
-    const wins = results.filter(r => r.result === 'won' || r.result === 'placed').length;
+    // Exclude voids from P/L counting (voids return the stake)
+    const counted = results.filter(r => r.result !== 'void');
+    const totalStaked = counted.reduce((sum, r) => sum + r.stake, 0);
+    const totalPnl = counted.reduce((sum, r) => sum + r.pnl, 0);
+    const wins = counted.filter(r => r.result === 'won' || r.result === 'placed').length;
     const roi = totalStaked > 0 ? (totalPnl / totalStaked) * 100 : 0;
-    const strikeRate = (wins / results.length) * 100;
+    // Strike rate excludes voids (standard betting practice)
+    const strikeRate = counted.length > 0 ? (wins / counted.length) * 100 : 0;
 
     // Running bank calculation (starting from 100 units)
     let bank = 100;
