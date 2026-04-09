@@ -602,6 +602,56 @@ app.get('/api/racing/live-results', async (req, res) => {
   }
 });
 
+// Dedicated endpoint for big-races (future festival cards)
+app.get('/api/racing/big-races', async (req, res) => {
+  try {
+    if (!process.env.RACING_API_KEY) return res.json({ error: 'Not configured' });
+    const https = require('https');
+    const auth = Buffer.from(`${process.env.RACING_API_KEY}:${process.env.RACING_API_SECRET}`).toString('base64');
+    const data = await new Promise((resolve, reject) => {
+      const r = https.request({
+        hostname: 'api.theracingapi.com',
+        path: '/v1/racecards/big-races',
+        method: 'GET',
+        headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+      }, (resp) => {
+        let b = '';
+        resp.on('data', c => b += c);
+        resp.on('end', () => { try { resolve(JSON.parse(b)); } catch (e) { reject(e); } });
+      });
+      r.on('error', reject);
+      r.setTimeout(15000, () => { r.destroy(); reject(new Error('Timeout')); });
+      r.end();
+    });
+    // Summarise by date + return Aintree only with runner lists
+    const aintree = (data.racecards || []).filter(r => r.course === 'Aintree');
+    const summary = aintree.map(r => ({
+      date: r.date,
+      time: r.off_time,
+      raceName: r.race_name,
+      raceClass: r.race_class,
+      distance: r.distance,
+      going: r.going || r.going_detailed || '',
+      prize: r.prize,
+      fieldSize: r.field_size,
+      runners: (r.runners || []).map(rn => ({
+        horse: rn.horse,
+        horseId: rn.horse_id,
+        jockey: rn.jockey,
+        trainer: rn.trainer,
+        age: rn.age,
+        weight: rn.lbs || rn.weight,
+        form: rn.form,
+        or: rn.ofr || rn.or,
+        odds: (rn.odds && rn.odds[0] && rn.odds[0].fractional) || '',
+      }))
+    }));
+    res.json({ count: aintree.length, aintree: summary });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Diagnostic: raw Racing API response for debugging
 app.get('/api/racing/diagnostic', async (req, res) => {
   try {
