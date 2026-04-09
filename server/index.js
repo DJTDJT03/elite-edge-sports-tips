@@ -614,10 +614,6 @@ app.get('/api/racing/diagnostic', async (req, res) => {
     const queryDate = req.query.date || '';
     const dateSuffix = queryDate ? `?date=${queryDate}` : '';
     const endpoints = [
-      '/racecards/standard',
-      '/racecards/standard?date=2026-04-10',
-      '/racecards/standard/2026-04-10',
-      '/racecards/standard?region_codes=gb&date=2026-04-10',
       '/racecards/big-races',
       '/racecards/summaries',
     ];
@@ -633,7 +629,7 @@ app.get('/api/racing/diagnostic', async (req, res) => {
           }, (r) => {
             let body = '';
             r.on('data', c => body += c);
-            r.on('end', () => resolve({ status: r.statusCode, body: body.substring(0, 2000) }));
+            r.on('end', () => resolve({ status: r.statusCode, body: body.substring(0, 50000) }));
           });
           req.on('error', reject);
           req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')); });
