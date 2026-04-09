@@ -614,14 +614,12 @@ app.get('/api/racing/diagnostic', async (req, res) => {
     const queryDate = req.query.date || '';
     const dateSuffix = queryDate ? `?date=${queryDate}` : '';
     const endpoints = [
-      '/racecards/basic' + dateSuffix,
-      '/racecards/basic/2026-04-10',
-      '/racecards/basic/2026-04-11',
-      '/racecards/basic?date=2026-04-10',
-      '/racecards/basic?date=2026-04-11',
       '/racecards/standard',
-      '/results',
-      '/horses/search?name=Lulamba',
+      '/racecards/standard?date=2026-04-10',
+      '/racecards/standard/2026-04-10',
+      '/racecards/standard?region_codes=gb&date=2026-04-10',
+      '/racecards/big-races',
+      '/racecards/summaries',
     ];
     const results = {};
     for (const path of endpoints) {
