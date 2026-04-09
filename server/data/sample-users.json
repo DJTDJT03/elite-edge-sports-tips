@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "id": "usr_1775765677903",
+    "email": "darren@ecocleaningsystems.co.uk",
+    "password": "$2a$10$Lyb.WQUtcMGz65N9l4t5COebNvB9XVdIk2m1iOv3PLx5U3EfwPc5O",
+    "name": "Darren Thornton",
+    "role": "admin",
+    "subscription": "premium",
+    "subscriptionExpiry": "2027-12-31",
+    "joined": "2026-04-09",
+    "bank": 100,
+    "agreementTimestamp": "2026-04-09T20:14:37.907Z",
+    "agreementText": "I confirm I am 18+ and understand this service provides statistical analysis only.",
+    "sessionId": "a5b1c278e6386d89e134f37df3d2356b",
+    "failedAttempts": 0,
+    "lockUntil": null,
+    "flagged": false,
+    "trustedDevices": [],
+    "emailPrefs": {
+      "dailyBulletin": true,
+      "weeklySummary": true,
+      "marketing": true,
+      "bigWins": true
+    }
+  }
+]
