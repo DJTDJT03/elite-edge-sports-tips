@@ -611,7 +611,18 @@ app.get('/api/racing/diagnostic', async (req, res) => {
     const https = require('https');
     const auth = Buffer.from(`${process.env.RACING_API_KEY}:${process.env.RACING_API_SECRET}`).toString('base64');
     const serverDate = new Date().toISOString();
-    const endpoints = ['/racecards/pro', '/racecards/standard', '/racecards/basic', '/racecards/free', '/racecards', '/results'];
+    const queryDate = req.query.date || '';
+    const dateSuffix = queryDate ? `?date=${queryDate}` : '';
+    const endpoints = [
+      '/racecards/basic' + dateSuffix,
+      '/racecards/basic/2026-04-10',
+      '/racecards/basic/2026-04-11',
+      '/racecards/basic?date=2026-04-10',
+      '/racecards/basic?date=2026-04-11',
+      '/racecards/standard',
+      '/results',
+      '/horses/search?name=Lulamba',
+    ];
     const results = {};
     for (const path of endpoints) {
       try {
