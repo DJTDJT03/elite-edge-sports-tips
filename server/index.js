@@ -566,6 +566,60 @@ app.put('/api/auth/email-prefs', authenticate, (req, res) => {
 // In demo mode: resets password to "reset123"
 // In production: integrate with SendGrid/Mailgun for actual reset email
 // ---------------------------------------------------------------------------
+// TEMPORARY: Re-settle today's racing results using fixed logic
+app.post('/api/admin/resettle-today', async (req, res) => {
+  try {
+    const { secret } = req.body;
+    if (secret !== 'ee-wipe-2026-darren') return res.status(403).json({ error: 'forbidden' });
+    if (!racingSource || !process.env.RACING_API_KEY) return res.json({ error: 'racing api not configured' });
+
+    const today = new Date().toISOString().split('T')[0];
+    const raceResults = await racingSource.fetchResults(today);
+    const allResults = (raceResults && raceResults.results) || [];
+    const results = readJSON('sample-results.json');
+
+    var normHorse = function(name) {
+      if (!name) return '';
+      return name.toLowerCase().replace(/\s*\([a-z]{2,4}\)\s*$/i, '').trim();
+    };
+
+    var fixed = [];
+    var todaysResults = results.filter(r => r.date === today && r.sport === 'racing');
+    todaysResults.forEach(function(existingResult) {
+      var tipName = normHorse(existingResult.selection);
+      var match = allResults.find(r => r.runners && r.runners.some(rn => normHorse(rn.horse) === tipName));
+      if (!match) return;
+      var winner = match.runners.find(r => parseInt(r.position, 10) === 1);
+      var tipWon = winner && normHorse(winner.horse) === tipName;
+      var placedRunner = !tipWon && match.runners.find(r => {
+        var pos = parseInt(r.position, 10);
+        return !isNaN(pos) && pos >= 1 && pos <= 3 && normHorse(r.horse) === tipName;
+      });
+      var placed = !!placedRunner;
+
+      var market = existingResult.market || '';
+      if (market.toLowerCase().indexOf('each-way') !== -1 && placed) tipWon = true;
+
+      var newResult = tipWon ? 'won' : (placed ? 'placed' : 'lost');
+      var oldResult = existingResult.result;
+
+      if (newResult !== oldResult) {
+        var stake = existingResult.stake || 1;
+        var odds = existingResult.odds || 1;
+        var newPnl = newResult === 'won' ? Math.round((odds - 1) * stake * 100) / 100
+                   : newResult === 'placed' ? Math.round(((odds - 1) / 4) * stake * 100) / 100
+                   : -stake;
+        existingResult.result = newResult;
+        existingResult.pnl = newPnl;
+        fixed.push({ selection: existingResult.selection, was: oldResult, now: newResult, pnl: newPnl });
+      }
+    });
+
+    if (fixed.length > 0) writeJSON('sample-results.json', results);
+    res.json({ fixed: fixed.length, changes: fixed });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Reset password using the JWT token from the email link
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
@@ -2397,15 +2451,26 @@ async function autoSettleResults() {
         if (raceResults && raceResults.results) {
           activeTips.forEach(function(tip) {
             if (tip.sport !== 'racing') return;
+            // Helper: normalise horse name for matching (strip country code, lowercase, trim)
+            var normHorse = function(name) {
+              if (!name) return '';
+              return name.toLowerCase().replace(/\s*\([a-z]{2,4}\)\s*$/i, '').trim();
+            };
+            var tipName = normHorse(tip.selection);
+
             var match = (raceResults.results || []).find(function(r) {
               return r.runners && r.runners.some(function(runner) {
-                return runner.horse && runner.horse.toLowerCase().indexOf(tip.selection.toLowerCase()) !== -1;
+                return normHorse(runner.horse) === tipName;
               });
             });
             if (match) {
-              var winner = match.runners.find(function(r) { return r.position === 1; });
-              var tipWon = winner && winner.horse && winner.horse.toLowerCase().indexOf(tip.selection.toLowerCase()) !== -1;
-              var placed = !tipWon && match.runners.some(function(r) { return r.position <= 3 && r.horse && r.horse.toLowerCase().indexOf(tip.selection.toLowerCase()) !== -1; });
+              // Position can be string ("1") or number (1) - coerce to int
+              var winner = match.runners.find(function(r) { return parseInt(r.position, 10) === 1; });
+              var tipWon = winner && normHorse(winner.horse) === tipName;
+              var placed = !tipWon && match.runners.some(function(r) {
+                var pos = parseInt(r.position, 10);
+                return !isNaN(pos) && pos >= 1 && pos <= 3 && normHorse(r.horse) === tipName;
+              });
 
               if (tip.market && tip.market.toLowerCase().indexOf('each-way') !== -1 && placed) {
                 tipWon = true; // EW counts as win if placed
