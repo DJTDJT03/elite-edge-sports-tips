@@ -64,6 +64,93 @@ const App = {
     this.checkReferralParam();
     this.initCookieConsent();
     this.initChatTease();
+    this.initInstallPrompt();
+  },
+
+  // -----------------------------------------------------------------------
+  // PWA INSTALL PROMPT
+  // -----------------------------------------------------------------------
+  _deferredInstallPrompt: null,
+
+  initInstallPrompt() {
+    var self = this;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      self._deferredInstallPrompt = e;
+      // Show banner after 30 seconds if user hasn't dismissed before
+      if (!localStorage.getItem('ee_install_dismissed')) {
+        setTimeout(function() {
+          if (self._deferredInstallPrompt) {
+            self.showInstallBanner();
+          }
+        }, 30000);
+      }
+    });
+  },
+
+  showInstallBanner() {
+    if (document.getElementById('pwa-install-banner')) return;
+    var banner = document.createElement('div');
+    banner.id = 'pwa-install-banner';
+    banner.className = 'pwa-install-banner';
+    banner.innerHTML = '<div class="pwa-install-inner">' +
+      '<span class="pwa-install-text">Install Elite Edge for instant access</span>' +
+      '<button class="btn btn-gold btn-sm" id="pwa-install-btn">Install</button>' +
+      '<button class="pwa-install-dismiss" id="pwa-install-dismiss">&times;</button>' +
+      '</div>';
+    document.body.appendChild(banner);
+    setTimeout(function() { banner.classList.add('pwa-install-show'); }, 50);
+
+    var self = this;
+    document.getElementById('pwa-install-btn').addEventListener('click', function() {
+      if (self._deferredInstallPrompt) {
+        self._deferredInstallPrompt.prompt();
+        self._deferredInstallPrompt.userChoice.then(function(choiceResult) {
+          if (choiceResult.outcome === 'accepted') {
+            App.showToast('App installed successfully!', 'success');
+          }
+          self._deferredInstallPrompt = null;
+          self.hideInstallBanner();
+        });
+      }
+    });
+
+    document.getElementById('pwa-install-dismiss').addEventListener('click', function() {
+      localStorage.setItem('ee_install_dismissed', 'true');
+      self.hideInstallBanner();
+    });
+  },
+
+  hideInstallBanner() {
+    var banner = document.getElementById('pwa-install-banner');
+    if (banner) {
+      banner.classList.remove('pwa-install-show');
+      setTimeout(function() { if (banner.parentNode) banner.parentNode.removeChild(banner); }, 300);
+    }
+  },
+
+  // -----------------------------------------------------------------------
+  // TOAST NOTIFICATIONS
+  // -----------------------------------------------------------------------
+  showToast(message, type) {
+    type = type || 'info';
+    var container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:none;';
+      document.body.appendChild(container);
+    }
+    var toast = document.createElement('div');
+    toast.className = 'ee-toast ee-toast-' + type;
+    toast.textContent = message;
+    toast.style.pointerEvents = 'auto';
+    container.appendChild(toast);
+    setTimeout(function() { toast.classList.add('ee-toast-show'); }, 50);
+    setTimeout(function() {
+      toast.classList.remove('ee-toast-show');
+      setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
+    }, 4000);
   },
 
   // -----------------------------------------------------------------------
@@ -294,7 +381,7 @@ const App = {
     window.location.hash = '#/';
     // Show session expired message
     setTimeout(() => {
-      alert('Your session has ended because your account was logged in on another device. Only one active session is allowed per account.');
+      App.showToast('Your session has ended because your account was logged in on another device. Only one active session is allowed per account.', 'error');
     }, 100);
   },
 
@@ -309,7 +396,7 @@ const App = {
       this.updateAuthUI();
       window.location.hash = '#/';
       setTimeout(() => {
-        alert('Your session has expired. Please log in again.');
+        App.showToast('Your session has expired. Please log in again.', 'error');
       }, 100);
     }
   },
@@ -630,7 +717,7 @@ const App = {
     const token = tokenMatch ? tokenMatch[1] : null;
     if (!token) {
       this.renderDashboard();
-      setTimeout(() => alert('Reset link is missing the token. Please request a new password reset.'), 100);
+      setTimeout(() => App.showToast('Reset link is missing the token. Please request a new password reset.', 'error'), 100);
       return;
     }
     this._resetToken = token;
@@ -878,7 +965,7 @@ const App = {
   copyShareText(selection, odds) {
     const text = `Another winner from EliteEdgeTips! ${selection} @ ${odds} \u2705 Join us: https://eliteedgesports.co.uk`;
     navigator.clipboard.writeText(text).then(() => {
-      alert('Copied to clipboard!');
+      App.showToast('Copied to clipboard!', 'success');
     }).catch(() => {
       prompt('Copy this text:', text);
     });
@@ -1245,6 +1332,23 @@ const App = {
           <a href="#/pricing" class="btn btn-gold btn-lg">View Premium Plans</a>
           <p class="text-xs text-muted mt-16">First month FREE, then &pound;19.99/month. Cancel anytime.</p>
         </div>` : ''}
+
+        ${this.user ? `
+        <!-- Referral Card -->
+        <div class="card" style="margin-top:24px;border-color:rgba(212,168,67,0.2);">
+          <div style="display:flex;align-items:flex-start;gap:16px;">
+            <div style="font-size:32px;flex-shrink:0;">&#127873;</div>
+            <div style="flex:1;">
+              <h3 style="font-size:18px;font-weight:800;margin-bottom:6px;">Refer a Friend — Get 1 Month Free</h3>
+              <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;line-height:1.5;">Share your unique code with friends. When they subscribe to Premium, you both get a free month.</p>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <div style="background:var(--bg-elevated);border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:8px 16px;font-family:monospace;font-size:16px;font-weight:700;color:var(--gold);letter-spacing:1px;" id="dash-referral-code">${this.getReferralCode()}</div>
+                <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();var code=document.getElementById('dash-referral-code').textContent;navigator.clipboard.writeText(code).then(function(){App.showToast('Referral code copied!','success');}).catch(function(){});">Copy Code</button>
+                <button class="btn btn-ghost btn-sm" onclick="App.showReferral()">Full Details</button>
+              </div>
+            </div>
+          </div>
+        </div>` : ''}
       </div>
     `;
   },
@@ -1328,7 +1432,12 @@ const App = {
           <div class="tip-event">${tip.event}${tip.league ? ' &bull; ' + tip.league : ''}${tip.raceTime ? ' &bull; ' + tip.raceTime : ''}</div>
           <div class="tip-summary">${tip.analysis?.summary ? tip.analysis.summary.substring(0, 150) + '...' : ''}</div>
           <div class="tip-meta">
-            <div class="tip-meta-item"><strong>Confidence:</strong> ${tip.confidence}/10</div>
+            <div class="tip-meta-item">
+              <strong>Confidence:</strong> ${tip.confidence}/10
+              <div class="confidence-meter" style="margin-top:4px;height:6px;border-radius:3px;background:var(--bg-elevated);overflow:hidden;">
+                <div style="height:100%;border-radius:3px;background:linear-gradient(90deg,#b8902f,#d4a843,#e8c36a);width:${(tip.confidence || 0) * 10}%;transition:width 0.4s ease;"></div>
+              </div>
+            </div>
             <div class="tip-meta-item"><strong>Edge:</strong> ${((tip.edge || 0) * 100).toFixed(1)}%</div>
             <div class="tip-meta-item"><strong>Stake:</strong> ${tip.staking || '-'}</div>
             <div class="tip-meta-item"><strong>Risk:</strong> ${tip.riskLevel || '-'}</div>
@@ -3003,7 +3112,7 @@ const App = {
         })
       });
       this.renderAdmin();
-    } catch (err) { alert(err.message); }
+    } catch (err) { App.showToast(err.message, 'error'); }
   },
 
   async deleteTip(id) {
@@ -3011,7 +3120,7 @@ const App = {
     try {
       await this.api(`/admin/tips/${id}`, { method: 'DELETE' });
       this.renderAdmin();
-    } catch (err) { alert(err.message); }
+    } catch (err) { App.showToast(err.message, 'error'); }
   },
 
   async markResult(e) {
@@ -3024,9 +3133,9 @@ const App = {
           result: document.getElementById('mr-result').value,
         })
       });
-      alert('Result recorded successfully.');
+      App.showToast('Result recorded successfully.', 'success');
       this.renderAdmin();
-    } catch (err) { alert(err.message); }
+    } catch (err) { App.showToast(err.message, 'error'); }
   },
 
   async sendEmail(e) {
@@ -3062,7 +3171,7 @@ const App = {
       });
       document.getElementById('email-preview').style.display = 'block';
       document.getElementById('email-preview-content').innerHTML = result.html;
-    } catch (err) { alert(err.message); }
+    } catch (err) { App.showToast(err.message, 'error'); }
   },
 
   async replyTicket(id) {
@@ -3075,7 +3184,7 @@ const App = {
         body: JSON.stringify({ message, status: 'in-progress' })
       });
       this.renderAdmin();
-    } catch (err) { alert(err.message); }
+    } catch (err) { App.showToast(err.message, 'error'); }
   },
 
   // -----------------------------------------------------------------------
@@ -3170,26 +3279,26 @@ const App = {
     if (!confirm('Force logout this user?')) return;
     try {
       var result = await this.api('/admin/users/' + userId + '/force-logout', { method: 'POST' });
-      alert(result.message || 'User session invalidated.');
+      App.showToast(result.message || 'User session invalidated.', 'success');
       this.renderAdmin();
-    } catch (e) { alert('Error: ' + e.message); }
+    } catch (e) { App.showToast('Error: ' + e.message, 'error'); }
   },
 
   async adminLockUser(userId) {
     if (!confirm('Lock this account?')) return;
     try {
       var result = await this.api('/admin/users/' + userId + '/lock', { method: 'POST' });
-      alert(result.message || 'Account locked.');
+      App.showToast(result.message || 'Account locked.', 'success');
       this.renderAdmin();
-    } catch (e) { alert('Error: ' + e.message); }
+    } catch (e) { App.showToast('Error: ' + e.message, 'error'); }
   },
 
   async adminUnlockUser(userId) {
     try {
       var result = await this.api('/admin/users/' + userId + '/unlock', { method: 'POST' });
-      alert(result.message || 'Account unlocked.');
+      App.showToast(result.message || 'Account unlocked.', 'success');
       this.renderAdmin();
-    } catch (e) { alert('Error: ' + e.message); }
+    } catch (e) { App.showToast('Error: ' + e.message, 'error'); }
   },
 
   adminToggleLoginHistory(userId) {
@@ -3209,17 +3318,17 @@ const App = {
       var result = await this.api('/admin/users/' + userId + '/subscription', {
         method: 'PUT', body: JSON.stringify({ subscription: newSub, subscriptionExpiry: expiry })
       });
-      alert(result.message || 'Subscription updated.');
+      App.showToast(result.message || 'Subscription updated.', 'success');
       this.renderAdmin();
-    } catch (e) { alert('Error: ' + e.message); }
+    } catch (e) { App.showToast('Error: ' + e.message, 'error'); }
   },
 
   async adminAutoSettle() {
     try {
       var result = await this.api('/admin/auto-results', { method: 'POST' });
-      alert(result.message || 'Auto-settle complete. ' + (result.updated || 0) + ' tips updated.');
+      App.showToast(result.message || 'Auto-settle complete. ' + (result.updated || 0) + ' tips updated.', 'success');
       this.renderAdmin();
-    } catch (e) { alert('Error: ' + e.message); }
+    } catch (e) { App.showToast('Error: ' + e.message, 'error'); }
   },
 
   // -----------------------------------------------------------------------
@@ -3862,7 +3971,7 @@ const App = {
 
   sendTestAlert() {
     this.addNotification('Test Alert: New premium tip just published!');
-    alert('Test notification sent!');
+    App.showToast('Test notification sent!', 'success');
   },
 
   timeAgo(dateStr) {
@@ -4335,7 +4444,7 @@ const App = {
       await this.api('/auth/logout-all', { method: 'POST' });
       this.logout();
     } catch (err) {
-      alert(err.message);
+      App.showToast(err.message, 'error');
     }
   },
 
@@ -4345,9 +4454,9 @@ const App = {
     try {
       await this.api('/auth/account', { method: 'DELETE' });
       this.logout();
-      alert('Your account has been deleted.');
+      App.showToast('Your account has been deleted.', 'info');
     } catch (err) {
-      alert(err.message);
+      App.showToast(err.message, 'error');
     }
   },
 
@@ -4724,7 +4833,7 @@ const App = {
 
   exportMyBetsCSV() {
     const bets = this.getMyBets();
-    if (!bets.length) { alert('No bets to export.'); return; }
+    if (!bets.length) { App.showToast('No bets to export.', 'info'); return; }
     const csvRows = ['Date,Event,Selection,Odds,Result,P/L'];
     bets.forEach(b => {
       const pnl = b.result === 'won' ? (b.odds - 1) : b.result === 'lost' ? -1 : 0;
@@ -4774,18 +4883,18 @@ const App = {
 
   sendSelectedToTelegram() {
     const tipIds = [...document.querySelectorAll('.em-tip-check:checked')].map(c => c.value);
-    if (!tipIds.length) { alert('No tips selected.'); return; }
+    if (!tipIds.length) { App.showToast('No tips selected.', 'info'); return; }
     const messages = tipIds.map(id => {
       const tip = this.tips.find(t => t.id === id);
       return tip ? this.formatTipForTelegram(tip) : null;
     }).filter(Boolean);
-    alert('Telegram messages formatted (demo mode):\n\n' + messages.join('\n---\n'));
+    App.showToast('Telegram messages formatted (demo mode): ' + messages.length + ' tips prepared.', 'success');
     trackEvent('telegram', 'send_bulletin', tipIds.length + ' tips');
   },
 
   sendToTelegram(tipId) {
     const tip = this.tips.find(t => t.id === tipId);
-    if (!tip) { alert('Tip not found.'); return; }
+    if (!tip) { App.showToast('Tip not found.', 'error'); return; }
     const message = this.formatTipForTelegram(tip);
     // Placeholder: In production, call Telegram Bot API
     // fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -4793,7 +4902,7 @@ const App = {
     //   headers: { 'Content-Type': 'application/json' },
     //   body: JSON.stringify({ chat_id: '@EliteEdgeTips', text: message })
     // });
-    alert('Telegram message formatted (demo mode):\n\n' + message);
+    App.showToast('Telegram message formatted (demo mode) for: ' + (tip.selection || tipId), 'success');
     trackEvent('telegram', 'send_tip', tipId);
   },
 
