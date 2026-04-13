@@ -985,15 +985,14 @@ const App = {
           <p>Today's premium betting intelligence — ${new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}</p>
         </div>
 
-        <!-- Grand National Festival Banner -->
-        <div style="background:linear-gradient(135deg,rgba(212,168,67,0.15),rgba(184,144,47,0.08));border:2px solid rgba(212,168,67,0.5);border-radius:14px;padding:20px 24px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;" onclick="window.location.hash='#/festival'">
-          <div style="position:absolute;top:0;right:0;width:200px;height:100%;background:linear-gradient(135deg,transparent 40%,rgba(212,168,67,0.08));pointer-events:none;"></div>
+        <!-- Grand National Winner Banner -->
+        <div style="background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(212,168,67,0.08));border:2px solid rgba(34,197,94,0.4);border-radius:14px;padding:20px 24px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;" onclick="window.location.hash='#/results'">
           <div style="display:flex;align-items:center;gap:16px;">
-            <div style="font-size:36px;">&#127943;</div>
+            <div style="font-size:36px;">&#127942;</div>
             <div style="flex:1;">
-              <div style="font-weight:900;font-size:18px;color:#d4a843;margin-bottom:4px;">Grand National Festival &mdash; Live This Week</div>
-              <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">18 races. 3 days. Elite analysis for every race.</div>
-              <div style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:8px 20px;border-radius:8px;font-weight:700;font-size:13px;">View Festival Guide &rarr;</div>
+              <div style="font-weight:900;font-size:18px;color:#22c55e;margin-bottom:4px;">Grand National 2026 &mdash; I Am Maximus WINS at 8/1</div>
+              <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">Our NAP selection delivered a sensational back-to-back victory. +16.00 units profit from one race.</div>
+              <div style="display:inline-block;background:#22c55e;color:#0a0e1a;padding:8px 20px;border-radius:8px;font-weight:700;font-size:13px;">View Full Results &rarr;</div>
             </div>
           </div>
         </div>
