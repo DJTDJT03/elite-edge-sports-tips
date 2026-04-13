@@ -607,7 +607,7 @@ app.post('/api/admin/fix-gn', async (req, res) => {
       gnTip.status = 'settled';
       gnTip.result = 'won';
       gnTip.isNap = true;
-      gnTip.analysis = { summary: 'Willie Mullins\\' I Am Maximus was our Grand National NAP — the defending champion delivered a sensational back-to-back victory under Paul Townend at 8/1. Class told in the end.' };
+      gnTip.analysis = { summary: "Willie Mullins' I Am Maximus was our Grand National NAP — the defending champion delivered a sensational back-to-back victory under Paul Townend at 8/1. Class told in the end." };
     }
     // Remove Gerri Colombe and Panic Attack tips
     tips = tips.filter(function(t) {
