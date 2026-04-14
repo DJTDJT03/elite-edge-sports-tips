@@ -603,7 +603,7 @@ const App = {
       if (myBetsLink) myBetsLink.style.display = 'inline-block';
       if (this.user.subscription === 'free') {
         subBar.style.display = 'block';
-        subBar.innerHTML = 'You are on the <strong>Free</strong> plan. <a href="#/pricing">Upgrade to Premium</a> for full access to all tips and analysis.';
+        subBar.innerHTML = '<strong>Free</strong> member — You have access to daily NAP, race cards, results, and weekly blog. <a href="#/pricing">View Premium features</a>';
       } else if (this.user.subscription === 'premium') {
         subBar.style.display = 'block';
         subBar.innerHTML = '<strong>Premium</strong> member — Full access enabled. Thank you for your subscription.';
@@ -2578,66 +2578,65 @@ const App = {
   // -----------------------------------------------------------------------
   renderPricing() {
     const app = document.getElementById('app');
+    const isLoggedIn = !!this.user;
+    const isPremium = this.user && this.user.subscription === 'premium';
     app.innerHTML = `
       <div class="container">
         <div class="page-header text-center">
           <h1>Choose Your <span class="accent">Plan</span></h1>
-          <p>Invest in your betting edge. Cancel anytime.</p>
+          <p>Sign up free in 30 seconds. No bank details required. Upgrade when you're ready.</p>
         </div>
 
+        ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(34,197,94,0.03));border:2px solid rgba(34,197,94,0.3);border-radius:14px;padding:24px;margin-bottom:32px;text-align:center;"><div style="font-size:28px;margin-bottom:8px;">&#127881;</div><div style="font-size:20px;font-weight:800;color:#22c55e;margin-bottom:8px;">Start Free — No Bank Details Needed</div><div style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">Create your free account to access daily tips, race cards, results, and our weekly blog. Upgrade to Premium anytime from inside your account.</div><button class="btn btn-gold btn-lg" onclick="App.showModal(\'register\')">Create Free Account</button></div>' : ''}
+
         <div class="pricing-grid mb-32">
-          <div class="pricing-card">
-            <h3>Free</h3>
-            <p class="text-muted">One free selection every day</p>
-            <div class="pricing-price">&pound;<span style="font-size:42px;">0</span><span class="period">/month</span></div>
+          <div class="pricing-card${!isPremium ? ' featured' : ''}">
+            ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">RECOMMENDED — START HERE</div>' : ''}
+            <h3>Free Access</h3>
+            <p class="text-muted">Everything you need to get started</p>
+            <div class="pricing-price">&pound;<span style="font-size:42px;">0</span><span class="period">/forever</span></div>
+            <p class="text-xs text-gold mb-8">No credit card. No bank details. No commitment.</p>
             <ul class="pricing-features">
-              <li>1 free NAP of the day</li>
-              <li>Basic match/race info</li>
-              <li>Summary analysis</li>
-              <li>Results tracker access</li>
-              <li class="disabled">Full deep-dive analysis</li>
-              <li class="disabled">Premium edge selections (2-4 daily max)</li>
-              <li class="disabled">Early access to tips</li>
-              <li class="disabled">Email bulletins</li>
-              <li class="disabled">Staking recommendations</li>
-              <li class="disabled">Priority support</li>
+              <li>Daily NAP of the day selection</li>
+              <li>Live race cards with full runner lists</li>
+              <li>Live football fixtures and scores</li>
+              <li>Full results page and performance stats</li>
+              <li>Weekly blog reviews and insights</li>
+              <li>Free weekly accumulator</li>
+              <li>Odds comparison across bookmakers</li>
+              <li>Staking calculator</li>
+              <li class="disabled">2-4 premium edge selections daily</li>
+              <li class="disabled">Full deep-dive analysis per selection</li>
+              <li class="disabled">Race Intelligence on every race card</li>
+              <li class="disabled">Daily email bulletins</li>
             </ul>
-            <button class="btn btn-outline btn-full" onclick="${this.user ? '' : "App.showModal('register')"}">
-              ${this.user ? 'Current Plan' : 'Sign Up Free'}
+            <button class="btn ${!isLoggedIn ? 'btn-gold' : 'btn-outline'} btn-full" onclick="${isLoggedIn ? '' : "App.showModal('register')"}">
+              ${isLoggedIn ? (isPremium ? 'Free Features Included' : 'Your Current Plan') : 'Sign Up Free — 30 Seconds'}
             </button>
           </div>
 
-          <div class="pricing-card featured">
-            <div style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">🎉 FIRST MONTH FREE — LIMITED OFFER</div>
+          <div class="pricing-card${isPremium ? ' featured' : ''}">
+            <div style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">PREMIUM — FULL ACCESS</div>
             <h3>Premium</h3>
             <p class="text-muted">Every edge play, every day — quality not quantity</p>
-            <div class="pricing-price"><span style="text-decoration:line-through;color:var(--text-muted);font-size:18px;">&pound;19.99</span> <span class="currency">&pound;</span>0<span style="font-size:20px;">.00</span><span class="period">/1st month</span></div>
-            <p class="text-xs text-gold mb-8">Then &pound;19.99/month | or &pound;199.99/year (save &pound;40)</p>
+            <div class="pricing-price"><span class="currency">&pound;</span>19<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
+            <p class="text-xs text-gold mb-8">&pound;199.99/year (save &pound;40) | Cancel anytime</p>
             <ul class="pricing-features">
-              <li><strong>First month completely FREE</strong></li>
+              <li><strong>Everything in Free, plus:</strong></li>
               <li>2-4 premium selections daily (quality over quantity)</li>
-              <li>Full deep-dive analysis</li>
-              <li>Probability & edge calculations</li>
+              <li>Full deep-dive analysis per selection</li>
+              <li>Race Intelligence on every race card</li>
+              <li>Probability and edge calculations</li>
               <li>Staking recommendations</li>
               <li>Early morning access (before 9am)</li>
               <li>Daily email bulletins</li>
-              <li>In-play alerts (coming soon)</li>
+              <li>Big win alerts</li>
               <li>Priority email support</li>
               <li>Exclusive Telegram group</li>
             </ul>
-            <!-- STRIPE INTEGRATION POINT: Replace onclick with Stripe Checkout redirect -->
-            <!-- stripe.redirectToCheckout({ sessionId: await createCheckoutSession(plan, price, trialDays: 30) }) -->
-            <button class="btn btn-gold btn-full" data-plan="monthly" data-price="0" data-trial="30" data-currency="gbp" onclick="trackEvent('upgrade','click_monthly_trial','pricing');App.showModal('stripe')">
-              ${this.user?.subscription === 'premium' ? 'Current Plan' : 'Start Free Month'}
-            </button>
-            <button class="btn btn-outline btn-full mt-8" data-plan="annual" data-price="19999" data-currency="gbp" onclick="App.showModal('stripe')">
-              Annual Plan - &pound;199.99/yr (Save &pound;40)
-            </button>
-            <div class="stripe-badge mt-8">
-              <span>Secure payment powered by</span>
-              <span class="stripe-logo">Stripe</span>
-            </div>
-            <p class="text-xs text-muted mt-8">Free for 30 days, then auto-renews at &pound;19.99/month. Cancel anytime before your trial ends to avoid charges. No commitment.</p>
+            ${isPremium ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
+              isLoggedIn ? '<button class="btn btn-gold btn-full" onclick="App.showToast(\'Premium subscriptions launching soon. You will be notified by email when Premium is available.\',\'info\')">Coming Soon — Get Notified</button><p class="text-xs text-muted mt-8">Premium subscriptions are launching soon. As a free member, you will be first to know when Premium goes live.</p>' :
+              '<button class="btn btn-outline btn-full" onclick="App.showModal(\'register\')">Sign Up Free First</button><p class="text-xs text-muted mt-8">Create your free account first. You can upgrade to Premium from inside your account once subscriptions launch.</p>'}
           </div>
         </div>
 
