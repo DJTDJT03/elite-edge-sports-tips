@@ -686,6 +686,7 @@ const App = {
       case 'dashboard': case '': this.renderDashboard(); break;
       case 'racing': this.renderRacing(); break;
       case 'football': this.renderFootball(); break;
+      case 'selections': this.renderSelections(); break;
       case 'festival': this.renderFestival(); break;
       case 'results': this.renderResults(); break;
       case 'pricing': this.renderPricing(); break;
@@ -1741,8 +1742,9 @@ const App = {
                 var isPremium = App.user && App.user.subscription === 'premium';
 
                 // Build the race header with embedded verdict
+                var raceClickable = intel ? ' race-row-clickable" onclick="App.openRaceIntelligence(\'' + (race.meeting || '').replace(/'/g, "\\'") + '\',\'' + (race.time || '').replace(/'/g, "\\'") + '\')" title="Click for full race analysis' : '';
                 var raceHeader = '<div class="race-card-header">' +
-                  '<div class="race-row"><span class="race-time">' + (race.time || '-') + '</span><span class="race-name">' + (race.raceName || '') + '</span><span class="race-info">' + [race.raceClass, race.distance, race.going].filter(Boolean).join(' | ') + '</span></div>';
+                  '<div class="race-row' + raceClickable + '"><span class="race-time">' + (race.time || '-') + '</span><span class="race-name">' + (race.raceName || '') + '</span><span class="race-info">' + [race.raceClass, race.distance, race.going].filter(Boolean).join(' | ') + '</span>' + (intel ? '<span class="race-row-chevron">&#9656;</span>' : '') + '</div>';
 
                 // Add inline race verdict for premium
                 if (intel && isPremium) {
@@ -1865,6 +1867,323 @@ const App = {
         </div>` : ''}
       </div>
     `;
+  },
+
+  // -----------------------------------------------------------------------
+  // RACE INTELLIGENCE MODAL
+  // -----------------------------------------------------------------------
+  async openRaceIntelligence(meetingName, raceTime) {
+    // Remove any existing modal
+    var existing = document.getElementById('race-intel-modal');
+    if (existing) existing.remove();
+
+    // Show loading modal
+    var modal = document.createElement('div');
+    modal.id = 'race-intel-modal';
+    modal.className = 'race-intel-modal';
+    modal.innerHTML = '<div class="race-intel-overlay" onclick="App.closeRaceIntelligence()"></div>' +
+      '<div class="race-intel-container">' +
+        '<button class="race-intel-close" onclick="App.closeRaceIntelligence()">&times;</button>' +
+        '<div class="race-intel-loading"><div class="loading-spinner"></div><p style="margin-top:16px;color:var(--text-muted);">Loading race intelligence...</p></div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+
+    // Fetch intelligence data from cache (already fetched in renderRacing)
+    var intelData = this._getCached('race-intel', 300000);
+    if (!intelData) {
+      try {
+        intelData = await this.fetchRaceIntelligence();
+      } catch (e) {
+        intelData = null;
+      }
+    }
+
+    var intelRaces = (intelData && intelData.live && intelData.races) ? intelData.races : [];
+    var intel = intelRaces.find(function(ir) {
+      return ir.meeting === meetingName && ir.time === raceTime;
+    });
+
+    if (!intel) {
+      var container = document.querySelector('.race-intel-container');
+      if (container) {
+        container.innerHTML = '<button class="race-intel-close" onclick="App.closeRaceIntelligence()">&times;</button>' +
+          '<div style="padding:40px;text-align:center;">' +
+            '<div style="font-size:48px;margin-bottom:16px;">!</div>' +
+            '<h3 style="margin-bottom:8px;">No Analysis Available</h3>' +
+            '<p class="text-muted">Race intelligence data is not yet available for this race.</p>' +
+          '</div>';
+      }
+      return;
+    }
+
+    // Also fetch live racecard data for runner table
+    var liveData = this._getCached('racing', 180000);
+    var racecard = null;
+    if (liveData && liveData.racecards) {
+      racecard = liveData.racecards.find(function(r) {
+        return r.meeting === meetingName && r.time === raceTime;
+      });
+    }
+
+    this._renderRaceIntelContent(intel, racecard);
+    trackEvent('racing', 'race_intelligence', meetingName + ' ' + raceTime);
+  },
+
+  closeRaceIntelligence() {
+    var modal = document.getElementById('race-intel-modal');
+    if (modal) modal.remove();
+    document.body.style.overflow = '';
+  },
+
+  _renderRaceIntelContent(intel, racecard) {
+    var container = document.querySelector('.race-intel-container');
+    if (!container) return;
+
+    var isPremium = this.user && this.user.subscription === 'premium';
+    var lockedClass = isPremium ? '' : ' race-intel-locked';
+    var self = this;
+
+    var html = '<button class="race-intel-close" onclick="App.closeRaceIntelligence()">&times;</button>';
+
+    // --- Race Header (visible to all) ---
+    html += '<div class="race-intel-header">' +
+      '<div class="race-intel-meeting">' + (intel.meeting || 'Meeting') + '</div>' +
+      '<div class="race-intel-title-row">' +
+        '<span class="race-intel-time">' + (intel.time || '') + '</span>' +
+        '<span class="race-intel-name">' + (intel.raceName || intel.raceClass || 'Race') + '</span>' +
+      '</div>' +
+      '<div class="race-intel-details">' +
+        [intel.raceClass, intel.distance, intel.going, intel.surface].filter(Boolean).join(' | ') +
+        (intel.prizeMoney ? ' | ' + intel.prizeMoney : '') +
+      '</div>' +
+      (intel.fieldSize ? '<div class="race-intel-field">' +
+        intel.fieldSize + ' runners' +
+        (intel.avgRating ? ' | Avg OR: ' + intel.avgRating : '') +
+        (intel.topRated ? ' | Top rated: ' + intel.topRated.name + ' (' + intel.topRated.rating + ')' : '') +
+      '</div>' : '') +
+    '</div>';
+
+    // --- OUR TAKE (premium) ---
+    html += '<div class="race-intel-verdict' + lockedClass + '">' +
+      '<div class="race-intel-verdict-label">OUR TAKE</div>' +
+      '<div class="race-intel-verdict-text">' + (intel.insights.paceAnalysis || '') + '</div>' +
+      (intel.insights.keyAngle ? '<div class="race-intel-verdict-angle">' + intel.insights.keyAngle + '</div>' : '') +
+    '</div>';
+
+    // --- Going Analysis ---
+    html += '<div class="race-intel-section' + lockedClass + '">' +
+      '<h3 class="race-intel-section-title">Going Analysis</h3>' +
+      '<p class="race-intel-text">' + (intel.insights.goingAnalysis || '-') + '</p>' +
+    '</div>';
+
+    // --- Class Profile ---
+    html += '<div class="race-intel-section' + lockedClass + '">' +
+      '<h3 class="race-intel-section-title">Class Profile</h3>' +
+      '<p class="race-intel-text">' + (intel.insights.classAnalysis || '-') + '</p>' +
+    '</div>';
+
+    // --- Key Angle ---
+    if (intel.insights.keyAngle) {
+      html += '<div class="race-intel-section' + lockedClass + '">' +
+        '<h3 class="race-intel-section-title">Key Angle</h3>' +
+        '<p class="race-intel-text">' + intel.insights.keyAngle + '</p>' +
+      '</div>';
+    }
+
+    // --- Favourite Card ---
+    if (intel.favourite) {
+      html += '<div class="race-intel-runner-card race-intel-fav' + lockedClass + '">' +
+        '<div class="race-intel-runner-label">Favourite</div>' +
+        '<div class="race-intel-runner-name">' + intel.favourite.name + '</div>' +
+        '<div class="race-intel-runner-meta">' +
+          (intel.favourite.odds ? '<span>Odds: <strong>' + self.formatOdds(parseFloat(intel.favourite.odds)) + '</strong></span>' : '') +
+          (intel.favourite.jockey ? '<span>Jockey: ' + intel.favourite.jockey + '</span>' : '') +
+          (intel.favourite.trainer ? '<span>Trainer: ' + intel.favourite.trainer + '</span>' : '') +
+          (intel.favourite.form ? '<span>Form: ' + intel.favourite.form + '</span>' : '') +
+        '</div>' +
+        '<div class="race-intel-runner-assessment">' + (intel.insights.favouriteAnalysis || '') + '</div>' +
+      '</div>';
+    }
+
+    // --- Danger Card ---
+    if (intel.danger) {
+      html += '<div class="race-intel-runner-card race-intel-danger' + lockedClass + '">' +
+        '<div class="race-intel-runner-label">Principal Danger</div>' +
+        '<div class="race-intel-runner-name">' + intel.danger.name + '</div>' +
+        '<div class="race-intel-runner-meta">' +
+          (intel.danger.odds ? '<span>Odds: <strong>' + self.formatOdds(parseFloat(intel.danger.odds)) + '</strong></span>' : '') +
+          (intel.danger.jockey ? '<span>Jockey: ' + intel.danger.jockey + '</span>' : '') +
+          (intel.danger.trainer ? '<span>Trainer: ' + intel.danger.trainer + '</span>' : '') +
+          (intel.danger.form ? '<span>Form: ' + intel.danger.form + '</span>' : '') +
+        '</div>' +
+        '<div class="race-intel-runner-assessment">' + (intel.insights.dangerAnalysis || '') + '</div>' +
+      '</div>';
+    }
+
+    // --- Value Pick Card ---
+    if (intel.outsider) {
+      html += '<div class="race-intel-runner-card race-intel-value' + lockedClass + '">' +
+        '<div class="race-intel-runner-label">Value Pick</div>' +
+        '<div class="race-intel-runner-name">' + intel.outsider.name + '</div>' +
+        '<div class="race-intel-runner-meta">' +
+          (intel.outsider.odds ? '<span>Odds: <strong>' + self.formatOdds(parseFloat(intel.outsider.odds)) + '</strong></span>' : '') +
+          (intel.outsider.jockey ? '<span>Jockey: ' + intel.outsider.jockey + '</span>' : '') +
+          (intel.outsider.trainer ? '<span>Trainer: ' + intel.outsider.trainer + '</span>' : '') +
+        '</div>' +
+        '<div class="race-intel-runner-assessment">' + (intel.insights.outsiderInsight || '') + '</div>' +
+      '</div>';
+    }
+
+    // --- Runner Summary Table (visible to all) ---
+    var runners = racecard && racecard.runners ? racecard.runners : [];
+    if (runners.length) {
+      html += '<div class="race-intel-section">' +
+        '<h3 class="race-intel-section-title">Full Field (' + runners.length + ' runners)</h3>' +
+        '<div class="race-intel-runners-wrap">' +
+        '<table class="runner-table">' +
+          '<thead><tr><th>Draw</th><th>Horse</th><th>Jockey</th><th>Trainer</th><th>Form</th><th>OR</th><th>Odds</th></tr></thead>' +
+          '<tbody>' +
+          runners.map(function(r) {
+            var tag = '';
+            if (intel.favourite && r.horseName === intel.favourite.name) tag = '<span class="runner-tag fav">FAV</span> ';
+            else if (intel.danger && r.horseName === intel.danger.name) tag = '<span class="runner-tag danger">DANGER</span> ';
+            else if (intel.outsider && r.horseName === intel.outsider.name) tag = '<span class="runner-tag outsider">VALUE</span> ';
+            var rowClass = tag ? ' class="runner-tagged"' : '';
+            return '<tr' + rowClass + '>' +
+              '<td>' + (r.draw || '-') + '</td>' +
+              '<td style="font-weight:600;">' + tag + (r.horseName || '-') + '</td>' +
+              '<td>' + (r.jockey || '-') + '</td>' +
+              '<td>' + (r.trainer || '-') + '</td>' +
+              '<td>' + (r.form || '-') + '</td>' +
+              '<td>' + (r.officialRating || '-') + '</td>' +
+              '<td style="font-weight:700;color:var(--gold);">' + (r.odds ? self.formatOdds(parseFloat(r.odds)) : '-') + '</td>' +
+            '</tr>';
+          }).join('') +
+          '</tbody></table>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // --- Upgrade overlay for free users ---
+    if (!isPremium) {
+      html += '<div class="race-intel-upgrade-overlay">' +
+        '<div class="race-intel-upgrade-inner">' +
+          '<div style="font-size:32px;margin-bottom:12px;">&#128274;</div>' +
+          '<h3>Premium Race Intelligence</h3>' +
+          '<p class="text-muted" style="margin:8px 0 16px;">Unlock expert verdicts, pace analysis, runner assessments, and value picks for every race.</p>' +
+          '<a href="#/pricing" class="btn btn-gold" onclick="App.closeRaceIntelligence()">Upgrade to Premium</a>' +
+        '</div>' +
+      '</div>';
+    }
+
+    container.innerHTML = html;
+  },
+
+  // -----------------------------------------------------------------------
+  // TODAY'S SELECTIONS PAGE
+  // -----------------------------------------------------------------------
+  async renderSelections() {
+    var app = document.getElementById('app');
+    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading selections...</div></div>';
+
+    try {
+      this.tips = await this.api('/tips');
+    } catch (e) { /* use cached */ }
+
+    var today = this._getToday();
+    var isPremium = this.user && this.user.subscription === 'premium';
+
+    // Filter to today's active tips
+    var todayTips = this.tips.filter(function(t) {
+      return t.status === 'active' && t.date === today;
+    });
+
+    var racingTips = todayTips.filter(function(t) { return t.sport === 'racing'; });
+    var footballTips = todayTips.filter(function(t) { return t.sport === 'football'; });
+
+    // Find NAP of the day (highest confidence tip, or one flagged as NAP)
+    var napTip = null;
+    var otherTips = todayTips.slice();
+    if (todayTips.length) {
+      // Look for an explicit NAP first (valueRating === 'Elite' and highest confidence)
+      var sortedByConf = todayTips.slice().sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); });
+      var eliteTips = sortedByConf.filter(function(t) { return t.valueRating === 'Elite'; });
+      napTip = eliteTips.length > 0 ? eliteTips[0] : sortedByConf[0];
+      otherTips = todayTips.filter(function(t) { return t.id !== napTip.id; });
+    }
+
+    var otherRacing = otherTips.filter(function(t) { return t.sport === 'racing'; });
+    var otherFootball = otherTips.filter(function(t) { return t.sport === 'football'; });
+
+    // Format date
+    var dateObj = new Date(today + 'T12:00:00');
+    var formattedDate = dateObj.toLocaleDateString('en-GB', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+
+    var self = this;
+
+    app.innerHTML = '<div class="container">' +
+      '<div class="page-header">' +
+        '<h1><span class="accent">Today\'s Selections</span></h1>' +
+        '<p>' + formattedDate + '</p>' +
+      '</div>' +
+
+      // Summary bar
+      '<div class="selections-summary">' +
+        '<div class="selections-summary-item">' +
+          '<span class="selections-summary-count">' + todayTips.length + '</span>' +
+          '<span class="selections-summary-label">Tips Published</span>' +
+        '</div>' +
+        '<div class="selections-summary-item">' +
+          '<span class="selections-summary-count">' + racingTips.length + '</span>' +
+          '<span class="selections-summary-label">Racing</span>' +
+        '</div>' +
+        '<div class="selections-summary-item">' +
+          '<span class="selections-summary-count">' + footballTips.length + '</span>' +
+          '<span class="selections-summary-label">Football</span>' +
+        '</div>' +
+      '</div>' +
+
+      // No tips message
+      (todayTips.length === 0 ? '<div class="card text-center" style="padding:48px 24px;">' +
+        '<div style="font-size:36px;margin-bottom:16px;">&#9200;</div>' +
+        '<h3 style="margin-bottom:8px;">No Selections Yet</h3>' +
+        '<p class="text-muted">Tips publish daily by 7:30am UK. Check back soon.</p>' +
+      '</div>' : '') +
+
+      // NAP of the Day
+      (napTip ? '<div class="selections-nap-section">' +
+        '<div class="selections-nap-label">NAP of the Day</div>' +
+        '<div class="selections-nap-card">' +
+          self.renderTipCard(napTip) +
+        '</div>' +
+      '</div>' : '') +
+
+      // Racing section
+      (otherRacing.length ? '<div class="section">' +
+        '<div class="section-title"><span class="icon">&#9826;</span> Racing Selections <span class="selections-count-badge">' + otherRacing.length + '</span></div>' +
+        '<div class="grid grid-2">' +
+          otherRacing.map(function(t) { return self.renderTipCard(t); }).join('') +
+        '</div>' +
+      '</div>' : '') +
+
+      // Football section
+      (otherFootball.length ? '<div class="section">' +
+        '<div class="section-title"><span class="icon">&#9917;</span> Football Selections <span class="selections-count-badge">' + otherFootball.length + '</span></div>' +
+        '<div class="grid grid-2">' +
+          otherFootball.map(function(t) { return self.renderTipCard(t); }).join('') +
+        '</div>' +
+      '</div>' : '') +
+
+      // Bottom links
+      '<div class="selections-footer">' +
+        '<a href="#/results" class="btn btn-outline">View Results</a>' +
+        '<a href="#/pricing" class="btn btn-outline">How It Works</a>' +
+      '</div>' +
+
+    '</div>';
   },
 
   async refreshRacingData(btn) {

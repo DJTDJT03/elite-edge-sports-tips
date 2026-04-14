@@ -3064,3 +3064,229 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   .match-intel-h2h-table { font-size: 11px; }
   .match-intel-h2h-table td { padding: 6px 6px; }
 }
+
+/* =========================================================================
+   RACE INTELLIGENCE MODAL
+   ========================================================================= */
+.race-row-clickable {
+  cursor: pointer;
+  transition: all var(--transition);
+  border-radius: var(--radius-sm);
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+.race-row-clickable:hover {
+  background: rgba(212,168,67,.06);
+  border-color: var(--gold-dark);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+.race-row-chevron {
+  color: var(--gold); font-size: 14px; margin-left: auto; opacity: 0.5;
+  transition: opacity var(--transition);
+}
+.race-row-clickable:hover .race-row-chevron { opacity: 1; }
+
+.race-intel-modal {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 9999; display: flex; align-items: flex-start; justify-content: center;
+  padding: 24px; overflow-y: auto;
+}
+.race-intel-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,.75); backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.race-intel-container {
+  position: relative; z-index: 1; width: 100%; max-width: 720px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden;
+  box-shadow: var(--shadow-lg); margin: 40px auto;
+}
+.race-intel-close {
+  position: absolute; top: 12px; right: 12px; z-index: 10;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  color: var(--text-secondary); font-size: 22px; width: 36px; height: 36px;
+  border-radius: 50%; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; transition: all var(--transition); line-height: 1;
+}
+.race-intel-close:hover { background: var(--red); color: #fff; border-color: var(--red); }
+.race-intel-loading {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 80px 20px; text-align: center;
+}
+
+/* Race Intel Header */
+.race-intel-header {
+  padding: 28px 24px 20px; text-align: center;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(212,168,67,.05) 0%, transparent 100%);
+}
+.race-intel-meeting {
+  font-size: 12px; font-weight: 700; color: var(--gold);
+  text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;
+}
+.race-intel-title-row {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  margin-bottom: 8px;
+}
+.race-intel-time {
+  font-size: 22px; font-weight: 800; color: var(--text-primary);
+}
+.race-intel-name {
+  font-size: 16px; font-weight: 600; color: var(--text-secondary);
+}
+.race-intel-details {
+  font-size: 12px; color: var(--text-muted); margin-bottom: 8px;
+}
+.race-intel-field {
+  font-size: 11px; color: var(--text-muted);
+  padding-top: 8px; border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+/* Race Intel Sections */
+.race-intel-section { padding: 20px 24px; border-bottom: 1px solid var(--border); }
+.race-intel-section-title {
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text-secondary); margin-bottom: 12px;
+}
+.race-intel-text { font-size: 14px; line-height: 1.7; color: var(--text-secondary); }
+
+/* Race Intel Verdict */
+.race-intel-verdict {
+  padding: 24px; margin: 20px 24px; border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(212,168,67,.08) 0%, rgba(212,168,67,.02) 100%);
+  border: 1px solid var(--gold-dark); position: relative;
+}
+.race-intel-verdict-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1.5px; color: var(--gold); margin-bottom: 8px;
+}
+.race-intel-verdict-text {
+  font-size: 14px; line-height: 1.7; color: var(--text-secondary);
+}
+.race-intel-verdict-angle {
+  margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid rgba(212,168,67,.15);
+  font-size: 13px; color: var(--gold); font-weight: 600; line-height: 1.6;
+}
+
+/* Runner Cards (Favourite / Danger / Value) */
+.race-intel-runner-card {
+  margin: 0 24px 0; padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.race-intel-runner-card:last-of-type { border-bottom: 1px solid var(--border); }
+.race-intel-fav { background: rgba(212,168,67,.04); }
+.race-intel-fav .race-intel-runner-label { color: var(--gold); }
+.race-intel-danger { background: rgba(239,68,68,.03); }
+.race-intel-danger .race-intel-runner-label { color: var(--red); }
+.race-intel-value { background: rgba(34,197,94,.03); }
+.race-intel-value .race-intel-runner-label { color: var(--green); }
+
+.race-intel-runner-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1.2px; margin-bottom: 4px;
+}
+.race-intel-runner-name {
+  font-size: 18px; font-weight: 800; color: var(--text-primary); margin-bottom: 8px;
+}
+.race-intel-runner-meta {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  font-size: 12px; color: var(--text-muted); margin-bottom: 10px;
+}
+.race-intel-runner-assessment {
+  font-size: 13px; line-height: 1.7; color: var(--text-secondary); font-style: italic;
+}
+
+/* Runner table in modal */
+.race-intel-runners-wrap { overflow-x: auto; }
+
+/* Locked state */
+.race-intel-locked {
+  filter: blur(6px); pointer-events: none; user-select: none;
+  -webkit-user-select: none;
+}
+.race-intel-upgrade-overlay {
+  position: sticky; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(180deg, transparent 0%, var(--bg-card) 30%, var(--bg-card) 100%);
+  padding: 60px 24px 32px; text-align: center; margin-top: -80px;
+}
+.race-intel-upgrade-inner { max-width: 360px; margin: 0 auto; }
+
+@media (max-width: 600px) {
+  .race-intel-modal { padding: 0; }
+  .race-intel-container {
+    max-width: 100%; margin: 0; border-radius: 0;
+    min-height: 100vh;
+  }
+  .race-intel-header { padding: 20px 16px 16px; }
+  .race-intel-title-row { flex-direction: column; gap: 4px; }
+  .race-intel-time { font-size: 18px; }
+  .race-intel-name { font-size: 14px; }
+  .race-intel-section { padding: 16px; }
+  .race-intel-verdict { margin: 16px; padding: 20px 16px; }
+  .race-intel-runner-card { margin: 0 16px; padding: 16px; }
+  .race-intel-runner-name { font-size: 16px; }
+  .race-intel-runner-meta { gap: 8px; font-size: 11px; }
+}
+
+/* =========================================================================
+   SELECTIONS PAGE
+   ========================================================================= */
+.selections-summary {
+  display: flex; gap: 16px; margin-bottom: 32px;
+}
+.selections-summary-item {
+  flex: 1; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; text-align: center;
+}
+.selections-summary-count {
+  display: block; font-size: 32px; font-weight: 800; color: var(--gold);
+  line-height: 1.1; margin-bottom: 4px;
+}
+.selections-summary-label {
+  font-size: 12px; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: .5px; font-weight: 600;
+}
+
+.selections-nap-section { margin-bottom: 32px; }
+.selections-nap-label {
+  font-size: 14px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 1.5px; color: var(--gold); margin-bottom: 12px;
+  text-align: center;
+}
+.selections-nap-card {
+  max-width: 600px; margin: 0 auto;
+}
+.selections-nap-card .tip-card {
+  border: 2px solid var(--gold-dark) !important;
+  box-shadow: var(--shadow-gold), 0 0 30px rgba(212,168,67,.08);
+}
+
+.selections-count-badge {
+  display: inline-block; background: var(--gold); color: var(--bg-deep);
+  font-size: 11px; font-weight: 800; padding: 2px 8px;
+  border-radius: 10px; margin-left: 8px; vertical-align: middle;
+}
+
+.selections-footer {
+  display: flex; gap: 12px; justify-content: center;
+  padding: 32px 0; margin-top: 16px;
+}
+.btn-outline {
+  padding: 10px 24px; border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm); color: var(--text-secondary);
+  font-size: 14px; font-weight: 600; background: transparent;
+  text-decoration: none; transition: all var(--transition);
+}
+.btn-outline:hover {
+  border-color: var(--gold); color: var(--gold);
+}
+
+@media (max-width: 600px) {
+  .selections-summary { flex-direction: column; gap: 8px; }
+  .selections-summary-item { padding: 14px; }
+  .selections-summary-count { font-size: 24px; }
+  .selections-footer { flex-direction: column; align-items: center; }
+}
