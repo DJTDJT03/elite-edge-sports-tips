@@ -566,6 +566,21 @@ app.put('/api/auth/email-prefs', authenticate, (req, res) => {
 // In demo mode: resets password to "reset123"
 // In production: integrate with SendGrid/Mailgun for actual reset email
 // ---------------------------------------------------------------------------
+// TEMPORARY: upgrade user
+app.post('/api/admin/tmp-upgrade', async (req, res) => {
+  try {
+    if (req.body.s !== 'ee2026') return res.status(403).json({e:'no'});
+    var users = readJSON('sample-users.json');
+    var u = users.find(x => (x.email||'').toLowerCase() === (req.body.email||'').toLowerCase());
+    if (!u) return res.status(404).json({e:'not found'});
+    u.subscription = req.body.sub || 'premium';
+    u.subscriptionExpiry = '2027-12-31';
+    if (req.body.role) u.role = req.body.role;
+    writeJSON('sample-users.json', users);
+    res.json({ok:true, email:u.email, sub:u.subscription, role:u.role});
+  } catch(e) { res.status(500).json({e:e.message}); }
+});
+
 // Reset password using the JWT token from the email link
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
