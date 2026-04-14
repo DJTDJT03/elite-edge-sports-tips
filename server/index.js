@@ -1071,6 +1071,289 @@ app.get('/api/football/h2h/:team1/:team2', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// MATCH INTELLIGENCE — Deep analysis for any fixture
+// GET /api/football/match-intelligence/:fixtureId
+// ---------------------------------------------------------------------------
+app.get('/api/football/match-intelligence/:fixtureId', async (req, res) => {
+  try {
+    if (!footballSource || !process.env.API_FOOTBALL_KEY) {
+      return res.status(503).json({ error: 'API-Football not configured. Set API_FOOTBALL_KEY.' });
+    }
+
+    var fixtureId = req.params.fixtureId;
+
+    // 1. Fetch fixture details
+    var fixtureData = await footballSource._apiGet('/fixtures?id=' + fixtureId);
+    if (!fixtureData.response || !fixtureData.response.length) {
+      return res.status(404).json({ error: 'Fixture not found.' });
+    }
+    var fixture = fixtureData.response[0];
+    var homeTeam = fixture.teams.home;
+    var awayTeam = fixture.teams.away;
+    var league = fixture.league;
+    var venue = fixture.fixture.venue;
+    var kickoff = fixture.fixture.date;
+    var status = fixture.fixture.status;
+
+    // 2. Fetch H2H data
+    var h2hData = await footballSource._apiGet(
+      '/fixtures/headtohead?h2h=' + homeTeam.id + '-' + awayTeam.id + '&last=10'
+    );
+    var h2hMatches = h2hData.response || [];
+
+    // 3. Fetch last 10 fixtures for each team (for form analysis)
+    var homeFixturesData = await footballSource._apiGet(
+      '/fixtures?team=' + homeTeam.id + '&last=10&status=FT'
+    );
+    var awayFixturesData = await footballSource._apiGet(
+      '/fixtures?team=' + awayTeam.id + '&last=10&status=FT'
+    );
+    var homeFixtures = homeFixturesData.response || [];
+    var awayFixtures = awayFixturesData.response || [];
+
+    // --- Build analysis ---
+
+    // Form analysis: last 5 results for each team
+    function getForm(fixtures, teamId) {
+      return fixtures.slice(0, 5).map(function(f) {
+        var isHome = f.teams.home.id === teamId;
+        var goalsFor = isHome ? f.goals.home : f.goals.away;
+        var goalsAgainst = isHome ? f.goals.away : f.goals.home;
+        var opponent = isHome ? f.teams.away.name : f.teams.home.name;
+        var result = goalsFor > goalsAgainst ? 'W' : goalsFor < goalsAgainst ? 'L' : 'D';
+        return { result: result, goalsFor: goalsFor || 0, goalsAgainst: goalsAgainst || 0, opponent: opponent, date: f.fixture.date };
+      });
+    }
+
+    var homeForm = getForm(homeFixtures, homeTeam.id);
+    var awayForm = getForm(awayFixtures, awayTeam.id);
+
+    // Goals analysis from last 10
+    function getGoalsStats(fixtures, teamId) {
+      if (!fixtures.length) return { avgScored: 0, avgConceded: 0, cleanSheets: 0, bttsCount: 0, over25Count: 0 };
+      var totalScored = 0, totalConceded = 0, cleanSheets = 0, bttsCount = 0, over25Count = 0;
+      fixtures.forEach(function(f) {
+        var isHome = f.teams.home.id === teamId;
+        var gf = isHome ? (f.goals.home || 0) : (f.goals.away || 0);
+        var ga = isHome ? (f.goals.away || 0) : (f.goals.home || 0);
+        totalScored += gf;
+        totalConceded += ga;
+        if (ga === 0) cleanSheets++;
+        if (gf > 0 && ga > 0) bttsCount++;
+        if ((gf + ga) > 2) over25Count++;
+      });
+      var n = fixtures.length;
+      return {
+        avgScored: +(totalScored / n).toFixed(2),
+        avgConceded: +(totalConceded / n).toFixed(2),
+        cleanSheets: cleanSheets,
+        cleanSheetPct: Math.round((cleanSheets / n) * 100),
+        bttsPct: Math.round((bttsCount / n) * 100),
+        over25Pct: Math.round((over25Count / n) * 100),
+        totalGames: n
+      };
+    }
+
+    var homeStats = getGoalsStats(homeFixtures, homeTeam.id);
+    var awayStats = getGoalsStats(awayFixtures, awayTeam.id);
+
+    // H2H analysis
+    var h2hHomeWins = 0, h2hAwayWins = 0, h2hDraws = 0, h2hTotalGoals = 0, h2hBtts = 0, h2hOver25 = 0;
+    var h2hSummary = h2hMatches.map(function(f) {
+      var hGoals = f.goals.home || 0;
+      var aGoals = f.goals.away || 0;
+      var isHomeTeamHome = f.teams.home.id === homeTeam.id;
+      if (hGoals > aGoals) {
+        if (isHomeTeamHome) h2hHomeWins++; else h2hAwayWins++;
+      } else if (aGoals > hGoals) {
+        if (isHomeTeamHome) h2hAwayWins++; else h2hHomeWins++;
+      } else {
+        h2hDraws++;
+      }
+      h2hTotalGoals += hGoals + aGoals;
+      if (hGoals > 0 && aGoals > 0) h2hBtts++;
+      if ((hGoals + aGoals) > 2) h2hOver25++;
+      return {
+        date: f.fixture.date,
+        home: f.teams.home.name,
+        away: f.teams.away.name,
+        homeGoals: hGoals,
+        awayGoals: aGoals,
+        league: f.league.name
+      };
+    });
+
+    var h2hCount = h2hMatches.length || 1;
+    var h2hAvgGoals = +(h2hTotalGoals / h2hCount).toFixed(2);
+    var h2hBttsPct = Math.round((h2hBtts / h2hCount) * 100);
+    var h2hOver25Pct = Math.round((h2hOver25 / h2hCount) * 100);
+
+    // --- Auto-generate verdict ---
+    var verdictMarket = '';
+    var verdictPick = '';
+    var verdictReason = '';
+    var confidence = 5;
+    var riskLevel = 'Medium';
+
+    var combinedBttsPct = (homeStats.bttsPct + awayStats.bttsPct + h2hBttsPct) / 3;
+    var combinedOver25Pct = (homeStats.over25Pct + awayStats.over25Pct + h2hOver25Pct) / 3;
+    var homeFormWins = homeForm.filter(function(r) { return r.result === 'W'; }).length;
+    var awayFormWins = awayForm.filter(function(r) { return r.result === 'W'; }).length;
+    var h2hDominance = Math.abs(h2hHomeWins - h2hAwayWins);
+    var avgTotalGoals = (homeStats.avgScored + homeStats.avgConceded + awayStats.avgScored + awayStats.avgConceded) / 2;
+
+    if (combinedBttsPct >= 65 && homeStats.avgScored >= 1.0 && awayStats.avgScored >= 1.0) {
+      verdictMarket = 'Both Teams to Score';
+      verdictPick = 'BTTS - Yes';
+      verdictReason = 'Both sides have been finding the net consistently. ' +
+        homeTeam.name + ' score in ' + homeStats.bttsPct + '% of matches while ' +
+        awayTeam.name + ' manage it in ' + awayStats.bttsPct + '%. ' +
+        'The head-to-head record reinforces this with both teams scoring in ' + h2hBttsPct + '% of recent meetings.';
+      confidence = Math.min(10, Math.round(combinedBttsPct / 10));
+      riskLevel = confidence >= 7 ? 'Low' : 'Medium';
+    } else if (h2hDominance >= 3 || (h2hDominance >= 2 && (homeFormWins >= 4 || awayFormWins >= 4))) {
+      var dominant = h2hHomeWins > h2hAwayWins ? homeTeam.name : awayTeam.name;
+      var dominantWins = Math.max(h2hHomeWins, h2hAwayWins);
+      verdictMarket = 'Match Result';
+      verdictPick = dominant + ' to Win';
+      verdictReason = dominant + ' have won ' + dominantWins + ' of the last ' + h2hMatches.length +
+        ' head-to-head meetings. That level of dominance in direct encounters is a strong indicator. ';
+      if (dominant === homeTeam.name && homeFormWins >= 3) {
+        verdictReason += 'Backed up by strong current form with ' + homeFormWins + ' wins from their last 5 matches.';
+      } else if (dominant === awayTeam.name && awayFormWins >= 3) {
+        verdictReason += 'Their recent form is equally impressive with ' + awayFormWins + ' wins from 5 outings.';
+      }
+      confidence = Math.min(10, 5 + h2hDominance);
+      riskLevel = confidence >= 7 ? 'Low' : 'Medium';
+    } else if (combinedOver25Pct >= 60 || avgTotalGoals >= 3.0) {
+      verdictMarket = 'Total Goals';
+      verdictPick = 'Over 2.5 Goals';
+      verdictReason = 'The numbers point to goals in this one. ' +
+        homeTeam.name + ' average ' + homeStats.avgScored.toFixed(1) + ' goals scored and ' +
+        homeStats.avgConceded.toFixed(1) + ' conceded per match. ' +
+        awayTeam.name + ' contribute ' + awayStats.avgScored.toFixed(1) + ' scored and ' +
+        awayStats.avgConceded.toFixed(1) + ' conceded. ' +
+        'Head-to-head meetings see an average of ' + h2hAvgGoals + ' goals per game.';
+      confidence = Math.min(10, Math.round(combinedOver25Pct / 10));
+      riskLevel = confidence >= 7 ? 'Low' : 'Medium';
+    } else {
+      // Tight/defensive profile
+      var homeDraws = homeForm.filter(function(r) { return r.result === 'D'; }).length;
+      var awayDraws = awayForm.filter(function(r) { return r.result === 'D'; }).length;
+      if (homeDraws + awayDraws >= 4 || h2hDraws >= 3) {
+        verdictMarket = 'Match Result';
+        verdictPick = 'Draw';
+        verdictReason = 'This fixture has stalemate written all over it. ' +
+          h2hDraws + ' of the last ' + h2hMatches.length + ' meetings ended level. ' +
+          'Neither side shows the kind of form that suggests they can force a result here.';
+        confidence = Math.min(10, 4 + h2hDraws);
+        riskLevel = 'Medium';
+      } else {
+        verdictMarket = 'Total Goals';
+        verdictPick = 'Under 2.5 Goals';
+        verdictReason = 'A low-scoring affair looks the most likely outcome. ' +
+          homeTeam.name + ' keep clean sheets in ' + homeStats.cleanSheetPct + '% of games while ' +
+          awayTeam.name + ' average just ' + awayStats.avgScored.toFixed(1) + ' goals per game. ' +
+          'The head-to-head average is ' + h2hAvgGoals + ' goals per meeting.';
+        confidence = Math.min(10, Math.round((100 - combinedOver25Pct) / 12));
+        riskLevel = confidence >= 6 ? 'Low-Medium' : 'Medium';
+      }
+    }
+
+    // Generate written analysis paragraphs
+    var overviewText = homeTeam.name + ' welcome ' + awayTeam.name + ' to ' +
+      (venue ? venue.name : 'their home ground') + ' in ' + league.name + ' action. ' +
+      'Kick-off is scheduled for ' + new Date(kickoff).toLocaleString('en-GB', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London'
+      }) + '.';
+
+    var formText = homeTeam.name + ' come into this match with ' + homeFormWins + ' wins from their last 5 outings' +
+      (homeStats.avgScored >= 1.5 ? ', scoring freely at ' + homeStats.avgScored.toFixed(1) + ' goals per game' : '') + '. ' +
+      awayTeam.name + ' have recorded ' + awayFormWins + ' wins from 5, ' +
+      (awayStats.avgScored >= 1.5 ? 'also finding the net regularly with ' + awayStats.avgScored.toFixed(1) + ' per match' :
+       'managing ' + awayStats.avgScored.toFixed(1) + ' goals per game') + '. ' +
+      (homeStats.cleanSheetPct >= 40 ? homeTeam.name + ' have been solid defensively with clean sheets in ' + homeStats.cleanSheetPct + '% of recent outings. ' : '') +
+      (awayStats.cleanSheetPct >= 40 ? awayTeam.name + ' have kept things tight at the back with ' + awayStats.cleanSheetPct + '% clean sheets. ' : '');
+
+    var h2hText = h2hMatches.length > 0 ?
+      'In their last ' + h2hMatches.length + ' meetings, ' + homeTeam.name + ' have won ' + h2hHomeWins +
+      ', ' + awayTeam.name + ' have won ' + h2hAwayWins + ', with ' + h2hDraws + ' draws. ' +
+      'These fixtures produce an average of ' + h2hAvgGoals + ' goals per game' +
+      (h2hBttsPct >= 50 ? ' with both teams scoring in ' + h2hBttsPct + '% of encounters.' : '.') :
+      'No recent head-to-head data available for this matchup.';
+
+    var riskText = '';
+    if (riskLevel === 'Low') {
+      riskText = 'The data signals are clear and consistent across form, head-to-head, and statistical trends. This represents one of the stronger opportunities on the card.';
+    } else if (riskLevel === 'Low-Medium') {
+      riskText = 'There is a reasonable degree of certainty here, though one or two factors introduce minor uncertainty. A solid proposition overall.';
+    } else if (riskLevel === 'Medium') {
+      riskText = 'There are competing signals in the data. While the overall direction is clear, this is not a standout selection. Stake accordingly.';
+    } else {
+      riskText = 'The data is inconclusive or contradictory. This selection carries above-average risk and should be approached with caution.';
+    }
+
+    res.json({
+      fixtureId: parseInt(fixtureId),
+      match: {
+        homeTeam: homeTeam.name,
+        homeTeamId: homeTeam.id,
+        homeTeamLogo: homeTeam.logo,
+        awayTeam: awayTeam.name,
+        awayTeamId: awayTeam.id,
+        awayTeamLogo: awayTeam.logo,
+        league: league.name,
+        leagueLogo: league.logo,
+        country: league.country,
+        venue: venue ? venue.name : '',
+        city: venue ? venue.city : '',
+        kickoff: kickoff,
+        status: status.short,
+        statusLong: status.long,
+        homeGoals: fixture.goals.home,
+        awayGoals: fixture.goals.away
+      },
+      form: {
+        home: homeForm,
+        away: awayForm
+      },
+      h2h: {
+        matches: h2hSummary,
+        homeWins: h2hHomeWins,
+        awayWins: h2hAwayWins,
+        draws: h2hDraws,
+        avgGoals: h2hAvgGoals,
+        bttsPct: h2hBttsPct,
+        over25Pct: h2hOver25Pct
+      },
+      stats: {
+        home: homeStats,
+        away: awayStats
+      },
+      verdict: {
+        market: verdictMarket,
+        pick: verdictPick,
+        reason: verdictReason,
+        confidence: confidence,
+        riskLevel: riskLevel,
+        riskText: riskText
+      },
+      analysis: {
+        overview: overviewText,
+        form: formText,
+        h2h: h2hText
+      },
+      generatedAt: new Date().toISOString()
+    });
+
+  } catch (err) {
+    console.error('[match-intelligence] Error:', err.message);
+    res.status(500).json({ error: 'Failed to generate match intelligence: ' + err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // LIVE ODDS DATA (The Odds API)
 // Set env: ODDS_API_KEY
 // Sign up: https://the-odds-api.com/

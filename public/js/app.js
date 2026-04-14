@@ -1979,7 +1979,7 @@ const App = {
                 var isLive = f.status === '1H' || f.status === '2H' || f.status === 'HT' || f.status === 'LIVE';
                 var isFT = f.status === 'FT';
                 var kickoffTime = f.kickoff ? new Date(f.kickoff).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '';
-                return '<div class="fixture-card">' +
+                return '<div class="fixture-card fixture-card-clickable" onclick="App.openMatchIntelligence(' + f.id + ', this)" title="Click for match analysis">' +
                   '<div style="flex:1;">' +
                     '<div class="fixture-league">' + leagueName + '</div>' +
                     '<div class="fixture-teams">' + f.homeTeam + ' <span class="fixture-vs">vs</span> ' + f.awayTeam + '</div>' +
@@ -2064,6 +2064,214 @@ const App = {
     if (value && type === 'market') tips = tips.filter(t => t.market === value);
     if (value && type === 'analyst') tips = tips.filter(t => t.tipsterProfile === value);
     document.getElementById('football-tips').innerHTML = tips.map(t => this.renderTipCard(t)).join('') || '<p class="text-muted">No tips match these filters.</p>';
+  },
+
+  // -----------------------------------------------------------------------
+  // MATCH INTELLIGENCE MODAL
+  // -----------------------------------------------------------------------
+  async openMatchIntelligence(fixtureId, el) {
+    // Remove any existing modal
+    var existing = document.getElementById('match-intel-modal');
+    if (existing) existing.remove();
+
+    // Show loading modal
+    var modal = document.createElement('div');
+    modal.id = 'match-intel-modal';
+    modal.className = 'match-intel-modal';
+    modal.innerHTML = '<div class="match-intel-overlay" onclick="App.closeMatchIntelligence()"></div>' +
+      '<div class="match-intel-container">' +
+        '<button class="match-intel-close" onclick="App.closeMatchIntelligence()">&times;</button>' +
+        '<div class="match-intel-loading"><div class="loading-spinner"></div><p style="margin-top:16px;color:var(--text-muted);">Generating match intelligence...</p></div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+
+    try {
+      var data = await this.api('/football/match-intelligence/' + fixtureId);
+      this.renderMatchIntelligence(data);
+      trackEvent('football', 'match_intelligence', data.match.homeTeam + ' vs ' + data.match.awayTeam);
+    } catch (err) {
+      var container = document.querySelector('.match-intel-container');
+      if (container) {
+        container.innerHTML = '<button class="match-intel-close" onclick="App.closeMatchIntelligence()">&times;</button>' +
+          '<div style="padding:40px;text-align:center;">' +
+            '<div style="font-size:48px;margin-bottom:16px;">!</div>' +
+            '<h3 style="margin-bottom:8px;">Unable to Load Analysis</h3>' +
+            '<p class="text-muted">' + (err.message || 'Something went wrong. Please try again.') + '</p>' +
+          '</div>';
+      }
+    }
+  },
+
+  closeMatchIntelligence() {
+    var modal = document.getElementById('match-intel-modal');
+    if (modal) modal.remove();
+    document.body.style.overflow = '';
+  },
+
+  renderMatchIntelligence(data) {
+    var container = document.querySelector('.match-intel-container');
+    if (!container) return;
+
+    var isPremium = this.user && this.user.subscription === 'premium';
+    var m = data.match;
+    var v = data.verdict;
+    var h = data.h2h;
+    var s = data.stats;
+    var a = data.analysis;
+    var homeForm = data.form.home;
+    var awayForm = data.form.away;
+
+    var kickoffStr = m.kickoff ? new Date(m.kickoff).toLocaleString('en-GB', {
+      weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+    }) : '';
+
+    // Form badges helper
+    function formBadges(form) {
+      if (!form || !form.length) return '<span class="text-muted">No data</span>';
+      return form.map(function(r) {
+        var cls = r.result === 'W' ? 'form-badge-win' : r.result === 'D' ? 'form-badge-draw' : 'form-badge-loss';
+        return '<span class="match-intel-form-badge ' + cls + '" title="' + r.result + ' vs ' + r.opponent + ' (' + r.goalsFor + '-' + r.goalsAgainst + ')">' + r.result + '</span>';
+      }).join('');
+    }
+
+    // Confidence bar
+    var confPct = (v.confidence || 0) * 10;
+
+    // Risk meter
+    var riskPct = v.riskLevel === 'Low' ? 25 : v.riskLevel === 'Low-Medium' ? 40 : v.riskLevel === 'Medium' ? 60 : 80;
+    var riskColor = v.riskLevel === 'Low' ? 'var(--green)' : v.riskLevel === 'Low-Medium' ? 'var(--gold)' : v.riskLevel === 'Medium' ? 'var(--gold-dark)' : 'var(--red)';
+
+    // H2H table rows
+    var h2hRows = '';
+    if (h.matches && h.matches.length) {
+      h2hRows = h.matches.slice(0, 5).map(function(match) {
+        var dateStr = match.date ? new Date(match.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '';
+        return '<tr>' +
+          '<td class="text-muted" style="font-size:11px;">' + dateStr + '</td>' +
+          '<td style="text-align:right;">' + match.home + '</td>' +
+          '<td style="text-align:center;font-weight:700;">' + match.homeGoals + ' - ' + match.awayGoals + '</td>' +
+          '<td>' + match.away + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    var html = '<button class="match-intel-close" onclick="App.closeMatchIntelligence()">&times;</button>';
+
+    // --- Match Header ---
+    html += '<div class="match-intel-header">' +
+      '<div class="match-intel-league">' +
+        (m.leagueLogo ? '<img src="' + m.leagueLogo + '" alt="" class="match-intel-league-logo">' : '') +
+        '<span>' + m.league + (m.country ? ' - ' + m.country : '') + '</span>' +
+      '</div>' +
+      '<div class="match-intel-teams-row">' +
+        '<div class="match-intel-team">' +
+          (m.homeTeamLogo ? '<img src="' + m.homeTeamLogo + '" alt="" class="match-intel-team-logo">' : '') +
+          '<span class="match-intel-team-name">' + m.homeTeam + '</span>' +
+        '</div>' +
+        '<div class="match-intel-vs">' +
+          (m.status === 'FT' || m.homeGoals != null ? '<div class="match-intel-score">' + (m.homeGoals || 0) + ' - ' + (m.awayGoals || 0) + '</div>' : '<span>VS</span>') +
+          '<div class="match-intel-kickoff">' + kickoffStr + '</div>' +
+        '</div>' +
+        '<div class="match-intel-team">' +
+          (m.awayTeamLogo ? '<img src="' + m.awayTeamLogo + '" alt="" class="match-intel-team-logo">' : '') +
+          '<span class="match-intel-team-name">' + m.awayTeam + '</span>' +
+        '</div>' +
+      '</div>' +
+      (m.venue ? '<div class="match-intel-venue">' + m.venue + (m.city ? ', ' + m.city : '') + '</div>' : '') +
+    '</div>';
+
+    // --- Form Guide (visible to all) ---
+    html += '<div class="match-intel-section">' +
+      '<h3 class="match-intel-section-title">Form Guide - Last 5 Matches</h3>' +
+      '<div class="match-intel-form">' +
+        '<div class="match-intel-form-row">' +
+          '<span class="match-intel-form-label">' + m.homeTeam + '</span>' +
+          '<div class="match-intel-form-badges">' + formBadges(homeForm) + '</div>' +
+        '</div>' +
+        '<div class="match-intel-form-row">' +
+          '<span class="match-intel-form-label">' + m.awayTeam + '</span>' +
+          '<div class="match-intel-form-badges">' + formBadges(awayForm) + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+    // --- Premium content wrapper ---
+    var lockedClass = isPremium ? '' : ' match-intel-locked';
+
+    // --- OUR TAKE verdict ---
+    html += '<div class="match-intel-verdict' + lockedClass + '">' +
+      '<div class="match-intel-verdict-label">OUR TAKE</div>' +
+      '<div class="match-intel-verdict-pick">' + v.pick + '</div>' +
+      '<div class="match-intel-verdict-market">' + v.market + '</div>' +
+      '<div class="match-intel-verdict-reason">' + v.reason + '</div>' +
+      '<div class="match-intel-meters">' +
+        '<div class="match-intel-meter">' +
+          '<div class="match-intel-meter-label"><span>Confidence</span><span>' + v.confidence + '/10</span></div>' +
+          '<div class="confidence-meter" style="height:8px;border-radius:4px;background:var(--bg-elevated);overflow:hidden;">' +
+            '<div style="height:100%;border-radius:4px;background:linear-gradient(90deg,#b8902f,#d4a843,#e8c36a);width:' + confPct + '%;transition:width 0.4s ease;"></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="match-intel-meter">' +
+          '<div class="match-intel-meter-label"><span>Risk: ' + v.riskLevel + '</span></div>' +
+          '<div class="confidence-meter" style="height:8px;border-radius:4px;background:var(--bg-elevated);overflow:hidden;">' +
+            '<div style="height:100%;border-radius:4px;background:' + riskColor + ';width:' + riskPct + '%;transition:width 0.4s ease;"></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+    // --- Analysis paragraphs ---
+    html += '<div class="match-intel-section' + lockedClass + '">' +
+      '<h3 class="match-intel-section-title">Match Overview</h3>' +
+      '<p class="match-intel-text">' + a.overview + '</p>' +
+      '<h3 class="match-intel-section-title" style="margin-top:16px;">Form Analysis</h3>' +
+      '<p class="match-intel-text">' + a.form + '</p>' +
+    '</div>';
+
+    // --- H2H Section ---
+    html += '<div class="match-intel-section' + lockedClass + '">' +
+      '<h3 class="match-intel-section-title">Head-to-Head Record</h3>' +
+      '<p class="match-intel-text" style="margin-bottom:12px;">' + a.h2h + '</p>' +
+      (h2hRows ? '<div class="match-intel-h2h">' +
+        '<table class="match-intel-h2h-table">' +
+          '<tbody>' + h2hRows + '</tbody>' +
+        '</table>' +
+      '</div>' : '') +
+    '</div>';
+
+    // --- Stats Grid ---
+    html += '<div class="match-intel-section' + lockedClass + '">' +
+      '<h3 class="match-intel-section-title">Key Statistics</h3>' +
+      '<div class="match-intel-stats">' +
+        '<div class="match-intel-stat-header"><span></span><span>' + m.homeTeam + '</span><span>' + m.awayTeam + '</span></div>' +
+        '<div class="match-intel-stat-row"><span>Avg Goals Scored</span><span>' + s.home.avgScored + '</span><span>' + s.away.avgScored + '</span></div>' +
+        '<div class="match-intel-stat-row"><span>Avg Goals Conceded</span><span>' + s.home.avgConceded + '</span><span>' + s.away.avgConceded + '</span></div>' +
+        '<div class="match-intel-stat-row"><span>Clean Sheets</span><span>' + s.home.cleanSheetPct + '%</span><span>' + s.away.cleanSheetPct + '%</span></div>' +
+        '<div class="match-intel-stat-row"><span>BTTS %</span><span>' + s.home.bttsPct + '%</span><span>' + s.away.bttsPct + '%</span></div>' +
+        '<div class="match-intel-stat-row"><span>Over 2.5 %</span><span>' + s.home.over25Pct + '%</span><span>' + s.away.over25Pct + '%</span></div>' +
+      '</div>' +
+    '</div>';
+
+    // --- Risk Assessment ---
+    html += '<div class="match-intel-section' + lockedClass + '">' +
+      '<h3 class="match-intel-section-title">Risk Assessment</h3>' +
+      '<p class="match-intel-text">' + v.riskText + '</p>' +
+    '</div>';
+
+    // --- Locked overlay for free users ---
+    if (!isPremium) {
+      html += '<div class="match-intel-upgrade-overlay">' +
+        '<div class="match-intel-upgrade-inner">' +
+          '<div style="font-size:32px;margin-bottom:12px;">&#128274;</div>' +
+          '<h3>Premium Match Intelligence</h3>' +
+          '<p class="text-muted" style="margin:8px 0 16px;">Unlock expert verdicts, detailed analysis, H2H breakdowns, and recommended bets for every fixture.</p>' +
+          '<a href="#/pricing" class="btn btn-gold" onclick="App.closeMatchIntelligence()">Upgrade to Premium</a>' +
+        '</div>' +
+      '</div>';
+    }
+
+    container.innerHTML = html;
   },
 
   // -----------------------------------------------------------------------
