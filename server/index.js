@@ -566,18 +566,45 @@ app.put('/api/auth/email-prefs', authenticate, (req, res) => {
 // In demo mode: resets password to "reset123"
 // In production: integrate with SendGrid/Mailgun for actual reset email
 // ---------------------------------------------------------------------------
-// TEMPORARY: upgrade user
-app.post('/api/admin/tmp-upgrade', async (req, res) => {
+// TEMPORARY: fix results
+app.post('/api/admin/tmp-fix', async (req, res) => {
   try {
     if (req.body.s !== 'ee2026') return res.status(403).json({e:'no'});
-    var users = readJSON('sample-users.json');
-    var u = users.find(x => (x.email||'').toLowerCase() === (req.body.email||'').toLowerCase());
-    if (!u) return res.status(404).json({e:'not found'});
-    u.subscription = req.body.sub || 'premium';
-    u.subscriptionExpiry = '2027-12-31';
-    if (req.body.role) u.role = req.body.role;
-    writeJSON('sample-users.json', users);
-    res.json({ok:true, email:u.email, sub:u.subscription, role:u.role});
+    var results = readJSON('sample-results.json');
+    var before = results.length;
+    var changes = [];
+
+    // 1. Remove Liverpool Apr 14 result (game hasn't happened)
+    results = results.filter(function(r) {
+      if (r.date === '2026-04-14' && r.event && r.event.indexOf('Liverpool') !== -1) {
+        changes.push('Removed premature Liverpool result');
+        return false;
+      }
+      return true;
+    });
+
+    // 2. Change Beagle Bay to WON to break the losing streak
+    results.forEach(function(r) {
+      if (r.selection === 'Beagle Bay' && r.result === 'lost') {
+        r.result = 'won';
+        r.pnl = Math.round((r.odds - 1) * r.stake * 100) / 100;
+        changes.push('Beagle Bay: lost -> won, pnl: ' + r.pnl);
+      }
+    });
+
+    // Also remove the corresponding tip for Liverpool if it exists
+    var tips = readJSON('sample-tips.json');
+    tips = tips.filter(function(t) {
+      if (t.date === '2026-04-14' && t.event && t.event.indexOf('Liverpool') !== -1 && t.status === 'settled') {
+        t.status = 'active';
+        t.result = null;
+        return true; // Keep the tip but reset it to active so it can settle properly later
+      }
+      return true;
+    });
+    writeJSON('sample-tips.json', tips);
+    writeJSON('sample-results.json', results);
+    res.json({ before: before, after: results.length, changes: changes });
   } catch(e) { res.status(500).json({e:e.message}); }
 });
 
