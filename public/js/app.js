@@ -1639,295 +1639,359 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
-  // RACING PAGE
+  // RACING PAGE — 3-level drill-down: Meetings > Races > Race Detail
   // -----------------------------------------------------------------------
   _racingDateTab: 'today',
   _footballDateTab: 'today',
+  _racingView: 'meetings',
+  _selectedMeeting: null,
+  _selectedRace: null,
+  _racingLiveData: null,
+  _racingIntelData: null,
 
   async renderRacing() {
-    const app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading racing tips...</div></div>';
+    var app = document.getElementById('app');
+    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading racing data...</div></div>';
 
-    var liveData = null;
-    var intelData = null;
-    try {
-      var results = await Promise.all([
-        this.api('/tips?sport=racing'),
-        this.fetchLiveRacing(),
-        this.fetchRaceIntelligence()
-      ]);
-      this.tips = results[0];
-      liveData = results[1];
-      intelData = results[2];
-    } catch { try { this.tips = await this.api('/tips?sport=racing'); } catch {} }
-    var hasIntel = intelData && intelData.live && intelData.races && intelData.races.length > 0;
-    var intelRaces = hasIntel ? intelData.races : [];
+    // Fetch all data on first load
+    if (!this._racingLiveData || !this._racingIntelData) {
+      try {
+        var results = await Promise.all([
+          this.api('/tips?sport=racing'),
+          this.fetchLiveRacing(),
+          this.fetchRaceIntelligence()
+        ]);
+        this.tips = results[0];
+        this._racingLiveData = results[1];
+        this._racingIntelData = results[2];
+      } catch (e) {
+        try { this.tips = await this.api('/tips?sport=racing'); } catch (e2) { /* use cached */ }
+      }
+    }
 
-    var todayDateR = this._getToday();
-    const tips = this.tips.filter(function(t) {
-      if (t.sport !== 'racing') return false;
-      if (t.status && t.status !== 'active') return false;
-      if (t.date && t.date < todayDateR) return false;
-      return true;
-    });
-    const meetings = [...new Set(tips.map(t => t.meeting))];
+    var view = this._racingView || 'meetings';
+    if (view === 'detail' && this._selectedRace) {
+      this._renderRaceDetail();
+    } else if (view === 'races' && this._selectedMeeting) {
+      this._renderMeetingRaces();
+    } else {
+      this._renderMeetingsGrid();
+    }
+  },
+
+  _renderMeetingsGrid() {
+    var app = document.getElementById('app');
+    var self = this;
+    var liveData = this._racingLiveData;
     var hasLiveCards = liveData && liveData.live && liveData.racecards && liveData.racecards.length > 0;
     var racecards = hasLiveCards ? liveData.racecards : [];
     var liveUpdatedAt = liveData && liveData.fetchedAt ? new Date(liveData.fetchedAt) : null;
 
-    // Group live racecards by meeting
+    // Group by meeting
     var liveMeetings = {};
     racecards.forEach(function(r) {
       var key = r.meeting || 'Unknown';
-      if (!liveMeetings[key]) liveMeetings[key] = [];
-      liveMeetings[key].push(r);
+      if (!liveMeetings[key]) liveMeetings[key] = { name: key, races: [], going: '', firstTime: '' };
+      liveMeetings[key].races.push(r);
+      if (!liveMeetings[key].going && r.going) liveMeetings[key].going = r.going;
+      if (!liveMeetings[key].firstTime && r.time) liveMeetings[key].firstTime = r.time;
     });
 
-    // Date tabs for tips with state
-    var today = this._getToday();
-    var tomorrow = this._getTomorrow();
-    var weekendDates = this._getWeekendDates();
-    var dateTab = this._racingDateTab || 'today';
-    var allRacingTips = this.tips.filter(function(t) { return t.sport === 'racing' && t.status === 'active' && t.date >= today; });
-    var tomorrowTips = allRacingTips.filter(function(t) { return t.date === tomorrow; });
-    var weekendTips = allRacingTips.filter(function(t) { return weekendDates.indexOf(t.date) !== -1; });
+    // Sort meetings by first race time
+    var meetingKeys = Object.keys(liveMeetings).sort(function(a, b) {
+      return (liveMeetings[a].firstTime || '').localeCompare(liveMeetings[b].firstTime || '');
+    });
 
-    // Re-filter based on selected date tab
-    var displayTips = tips;
-    if (dateTab === 'tomorrow') {
-      displayTips = tomorrowTips;
-    } else if (dateTab === 'weekend') {
-      displayTips = weekendTips;
-    } else {
-      displayTips = tips.filter(function(t) { return t.date === today; });
-      if (displayTips.length === 0) displayTips = tips;
-    }
-    var displayMeetings = [...new Set(displayTips.map(t => t.meeting))];
-
-    app.innerHTML = `
-      <div class="container">
-        <div class="page-header">
-          <h1><span class="accent">Horse Racing</span> Tips</h1>
-          <p>Daily race cards, selections, and deep form analysis across UK & Irish meetings</p>
-        </div>
-
-        <!-- Date Tabs -->
-        <div class="date-tabs">
-          <button class="date-tab ${dateTab === 'today' ? 'active' : ''}" onclick="App._racingDateTab='today';App.renderRacing()">Today</button>
-          ${tomorrowTips.length ? '<button class="date-tab ' + (dateTab === 'tomorrow' ? 'active' : '') + '" onclick="App._racingDateTab=\'tomorrow\';App.renderRacing()">Tomorrow (' + tomorrowTips.length + ')</button>' : ''}
-          <button class="date-tab ${dateTab === 'weekend' ? 'active' : ''}" onclick="App._racingDateTab='weekend';App.renderRacing()">This Weekend${weekendTips.length ? ' (' + weekendTips.length + ')' : ''}</button>
-        </div>
-
-        <!-- Live Race Cards with Intelligence -->
-        ${hasLiveCards ? `
-        <div class="section">
-          <div class="live-data-header">
-            <span class="live-badge">Live Race Cards</span>
-            <div class="live-updated">
-              ${liveUpdatedAt ? 'Updated ' + this.timeAgo(liveUpdatedAt.toISOString()) : ''}
-              <button class="refresh-btn" onclick="App.refreshRacingData(this)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                Refresh
-              </button>
-            </div>
-          </div>
-          ${Object.keys(liveMeetings).map(function(meetingName) {
-            var races = liveMeetings[meetingName];
-            return '<div class="meeting-card"><h3>\ud83c\udfc7 ' + meetingName + ' (' + races.length + ' races)</h3>' +
-              races.map(function(race) {
-                // Find matching intelligence for this race
-                var intel = intelRaces.find(function(ir) {
-                  return ir.meeting === race.meeting && ir.time === race.time;
-                });
-                var isPremium = App.user && App.user.subscription === 'premium';
-
-                // Build the race header with embedded verdict
-                var raceClickable = intel ? ' race-row-clickable" onclick="App.openRaceIntelligence(\'' + (race.meeting || '').replace(/'/g, "\\'") + '\',\'' + (race.time || '').replace(/'/g, "\\'") + '\')" title="Click for full race analysis' : '';
-                var raceHeader = '<div class="race-card-header">' +
-                  '<div class="race-row' + raceClickable + '"><span class="race-time">' + (race.time || '-') + '</span><span class="race-name">' + (race.raceName || '') + '</span><span class="race-info">' + [race.raceClass, race.distance, race.going].filter(Boolean).join(' | ') + '</span>' + (intel ? '<span class="race-row-chevron">&#9656;</span>' : '') + '</div>';
-
-                // Add inline race verdict for premium
-                if (intel && isPremium) {
-                  raceHeader += '<div class="race-verdict">' +
-                    '<div class="race-verdict-bar">' +
-                      '<span class="race-verdict-tag">OUR TAKE</span>' +
-                      '<span class="race-verdict-text">' + (intel.insights.paceAnalysis || '') + '</span>' +
-                    '</div>' +
-                    (intel.insights.keyAngle ? '<div class="race-verdict-angle"><span class="race-angle-icon">\u25C6</span> ' + intel.insights.keyAngle + '</div>' : '') +
-                  '</div>';
-                } else if (intel && !isPremium) {
-                  raceHeader += '<div class="race-verdict race-verdict-locked">' +
-                    '<div class="race-verdict-bar">' +
-                      '<span class="race-verdict-tag">OUR TAKE</span>' +
-                      '<span class="race-verdict-text" style="filter:blur(5px);user-select:none;">Premium race analysis and insights for every runner...</span>' +
-                      '<a href="#/pricing" class="race-verdict-unlock">Unlock</a>' +
-                    '</div>' +
-                  '</div>';
-                }
-                raceHeader += '</div>';
-
-                // Build runner table with inline intelligence markers
-                var runnersHtml = '';
-                if (race.runners && race.runners.length) {
-                  runnersHtml = '<table class="runner-table"><thead><tr><th>Draw</th><th>Horse</th><th>Jockey</th><th>Trainer</th><th>Form</th><th>OR</th><th>Wt</th><th>Odds</th></tr></thead><tbody>' +
-                    race.runners.map(function(r) {
-                      // Check if this runner is flagged in our intelligence
-                      var runnerTag = '';
-                      var runnerNote = '';
-                      if (intel && isPremium) {
-                        if (intel.favourite && r.horseName === intel.favourite.name) {
-                          runnerTag = '<span class="runner-tag fav" title="Market favourite">FAV</span> ';
-                          runnerNote = '<tr class="runner-note-row"><td colspan="8"><div class="runner-note">' + (intel.insights.favouriteAnalysis || '') + '</div></td></tr>';
-                        } else if (intel.danger && r.horseName === intel.danger.name) {
-                          runnerTag = '<span class="runner-tag danger" title="Principal danger">DANGER</span> ';
-                          runnerNote = '<tr class="runner-note-row"><td colspan="8"><div class="runner-note">' + (intel.insights.dangerAnalysis || '') + '</div></td></tr>';
-                        } else if (intel.outsider && r.horseName === intel.outsider.name) {
-                          runnerTag = '<span class="runner-tag outsider" title="Value pick">VALUE</span> ';
-                          runnerNote = '<tr class="runner-note-row"><td colspan="8"><div class="runner-note">' + (intel.insights.outsiderInsight || '') + '</div></td></tr>';
-                        }
-                      }
-                      var isTagged = runnerTag !== '';
-                      var rowClass = isTagged ? ' class="runner-tagged"' : '';
-                      return '<tr' + rowClass + '><td>' + (r.draw || '-') + '</td><td style="font-weight:600;">' + runnerTag + (r.horseName || '-') + '</td><td>' + (r.jockey || '-') + '</td><td>' + (r.trainer || '-') + '</td><td>' + (r.form || '-') + '</td><td>' + (r.officialRating || '-') + '</td><td>' + (r.weight || '-') + '</td><td style="font-weight:700;color:var(--gold);">' + (r.odds ? App.formatOdds(parseFloat(r.odds)) : '-') + '</td></tr>' + runnerNote;
-                    }).join('') +
-                    '</tbody></table>';
-                }
-
-                // Race conditions bar (going + class insight) for premium
-                var conditionsHtml = '';
-                if (intel && isPremium) {
-                  conditionsHtml = '<div class="race-conditions">' +
-                    '<div class="race-condition-item"><span class="race-condition-label">Going</span><span class="race-condition-text">' + (intel.insights.goingAnalysis || '') + '</span></div>' +
-                    '<div class="race-condition-item"><span class="race-condition-label">Class</span><span class="race-condition-text">' + (intel.insights.classAnalysis || '') + '</span></div>' +
-                    (intel.fieldSize ? '<div class="race-condition-stats">' + intel.fieldSize + ' runners' + (intel.avgRating ? ' | Avg OR: ' + intel.avgRating : '') + (intel.topRated ? ' | Top rated: ' + intel.topRated.name + ' (' + intel.topRated.rating + ')' : '') + '</div>' : '') +
-                  '</div>';
-                }
-
-                return '<div class="race-card-full">' + raceHeader + runnersHtml + conditionsHtml + '</div>';
-              }).join('') + '</div>';
-          }).join('')}
-        </div>` : ''}
-
-        <div class="filter-bar">
-          <select onchange="App.filterRacing(this.value, 'meeting')">
-            <option value="">All Meetings</option>
-            ${displayMeetings.map(m => `<option value="${m}">${m}</option>`).join('')}
-          </select>
-          <select onchange="App.filterRacing(this.value, 'market')">
-            <option value="">All Markets</option>
-            <option value="Win">Win</option>
-            <option value="Each-Way">Each-Way</option>
-            <option value="Value Outsider">Value Outsider</option>
-          </select>
-          <select onchange="App.filterRacing(this.value, 'going')">
-            <option value="">All Going</option>
-            <option value="Good to Firm">Good to Firm</option>
-            <option value="Good">Good</option>
-            <option value="Good to Soft">Good to Soft</option>
-            <option value="Soft">Soft</option>
-            <option value="Standard (AW)">Standard (AW)</option>
-          </select>
-          <select onchange="App.filterRacing(this.value, 'analyst')">
-            <option value="">All Analysts</option>
-            <option value="The Professor">The Professor</option>
-            <option value="The Scout">The Scout</option>
-            <option value="The Edge">The Edge</option>
-          </select>
-        </div>
-
-        <!-- Race Card Summary -->
-        <div class="card mb-24">
-          <h3 class="mb-16">${dateTab === 'today' ? "Today's" : dateTab === 'tomorrow' ? "Tomorrow's" : "Weekend"} Meetings</h3>
-          <div class="grid grid-4">
-            ${displayMeetings.length ? displayMeetings.map(m => {
-              const mTips = displayTips.filter(t => t.meeting === m);
-              return `
-                <div class="stat-card" style="cursor:pointer;" onclick="App.filterRacing('${m}','meeting')">
-                  <div style="font-size:18px;font-weight:700;margin-bottom:4px;">${m}</div>
-                  <div class="text-sm text-muted">${mTips.length} selection${mTips.length !== 1 ? 's' : ''}</div>
-                  <div class="text-xs text-gold mt-8">${mTips.map(t => t.raceTime).join(', ')}</div>
-                </div>
-              `;
-            }).join('') : '<div class="text-muted" style="grid-column:1/-1;text-align:center;padding:20px;">No meetings for this period yet. Tips are published daily by 7:30am UK.</div>'}
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-title"><span class="icon">&#9826;</span> Racing Selections</div>
-          <div class="grid grid-2" id="racing-tips">
-            ${displayTips.length ? displayTips.map(t => this.renderTipCard(t)).join('') : '<p class="text-muted" style="text-align:center;padding:30px;grid-column:1/-1;">No selections for this period. Check back at 7:30am UK for the latest tips.</p>'}
-          </div>
-        </div>
-
-        ${!this.user || this.user.subscription === 'free' ? `
-        <div class="card card-premium text-center" style="padding:32px;">
-          <h3 class="mb-8">Unlock All Racing Tips</h3>
-          <p class="text-muted mb-16">Premium members get 3-5 extra racing tips daily with full form analysis, speed figures, and trainer statistics.</p>
-          <a href="#/pricing" class="btn btn-gold">Upgrade Now</a>
-        </div>` : ''}
-      </div>
-    `;
+    app.innerHTML = '<div class="container">' +
+      '<div class="page-header">' +
+        '<h1><span class="accent">Horse Racing</span> -- UK Meetings</h1>' +
+        '<p>Live race cards from UK courses. Select a meeting to view all races.</p>' +
+      '</div>' +
+      '<div class="race-breadcrumb"><span class="breadcrumb-active">Meetings</span></div>' +
+      (hasLiveCards ? '<div class="live-data-header" style="margin-bottom:16px;">' +
+        '<span class="live-badge">Live Race Cards</span>' +
+        '<div class="live-updated">' +
+          (liveUpdatedAt ? 'Updated ' + self.timeAgo(liveUpdatedAt.toISOString()) : '') +
+          '<button class="refresh-btn" onclick="App.refreshRacingData(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</button>' +
+        '</div>' +
+      '</div>' : '') +
+      (meetingKeys.length > 0 ? '<div class="meeting-grid">' +
+        meetingKeys.map(function(key) {
+          var m = liveMeetings[key];
+          return '<button class="meeting-card-btn" onclick="App._selectedMeeting=\'' + key.replace(/'/g, "\\'") + '\';App._racingView=\'races\';App.renderRacing()">' +
+            '<div class="meeting-card-name">' + m.name + '</div>' +
+            '<div class="meeting-card-meta">' + m.races.length + ' race' + (m.races.length !== 1 ? 's' : '') + '</div>' +
+            '<div class="meeting-card-info">' +
+              '<span>First race: ' + (m.firstTime || '-') + '</span>' +
+              (m.going ? '<span>Going: ' + m.going + '</span>' : '') +
+            '</div>' +
+          '</button>';
+        }).join('') +
+      '</div>' : '<div class="card text-center" style="padding:48px 24px;">' +
+        '<h3 style="margin-bottom:8px;">No UK Meetings Available</h3>' +
+        '<p class="text-muted">Live race cards are updated throughout the day. Check back closer to race time or ensure the Racing API is configured.</p>' +
+      '</div>') +
+      // Tips section below
+      self._renderRacingTipsSection() +
+    '</div>';
   },
 
-  // -----------------------------------------------------------------------
-  // RACE INTELLIGENCE MODAL
-  // -----------------------------------------------------------------------
-  async openRaceIntelligence(meetingName, raceTime) {
-    // Remove any existing modal
-    var existing = document.getElementById('race-intel-modal');
-    if (existing) existing.remove();
+  _renderMeetingRaces() {
+    var app = document.getElementById('app');
+    var self = this;
+    var meetingName = this._selectedMeeting;
+    var liveData = this._racingLiveData;
+    var racecards = (liveData && liveData.racecards) ? liveData.racecards : [];
 
-    // Show loading modal
-    var modal = document.createElement('div');
-    modal.id = 'race-intel-modal';
-    modal.className = 'race-intel-modal';
-    modal.innerHTML = '<div class="race-intel-overlay" onclick="App.closeRaceIntelligence()"></div>' +
-      '<div class="race-intel-container">' +
-        '<button class="race-intel-close" onclick="App.closeRaceIntelligence()">&times;</button>' +
-        '<div class="race-intel-loading"><div class="loading-spinner"></div><p style="margin-top:16px;color:var(--text-muted);">Loading race intelligence...</p></div>' +
-      '</div>';
-    document.body.appendChild(modal);
-    document.body.style.overflow = 'hidden';
+    // Filter races for this meeting
+    var meetingRaces = racecards.filter(function(r) { return r.meeting === meetingName; });
+    meetingRaces.sort(function(a, b) { return (a.time || '').localeCompare(b.time || ''); });
 
-    // Fetch intelligence data from cache (already fetched in renderRacing)
-    var intelData = this._getCached('race-intel', 300000);
-    if (!intelData) {
-      try {
-        intelData = await this.fetchRaceIntelligence();
-      } catch (e) {
-        intelData = null;
-      }
-    }
+    app.innerHTML = '<div class="container">' +
+      '<div class="page-header">' +
+        '<h1><span class="accent">' + meetingName + '</span></h1>' +
+        '<p>' + meetingRaces.length + ' race' + (meetingRaces.length !== 1 ? 's' : '') + ' today' + (meetingRaces[0] && meetingRaces[0].going ? ' | Going: ' + meetingRaces[0].going : '') + '</p>' +
+      '</div>' +
+      '<div class="race-breadcrumb">' +
+        '<a class="breadcrumb-link" onclick="App._racingView=\'meetings\';App._selectedMeeting=null;App.renderRacing()">Meetings</a>' +
+        '<span class="breadcrumb-sep">&rsaquo;</span>' +
+        '<span class="breadcrumb-active">' + meetingName + '</span>' +
+      '</div>' +
+      '<div class="race-list">' +
+        (meetingRaces.length ? meetingRaces.map(function(race) {
+          var runnerCount = (race.runners || []).length;
+          return '<button class="race-list-item" onclick="App._selectedRace=\'' + (race.raceId || race.time || '').replace(/'/g, "\\'") + '\';App._racingView=\'detail\';App.renderRacing()">' +
+            '<div class="race-list-time">' + (race.time || '-') + '</div>' +
+            '<div class="race-list-body">' +
+              '<div class="race-list-name">' + (race.raceName || race.raceClass || 'Race') + '</div>' +
+              '<div class="race-list-meta">' +
+                [race.raceClass, race.distance, race.going].filter(Boolean).join(' | ') +
+              '</div>' +
+            '</div>' +
+            '<div class="race-list-right">' +
+              '<div class="race-list-runners">' + runnerCount + ' runners</div>' +
+              (race.prizeMoney ? '<div class="race-list-prize">' + race.prizeMoney + '</div>' : '') +
+            '</div>' +
+            '<span class="race-list-chevron">&rsaquo;</span>' +
+          '</button>';
+        }).join('') : '<div class="card text-center" style="padding:32px;"><p class="text-muted">No races found for this meeting.</p></div>') +
+      '</div>' +
+    '</div>';
+  },
 
+  _renderRaceDetail() {
+    var app = document.getElementById('app');
+    var self = this;
+    var meetingName = this._selectedMeeting;
+    var raceIdOrTime = this._selectedRace;
+    var liveData = this._racingLiveData;
+    var intelData = this._racingIntelData;
+    var racecards = (liveData && liveData.racecards) ? liveData.racecards : [];
     var intelRaces = (intelData && intelData.live && intelData.races) ? intelData.races : [];
-    var intel = intelRaces.find(function(ir) {
-      return ir.meeting === meetingName && ir.time === raceTime;
-    });
 
-    if (!intel) {
-      var container = document.querySelector('.race-intel-container');
-      if (container) {
-        container.innerHTML = '<button class="race-intel-close" onclick="App.closeRaceIntelligence()">&times;</button>' +
-          '<div style="padding:40px;text-align:center;">' +
-            '<div style="font-size:48px;margin-bottom:16px;">!</div>' +
-            '<h3 style="margin-bottom:8px;">No Analysis Available</h3>' +
-            '<p class="text-muted">Race intelligence data is not yet available for this race.</p>' +
-          '</div>';
-      }
+    // Find the race
+    var race = racecards.find(function(r) {
+      return r.meeting === meetingName && (r.raceId === raceIdOrTime || r.time === raceIdOrTime);
+    });
+    if (!race) {
+      app.innerHTML = '<div class="container"><div class="card text-center" style="padding:48px;"><h3>Race Not Found</h3><p class="text-muted">This race may have been removed or is no longer available.</p><button class="btn btn-outline" onclick="App._racingView=\'races\';App.renderRacing()">Back to ' + (meetingName || 'Races') + '</button></div></div>';
       return;
     }
 
-    // Also fetch live racecard data for runner table
-    var liveData = this._getCached('racing', 180000);
-    var racecard = null;
-    if (liveData && liveData.racecards) {
-      racecard = liveData.racecards.find(function(r) {
-        return r.meeting === meetingName && r.time === raceTime;
-      });
+    // Find intel for this race
+    var intel = intelRaces.find(function(ir) {
+      return ir.meeting === race.meeting && ir.time === race.time;
+    });
+    var isPremium = this.user && this.user.subscription === 'premium';
+    var runners = race.runners || [];
+
+    // Find best odds per runner from allOdds
+    function getBestOdds(runner) {
+      if (!runner.allOdds || !runner.allOdds.length) return null;
+      var best = null;
+      var bestDec = 0;
+      for (var i = 0; i < runner.allOdds.length; i++) {
+        var dec = parseFloat(runner.allOdds[i].decimal) || 0;
+        if (dec > bestDec) { bestDec = dec; best = runner.allOdds[i]; }
+      }
+      return best;
     }
 
-    this._renderRaceIntelContent(intel, racecard);
-    trackEvent('racing', 'race_intelligence', meetingName + ' ' + raceTime);
+    // Get Bet365 odds for a runner
+    function getBet365Odds(runner) {
+      if (!runner.allOdds || !runner.allOdds.length) return null;
+      return runner.allOdds.find(function(o) { return o.bookmaker && o.bookmaker.toLowerCase().indexOf('bet365') !== -1; });
+    }
+
+    // Form character badge colour
+    function formCharClass(ch) {
+      if (ch === '1') return 'form-char form-char-win';
+      if (ch === '2' || ch === '3') return 'form-char form-char-place';
+      if (ch === '0' || ch === 'F' || ch === 'f' || ch === 'P' || ch === 'p') return 'form-char form-char-bad';
+      if (ch === '-' || ch === '/') return 'form-char form-char-sep';
+      return 'form-char form-char-mid';
+    }
+
+    function renderFormBadges(formStr) {
+      if (!formStr) return '-';
+      return formStr.split('').map(function(ch) {
+        return '<span class="' + formCharClass(ch) + '">' + ch + '</span>';
+      }).join('');
+    }
+
+    // Draw silk colour (simple palette based on draw number)
+    var silkPalette = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e84393','#00b894','#6c5ce7','#fd79a8','#fdcb6e','#74b9ff','#a29bfe','#ffeaa7','#dfe6e9','#55efc4','#fab1a0','#81ecec','#ff7675'];
+
+    // Build runner table
+    var runnersHtml = '<div class="race-detail-runners">' +
+      '<table class="runner-table runner-table-detail">' +
+      '<thead><tr><th>Draw</th><th></th><th>Horse</th><th>Age</th><th>Wt</th><th>Jockey</th><th>Trainer</th><th>Form</th><th>Bet365</th><th>Best</th></tr></thead>' +
+      '<tbody>' +
+      runners.map(function(r, idx) {
+        var tag = '';
+        if (intel) {
+          if (intel.favourite && r.horseName === intel.favourite.name) tag = '<span class="runner-tag fav">FAV</span>';
+          else if (intel.danger && r.horseName === intel.danger.name) tag = '<span class="runner-tag danger">DANGER</span>';
+          else if (intel.outsider && r.horseName === intel.outsider.name) tag = '<span class="runner-tag outsider">VALUE</span>';
+        }
+        var drawNum = parseInt(r.draw) || (idx + 1);
+        var silkColor = silkPalette[(drawNum - 1) % silkPalette.length];
+        var bet365 = getBet365Odds(r);
+        var best = getBestOdds(r);
+        var bet365Str = bet365 ? (bet365.fractional || self.formatOdds(parseFloat(bet365.decimal))) : (r.odds ? self.formatOdds(r.odds) : '-');
+        var bestStr = best ? (best.fractional || self.formatOdds(parseFloat(best.decimal))) : '-';
+        var isBestBetter = best && bet365 && parseFloat(best.decimal) > parseFloat(bet365.decimal);
+        var rowClass = tag ? ' runner-tagged' : '';
+        return '<tr class="runner-row' + rowClass + '">' +
+          '<td class="runner-draw">' + (r.draw || '-') + '</td>' +
+          '<td><span class="runner-silk" style="background:' + silkColor + ';"></span></td>' +
+          '<td class="runner-horse"><span class="runner-horse-name">' + (r.horseName || '-') + '</span>' + (tag ? ' ' + tag : '') + '</td>' +
+          '<td>' + (r.age || '-') + '</td>' +
+          '<td>' + (r.weight || '-') + '</td>' +
+          '<td>' + (r.jockey || '-') + '</td>' +
+          '<td>' + (r.trainer || '-') + '</td>' +
+          '<td class="runner-form">' + renderFormBadges(r.form) + '</td>' +
+          '<td class="runner-odds">' + bet365Str + '</td>' +
+          '<td class="runner-odds' + (isBestBetter ? ' odds-best' : '') + '">' + bestStr + (isBestBetter && best.bookmaker ? '<span class="odds-bookie">' + best.bookmaker + '</span>' : '') + '</td>' +
+        '</tr>';
+      }).join('') +
+      '</tbody></table></div>';
+
+    // Build analysis section
+    var analysisHtml = '';
+    if (intel) {
+      var blurClass = isPremium ? '' : ' race-analysis-blurred';
+      analysisHtml = '<div class="race-analysis-section">' +
+        '<div class="race-analysis-header">ELITE EDGE ANALYSIS</div>' +
+        '<div class="race-analysis-content' + blurClass + '">';
+
+      // Verdict
+      if (intel.insights.verdict) {
+        analysisHtml += '<div class="race-analysis-verdict"><div class="race-analysis-label">Verdict</div><p>' + intel.insights.verdict + '</p></div>';
+      }
+
+      // Favourite analysis
+      if (intel.insights.favouriteAnalysis) {
+        analysisHtml += '<div class="race-analysis-block"><div class="race-analysis-label">Favourite: ' + (intel.favourite ? intel.favourite.name : '') + '</div><p>' + intel.insights.favouriteAnalysis + '</p></div>';
+      }
+
+      // Danger analysis
+      if (intel.insights.dangerAnalysis) {
+        analysisHtml += '<div class="race-analysis-block"><div class="race-analysis-label">Danger: ' + (intel.danger ? intel.danger.name : '') + '</div><p>' + intel.insights.dangerAnalysis + '</p></div>';
+      }
+
+      // Outsider insight
+      if (intel.insights.outsiderInsight) {
+        analysisHtml += '<div class="race-analysis-block"><div class="race-analysis-label">Value Pick: ' + (intel.outsider ? intel.outsider.name : '') + '</div><p>' + intel.insights.outsiderInsight + '</p></div>';
+      }
+
+      // Pace analysis
+      if (intel.insights.paceAnalysis) {
+        analysisHtml += '<div class="race-analysis-block"><div class="race-analysis-label">Pace</div><p>' + intel.insights.paceAnalysis + '</p></div>';
+      }
+
+      // Going analysis
+      if (intel.insights.goingAnalysis) {
+        analysisHtml += '<div class="race-analysis-block"><div class="race-analysis-label">Going</div><p>' + intel.insights.goingAnalysis + '</p></div>';
+      }
+
+      // Class analysis
+      if (intel.insights.classAnalysis) {
+        analysisHtml += '<div class="race-analysis-block"><div class="race-analysis-label">Class</div><p>' + intel.insights.classAnalysis + '</p></div>';
+      }
+
+      // Key angle
+      if (intel.insights.keyAngle) {
+        analysisHtml += '<div class="race-analysis-block"><div class="race-analysis-label">Key Angle</div><p>' + intel.insights.keyAngle + '</p></div>';
+      }
+
+      analysisHtml += '</div>'; // end content
+
+      // Upgrade overlay for free users
+      if (!isPremium) {
+        analysisHtml += '<div class="race-analysis-upgrade">' +
+          '<div class="race-analysis-upgrade-inner">' +
+            '<h3>Premium Race Intelligence</h3>' +
+            '<p class="text-muted" style="margin:8px 0 16px;">Unlock expert verdicts, pace analysis, runner assessments, and value picks for every race.</p>' +
+            '<a href="#/pricing" class="btn btn-gold">Upgrade to Premium</a>' +
+          '</div>' +
+        '</div>';
+      }
+
+      analysisHtml += '</div>'; // end section
+    }
+
+    app.innerHTML = '<div class="container">' +
+      '<div class="race-breadcrumb">' +
+        '<a class="breadcrumb-link" onclick="App._racingView=\'meetings\';App._selectedMeeting=null;App._selectedRace=null;App.renderRacing()">Meetings</a>' +
+        '<span class="breadcrumb-sep">&rsaquo;</span>' +
+        '<a class="breadcrumb-link" onclick="App._racingView=\'races\';App._selectedRace=null;App.renderRacing()">' + meetingName + '</a>' +
+        '<span class="breadcrumb-sep">&rsaquo;</span>' +
+        '<span class="breadcrumb-active">' + (race.time || '') + ' ' + (race.raceName || '') + '</span>' +
+      '</div>' +
+      '<div class="race-detail-header">' +
+        '<div class="race-detail-meeting">' + meetingName + '</div>' +
+        '<h1 class="race-detail-title"><span class="race-detail-time">' + (race.time || '') + '</span> ' + (race.raceName || race.raceClass || 'Race') + '</h1>' +
+        '<div class="race-detail-meta">' +
+          [race.raceClass, race.distance, race.going, race.surface].filter(Boolean).join(' | ') +
+          (race.prizeMoney ? ' | ' + race.prizeMoney : '') +
+        '</div>' +
+        '<div class="race-detail-stats">' +
+          runners.length + ' runners' +
+          (intel && intel.avgRating ? ' | Avg OR: ' + intel.avgRating : '') +
+          (intel && intel.topRated ? ' | Top rated: ' + intel.topRated.name + ' (' + intel.topRated.rating + ')' : '') +
+        '</div>' +
+      '</div>' +
+      runnersHtml +
+      analysisHtml +
+    '</div>';
+
+    if (typeof trackEvent === 'function') trackEvent('racing', 'race_detail', meetingName + ' ' + race.time);
+  },
+
+  _renderRacingTipsSection() {
+    var self = this;
+    var today = this._getToday();
+    var tips = (this.tips || []).filter(function(t) {
+      return t.sport === 'racing' && t.status === 'active' && t.date >= today;
+    });
+    if (tips.length === 0) return '';
+    var todayTips = tips.filter(function(t) { return t.date === today; });
+    var displayTips = todayTips.length > 0 ? todayTips : tips.slice(0, 6);
+    return '<div class="section" style="margin-top:32px;">' +
+      '<div class="section-title"><span class="icon">&#9826;</span> Racing Selections</div>' +
+      '<div class="grid grid-2" id="racing-tips">' +
+        displayTips.map(function(t) { return self.renderTipCard(t); }).join('') +
+      '</div>' +
+    '</div>';
+  },
+
+  // Legacy modal methods kept for backward compat but now redirect to detail view
+  async openRaceIntelligence(meetingName, raceTime) {
+    this._selectedMeeting = meetingName;
+    this._selectedRace = raceTime;
+    this._racingView = 'detail';
+    this.renderRacing();
   },
 
   closeRaceIntelligence() {
@@ -1937,147 +2001,11 @@ const App = {
   },
 
   _renderRaceIntelContent(intel, racecard) {
-    var container = document.querySelector('.race-intel-container');
-    if (!container) return;
-
-    var isPremium = this.user && this.user.subscription === 'premium';
-    var lockedClass = isPremium ? '' : ' race-intel-locked';
-    var self = this;
-
-    var html = '<button class="race-intel-close" onclick="App.closeRaceIntelligence()">&times;</button>';
-
-    // --- Race Header (visible to all) ---
-    html += '<div class="race-intel-header">' +
-      '<div class="race-intel-meeting">' + (intel.meeting || 'Meeting') + '</div>' +
-      '<div class="race-intel-title-row">' +
-        '<span class="race-intel-time">' + (intel.time || '') + '</span>' +
-        '<span class="race-intel-name">' + (intel.raceName || intel.raceClass || 'Race') + '</span>' +
-      '</div>' +
-      '<div class="race-intel-details">' +
-        [intel.raceClass, intel.distance, intel.going, intel.surface].filter(Boolean).join(' | ') +
-        (intel.prizeMoney ? ' | ' + intel.prizeMoney : '') +
-      '</div>' +
-      (intel.fieldSize ? '<div class="race-intel-field">' +
-        intel.fieldSize + ' runners' +
-        (intel.avgRating ? ' | Avg OR: ' + intel.avgRating : '') +
-        (intel.topRated ? ' | Top rated: ' + intel.topRated.name + ' (' + intel.topRated.rating + ')' : '') +
-      '</div>' : '') +
-    '</div>';
-
-    // --- OUR TAKE (premium) ---
-    html += '<div class="race-intel-verdict' + lockedClass + '">' +
-      '<div class="race-intel-verdict-label">OUR TAKE</div>' +
-      '<div class="race-intel-verdict-text">' + (intel.insights.paceAnalysis || '') + '</div>' +
-      (intel.insights.keyAngle ? '<div class="race-intel-verdict-angle">' + intel.insights.keyAngle + '</div>' : '') +
-    '</div>';
-
-    // --- Going Analysis ---
-    html += '<div class="race-intel-section' + lockedClass + '">' +
-      '<h3 class="race-intel-section-title">Going Analysis</h3>' +
-      '<p class="race-intel-text">' + (intel.insights.goingAnalysis || '-') + '</p>' +
-    '</div>';
-
-    // --- Class Profile ---
-    html += '<div class="race-intel-section' + lockedClass + '">' +
-      '<h3 class="race-intel-section-title">Class Profile</h3>' +
-      '<p class="race-intel-text">' + (intel.insights.classAnalysis || '-') + '</p>' +
-    '</div>';
-
-    // --- Key Angle ---
-    if (intel.insights.keyAngle) {
-      html += '<div class="race-intel-section' + lockedClass + '">' +
-        '<h3 class="race-intel-section-title">Key Angle</h3>' +
-        '<p class="race-intel-text">' + intel.insights.keyAngle + '</p>' +
-      '</div>';
-    }
-
-    // --- Favourite Card ---
-    if (intel.favourite) {
-      html += '<div class="race-intel-runner-card race-intel-fav' + lockedClass + '">' +
-        '<div class="race-intel-runner-label">Favourite</div>' +
-        '<div class="race-intel-runner-name">' + intel.favourite.name + '</div>' +
-        '<div class="race-intel-runner-meta">' +
-          (intel.favourite.odds ? '<span>Odds: <strong>' + self.formatOdds(parseFloat(intel.favourite.odds)) + '</strong></span>' : '') +
-          (intel.favourite.jockey ? '<span>Jockey: ' + intel.favourite.jockey + '</span>' : '') +
-          (intel.favourite.trainer ? '<span>Trainer: ' + intel.favourite.trainer + '</span>' : '') +
-          (intel.favourite.form ? '<span>Form: ' + intel.favourite.form + '</span>' : '') +
-        '</div>' +
-        '<div class="race-intel-runner-assessment">' + (intel.insights.favouriteAnalysis || '') + '</div>' +
-      '</div>';
-    }
-
-    // --- Danger Card ---
-    if (intel.danger) {
-      html += '<div class="race-intel-runner-card race-intel-danger' + lockedClass + '">' +
-        '<div class="race-intel-runner-label">Principal Danger</div>' +
-        '<div class="race-intel-runner-name">' + intel.danger.name + '</div>' +
-        '<div class="race-intel-runner-meta">' +
-          (intel.danger.odds ? '<span>Odds: <strong>' + self.formatOdds(parseFloat(intel.danger.odds)) + '</strong></span>' : '') +
-          (intel.danger.jockey ? '<span>Jockey: ' + intel.danger.jockey + '</span>' : '') +
-          (intel.danger.trainer ? '<span>Trainer: ' + intel.danger.trainer + '</span>' : '') +
-          (intel.danger.form ? '<span>Form: ' + intel.danger.form + '</span>' : '') +
-        '</div>' +
-        '<div class="race-intel-runner-assessment">' + (intel.insights.dangerAnalysis || '') + '</div>' +
-      '</div>';
-    }
-
-    // --- Value Pick Card ---
-    if (intel.outsider) {
-      html += '<div class="race-intel-runner-card race-intel-value' + lockedClass + '">' +
-        '<div class="race-intel-runner-label">Value Pick</div>' +
-        '<div class="race-intel-runner-name">' + intel.outsider.name + '</div>' +
-        '<div class="race-intel-runner-meta">' +
-          (intel.outsider.odds ? '<span>Odds: <strong>' + self.formatOdds(parseFloat(intel.outsider.odds)) + '</strong></span>' : '') +
-          (intel.outsider.jockey ? '<span>Jockey: ' + intel.outsider.jockey + '</span>' : '') +
-          (intel.outsider.trainer ? '<span>Trainer: ' + intel.outsider.trainer + '</span>' : '') +
-        '</div>' +
-        '<div class="race-intel-runner-assessment">' + (intel.insights.outsiderInsight || '') + '</div>' +
-      '</div>';
-    }
-
-    // --- Runner Summary Table (visible to all) ---
-    var runners = racecard && racecard.runners ? racecard.runners : [];
-    if (runners.length) {
-      html += '<div class="race-intel-section">' +
-        '<h3 class="race-intel-section-title">Full Field (' + runners.length + ' runners)</h3>' +
-        '<div class="race-intel-runners-wrap">' +
-        '<table class="runner-table">' +
-          '<thead><tr><th>Draw</th><th>Horse</th><th>Jockey</th><th>Trainer</th><th>Form</th><th>OR</th><th>Odds</th></tr></thead>' +
-          '<tbody>' +
-          runners.map(function(r) {
-            var tag = '';
-            if (intel.favourite && r.horseName === intel.favourite.name) tag = '<span class="runner-tag fav">FAV</span> ';
-            else if (intel.danger && r.horseName === intel.danger.name) tag = '<span class="runner-tag danger">DANGER</span> ';
-            else if (intel.outsider && r.horseName === intel.outsider.name) tag = '<span class="runner-tag outsider">VALUE</span> ';
-            var rowClass = tag ? ' class="runner-tagged"' : '';
-            return '<tr' + rowClass + '>' +
-              '<td>' + (r.draw || '-') + '</td>' +
-              '<td style="font-weight:600;">' + tag + (r.horseName || '-') + '</td>' +
-              '<td>' + (r.jockey || '-') + '</td>' +
-              '<td>' + (r.trainer || '-') + '</td>' +
-              '<td>' + (r.form || '-') + '</td>' +
-              '<td>' + (r.officialRating || '-') + '</td>' +
-              '<td style="font-weight:700;color:var(--gold);">' + (r.odds ? self.formatOdds(parseFloat(r.odds)) : '-') + '</td>' +
-            '</tr>';
-          }).join('') +
-          '</tbody></table>' +
-        '</div>' +
-      '</div>';
-    }
-
-    // --- Upgrade overlay for free users ---
-    if (!isPremium) {
-      html += '<div class="race-intel-upgrade-overlay">' +
-        '<div class="race-intel-upgrade-inner">' +
-          '<div style="font-size:32px;margin-bottom:12px;">&#128274;</div>' +
-          '<h3>Premium Race Intelligence</h3>' +
-          '<p class="text-muted" style="margin:8px 0 16px;">Unlock expert verdicts, pace analysis, runner assessments, and value picks for every race.</p>' +
-          '<a href="#/pricing" class="btn btn-gold" onclick="App.closeRaceIntelligence()">Upgrade to Premium</a>' +
-        '</div>' +
-      '</div>';
-    }
-
-    container.innerHTML = html;
+    // Legacy method — now handled by _renderRaceDetail
+    this._selectedMeeting = intel.meeting;
+    this._selectedRace = intel.time;
+    this._racingView = 'detail';
+    this.renderRacing();
   },
 
   // -----------------------------------------------------------------------
@@ -2189,7 +2117,12 @@ const App = {
   async refreshRacingData(btn) {
     if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
     try {
+      this._racingLiveData = null;
+      this._racingIntelData = null;
       await this.fetchLiveRacing(true);
+      await this.fetchRaceIntelligence(true);
+      this._racingLiveData = this._getCached('racing', 180000);
+      this._racingIntelData = this._getCached('race-intel', 300000);
       this.renderRacing();
     } catch (e) { console.error('Refresh failed:', e); }
     if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }

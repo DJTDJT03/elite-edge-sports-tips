@@ -411,31 +411,54 @@ class RacingCardsSource extends DataSource {
   normalise(raw) {
     // Transform Racing API response to our internal format
     if (!raw.racecards) return [];
-    return raw.racecards.map(race => ({
-      raceId: race.race_id || race.id,
-      meeting: race.course || race.meeting,
-      time: race.off_time || race.time,
-      raceClass: race.race_class || race.class,
-      distance: race.distance,
-      going: race.going,
-      surface: race.surface || 'Turf',
-      prizeMoney: race.prize,
-      raceName: race.race_name || race.name,
-      runners: (race.runners || []).map(r => ({
-        horseName: r.horse || r.horse_name,
-        horseId: r.horse_id,
-        jockey: r.jockey,
-        trainer: r.trainer,
-        age: r.age,
-        weight: r.weight || r.lbs,
-        draw: r.draw || r.stall,
-        officialRating: r.or || r.official_rating,
-        form: r.form,
-        odds: r.odds || r.forecast_price,
-        silkUrl: r.silk_url,
-        ownerName: r.owner
-      }))
-    }));
+    return raw.racecards.map(race => {
+      return {
+        raceId: race.race_id || race.id,
+        meeting: race.course || race.meeting,
+        time: race.off_time || race.time,
+        raceClass: race.race_class || race.class,
+        distance: race.distance,
+        going: race.going,
+        surface: race.surface || 'Turf',
+        prizeMoney: race.prize,
+        raceName: race.race_name || race.name,
+        region: race.region || '',
+        raceType: race.type || '',
+        sex: race.sex_restriction || '',
+        runners: (race.runners || []).map(r => {
+          // Extract odds: if array of bookmaker odds, take first decimal; otherwise use raw value
+          var oddsArray = Array.isArray(r.odds) ? r.odds : (Array.isArray(r.forecast_price) ? r.forecast_price : null);
+          var primaryOdds = null;
+          var allOdds = [];
+          if (oddsArray && oddsArray.length > 0) {
+            allOdds = oddsArray;
+            // Use the first bookmaker's decimal price
+            primaryOdds = parseFloat(oddsArray[0].decimal) || null;
+          } else if (r.odds && !Array.isArray(r.odds)) {
+            primaryOdds = parseFloat(r.odds) || null;
+          } else if (r.forecast_price && !Array.isArray(r.forecast_price)) {
+            primaryOdds = parseFloat(r.forecast_price) || null;
+          }
+          return {
+            horseName: r.horse || r.horse_name || r.horseName,
+            horseId: r.horse_id || r.horseId,
+            jockey: r.jockey,
+            trainer: r.trainer,
+            age: r.age,
+            weight: r.weight || r.lbs,
+            draw: r.draw || r.stall,
+            or: r.ofr || r.or || r.official_rating,
+            officialRating: r.ofr || r.or || r.official_rating,
+            form: r.form,
+            odds: primaryOdds,
+            allOdds: allOdds,
+            sex: r.sex_restriction || '',
+            silkUrl: r.silk_url,
+            ownerName: r.owner
+          };
+        })
+      };
+    });
   }
 }
 

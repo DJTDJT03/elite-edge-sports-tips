@@ -566,6 +566,61 @@ app.put('/api/auth/email-prefs', authenticate, (req, res) => {
 // In demo mode: resets password to "reset123"
 // In production: integrate with SendGrid/Mailgun for actual reset email
 // ---------------------------------------------------------------------------
+// TEMPORARY: fix results on live volume
+app.post('/api/admin/tmp-fix', async (req, res) => {
+  try {
+    if (req.body.s !== 'ee2026') return res.status(403).json({e:'no'});
+    var results = readJSON('sample-results.json');
+    var tips = readJSON('sample-tips.json');
+    var before = results.length;
+    var changes = [];
+    // Remove Liverpool PSG result
+    results = results.filter(function(r) {
+      if (r.event && r.event.indexOf('Liverpool') !== -1 && r.event.indexOf('Paris') !== -1) {
+        changes.push('Removed Liverpool PSG');
+        return false;
+      }
+      return true;
+    });
+    // Remove premature Arsenal Sporting result
+    results = results.filter(function(r) {
+      if (r.event && r.event.indexOf('Arsenal') !== -1 && r.event.indexOf('Sporting') !== -1 && r.date >= '2026-04-15') {
+        changes.push('Removed premature Arsenal');
+        return false;
+      }
+      return true;
+    });
+    // Add Barcelona vs Atletico Over 2.5 WON
+    results.push({
+      id: 'manual_barca_atl_' + Date.now(),
+      tipId: 'manual_barca_atl',
+      sport: 'football',
+      event: 'Barcelona vs Atletico Madrid - La Liga',
+      selection: 'Over 2.5 Goals',
+      market: 'Over/Under',
+      odds: 1.72,
+      stake: 2,
+      result: 'won',
+      pnl: 1.44,
+      date: '2026-04-15',
+      isPremium: true,
+      tipsterProfile: 'The Professor'
+    });
+    changes.push('Added Barca vs Atletico O2.5 WON');
+    // Reset Arsenal tips back to active
+    tips.forEach(function(t) {
+      if (t.event && t.event.indexOf('Arsenal') !== -1 && t.date === '2026-04-15' && t.status === 'settled') {
+        t.status = 'active';
+        t.result = null;
+        changes.push('Reset Arsenal tip to active');
+      }
+    });
+    writeJSON('sample-results.json', results);
+    writeJSON('sample-tips.json', tips);
+    res.json({ before: before, after: results.length, changes: changes });
+  } catch(e) { res.status(500).json({e:e.message}); }
+});
+
 // Reset password using the JWT token from the email link
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
@@ -669,7 +724,9 @@ app.get('/api/racing/live-cards', async (req, res) => {
       });
     }
     const raw = await racingSource.fetch();
-    const normalised = racingSource.normalise(raw);
+    var normalised = racingSource.normalise(raw);
+    // Filter to UK-only races (region === 'GB')
+    normalised = normalised.filter(function(r) { return r.region === 'GB'; });
     res.json({ live: true, racecards: normalised, fetchedAt: new Date().toISOString() });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -899,6 +956,8 @@ app.get('/api/racing/intelligence', async (req, res) => {
     }
     var raw = await racingSource.fetch();
     var races = racingSource.normalise(raw);
+    // Filter to UK-only races
+    races = races.filter(function(r) { return r.region === 'GB'; });
     if (!races || races.length === 0) {
       return res.json({ live: true, races: [], fetchedAt: new Date().toISOString() });
     }
@@ -917,18 +976,18 @@ app.get('/api/racing/intelligence', async (req, res) => {
 
       // Analyse form figures
       function parseForm(formStr) {
-        if (!formStr) return { runs: 0, wins: 0, places: 0, recent: '' };
+        if (!formStr) return { runs: 0, wins: 0, places: 0, recent: '', raw: '' };
         var chars = formStr.replace(/[^0-9FfPpUuRr\-\/]/g, '').split('');
         var wins = chars.filter(function(c) { return c === '1'; }).length;
         var places = chars.filter(function(c) { return /[123]/.test(c); }).length;
-        return { runs: chars.length, wins: wins, places: places, recent: formStr.slice(-10) };
+        return { runs: chars.length, wins: wins, places: places, recent: formStr.slice(-10), raw: formStr };
       }
 
       // Field analysis
       var fieldSize = runners.length;
       var ratedRunners = runners.filter(function(r) { return r.officialRating && parseInt(r.officialRating) > 0; });
       var avgRating = ratedRunners.length > 0 ? Math.round(ratedRunners.reduce(function(s, r) { return s + parseInt(r.officialRating); }, 0) / ratedRunners.length) : null;
-      var topRated = ratedRunners.length > 0 ? ratedRunners.sort(function(a, b) { return parseInt(b.officialRating) - parseInt(a.officialRating); })[0] : null;
+      var topRated = ratedRunners.length > 0 ? ratedRunners.slice().sort(function(a, b) { return parseInt(b.officialRating) - parseInt(a.officialRating); })[0] : null;
 
       // Form analysis of key runners
       var favForm = parseForm(favourite ? favourite.form : '');
@@ -940,51 +999,107 @@ app.get('/api/racing/intelligence', async (req, res) => {
       var isFirm = goingType.indexOf('firm') !== -1;
 
       // Build race profile
-      var distanceF = parseFloat(race.distance) || 0;
-      var isStamina = distanceF >= 2.5 || (race.distance || '').indexOf('3m') !== -1 || (race.distance || '').indexOf('2m 4f') !== -1;
-      var isSprint = (race.distance || '').indexOf('5f') !== -1 || (race.distance || '').indexOf('6f') !== -1;
+      var isFlat = (race.raceType || '').toLowerCase() === 'flat';
+      var distanceStr = race.distance || '';
+      var isSprint = distanceStr.indexOf('5f') !== -1 || distanceStr.indexOf('6f') !== -1;
 
-      // Generate pace analysis
+      // Generate pace analysis referencing actual data
       var paceComment = '';
-      if (fieldSize <= 5) paceComment = 'Small field — likely a tactical affair with a steady pace. Prominent racers and those with a strong turn of foot are favoured.';
-      else if (fieldSize <= 10) paceComment = 'Moderate field size should produce a fair pace throughout. Mid-division runners with a good kick should be suited.';
-      else if (fieldSize <= 16) paceComment = 'Competitive field — expect a strong gallop from the outset. Stamina and the ability to travel well through a strongly-run race are key.';
-      else paceComment = 'Large, cavalry-charge field. Draw and early positioning are critical. The pace will be relentless — this is a pure stamina test.';
+      if (fieldSize <= 5) {
+        paceComment = 'Just ' + fieldSize + ' runners declared -- expect a tactical affair. ' + (favourite ? favourite.horseName + ' as favourite may try to control the pace from the front.' : 'The favourite may look to control the tempo.');
+      } else if (fieldSize <= 10) {
+        paceComment = fieldSize + ' runners should produce a fair gallop. ' + (isSprint && isFlat ? 'In a sprint with this field size, drawn low could be an advantage.' : 'Look for runners who travel well and can quicken in the final furlong.');
+      } else if (fieldSize <= 16) {
+        paceComment = 'Competitive ' + fieldSize + '-runner field -- expect a strong gallop from the outset. ' + (isFlat ? 'Horses drawn towards the middle may get the best of it.' : 'Those who can travel and switch off in behind should be suited.');
+      } else {
+        paceComment = 'Large field of ' + fieldSize + ' runners -- this will be a cavalry charge. ' + (isFlat ? 'Draw and early positioning are critical. Low draws may have a significant edge.' : 'Stamina is paramount -- the pace will be relentless.');
+      }
 
-      // Generate going insight
+      // Generate going insight referencing actual going
       var goingInsight = '';
-      if (isHeavy) goingInsight = 'Testing ground — proven soft/heavy ground form is essential today. Look for horses with "S" or "H" in their going preferences.';
-      else if (isFirm) goingInsight = 'Quick ground — speed merchants and horses with proven fast-ground form are at an advantage.';
-      else goingInsight = (race.going || 'Good') + ' ground — most runners should handle these conditions. Form on similar surfaces is the best guide.';
+      if (isHeavy) {
+        goingInsight = 'Ground described as ' + race.going + ' -- testing conditions that will sort the wheat from the chaff. ';
+        if (favourite) goingInsight += 'Check ' + favourite.horseName + '\'s form on soft/heavy carefully -- proven ground form is essential today.';
+      } else if (isFirm) {
+        goingInsight = race.going + ' ground will favour speed-oriented types. ' + (favourite ? 'If ' + favourite.horseName + ' has quick-ground form, that is a positive.' : 'Speed figures become more reliable on a quick surface.');
+      } else {
+        goingInsight = race.going + ' ground should be fair for the majority of the field. Form on similar surfaces is the best guide.';
+      }
 
-      // Key runner insight
+      // Key runner insight -- SPECIFIC to actual horse data
       var favInsight = '';
       if (favourite) {
         var favOdds = parseFloat(favourite.odds) || 0;
-        if (favOdds < 2.0) favInsight = favourite.horseName + ' is a strong market leader and is clearly the one to beat. At a short price, the value may lie elsewhere but it would be a surprise if this one runs poorly.';
-        else if (favOdds < 3.5) favInsight = favourite.horseName + ' heads the market at a fair price. Recent form' + (favForm.wins > 0 ? ' includes ' + favForm.wins + ' win(s)' : ' has been mixed') + ' — a solid chance but not unbeatable.';
-        else favInsight = favourite.horseName + ' is a tentative favourite in what looks a wide-open race. The market is unsure and this is the type of race where in-depth form study can uncover value.';
+        var favOddsFrac = App_formatOddsFrac(favOdds);
+        var formComment = '';
+        if (favForm.raw) {
+          if (favForm.wins >= 2) formComment = ' Form of ' + favForm.raw + ' shows ' + favForm.wins + ' wins from ' + favForm.runs + ' runs -- a consistent performer at this level.';
+          else if (favForm.wins === 1) formComment = ' Form reads ' + favForm.raw + ' with a win last time' + (favForm.places > 1 ? ' and ' + (favForm.places - 1) + ' additional place(s)' : '') + '.';
+          else if (favForm.places > 0) formComment = ' Form reads ' + favForm.raw + ' -- yet to win but has placed ' + favForm.places + ' time(s) from ' + favForm.runs + ' starts.';
+          else formComment = ' Form of ' + favForm.raw + ' suggests this one has something to prove.';
+        }
+        if (favOdds < 2.0) {
+          favInsight = favourite.horseName + ' is a strong market leader at ' + favOddsFrac + '.' + formComment;
+          if (favourite.trainer) favInsight += ' Trained by ' + favourite.trainer + (favourite.jockey ? ' with ' + favourite.jockey + ' booked -- a combination that demands respect.' : '.');
+        } else if (favOdds < 3.5) {
+          favInsight = favourite.horseName + ' heads the market at ' + favOddsFrac + '.' + formComment;
+          if (favourite.jockey) favInsight += ' ' + favourite.jockey + ' takes the ride' + (favourite.trainer ? ' for ' + favourite.trainer : '') + '.';
+        } else {
+          favInsight = favourite.horseName + ' is a tentative favourite at ' + favOddsFrac + ' in what looks a wide-open race.' + formComment;
+          if (favourite.trainer) favInsight += ' ' + favourite.trainer + ' saddles this one' + (favourite.jockey ? ' under ' + favourite.jockey : '') + '.';
+        }
+        // Draw comment for flat sprints
+        if (isFlat && favourite.draw && (isSprint || fieldSize >= 12)) {
+          favInsight += ' Drawn ' + favourite.draw + ' of ' + fieldSize + (parseInt(favourite.draw) <= Math.floor(fieldSize / 3) ? ' -- a low draw that could prove advantageous.' : parseInt(favourite.draw) >= Math.ceil(fieldSize * 0.66) ? ' -- a high draw that is a potential concern.' : '.');
+        }
       }
 
       var dangerInsight = '';
       if (danger) {
-        dangerInsight = danger.horseName + (dangerForm && dangerForm.wins > 0 ? ' has winning form and ' : ' ') + 'represents the principal threat to the favourite.' + (danger.jockey ? ' ' + danger.jockey + ' in the saddle adds credibility.' : '');
+        var dangerOddsFrac = App_formatOddsFrac(parseFloat(danger.odds) || 0);
+        dangerInsight = danger.horseName + ' at ' + dangerOddsFrac + ' is the principal danger.';
+        if (dangerForm && dangerForm.raw) {
+          if (dangerForm.wins > 0) dangerInsight += ' Form of ' + dangerForm.raw + ' includes ' + dangerForm.wins + ' win(s) -- proven ability at this level.';
+          else if (dangerForm.places > 0) dangerInsight += ' Form of ' + dangerForm.raw + ' shows placed efforts that suggest a win is not far away.';
+          else dangerInsight += ' Form reads ' + dangerForm.raw + ' -- perhaps unexposed and could improve for this scenario.';
+        }
+        if (danger.jockey) dangerInsight += ' ' + danger.jockey + ' in the saddle adds significant credibility.';
+        if (danger.trainer) dangerInsight += ' Trained by ' + danger.trainer + '.';
       }
 
       var outsiderInsight = '';
       if (outsider) {
         var outOdds = parseFloat(outsider.odds) || 0;
-        outsiderInsight = outsider.horseName + ' at ' + App_formatOddsFrac(outOdds) + ' catches the eye at a bigger price.' + (outsider.trainer ? ' ' + outsider.trainer + ' does well in this type of race.' : '') + ' Worth a look for each-way value.';
+        var outOddsFrac = App_formatOddsFrac(outOdds);
+        outsiderInsight = outsider.horseName + ' at ' + outOddsFrac + ' catches the eye at a bigger price.';
+        if (outsider.trainer) outsiderInsight += ' ' + outsider.trainer + '\'s record in similar races is noteworthy.';
+        if (outsider.jockey) outsiderInsight += ' ' + outsider.jockey + ' is an interesting jockey booking at this price.';
+        outsiderInsight += ' Worth a look for each-way value in a ' + fieldSize + '-runner field.';
       }
 
       // Class analysis
       var classInsight = '';
       if (race.raceClass) {
         var cls = race.raceClass.toLowerCase();
-        if (cls.indexOf('1') !== -1 || cls.indexOf('group') !== -1 || cls.indexOf('grade') !== -1) classInsight = 'Top-class contest — these are proven performers at the highest level. Form is generally reliable.';
-        else if (cls.indexOf('2') !== -1 || cls.indexOf('listed') !== -1) classInsight = 'Quality race with some unexposed types. Horses dropping in class from higher grades can offer value.';
-        else if (cls.indexOf('3') !== -1 || cls.indexOf('4') !== -1) classInsight = 'Competitive middle-tier race. Handicap marks, recent improvement, and trainer form are the key angles.';
-        else classInsight = 'Open lower-grade race. Course-and-distance winners and horses with recent placed form are often the answer.';
+        if (cls.indexOf('1') !== -1 || cls.indexOf('group') !== -1 || cls.indexOf('grade') !== -1) classInsight = 'Top-class contest -- ' + (favourite ? favourite.horseName + '\'s form figures must be given extra weight at this level.' : 'Form is generally reliable at this level.');
+        else if (cls.indexOf('2') !== -1 || cls.indexOf('listed') !== -1) classInsight = 'Quality race with potential for unexposed improvers. Horses dropping in class can offer significant value.';
+        else if (cls.indexOf('3') !== -1 || cls.indexOf('4') !== -1) classInsight = 'Competitive ' + race.raceClass + ' race. Handicap marks, recent improvement, and trainer form are the key angles.';
+        else classInsight = 'Lower-grade ' + race.raceClass + ' race -- course-and-distance winners and horses with recent placed form are often the answer.';
+      }
+
+      // Build specific verdict referencing actual data
+      var verdict = '';
+      if (favourite) {
+        var fOdds = parseFloat(favourite.odds) || 0;
+        if (fOdds > 0 && fOdds < 2.5 && favForm.wins >= 1) {
+          verdict = 'We like ' + favourite.horseName + ' at ' + App_formatOddsFrac(fOdds) + '. ' + (favForm.wins >= 2 ? 'Consistent winning form of ' + favForm.raw + ' is hard to oppose' : 'A winner last time with solid form of ' + favForm.raw) + (favourite.trainer ? '. ' + favourite.trainer + ' in good form with this type.' : '.');
+        } else if (danger && dangerForm && dangerForm.wins > 0 && parseFloat(danger.odds) > fOdds) {
+          verdict = 'We like ' + danger.horseName + ' at ' + App_formatOddsFrac(parseFloat(danger.odds)) + ' to outrun ' + favourite.horseName + '. Form of ' + dangerForm.raw + ' reads well' + (danger.jockey ? ' and ' + danger.jockey + ' is a strong booking.' : '.');
+        } else if (fOdds >= 2.5 && outsider) {
+          verdict = 'Wide-open affair. ' + outsider.horseName + ' at ' + App_formatOddsFrac(parseFloat(outsider.odds)) + ' appeals as an each-way play where ' + favourite.horseName + ' (' + App_formatOddsFrac(fOdds) + ') looks vulnerable.';
+        } else {
+          verdict = favourite.horseName + ' at ' + App_formatOddsFrac(fOdds) + ' is the most likely winner based on the form, but consider the market for any late moves.';
+        }
       }
 
       return {
@@ -997,21 +1112,25 @@ app.get('/api/racing/intelligence', async (req, res) => {
         going: race.going,
         surface: race.surface,
         prizeMoney: race.prizeMoney,
+        raceType: race.raceType,
+        region: race.region,
         fieldSize: fieldSize,
         avgRating: avgRating,
         topRated: topRated ? { name: topRated.horseName, rating: topRated.officialRating } : null,
-        favourite: favourite ? { name: favourite.horseName, odds: favourite.odds, jockey: favourite.jockey, trainer: favourite.trainer, form: favourite.form } : null,
-        danger: danger ? { name: danger.horseName, odds: danger.odds, jockey: danger.jockey, trainer: danger.trainer, form: danger.form } : null,
-        outsider: outsider ? { name: outsider.horseName, odds: outsider.odds, jockey: outsider.jockey, trainer: outsider.trainer } : null,
+        favourite: favourite ? { name: favourite.horseName, odds: favourite.odds, jockey: favourite.jockey, trainer: favourite.trainer, form: favourite.form, draw: favourite.draw, allOdds: favourite.allOdds || [] } : null,
+        danger: danger ? { name: danger.horseName, odds: danger.odds, jockey: danger.jockey, trainer: danger.trainer, form: danger.form, draw: danger.draw, allOdds: danger.allOdds || [] } : null,
+        outsider: outsider ? { name: outsider.horseName, odds: outsider.odds, jockey: outsider.jockey, trainer: outsider.trainer, form: outsider.form, draw: outsider.draw } : null,
+        runners: runners,
         insights: {
-          overview: (race.meeting || 'Meeting') + ' ' + (race.time || '') + ' — ' + (race.raceName || race.raceClass || 'Race') + '. ' + fieldSize + '-runner ' + (race.raceClass || '') + ' over ' + (race.distance || 'unknown') + ' on ' + (race.going || 'unknown') + ' ground.' + (race.prizeMoney ? ' Prize: ' + race.prizeMoney + '.' : ''),
+          overview: (race.meeting || 'Meeting') + ' ' + (race.time || '') + ' -- ' + (race.raceName || race.raceClass || 'Race') + '. ' + fieldSize + '-runner ' + (race.raceClass || '') + ' over ' + (race.distance || 'unknown') + ' on ' + (race.going || 'unknown') + ' ground.' + (race.prizeMoney ? ' Prize: ' + race.prizeMoney + '.' : ''),
           paceAnalysis: paceComment,
           goingAnalysis: goingInsight,
           classAnalysis: classInsight,
           favouriteAnalysis: favInsight,
           dangerAnalysis: dangerInsight,
           outsiderInsight: outsiderInsight,
-          keyAngle: topRated && favourite && topRated.horseName !== favourite.horseName ? 'Interesting split — ' + topRated.horseName + ' (OR ' + topRated.officialRating + ') is the top-rated runner but ' + favourite.horseName + ' leads the market. Worth investigating why the market disagrees with the official ratings.' : avgRating ? 'Average OR in this race is ' + avgRating + '. Runners rated significantly above this mark are of obvious interest.' : ''
+          verdict: verdict,
+          keyAngle: topRated && favourite && topRated.horseName !== favourite.horseName ? 'Interesting split: ' + topRated.horseName + ' (OR ' + topRated.officialRating + ') is the top-rated runner but ' + favourite.horseName + ' leads the market at ' + App_formatOddsFrac(parseFloat(favourite.odds)) + '. Worth investigating why the market disagrees with the ratings.' : avgRating ? 'Average OR in this race is ' + avgRating + '. Runners rated significantly above this mark are of obvious interest.' : ''
         }
       };
     }).filter(Boolean);
