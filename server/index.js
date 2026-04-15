@@ -566,61 +566,6 @@ app.put('/api/auth/email-prefs', authenticate, (req, res) => {
 // In demo mode: resets password to "reset123"
 // In production: integrate with SendGrid/Mailgun for actual reset email
 // ---------------------------------------------------------------------------
-// TEMPORARY: fix results on live volume
-app.post('/api/admin/tmp-fix', async (req, res) => {
-  try {
-    if (req.body.s !== 'ee2026') return res.status(403).json({e:'no'});
-    var results = readJSON('sample-results.json');
-    var tips = readJSON('sample-tips.json');
-    var before = results.length;
-    var changes = [];
-    // Remove Liverpool PSG result
-    results = results.filter(function(r) {
-      if (r.event && r.event.indexOf('Liverpool') !== -1 && r.event.indexOf('Paris') !== -1) {
-        changes.push('Removed Liverpool PSG');
-        return false;
-      }
-      return true;
-    });
-    // Remove premature Arsenal Sporting result
-    results = results.filter(function(r) {
-      if (r.event && r.event.indexOf('Arsenal') !== -1 && r.event.indexOf('Sporting') !== -1 && r.date >= '2026-04-15') {
-        changes.push('Removed premature Arsenal');
-        return false;
-      }
-      return true;
-    });
-    // Add Barcelona vs Atletico Over 2.5 WON
-    results.push({
-      id: 'manual_barca_atl_' + Date.now(),
-      tipId: 'manual_barca_atl',
-      sport: 'football',
-      event: 'Barcelona vs Atletico Madrid - La Liga',
-      selection: 'Over 2.5 Goals',
-      market: 'Over/Under',
-      odds: 1.72,
-      stake: 2,
-      result: 'won',
-      pnl: 1.44,
-      date: '2026-04-15',
-      isPremium: true,
-      tipsterProfile: 'The Professor'
-    });
-    changes.push('Added Barca vs Atletico O2.5 WON');
-    // Reset Arsenal tips back to active
-    tips.forEach(function(t) {
-      if (t.event && t.event.indexOf('Arsenal') !== -1 && t.date === '2026-04-15' && t.status === 'settled') {
-        t.status = 'active';
-        t.result = null;
-        changes.push('Reset Arsenal tip to active');
-      }
-    });
-    writeJSON('sample-results.json', results);
-    writeJSON('sample-tips.json', tips);
-    res.json({ before: before, after: results.length, changes: changes });
-  } catch(e) { res.status(500).json({e:e.message}); }
-});
-
 // Reset password using the JWT token from the email link
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
