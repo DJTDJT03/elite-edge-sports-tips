@@ -781,6 +781,202 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // MORNING BRIEF — Personalised welcome for logged-in users
+  // -----------------------------------------------------------------------
+  buildMorningBrief(todayTips, allResults, perf) {
+    if (!this.user) return '';
+    var firstName = (this.user.name || 'there').split(' ')[0];
+    var initial = firstName.charAt(0).toUpperCase();
+    var now = new Date();
+    var hour = now.getHours();
+    var greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+    // Yesterday's results
+    var yesterday = this._getYesterday();
+    var yesterdayResults = allResults.filter(function(r) { return r.date === yesterday; });
+    var yesterdayWins = yesterdayResults.filter(function(r) { return r.result === 'won' || r.result === 'placed'; });
+    var yesterdayPnl = yesterdayResults.reduce(function(sum, r) { return sum + (r.pnl || 0); }, 0);
+
+    // Today's tips breakdown
+    var today = this._getToday();
+    var activeTodayTips = todayTips.filter(function(t) { return !t.isWeeklyAcca && (!t.date || t.date === today); });
+    var racingTips = activeTodayTips.filter(function(t) { return t.sport === 'racing'; });
+    var footballTips = activeTodayTips.filter(function(t) { return t.sport === 'football'; });
+
+    // Build sport details
+    var sportParts = [];
+    if (racingTips.length > 0) {
+      var meetings = [];
+      racingTips.forEach(function(t) {
+        var meeting = (t.meeting || t.event || '').split(' ')[0];
+        if (meeting && meetings.indexOf(meeting) === -1) meetings.push(meeting);
+      });
+      var napCount = racingTips.filter(function(t) { return t.isNap; }).length;
+      var racingDesc = racingTips.length + ' racing';
+      if (napCount > 0 && meetings.length > 0) racingDesc += ' (including our NAP at ' + meetings[0] + ')';
+      else if (meetings.length > 0) racingDesc += ' at ' + meetings.slice(0, 2).join(' and ');
+      sportParts.push(racingDesc);
+    }
+    if (footballTips.length > 0) {
+      var leagues = [];
+      footballTips.forEach(function(t) {
+        var league = t.league || '';
+        if (league && leagues.indexOf(league) === -1) leagues.push(league);
+      });
+      var fbDesc = footballTips.length + ' football';
+      if (leagues.length > 0) fbDesc += ' across ' + leagues.slice(0, 2).join(' and ');
+      sportParts.push(fbDesc);
+    }
+
+    // Build sentences
+    var sentences = [];
+    // Sentence 1: greeting + today's tips
+    if (activeTodayTips.length === 0) {
+      sentences.push(greeting + ' ' + firstName + '. Quiet day on the tips front today — our model has not identified any selections with sufficient edge.');
+    } else {
+      var tipCountText = activeTodayTips.length === 1 ? '1 selection' : activeTodayTips.length + ' selections';
+      sentences.push(greeting + ' ' + firstName + '. We have ' + tipCountText + ' for you today — ' + sportParts.join(' and ') + '.');
+    }
+
+    // Sentence 2: yesterday's results
+    if (yesterdayResults.length > 0) {
+      var pnlStr = yesterdayPnl >= 0 ? '+' + yesterdayPnl.toFixed(2) : yesterdayPnl.toFixed(2);
+      sentences.push('Yesterday\'s picks returned ' + pnlStr + ' units (' + yesterdayWins.length + ' from ' + yesterdayResults.length + ' winners).');
+    }
+
+    // Sentence 3: overall stats
+    if (perf && perf.roi) {
+      sentences.push('Your overall strike rate sits at ' + perf.strikeRate + '% with ROI of +' + perf.roi + '%.');
+    }
+
+    var briefText = sentences.join(' ');
+
+    var dateStr = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    var timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+    return '<div class="morning-brief">' +
+      '<div class="morning-brief-avatar">' + initial + '</div>' +
+      '<div class="morning-brief-body">' +
+        '<div class="morning-brief-text">' + briefText + '</div>' +
+        '<div class="morning-brief-meta">' + dateStr + ' at ' + timeStr + '</div>' +
+      '</div>' +
+    '</div>';
+  },
+
+  // -----------------------------------------------------------------------
+  // WOULD HAVE WON — Tease for non-premium users
+  // -----------------------------------------------------------------------
+  buildWouldHaveWon(allResults) {
+    if (this.user && this.user.subscription === 'premium') return '';
+    var yesterday = this._getYesterday();
+    var yesterdayPremium = allResults.filter(function(r) { return r.date === yesterday && r.isPremium; });
+    if (yesterdayPremium.length === 0) return '';
+
+    var self = this;
+    var totalPnl = yesterdayPremium.reduce(function(sum, r) { return sum + (r.pnl || 0); }, 0);
+    var totalPnlStr = totalPnl >= 0 ? '+' + totalPnl.toFixed(2) : totalPnl.toFixed(2);
+
+    var rows = yesterdayPremium.map(function(r) {
+      var resultClass = r.result === 'won' ? 'whw-badge-won' : r.result === 'placed' ? 'whw-badge-placed' : 'whw-badge-lost';
+      var resultLabel = r.result === 'won' ? 'WON' : r.result === 'placed' ? 'PLACED' : 'LOST';
+      var pnlClass = r.pnl > 0 ? 'whw-pnl-positive' : r.pnl < 0 ? 'whw-pnl-negative' : 'whw-pnl-neutral';
+      var pnlStr = r.pnl >= 0 ? '+' + r.pnl.toFixed(2) + 'u' : r.pnl.toFixed(2) + 'u';
+      var napTag = r.isNap ? '<span class="whw-result-nap">NAP:</span> ' : '';
+      return '<div class="whw-result-row">' +
+        '<div class="whw-result-name">' + napTag + r.selection + '</div>' +
+        '<div class="whw-result-odds">@ ' + self.formatOdds(r.odds) + '</div>' +
+        '<span class="whw-badge ' + resultClass + '">' + resultLabel + '</span>' +
+        '<div class="whw-pnl ' + pnlClass + '">' + pnlStr + '</div>' +
+      '</div>';
+    }).join('');
+
+    var totalClass = totalPnl > 0 ? 'whw-pnl-positive' : totalPnl < 0 ? 'whw-pnl-negative' : 'whw-pnl-neutral';
+
+    return '<div class="whw-section">' +
+      '<div class="whw-title">What Premium Members Got Yesterday</div>' +
+      '<div class="whw-subtitle">Settled premium selections from ' + formatDateUK(yesterday) + '</div>' +
+      '<div class="whw-results-list">' + rows + '</div>' +
+      '<div class="whw-total">' +
+        '<div class="whw-total-label">Yesterday\'s Premium P/L</div>' +
+        '<div class="whw-total-value ' + totalClass + '">' + totalPnlStr + ' units</div>' +
+      '</div>' +
+      '<div class="whw-cta">' +
+        '<div class="whw-cta-text"><strong>Get tomorrow\'s picks before they happen.</strong> First month FREE.</div>' +
+        '<button class="btn btn-gold" onclick="App.showModal(\'register\')">Start Free Trial</button>' +
+      '</div>' +
+    '</div>';
+  },
+
+  // -----------------------------------------------------------------------
+  // STREAK BADGES — Achievement system
+  // -----------------------------------------------------------------------
+  async renderStreakBadges() {
+    try {
+      var data = await this.api('/results/streaks');
+      if (!data || !data.badges) return '';
+
+      var self = this;
+      var badgeIcons = {
+        flame: '&#9632;',
+        fire: '&#9733;',
+        lightning: '&#9889;',
+        star: '&#9734;',
+        trophy: '&#9816;',
+        crown: '&#9812;'
+      };
+      // Use text-based icons to avoid emojis
+      var badgeSymbols = {
+        hot_streak: '3+',
+        on_fire: '5+',
+        unstoppable: '8+',
+        perfect_week: '100%',
+        century_club: '100',
+        roi_king: 'ROI'
+      };
+
+      var badgesHtml = data.badges.map(function(b) {
+        var cls = b.earned ? 'streak-badge earned' : 'streak-badge locked';
+        var progressText = '';
+        if (!b.earned) {
+          var remaining = b.target - b.progress;
+          progressText = '<div class="streak-badge-progress">' + remaining + ' more to unlock</div>';
+        }
+        var shareBtn = '';
+        if (b.earned) {
+          var shareText = 'I earned the "' + b.name + '" badge with @EliteEdgeTips! ' + data.strikeRate + '% strike rate, +' + data.roi + '% ROI. Join free: eliteedgesports.co.uk';
+          shareBtn = '<button class="streak-badge-share" onclick="event.stopPropagation();App.shareAchievement(\'' + shareText.replace(/'/g, "\\'") + '\')">Share</button>';
+        }
+        return '<div class="' + cls + '">' +
+          '<span class="streak-badge-icon">' + (badgeSymbols[b.id] || '?') + '</span>' +
+          '<div class="streak-badge-name">' + b.name + '</div>' +
+          '<div class="streak-badge-desc">' + b.description + '</div>' +
+          progressText +
+          shareBtn +
+        '</div>';
+      }).join('');
+
+      return '<div class="streak-badges-section">' +
+        '<div class="streak-badges-title">Achievement Badges</div>' +
+        '<div class="streak-badges-grid">' + badgesHtml + '</div>' +
+      '</div>';
+    } catch(e) {
+      return '';
+    }
+  },
+
+  shareAchievement(text) {
+    if (navigator.share) {
+      navigator.share({ text: text }).catch(function() {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function() {
+        App.showToast('Achievement copied to clipboard!', 'success');
+      }).catch(function() {
+        App.showToast('Could not copy to clipboard', 'error');
+      });
+    }
+  },
+
+  // -----------------------------------------------------------------------
   // THEME TOGGLE (Enhancement #11)
   // -----------------------------------------------------------------------
   loadTheme() {
@@ -1066,12 +1262,23 @@ const App = {
     // Find NAP — must be from today only
     const napTip = tips.find(t => t.isNap && t.date === today && t.status === 'active');
 
+    // Build Feature sections
+    var morningBriefHtml = this.buildMorningBrief(tips, allResults, perf);
+    var wouldHaveWonHtml = this.buildWouldHaveWon(allResults);
+    var streakBadgesHtml = await this.renderStreakBadges();
+
     app.innerHTML = `
       <div class="container">
+        <!-- Morning Brief (logged-in users only) -->
+        ${morningBriefHtml}
+
         <div class="page-header">
           <h1>Welcome to <span class="accent">Elite Edge</span></h1>
           <p>Today's premium betting intelligence — ${new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}</p>
         </div>
+
+        <!-- Would Have Won (non-premium users only) -->
+        ${wouldHaveWonHtml}
 
         <!-- Grand National Winner Banner -->
         <div style="background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(212,168,67,0.08));border:2px solid rgba(34,197,94,0.4);border-radius:14px;padding:20px 24px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;" onclick="window.location.hash='#/results'">
@@ -1103,6 +1310,9 @@ const App = {
           <div class="trust-item"><div class="trust-value">${perf.wins}</div><div class="trust-label">Winners</div></div>
           ${streak > 1 ? `<div class="trust-item"><div class="streak-badge">\ud83d\udd25 ${streak}-Tip Winning Streak</div></div>` : ''}
         </div>
+
+        <!-- Streak Badges -->
+        ${streakBadgesHtml}
 
         <!-- Recent Wins Ticker -->
         ${recentWins.length ? `

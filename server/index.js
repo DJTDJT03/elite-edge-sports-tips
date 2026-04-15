@@ -1634,6 +1634,96 @@ app.get('/api/results/performance', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// STREAKS & BADGES ROUTE
+// ---------------------------------------------------------------------------
+app.get('/api/results/streaks', (req, res) => {
+  const results = readJSON('sample-results.json');
+  const sorted = [...results].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const counted = sorted.filter(r => r.result !== 'void');
+
+  // Current winning streak (from most recent backwards)
+  let currentStreak = 0;
+  for (let i = counted.length - 1; i >= 0; i--) {
+    if (counted[i].result === 'won' || counted[i].result === 'placed') currentStreak++;
+    else break;
+  }
+
+  // Longest ever streak
+  let longestStreak = 0;
+  let tempStreak = 0;
+  for (const r of counted) {
+    if (r.result === 'won' || r.result === 'placed') { tempStreak++; longestStreak = Math.max(longestStreak, tempStreak); }
+    else tempStreak = 0;
+  }
+
+  // Best week (by P/L)
+  const weekMap = {};
+  counted.forEach(r => {
+    const d = new Date(r.date);
+    const weekStart = new Date(d);
+    weekStart.setDate(d.getDate() - d.getDay());
+    const key = weekStart.toISOString().split('T')[0];
+    if (!weekMap[key]) weekMap[key] = { pnl: 0, wins: 0, total: 0 };
+    weekMap[key].pnl += r.pnl || 0;
+    weekMap[key].total++;
+    if (r.result === 'won' || r.result === 'placed') weekMap[key].wins++;
+  });
+  let bestWeek = { week: null, pnl: 0 };
+  for (const [week, data] of Object.entries(weekMap)) {
+    if (data.pnl > bestWeek.pnl) bestWeek = { week, pnl: Math.round(data.pnl * 100) / 100, wins: data.wins, total: data.total };
+  }
+
+  // Best month (by P/L)
+  const monthMap = {};
+  counted.forEach(r => {
+    const key = r.date.substring(0, 7);
+    if (!monthMap[key]) monthMap[key] = { pnl: 0, wins: 0, total: 0 };
+    monthMap[key].pnl += r.pnl || 0;
+    monthMap[key].total++;
+    if (r.result === 'won' || r.result === 'placed') monthMap[key].wins++;
+  });
+  let bestMonth = { month: null, pnl: 0 };
+  for (const [month, data] of Object.entries(monthMap)) {
+    if (data.pnl > bestMonth.pnl) bestMonth = { month, pnl: Math.round(data.pnl * 100) / 100, wins: data.wins, total: data.total };
+  }
+
+  // Performance stats
+  const totalStaked = counted.reduce((sum, r) => sum + (r.stake || 0), 0);
+  const totalPnl = counted.reduce((sum, r) => sum + (r.pnl || 0), 0);
+  const wins = counted.filter(r => r.result === 'won' || r.result === 'placed').length;
+  const roi = totalStaked > 0 ? Math.round((totalPnl / totalStaked) * 10000) / 100 : 0;
+  const strikeRate = counted.length > 0 ? Math.round((wins / counted.length) * 10000) / 100 : 0;
+
+  // Perfect weeks (100% strike rate with 3+ tips)
+  let perfectWeeks = [];
+  for (const [week, data] of Object.entries(weekMap)) {
+    if (data.total >= 3 && data.wins === data.total) perfectWeeks.push(week);
+  }
+
+  // Badge calculations
+  const badges = [
+    { id: 'hot_streak', name: 'Hot Streak', description: '3+ consecutive winners', icon: 'flame', earned: currentStreak >= 3, progress: Math.min(currentStreak, 3), target: 3, earnedDate: currentStreak >= 3 ? new Date().toISOString().split('T')[0] : null },
+    { id: 'on_fire', name: 'On Fire', description: '5+ consecutive winners', icon: 'fire', earned: currentStreak >= 5, progress: Math.min(currentStreak, 5), target: 5, earnedDate: currentStreak >= 5 ? new Date().toISOString().split('T')[0] : null },
+    { id: 'unstoppable', name: 'Unstoppable', description: '8+ consecutive winners', icon: 'lightning', earned: longestStreak >= 8, progress: Math.min(longestStreak, 8), target: 8, earnedDate: longestStreak >= 8 ? new Date().toISOString().split('T')[0] : null },
+    { id: 'perfect_week', name: 'Perfect Week', description: '100% strike rate in a week (3+ tips)', icon: 'star', earned: perfectWeeks.length > 0, progress: perfectWeeks.length, target: 1, earnedDate: perfectWeeks.length > 0 ? perfectWeeks[0] : null },
+    { id: 'century_club', name: 'Century Club', description: '100+ tips settled', icon: 'trophy', earned: counted.length >= 100, progress: Math.min(counted.length, 100), target: 100, earnedDate: counted.length >= 100 ? counted[99].date : null },
+    { id: 'roi_king', name: 'ROI King', description: 'ROI over 30%', icon: 'crown', earned: roi > 30, progress: Math.min(Math.round(roi), 30), target: 30, earnedDate: roi > 30 ? new Date().toISOString().split('T')[0] : null },
+  ];
+
+  res.json({
+    currentStreak,
+    longestStreak,
+    bestWeek,
+    bestMonth,
+    totalTips: counted.length,
+    wins,
+    roi,
+    strikeRate,
+    badges
+  });
+});
+
+// ---------------------------------------------------------------------------
 // ADMIN ROUTES
 // ---------------------------------------------------------------------------
 app.get('/api/admin/users', authenticate, requireAdmin, (req, res) => {
