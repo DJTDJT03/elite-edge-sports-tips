@@ -60,6 +60,7 @@ const App = {
     });
     this.route();
     this.loadDailyStats();
+    this.loadActivityTicker();
     this.initNotifications();
     this.checkReferralParam();
     this.initCookieConsent();
@@ -1198,11 +1199,32 @@ const App = {
   renderOddsMovement(currentOdds, openingOdds) {
     if (!openingOdds || !currentOdds) return '';
     if (currentOdds > openingOdds) {
-      return '<span class="odds-movement drifted" title="Odds drifted (value increasing)">\u2191 Drifted</span>';
+      return '<span class="odds-movement drifted" title="Odds drifted from ' + this.formatOdds(openingOdds) + '">\u2191 Drifted</span>';
     } else if (currentOdds < openingOdds) {
-      return '<span class="odds-movement shortened" title="Odds shortened">\u2193 Shortened</span>';
+      return '<span class="odds-movement shortened" title="Odds shortened from ' + this.formatOdds(openingOdds) + '">\u2193 Shortened</span>';
     }
     return '<span class="odds-movement" style="color:var(--text-muted);">\u2194 Steady</span>';
+  },
+
+  renderOddsMovementDetail(tip) {
+    var parts = [];
+    if (tip.openingOdds && tip.odds && tip.openingOdds !== tip.odds) {
+      if (tip.odds < tip.openingOdds) {
+        parts.push('<span class="odds-shortened-detail">\u2193 Shortened from ' + this.formatOdds(tip.openingOdds) + '</span>');
+      } else {
+        parts.push('<span class="odds-drifted-detail">\u2191 Drifted from ' + this.formatOdds(tip.openingOdds) + '</span>');
+      }
+    }
+    if (tip.bookmakerOdds) {
+      var entries = Object.entries(tip.bookmakerOdds);
+      if (entries.length > 0) {
+        var names = { bet365: 'Bet365', betfair: 'Betfair', skybet: 'Sky Bet', paddypower: 'Paddy Power', williamhill: 'William Hill' };
+        var best = entries.reduce(function(prev, curr) { return curr[1] > prev[1] ? curr : prev; });
+        parts.push('<span class="odds-best-price">Best: ' + this.formatOdds(best[1]) + ' at ' + (names[best[0]] || best[0]) + '</span>');
+      }
+    }
+    if (parts.length === 0) return '';
+    return '<div class="odds-movement-detail">' + parts.join('') + '</div>';
   },
 
   renderFormGuide(recentForm, sport) {
@@ -1217,6 +1239,87 @@ const App = {
         return `<span class="form-badge form-pos ${pos === 1 ? 'form-pos-1' : ''}">${f}</span>`;
       }).join('')}
     </div>`;
+  },
+
+  // -----------------------------------------------------------------------
+  // ACTIVITY TICKER (Social Proof)
+  // -----------------------------------------------------------------------
+  async loadActivityTicker() {
+    try {
+      var items = await this.api('/activity-feed');
+      if (!items || !items.length) return;
+      var ticker = document.getElementById('activity-ticker');
+      var inner = document.getElementById('activity-ticker-inner');
+      if (!ticker || !inner) return;
+
+      var html = '';
+      var separator = '<span class="activity-separator">\u25C6</span>';
+      // Build items twice for seamless infinite scroll
+      for (var pass = 0; pass < 2; pass++) {
+        for (var i = 0; i < items.length; i++) {
+          var item = items[i];
+          var typeClass = item.type === 'won' ? 'activity-won' : item.type === 'tip' ? 'activity-tip' : item.type === 'settled' ? 'activity-settled' : 'activity-general';
+          html += '<span class="activity-item ' + typeClass + '">' + item.text + '</span>';
+          if (i < items.length - 1 || pass === 0) {
+            html += separator;
+          }
+        }
+      }
+      inner.innerHTML = html;
+      ticker.style.display = '';
+    } catch (e) {
+      // Silently fail — ticker is non-critical
+    }
+  },
+
+  // -----------------------------------------------------------------------
+  // BET SLIP HELPERS
+  // -----------------------------------------------------------------------
+  toggleBetSlip(tipId) {
+    var dd = document.getElementById('betslip-dd-' + tipId);
+    if (!dd) return;
+    var isActive = dd.classList.contains('active');
+    // Close all open dropdowns first
+    document.querySelectorAll('.bet-slip-dropdown.active').forEach(function(el) {
+      el.classList.remove('active');
+    });
+    if (!isActive) {
+      dd.classList.add('active');
+      // Close on outside click
+      var handler = function(e) {
+        if (!dd.contains(e.target) && !e.target.classList.contains('bet-slip-btn')) {
+          dd.classList.remove('active');
+          document.removeEventListener('click', handler);
+        }
+      };
+      setTimeout(function() { document.addEventListener('click', handler); }, 10);
+    }
+  },
+
+  copySelection(selection, market, odds, event) {
+    var text = 'Selection: ' + selection + ' | Market: ' + market + ' | Odds: ' + this.formatOdds(odds) + ' | Event: ' + event;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        App.showToast('Selection copied to clipboard', 'success');
+      }).catch(function() {
+        App.showToast('Could not copy — try manually', 'error');
+      });
+    } else {
+      // Fallback
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        App.showToast('Selection copied to clipboard', 'success');
+      } catch (e) {
+        App.showToast('Could not copy — try manually', 'error');
+      }
+      document.body.removeChild(ta);
+    }
   },
 
   // -----------------------------------------------------------------------
@@ -1654,17 +1757,37 @@ const App = {
             <div class="tip-meta-item"><strong>Risk:</strong> ${tip.riskLevel || '-'}</div>
           </div>
           ${!isLocked ? this.renderBookmakerOdds(tip.bookmakerOdds) : ''}
+          ${!isLocked ? this.renderOddsMovementDetail(tip) : ''}
           ${!isLocked ? this.renderFormGuide(tip.recentForm, tip.sport) : ''}
           <div class="tip-edge-bar">
             <div class="tip-edge-bar-label"><span>Edge</span><span>${((tip.edge || 0) * 100).toFixed(1)}%</span></div>
             <div class="tip-edge-bar-track"><div class="tip-edge-bar-fill ${edgeClass}" style="width:${edgePct}%"></div></div>
           </div>
           ${!isLocked ? `
-          <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap;">
             <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);cursor:pointer;" onclick="event.stopPropagation();">
               <input type="checkbox" class="acca-checkbox" id="acca-cb-${tip.id}" ${inAcca ? 'checked' : ''} onchange="App.toggleAcca('${tip.id}','${tip.selection.replace(/'/g, "\\'")}',${tip.odds},event)"> Add to Acca
             </label>
             <button class="backed-btn ${isBacked ? 'backed' : ''}" id="backed-${tip.id}" onclick="event.stopPropagation();App.toggleBacked('${tip.id}','${tip.selection.replace(/'/g, "\\'")}',${tip.odds},'${tip.result || ''}')">${isBacked ? 'Backed' : 'I backed this'}</button>
+          </div>
+          <div class="bet-slip-section" onclick="event.stopPropagation();">
+            <div class="bet-slip-wrapper">
+              <button class="bet-slip-btn" onclick="App.toggleBetSlip('${tip.id}')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+                Place Bet
+              </button>
+              <div class="bet-slip-dropdown" id="betslip-dd-${tip.id}">
+                <a href="https://www.bet365.com/#/HO/" target="_blank" rel="noopener nofollow" class="bookie-link"><span class="bookie-dot" style="background:#1b5e20;"></span>Bet365<span class="bookie-arrow">&rsaquo;</span></a>
+                <a href="https://www.paddypower.com/" target="_blank" rel="noopener nofollow" class="bookie-link"><span class="bookie-dot" style="background:#004833;"></span>Paddy Power<span class="bookie-arrow">&rsaquo;</span></a>
+                <a href="https://www.williamhill.com/" target="_blank" rel="noopener nofollow" class="bookie-link"><span class="bookie-dot" style="background:#1a237e;"></span>William Hill<span class="bookie-arrow">&rsaquo;</span></a>
+                <a href="https://www.skybet.com/" target="_blank" rel="noopener nofollow" class="bookie-link"><span class="bookie-dot" style="background:#0c2340;"></span>Sky Bet<span class="bookie-arrow">&rsaquo;</span></a>
+                <a href="https://www.betfair.com/" target="_blank" rel="noopener nofollow" class="bookie-link"><span class="bookie-dot" style="background:#ffb80c;"></span>Betfair<span class="bookie-arrow">&rsaquo;</span></a>
+              </div>
+            </div>
+            <button class="copy-selection-btn" onclick="App.copySelection('${tip.selection.replace(/'/g, "\\'")}','${(tip.market || '').replace(/'/g, "\\'")}',${tip.odds},'${(tip.event || '').replace(/'/g, "\\'")}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy Selection
+            </button>
           </div>` : ''}
         </div>
         ${isLocked ? `

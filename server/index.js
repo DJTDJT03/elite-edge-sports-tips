@@ -1610,6 +1610,110 @@ app.get('/api/tips/:id', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// ACTIVITY FEED (Social Proof Ticker)
+// ---------------------------------------------------------------------------
+app.get('/api/activity-feed', (req, res) => {
+  const results = readJSON('sample-results.json');
+  const tips = readJSON('sample-tips.json');
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const todayStr = now.toISOString().split('T')[0];
+
+  // Helper: random-but-realistic member count
+  function randMembers(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  // Helper: format odds as fractional string for display
+  function formatOddsFrac(decimal) {
+    if (!decimal || decimal <= 1) return String(decimal);
+    var common = [
+      [1.1,'1/10'],[1.2,'1/5'],[1.25,'1/4'],[1.33,'1/3'],[1.4,'2/5'],[1.5,'1/2'],
+      [1.57,'4/7'],[1.62,'8/13'],[1.67,'4/6'],[1.73,'8/11'],[1.8,'4/5'],[1.83,'5/6'],
+      [1.91,'10/11'],[2,'Evs'],[2.1,'11/10'],[2.2,'6/5'],[2.25,'5/4'],[2.38,'11/8'],
+      [2.5,'6/4'],[2.62,'13/8'],[2.75,'7/4'],[2.88,'15/8'],[3,'2/1'],[3.25,'9/4'],
+      [3.5,'5/2'],[3.75,'11/4'],[4,'3/1'],[4.33,'10/3'],[4.5,'7/2'],[5,'4/1'],
+      [5.5,'9/2'],[6,'5/1'],[7,'6/1'],[8,'7/1'],[9,'8/1'],[10,'9/1'],
+      [11,'10/1'],[13,'12/1'],[15,'14/1'],[17,'16/1'],[21,'20/1'],[26,'25/1'],
+      [34,'33/1'],[51,'50/1'],[101,'100/1']
+    ];
+    var closest = common.reduce(function(prev, curr) {
+      return Math.abs(curr[0] - decimal) < Math.abs(prev[0] - decimal) ? curr : prev;
+    });
+    if (Math.abs(closest[0] - decimal) < 0.15) return closest[1];
+    return decimal.toFixed(2);
+  }
+
+  var messages = [];
+
+  // 1. Recent WON results
+  var recentWins = results.filter(function(r) {
+    return r.result === 'won' && r.date >= sevenDaysAgo;
+  }).slice(-6);
+  recentWins.forEach(function(r) {
+    var members = randMembers(8, 35);
+    messages.push({
+      text: members + ' members backed ' + r.selection + ' — WON at ' + formatOddsFrac(r.odds),
+      type: 'won',
+      timestamp: r.date
+    });
+    // Also add settled message
+    if (r.pnl && r.pnl > 0) {
+      messages.push({
+        text: 'Premium tip settled: +' + r.pnl.toFixed(2) + 'u on ' + r.selection,
+        type: 'settled',
+        timestamp: r.date
+      });
+    }
+  });
+
+  // 2. Active tips (NAP and regular)
+  var activeTips = tips.filter(function(t) {
+    return t.status === 'active' && t.date >= todayStr;
+  }).slice(0, 5);
+  activeTips.forEach(function(t) {
+    var members = randMembers(8, 28);
+    if (t.isNap) {
+      messages.push({
+        text: 'NAP of the Day: ' + t.selection + ' at ' + (t.event || '') + ' — ' + members + ' members following',
+        type: 'tip',
+        timestamp: t.date || todayStr
+      });
+    } else {
+      messages.push({
+        text: t.selection + ' at ' + (t.event || '') + ' — ' + members + ' members tracking',
+        type: 'tip',
+        timestamp: t.date || todayStr
+      });
+    }
+  });
+
+  // 3. Weekly acca if present
+  var acca = tips.find(function(t) { return t.isWeeklyAcca && t.status === 'active'; });
+  if (acca) {
+    messages.push({
+      text: 'Weekly acca at ' + (acca.odds ? acca.odds.toFixed(2) : '?.??') + ' combined odds — ' + randMembers(15, 30) + ' members tracking',
+      type: 'tip',
+      timestamp: todayStr
+    });
+  }
+
+  // 4. General social proof messages
+  var cities = ['London', 'Manchester', 'Birmingham', 'Leeds', 'Liverpool', 'Glasgow', 'Edinburgh', 'Bristol', 'Cardiff', 'Belfast', 'Newcastle', 'Sheffield'];
+  messages.push({
+    text: 'New member joined from ' + cities[Math.floor(Math.random() * cities.length)],
+    type: 'general',
+    timestamp: todayStr
+  });
+
+  // Shuffle and limit to 8-12
+  messages.sort(function() { return Math.random() - 0.5; });
+  messages = messages.slice(0, Math.min(12, Math.max(8, messages.length)));
+
+  res.json(messages);
+});
+
+// ---------------------------------------------------------------------------
 // RESULTS ROUTES
 // ---------------------------------------------------------------------------
 app.get('/api/results', (req, res) => {

@@ -1317,8 +1317,8 @@ main { min-height: calc(100vh - 64px); }
    ENHANCEMENT: ODDS MOVEMENT INDICATOR
    ========================================================================= */
 .odds-movement { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; margin-left: 6px; }
-.odds-movement.drifted { color: var(--green); }
-.odds-movement.shortened { color: var(--red); }
+.odds-movement.drifted { color: #f59e0b; }
+.odds-movement.shortened { color: var(--green); }
 
 /* =========================================================================
    ENHANCEMENT: FORM GUIDE
@@ -3686,4 +3686,219 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   .streak-badge { width: 100px; padding: 12px 8px; }
   .streak-badge-icon { font-size: 24px; }
   .streak-badge-name { font-size: 11px; }
+}
+
+/* =========================================================================
+   FEATURE: SOCIAL PROOF ACTIVITY TICKER
+   ========================================================================= */
+.activity-ticker {
+  overflow: hidden;
+  background: linear-gradient(90deg, var(--bg-deep), rgba(212,168,67,0.03), var(--bg-deep));
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+  position: relative;
+}
+.activity-ticker::before,
+.activity-ticker::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 60px;
+  z-index: 2;
+  pointer-events: none;
+}
+.activity-ticker::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--bg-deep), transparent);
+}
+.activity-ticker::after {
+  right: 0;
+  background: linear-gradient(270deg, var(--bg-deep), transparent);
+}
+.activity-ticker-inner {
+  display: flex;
+  gap: 0;
+  width: max-content;
+  animation: activity-scroll 45s linear infinite;
+}
+.activity-ticker-inner:hover {
+  animation-play-state: paused;
+}
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 0 12px;
+}
+.activity-item.activity-won { color: var(--green); font-weight: 600; }
+.activity-item.activity-tip { color: var(--gold); font-weight: 600; }
+.activity-item.activity-settled { color: var(--green); }
+.activity-item.activity-general { color: var(--text-muted); }
+.activity-separator {
+  color: var(--gold);
+  opacity: 0.5;
+  font-size: 10px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+}
+@keyframes activity-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@media (max-width: 768px) {
+  .activity-ticker { padding: 6px 0; }
+  .activity-item { font-size: 11px; padding: 0 8px; }
+}
+
+/* =========================================================================
+   FEATURE: BET SLIP DEEP LINKS
+   ========================================================================= */
+.bet-slip-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.bet-slip-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.bet-slip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bg-deep);
+  background: linear-gradient(135deg, var(--gold), #b8902f);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.bet-slip-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(212,168,67,0.3);
+}
+.bet-slip-btn svg {
+  width: 12px;
+  height: 12px;
+}
+.bet-slip-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 100;
+  overflow: hidden;
+  animation: betslip-open 0.2s ease;
+}
+.bet-slip-dropdown.active {
+  display: block;
+}
+@keyframes betslip-open {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.bookie-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.bookie-link:last-child { border-bottom: none; }
+.bookie-link:hover {
+  background: rgba(212,168,67,0.08);
+}
+.bookie-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.bookie-link .bookie-arrow {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.copy-selection-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.copy-selection-btn:hover {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+/* =========================================================================
+   FEATURE: ENHANCED ODDS MOVEMENT INDICATOR
+   ========================================================================= */
+.odds-movement-detail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+.odds-shortened-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--green);
+  font-weight: 600;
+  background: rgba(34,197,94,0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.odds-drifted-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #f59e0b;
+  font-weight: 600;
+  background: rgba(245,158,11,0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.odds-best-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--green);
+  font-weight: 700;
+  background: rgba(34,197,94,0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
 }
