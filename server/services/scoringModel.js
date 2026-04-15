@@ -308,19 +308,41 @@ class ScoringModel {
     const formPositions = formStr.split('').filter(c => /[0-9]/.test(c)).map(Number);
 
     // --- Form factor ---
+    // Rewards consistency AND improvement, not just winning.
+    // A horse that finishes 2nd, 2nd, 3rd, 1st is IMPROVING and valuable.
+    // A horse that goes 1, 1, 1, 5 might be declining.
     let formScore = 0.5;
     if (formPositions.length > 0) {
-      const recentForm = formPositions.slice(0, 5);
+      const recentForm = formPositions.slice(0, 6);
       let formPoints = 0;
+      let improvementBonus = 0;
+
       recentForm.forEach((pos, idx) => {
-        const recency = 1 - (idx * 0.15); // more recent = more weight
+        const recency = 1 - (idx * 0.12); // more recent = more weight
         if (pos === 1) formPoints += 1.0 * recency;
-        else if (pos === 2) formPoints += 0.75 * recency;
-        else if (pos === 3) formPoints += 0.5 * recency;
-        else if (pos <= 5) formPoints += 0.2 * recency;
-        else formPoints += 0.05 * recency;
+        else if (pos === 2) formPoints += 0.8 * recency;
+        else if (pos === 3) formPoints += 0.6 * recency;
+        else if (pos <= 5) formPoints += 0.3 * recency;
+        else if (pos <= 8) formPoints += 0.1 * recency;
+        else formPoints += 0.02 * recency;
       });
-      formScore = Math.min(formPoints / (recentForm.length * 0.7), 1.0);
+
+      // Improvement bonus: if recent positions are getting lower (better), boost
+      if (recentForm.length >= 3) {
+        const first3 = recentForm.slice(0, 3);
+        const last3 = recentForm.slice(-3);
+        const recentAvg = first3.reduce((s, p) => s + p, 0) / first3.length;
+        const olderAvg = last3.reduce((s, p) => s + p, 0) / last3.length;
+        if (recentAvg < olderAvg) improvementBonus = 0.15; // improving
+        if (recentAvg > olderAvg + 2) improvementBonus = -0.1; // declining
+      }
+
+      // Consistency bonus: if all recent runs are in the first 3, very consistent
+      const top3Count = recentForm.filter(p => p <= 3).length;
+      const consistencyBonus = top3Count >= 4 ? 0.15 : top3Count >= 3 ? 0.08 : 0;
+
+      formScore = Math.min(formPoints / (recentForm.length * 0.65) + improvementBonus + consistencyBonus, 1.0);
+      formScore = Math.max(formScore, 0.05);
     }
 
     // --- Going factor ---
@@ -379,19 +401,30 @@ class ScoringModel {
     }
 
     // --- Market support factor ---
+    // DO NOT reward short prices — that creates a favourite bias.
+    // Instead, look for VALUE: where form/class/trainer signals are
+    // stronger than the market price suggests.
     let marketScore = 0.5;
     const runnerOdds = runner.odds || 0;
-    if (runnerOdds > 0 && runnerOdds < 4) marketScore = 0.7; // short price = market support
-    else if (runnerOdds >= 4 && runnerOdds < 8) marketScore = 0.55;
-    else if (runnerOdds >= 8 && runnerOdds < 15) marketScore = 0.4;
-    else if (runnerOdds >= 15) marketScore = 0.25;
 
-    // If we have Odds API data, check for movement
-    if (oddsData && runner.horseName) {
-      // oddsData is normalised: array of { eventId, bookmakerOdds, ... }
-      // We don't have direct racing odds from Odds API (it's football-focused)
-      // So we rely on the runner.odds from Racing API
+    // Calculate a form-implied price: what odds SHOULD this horse be based on form alone?
+    const formImpliedOdds = formScore > 0 ? 1 / (formScore * 0.7) : 20;
+
+    if (runnerOdds > 0) {
+      // Market agrees with our form assessment = moderate signal
+      if (Math.abs(runnerOdds - formImpliedOdds) < 2) marketScore = 0.55;
+      // Market has this horse SHORTER than form suggests = market knows something, decent
+      else if (runnerOdds < formImpliedOdds) marketScore = 0.6;
+      // Market has this horse BIGGER than form suggests = potential VALUE play
+      else if (runnerOdds > formImpliedOdds * 1.5) marketScore = 0.75;
+      // Massive overlay — market price way bigger than form suggests
+      else if (runnerOdds > formImpliedOdds * 2) marketScore = 0.85;
     }
+
+    // Bonus for mid-range prices where the best value typically lives (4/1 to 14/1)
+    if (runnerOdds >= 5 && runnerOdds <= 15) marketScore = Math.min(marketScore + 0.1, 1.0);
+    // Don't completely dismiss outsiders — they can be value
+    if (runnerOdds >= 15 && formScore >= 0.5) marketScore = Math.min(marketScore + 0.15, 0.9);
 
     const factors = {
       form: Math.round(formScore * 100) / 100,
