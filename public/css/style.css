@@ -3902,3 +3902,372 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   border-radius: 4px;
   font-size: 11px;
 }
+
+/* =========================================================================
+   BANKROLL TRACKER (Feature: Bankroll + Personal P/L)
+   ========================================================================= */
+.bankroll-card {
+  background: linear-gradient(135deg, rgba(212,168,67,0.08), rgba(212,168,67,0.02));
+  border: 1px solid rgba(212,168,67,0.35);
+  border-radius: 14px;
+  padding: 20px 22px;
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.bankroll-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--gold-dark));
+}
+.bankroll-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.bankroll-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--gold);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.bankroll-title .bankroll-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 8px rgba(212,168,67,0.7);
+}
+.bankroll-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.bankroll-stat {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 14px 12px;
+  text-align: center;
+}
+.bankroll-stat .label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.bankroll-stat .value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+.bankroll-stat .value.current {
+  font-size: 26px;
+  background: linear-gradient(135deg, var(--gold-light), var(--gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.bankroll-stat .sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.bankroll-stat .sub.positive { color: var(--green); }
+.bankroll-stat .sub.negative { color: var(--red); }
+.bankroll-chart {
+  background: rgba(0,0,0,0.2);
+  border-radius: 10px;
+  padding: 10px 8px 6px;
+  height: 110px;
+  position: relative;
+}
+.bankroll-empty {
+  background: linear-gradient(135deg, rgba(212,168,67,0.1), rgba(212,168,67,0.02));
+  border: 1px dashed rgba(212,168,67,0.4);
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.bankroll-empty .be-icon {
+  font-size: 32px;
+}
+.bankroll-empty .be-body {
+  flex: 1;
+  min-width: 180px;
+}
+.bankroll-empty .be-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+.bankroll-empty .be-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.bankroll-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.bankroll-trend.up { color: var(--green); }
+.bankroll-trend.down { color: var(--red); }
+
+@media (max-width: 720px) {
+  .bankroll-grid { grid-template-columns: repeat(2, 1fr); }
+  .bankroll-stat .value { font-size: 18px; }
+  .bankroll-stat .value.current { font-size: 22px; }
+}
+
+/* Bankroll Settings Modal form spacing */
+.bankroll-method-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+.bankroll-method-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.bankroll-method-row input[type=radio] {
+  margin: 0;
+  width: auto;
+}
+
+/* =========================================================================
+   CONFIDENCE LEADERBOARD (Feature: Tipster Confidence ROI Tiers)
+   ========================================================================= */
+.confidence-leaderboard-wrap {
+  margin-bottom: 28px;
+}
+.confidence-leaderboard-header {
+  text-align: center;
+  margin-bottom: 14px;
+}
+.confidence-leaderboard-header .cl-tagline {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.confidence-leaderboard-header .cl-tagline strong {
+  color: var(--gold);
+}
+.confidence-leaderboard {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.confidence-tier-card {
+  background: var(--bg-card, #141828);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 14px;
+  position: relative;
+  transition: transform var(--transition), border-color var(--transition);
+}
+.confidence-tier-card:hover {
+  transform: translateY(-2px);
+}
+.confidence-tier-card.recommended {
+  border: 1px solid var(--gold);
+  box-shadow: 0 0 20px rgba(212,168,67,0.12);
+}
+.confidence-tier-card.recommended::after {
+  content: "Recommended";
+  position: absolute;
+  top: -10px;
+  right: 10px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+  color: #0a0e1a;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.confidence-tier-card .tier-name {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.confidence-tier-card .tier-range {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+.confidence-tier-card .tier-roi {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+.confidence-tier-card .tier-roi.positive {
+  background: rgba(34,197,94,0.15);
+  color: var(--green);
+}
+.confidence-tier-card .tier-roi.negative {
+  background: rgba(239,68,68,0.15);
+  color: var(--red);
+}
+.confidence-tier-card .tier-roi.neutral {
+  background: rgba(255,255,255,0.05);
+  color: var(--text-muted);
+}
+.confidence-tier-card .tier-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+.confidence-tier-card .tier-meta div { text-align: center; flex: 1; }
+.confidence-tier-card .tier-meta .meta-value {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+@media (max-width: 720px) {
+  .confidence-leaderboard { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* =========================================================================
+   RECOVERY PICK CARD (Feature: Loss Recovery Tracker)
+   ========================================================================= */
+.recovery-pick-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(239,68,68,0.08), rgba(245,158,11,0.05));
+  border-radius: 14px;
+  padding: 3px;
+  background-image: linear-gradient(var(--bg-card, #141828), var(--bg-card, #141828)),
+                    linear-gradient(135deg, #ef4444, #f59e0b, #d4a843);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  border: 2px solid transparent;
+  margin-bottom: 22px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform var(--transition);
+}
+.recovery-pick-card:hover { transform: translateY(-1px); }
+.recovery-pick-inner {
+  background: var(--bg-card, #141828);
+  border-radius: 12px;
+  padding: 20px 22px;
+  position: relative;
+}
+.recovery-pick-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #f59e0b;
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+.recovery-pick-title .recovery-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 10px rgba(245,158,11,0.7);
+  animation: recoveryPulse 1.8s ease-in-out infinite;
+}
+@keyframes recoveryPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.25); opacity: 0.65; }
+}
+.recovery-pick-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+.recovery-tip-info {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  background: rgba(212,168,67,0.05);
+  border: 1px solid rgba(212,168,67,0.18);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  animation: recoveryGlow 2.5s ease-in-out infinite;
+}
+@keyframes recoveryGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212,168,67,0.0); }
+  50% { box-shadow: 0 0 18px 0 rgba(212,168,67,0.25); }
+}
+.recovery-tip-info .rt-selection {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.recovery-tip-info .rt-event {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.recovery-tip-info .rt-odds {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--gold);
+  text-align: right;
+}
+.recovery-tip-info .rt-odds-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  text-align: right;
+}
+.recovery-pick-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+.recovery-pick-meta strong { color: var(--gold); }
+@media (max-width: 560px) {
+  .recovery-tip-info { grid-template-columns: 1fr; }
+  .recovery-tip-info .rt-odds, .recovery-tip-info .rt-odds-label { text-align: left; }
+}

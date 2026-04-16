@@ -1035,11 +1035,13 @@ const App = {
   toggleBacked(tipId, selection, odds, result) {
     const bets = this.getMyBets();
     const idx = bets.findIndex(b => b.tipId === tipId);
+    var added = false;
     if (idx >= 0) {
       bets.splice(idx, 1);
     } else {
       bets.push({ tipId, selection, odds, result: result || null, date: new Date().toISOString() });
       trackEvent('betting', 'bet_placed', selection);
+      added = true;
     }
     this.saveMyBets(bets);
     // Update button state
@@ -1047,8 +1049,16 @@ const App = {
     if (btn) {
       const isBacked = bets.find(b => b.tipId === tipId);
       btn.className = isBacked ? 'backed-btn backed' : 'backed-btn';
-      btn.textContent = isBacked ? 'Backed' : 'I backed this';
+      btn.textContent = isBacked ? 'Backed' : 'Back This Tip';
     }
+    // Toast feedback
+    if (added) {
+      this.showToast("Added to your bets — we'll track the result", 'success');
+    } else {
+      this.showToast('Removed from your bets.', 'info');
+    }
+    // Refresh bankroll card live
+    try { this.refreshBankrollCard(); } catch (e) {}
   },
 
   renderMyBets() {
@@ -1056,7 +1066,7 @@ const App = {
     if (!content) return;
     const bets = this.getMyBets();
     if (!bets.length) {
-      content.innerHTML = '<p class="text-muted">No bets tracked yet. Click "I backed this" on any tip card to start tracking.</p>';
+      content.innerHTML = '<p class="text-muted">No bets tracked yet. Click "Back This Tip" on any tip card to start tracking.</p>';
       return;
     }
     const won = bets.filter(b => b.result === 'won').length;
@@ -1096,6 +1106,385 @@ const App = {
         </tbody>
       </table>
     `;
+  },
+
+  // -----------------------------------------------------------------------
+  // BANKROLL TRACKER (Feature: Personal P/L Dashboard)
+  // -----------------------------------------------------------------------
+  getBankrollSettings() {
+    try {
+      var raw = localStorage.getItem('ee_bankroll');
+      if (!raw) return null;
+      var obj = JSON.parse(raw);
+      if (!obj || typeof obj.startingBank !== 'number') return null;
+      return obj;
+    } catch { return null; }
+  },
+
+  saveBankrollSettings(e) {
+    if (e) e.preventDefault();
+    var starting = parseFloat(document.getElementById('br-starting').value);
+    var stake = parseFloat(document.getElementById('br-stake').value);
+    var methodEl = document.querySelector('input[name="br-method"]:checked');
+    var method = methodEl ? methodEl.value : 'flat';
+    var errBox = document.getElementById('br-error');
+    if (!(starting > 0) || !(stake > 0)) {
+      if (errBox) errBox.textContent = 'Please enter a starting bank and stake size greater than zero.';
+      return;
+    }
+    if (errBox) errBox.textContent = '';
+    var settings = {
+      startingBank: starting,
+      currency: 'GBP',
+      stakeSize: stake,
+      stakingMethod: method,
+      updated: new Date().toISOString(),
+    };
+    localStorage.setItem('ee_bankroll', JSON.stringify(settings));
+    this.closeModal();
+    this.showToast('Bankroll settings saved.', 'success');
+    // Re-render the bankroll card if we're on the dashboard
+    this.refreshBankrollCard();
+  },
+
+  resetBankrollSettings() {
+    if (!confirm('Reset your bankroll tracker? This removes saved settings (your backed bets stay intact).')) return;
+    localStorage.removeItem('ee_bankroll');
+    this.closeModal();
+    this.showToast('Bankroll tracker reset.', 'info');
+    this.refreshBankrollCard();
+  },
+
+  openBankrollSettings() {
+    var settings = this.getBankrollSettings() || { startingBank: 500, stakeSize: 10, stakingMethod: 'flat' };
+    // Populate the modal inputs then show
+    this.showModal('bankroll-settings');
+    var s = document.getElementById('br-starting');
+    var k = document.getElementById('br-stake');
+    if (s) s.value = settings.startingBank;
+    if (k) k.value = settings.stakeSize;
+    var radios = document.querySelectorAll('input[name="br-method"]');
+    radios.forEach(function(r) {
+      r.checked = (r.value === (settings.stakingMethod || 'flat'));
+    });
+  },
+
+  // Build bankroll computation from backed bets + live tips/results data
+  _computeBankrollSeries(settings) {
+    var bets = this.getMyBets();
+    var tipsById = {};
+    (this.tips || []).forEach(function(t) { if (t && t.id) tipsById[t.id] = t; });
+    var results = this._allResults || this.results || [];
+    var resultsByTip = {};
+    results.forEach(function(r) { if (r && r.tipId) resultsByTip[r.tipId] = r; });
+
+    // Enrich each bet with result + per-unit pnl
+    var enriched = bets.map(function(b) {
+      var r = resultsByTip[b.tipId];
+      var tip = tipsById[b.tipId] || {};
+      var status = (r && r.result) || b.result || null;
+      // Per-unit P/L from server result if present, else rough estimate
+      var perUnit = 0;
+      if (r && typeof r.pnl === 'number' && r.stake) {
+        perUnit = r.pnl / r.stake;
+      } else if (status === 'won' && (b.odds || tip.odds)) {
+        perUnit = (b.odds || tip.odds) - 1;
+      } else if (status === 'lost') {
+        perUnit = -1;
+      } else if (status === 'placed' && (b.odds || tip.odds)) {
+        perUnit = ((b.odds || tip.odds) - 1) / 4;
+      }
+      return {
+        tipId: b.tipId,
+        date: (r && r.date) || b.date || new Date().toISOString(),
+        selection: b.selection || tip.selection || 'Bet',
+        status: status,
+        perUnit: perUnit,
+        pnl: perUnit * settings.stakeSize,
+      };
+    });
+
+    // Sort by date ascending
+    enriched.sort(function(a, b) { return new Date(a.date) - new Date(b.date); });
+
+    // Running bank history
+    var bank = settings.startingBank;
+    var history = [{ date: 'Start', bank: bank }];
+    enriched.forEach(function(e) {
+      if (e.status) { // only settled bets affect bank
+        bank += e.pnl;
+        history.push({ date: e.date, bank: Math.round(bank * 100) / 100 });
+      }
+    });
+
+    var settled = enriched.filter(function(e) { return e.status; });
+    var totalPnl = settled.reduce(function(s, e) { return s + e.pnl; }, 0);
+    return {
+      startingBank: settings.startingBank,
+      currentBank: Math.round(bank * 100) / 100,
+      totalPnl: Math.round(totalPnl * 100) / 100,
+      totalBets: bets.length,
+      settledBets: settled.length,
+      pendingBets: bets.length - settled.length,
+      history: history,
+    };
+  },
+
+  renderBankroll() {
+    if (!this.user) return '';
+    var settings = this.getBankrollSettings();
+    if (!settings) {
+      return '' +
+        '<div class="bankroll-empty" id="bankroll-card">' +
+          '<div class="be-icon">&#128176;</div>' +
+          '<div class="be-body">' +
+            '<div class="be-title">Set Up Your Bankroll</div>' +
+            '<div class="be-desc">Track your personal P/L on every tip you back. Set your starting bank and stake size to get started.</div>' +
+          '</div>' +
+          '<button class="btn btn-gold btn-sm" onclick="App.openBankrollSettings()">Set Up Bankroll</button>' +
+        '</div>';
+    }
+
+    var stats = this._computeBankrollSeries(settings);
+    var netPct = settings.startingBank > 0 ? (stats.totalPnl / settings.startingBank) * 100 : 0;
+    var sign = stats.totalPnl >= 0 ? '+' : '';
+    var trendClass = stats.totalPnl >= 0 ? 'up' : 'down';
+    var trendArrow = stats.totalPnl >= 0 ? '&uarr;' : '&darr;';
+    var pnlColour = stats.totalPnl >= 0 ? 'positive' : 'negative';
+
+    var methodLabel = 'Flat';
+    if (settings.stakingMethod === 'percentage') methodLabel = '1% of Bank';
+    else if (settings.stakingMethod === 'kelly') methodLabel = 'Kelly Criterion';
+
+    return '' +
+      '<div class="bankroll-card" id="bankroll-card">' +
+        '<div class="bankroll-header">' +
+          '<div class="bankroll-title"><span class="bankroll-dot"></span> Your Bankroll Tracker</div>' +
+          '<button class="btn btn-outline btn-sm" onclick="App.openBankrollSettings()">Edit Settings</button>' +
+        '</div>' +
+        '<div class="bankroll-grid">' +
+          '<div class="bankroll-stat">' +
+            '<div class="label">Starting Bank</div>' +
+            '<div class="value">&pound;' + settings.startingBank.toFixed(2) + '</div>' +
+            '<div class="sub">' + methodLabel + ' @ &pound;' + settings.stakeSize + '/unit</div>' +
+          '</div>' +
+          '<div class="bankroll-stat">' +
+            '<div class="label">Current Bank</div>' +
+            '<div class="value current">&pound;' + stats.currentBank.toFixed(2) + '</div>' +
+            '<div class="sub ' + (stats.totalPnl >= 0 ? 'positive' : 'negative') + '">' +
+              '<span class="bankroll-trend ' + trendClass + '">' + trendArrow + ' ' + sign + netPct.toFixed(1) + '%</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="bankroll-stat">' +
+            '<div class="label">Net P/L</div>' +
+            '<div class="value ' + pnlColour + '">' + sign + '&pound;' + stats.totalPnl.toFixed(2) + '</div>' +
+            '<div class="sub">' + stats.settledBets + ' settled</div>' +
+          '</div>' +
+          '<div class="bankroll-stat">' +
+            '<div class="label">Bets Backed</div>' +
+            '<div class="value">' + stats.totalBets + '</div>' +
+            '<div class="sub">' + stats.pendingBets + ' pending</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="bankroll-chart"><canvas id="bankroll-chart-canvas"></canvas></div>' +
+      '</div>';
+  },
+
+  renderBankrollChart() {
+    if (!this.user) return;
+    var settings = this.getBankrollSettings();
+    if (!settings) return;
+    var canvas = document.getElementById('bankroll-chart-canvas');
+    if (!canvas || typeof Chart === 'undefined') return;
+    if (this._bankrollChart) {
+      try { this._bankrollChart.destroy(); } catch (e) {}
+      this._bankrollChart = null;
+    }
+    var stats = this._computeBankrollSeries(settings);
+    // If only the Start point exists, add a flat projection so the chart isn't empty
+    if (stats.history.length < 2) {
+      stats.history = [
+        { date: 'Start', bank: settings.startingBank },
+        { date: new Date().toISOString(), bank: settings.startingBank },
+      ];
+    }
+    var labels = stats.history.map(function(h, i) {
+      return i === 0 ? 'Start' : formatDateUK(h.date);
+    });
+    var data = stats.history.map(function(h) { return h.bank; });
+
+    try {
+      this._bankrollChart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            borderColor: '#d4a843',
+            backgroundColor: 'rgba(212,168,67,0.12)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 3,
+            borderWidth: 2,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) { return '£' + ctx.parsed.y.toFixed(2); }
+              }
+            }
+          },
+          scales: {
+            x: { display: false },
+            y: {
+              display: false,
+              beginAtZero: false,
+            }
+          },
+          elements: { line: { capBezierPoints: true } },
+        }
+      });
+    } catch (err) {
+      console.error('[Bankroll] Chart error:', err);
+    }
+  },
+
+  refreshBankrollCard() {
+    var existing = document.getElementById('bankroll-card');
+    if (!existing) return;
+    var parent = existing.parentNode;
+    var wrap = document.createElement('div');
+    wrap.innerHTML = this.renderBankroll();
+    var fresh = wrap.firstChild;
+    if (fresh) {
+      parent.replaceChild(fresh, existing);
+      this.renderBankrollChart();
+    }
+  },
+
+  // -----------------------------------------------------------------------
+  // CONFIDENCE LEADERBOARD (Feature: Social Proof Tier ROI)
+  // -----------------------------------------------------------------------
+  async loadConfidenceLeaderboard() {
+    if (this._confidenceTiers) return this._confidenceTiers;
+    try {
+      var data = await this.api('/results/by-confidence');
+      this._confidenceTiers = (data && data.tiers) || [];
+    } catch (e) {
+      this._confidenceTiers = [];
+    }
+    return this._confidenceTiers;
+  },
+
+  renderConfidenceLeaderboard(tiers) {
+    if (!tiers || !tiers.length) return '';
+
+    // Derive tagline from data if available
+    var eliteTier = tiers.find(function(t) { return t.tier === 'Elite'; });
+    var strongTier = tiers.find(function(t) { return t.tier === 'Strong'; });
+    var tagline;
+    if (eliteTier && eliteTier.totalTips > 0) {
+      tagline = 'Tips rated 8+ confidence have returned <strong>' + ((strongTier && strongTier.roi > 0) ? '+' : '') + (strongTier ? strongTier.roi : 0) + '% ROI</strong> this year. Our Elite-rated picks are <strong>' + eliteTier.strikeRate + '% strike rate</strong>.';
+    } else {
+      tagline = 'Our confidence model is tracked transparently across every tier. Tips rated 8+ consistently outperform the market.';
+    }
+
+    var html = '' +
+      '<div class="confidence-leaderboard-wrap">' +
+        '<div class="confidence-leaderboard-header">' +
+          '<div class="section-title" style="justify-content:center;">' +
+            '<span class="icon">&#9733;</span> Performance by Confidence Tier' +
+          '</div>' +
+          '<div class="cl-tagline">' + tagline + '</div>' +
+        '</div>' +
+        '<div class="confidence-leaderboard">' +
+          tiers.map(function(t) {
+            var roiClass = t.roi > 0 ? 'positive' : (t.roi < 0 ? 'negative' : 'neutral');
+            var roiSign = t.roi >= 0 ? '+' : '';
+            return '<div class="confidence-tier-card' + (t.recommended ? ' recommended' : '') + '">' +
+              '<div class="tier-name">' + t.tier + '</div>' +
+              '<div class="tier-range">Confidence ' + t.range + '</div>' +
+              '<div class="tier-roi ' + roiClass + '">' + roiSign + t.roi + '% ROI</div>' +
+              '<div class="tier-meta">' +
+                '<div><span class="meta-value">' + t.strikeRate + '%</span>Strike</div>' +
+                '<div><span class="meta-value">' + t.totalTips + '</span>Tips</div>' +
+                '<div><span class="meta-value">' + t.wins + '</span>Wins</div>' +
+              '</div>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+    return html;
+  },
+
+  // -----------------------------------------------------------------------
+  // RECOVERY PICK (Feature: Loss Recovery Tracker)
+  // -----------------------------------------------------------------------
+  renderRecoveryPick(recentResults, todayTips) {
+    // Premium only
+    if (!this.user || this.user.subscription !== 'premium') return '';
+    if (!Array.isArray(recentResults) || !Array.isArray(todayTips)) return '';
+
+    // Take last 5 settled results (newest first)
+    var settled = recentResults
+      .filter(function(r) { return r && r.result && r.result !== 'void'; })
+      .slice()
+      .sort(function(a, b) { return new Date(b.date) - new Date(a.date); })
+      .slice(0, 5);
+
+    if (settled.length < 3) return ''; // Not enough data
+
+    var losses = settled.filter(function(r) { return r.result === 'lost'; }).length;
+    if (losses < 3) return ''; // Not on a cold run
+
+    // Find today's highest-confidence tip with confidence >= 8
+    var today = this._getToday();
+    var candidates = todayTips.filter(function(t) {
+      return !t.locked && !t.isWeeklyAcca &&
+        (t.confidence || 0) >= 8 &&
+        (!t.date || t.date === today) &&
+        t.status === 'active';
+    });
+    if (!candidates.length) return '';
+
+    candidates.sort(function(a, b) {
+      if ((b.confidence || 0) !== (a.confidence || 0)) return (b.confidence || 0) - (a.confidence || 0);
+      return (b.edge || 0) - (a.edge || 0);
+    });
+    var pick = candidates[0];
+
+    var oddsStr = this.formatOdds(pick.odds);
+    var edgePct = ((pick.edge || 0) * 100).toFixed(1);
+
+    return '' +
+      '<div class="recovery-pick-card" onclick="window.location.hash=\'#/tip/' + pick.id + '\'">' +
+        '<div class="recovery-pick-inner">' +
+          '<div class="recovery-pick-title"><span class="recovery-dot"></span> Recovery Pick &mdash; Time to Bounce Back</div>' +
+          '<div class="recovery-pick-subtitle">We are on a short cold run (' + losses + ' losses in the last ' + settled.length + '). This is our highest-conviction tip today.</div>' +
+          '<div class="recovery-tip-info">' +
+            '<div>' +
+              '<div class="rt-selection">' + pick.selection + '</div>' +
+              '<div class="rt-event">' + (pick.event || '') + (pick.league ? ' &bull; ' + pick.league : '') + (pick.raceTime ? ' &bull; ' + pick.raceTime : '') + '</div>' +
+            '</div>' +
+            '<div>' +
+              '<div class="rt-odds">' + oddsStr + '</div>' +
+              '<div class="rt-odds-label">' + (pick.market || 'Market') + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="recovery-pick-meta">' +
+            '<div><strong>Confidence:</strong> ' + pick.confidence + '/10</div>' +
+            '<div><strong>Edge:</strong> ' + edgePct + '%</div>' +
+            '<div><strong>Stake:</strong> ' + (pick.staking || '-') + '</div>' +
+            '<div style="margin-left:auto;"><a href="#/tip/' + pick.id + '" onclick="event.stopPropagation();" style="color:var(--gold);font-weight:700;">View full analysis &rarr;</a></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
   },
 
   // -----------------------------------------------------------------------
@@ -1369,11 +1758,19 @@ const App = {
     var morningBriefHtml = this.buildMorningBrief(tips, allResults, perf);
     var wouldHaveWonHtml = this.buildWouldHaveWon(allResults);
     var streakBadgesHtml = await this.renderStreakBadges();
+    var bankrollHtml = this.renderBankroll();
+    var recoveryHtml = this.renderRecoveryPick(allResults, tips);
 
     app.innerHTML = `
       <div class="container">
         <!-- Morning Brief (logged-in users only) -->
         ${morningBriefHtml}
+
+        <!-- Bankroll Tracker (logged-in users only) -->
+        ${bankrollHtml}
+
+        <!-- Recovery Pick (premium, only on losing runs) -->
+        ${recoveryHtml}
 
         <div class="page-header">
           <h1>Welcome to <span class="accent">Elite Edge</span></h1>
@@ -1665,6 +2062,10 @@ const App = {
         </div>` : ''}
       </div>
     `;
+
+    // Render bankroll chart after DOM update
+    var self = this;
+    setTimeout(function() { try { self.renderBankrollChart(); } catch (e) {} }, 50);
   },
 
   _dashDateFilter: 'today',
@@ -1768,7 +2169,7 @@ const App = {
             <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);cursor:pointer;" onclick="event.stopPropagation();">
               <input type="checkbox" class="acca-checkbox" id="acca-cb-${tip.id}" ${inAcca ? 'checked' : ''} onchange="App.toggleAcca('${tip.id}','${tip.selection.replace(/'/g, "\\'")}',${tip.odds},event)"> Add to Acca
             </label>
-            <button class="backed-btn ${isBacked ? 'backed' : ''}" id="backed-${tip.id}" onclick="event.stopPropagation();App.toggleBacked('${tip.id}','${tip.selection.replace(/'/g, "\\'")}',${tip.odds},'${tip.result || ''}')">${isBacked ? 'Backed' : 'I backed this'}</button>
+            <button class="backed-btn ${isBacked ? 'backed' : ''}" id="backed-${tip.id}" onclick="event.stopPropagation();App.toggleBacked('${tip.id}','${tip.selection.replace(/'/g, "\\'")}',${tip.odds},'${tip.result || ''}')">${isBacked ? 'Backed' : 'Back This Tip'}</button>
           </div>
           <div class="bet-slip-section" onclick="event.stopPropagation();">
             <div class="bet-slip-wrapper">
@@ -3046,9 +3447,10 @@ const App = {
     app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading results...</div></div>';
 
     try {
-      const [results, perf] = await Promise.all([
+      const [results, perf, tiers] = await Promise.all([
         this.api('/results'),
         this.api('/results/performance'),
+        this.loadConfidenceLeaderboard(),
       ]);
       this.results = results;
       this._allResults = results;
@@ -3057,6 +3459,7 @@ const App = {
 
     const results = this.results;
     const perf = this.performance || { roi: 0, strikeRate: 0, runningBank: 100, totalPnl: 0, totalTips: 0, wins: 0, losses: 0, avgOdds: 0, longestWinStreak: 0 };
+    const confidenceLeaderboardHtml = this.renderConfidenceLeaderboard(this._confidenceTiers || []);
 
     app.innerHTML = `
       <div class="container">
@@ -3064,6 +3467,9 @@ const App = {
           <h1><span class="accent">Results</span> & Performance</h1>
           <p>Full transparency on every published tip. Track record you can trust.</p>
         </div>
+
+        <!-- Confidence Tier Leaderboard (social proof) -->
+        ${confidenceLeaderboardHtml}
 
         <div class="grid grid-4 mb-32">
           <div class="stat-card"><div class="stat-value ${perf.roi >= 0 ? 'positive' : 'negative'}">${perf.roi > 0 ? '+' : ''}${perf.roi}%</div><div class="stat-label">ROI</div></div>
@@ -3382,6 +3788,9 @@ const App = {
 
         ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(34,197,94,0.03));border:2px solid rgba(34,197,94,0.3);border-radius:14px;padding:24px;margin-bottom:32px;text-align:center;"><div style="font-size:28px;margin-bottom:8px;">&#127881;</div><div style="font-size:20px;font-weight:800;color:#22c55e;margin-bottom:8px;">Start Free — No Bank Details Needed</div><div style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">Create your free account to access daily tips, race cards, results, and our weekly blog. Upgrade to Premium anytime from inside your account.</div><button class="btn btn-gold btn-lg" onclick="App.showModal(\'register\')">Create Free Account</button></div>' : ''}
 
+        <!-- Confidence Tier Leaderboard (social proof before plans) -->
+        <div id="pricing-confidence-leaderboard"></div>
+
         <div class="pricing-grid mb-32">
           <div class="pricing-card${!isPremium ? ' featured' : ''}">
             ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">RECOMMENDED — START HERE</div>' : ''}
@@ -3466,6 +3875,15 @@ const App = {
         </div>
       </div>
     `;
+
+    // Async load confidence leaderboard and inject
+    var self = this;
+    this.loadConfidenceLeaderboard().then(function(tiers) {
+      var container = document.getElementById('pricing-confidence-leaderboard');
+      if (container && tiers && tiers.length) {
+        container.innerHTML = self.renderConfidenceLeaderboard(tiers);
+      }
+    }).catch(function() {});
   },
 
   // -----------------------------------------------------------------------
@@ -4671,7 +5089,7 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
-  // NOTIFICATION SYSTEM (Feature #3)
+  // NOTIFICATION SYSTEM (Feature: In-app notifications)
   // -----------------------------------------------------------------------
   initNotifications() {
     this.updateNotifBadge();
@@ -4682,10 +5100,70 @@ const App = {
         if (prompt) prompt.style.display = 'block';
       }, 3000);
     }
-    // Load notifications from localStorage (populated by real events)
-    if (!this.notifications.length) {
-      this.notifications = JSON.parse(localStorage.getItem('ee_notifications') || '[]');
+    // Fetch initial server notifications, then poll every 2 minutes
+    this.fetchServerNotifications();
+    if (!this._notifPoll) {
+      this._notifPoll = setInterval(() => {
+        this.fetchServerNotifications();
+      }, 2 * 60 * 1000);
+    }
+  },
+
+  _readNotifIds() {
+    try {
+      return JSON.parse(localStorage.getItem('ee_notif_read') || '[]');
+    } catch { return []; }
+  },
+
+  _markNotifRead(id) {
+    if (!id) return;
+    var readIds = this._readNotifIds();
+    if (readIds.indexOf(id) === -1) {
+      readIds.push(id);
+      // Cap to last 500 to avoid storage bloat
+      if (readIds.length > 500) readIds = readIds.slice(-500);
+      localStorage.setItem('ee_notif_read', JSON.stringify(readIds));
+    }
+  },
+
+  async fetchServerNotifications() {
+    try {
+      var data = await this.api('/notifications');
+      var serverList = (data && data.notifications) || [];
+      var readIds = this._readNotifIds();
+      // Merge: dedupe by id
+      var byId = {};
+      this.notifications.forEach(function(n) { if (n && n.id) byId[n.id] = n; });
+      serverList.forEach(function(n) {
+        var existing = byId[n.id];
+        if (!existing) {
+          byId[n.id] = {
+            id: n.id,
+            text: n.message,
+            type: n.type,
+            tipId: n.tipId || null,
+            time: n.timestamp,
+            audience: n.audience,
+            read: readIds.indexOf(n.id) !== -1,
+          };
+        } else {
+          existing.read = readIds.indexOf(n.id) !== -1;
+        }
+      });
+      // Sort by time desc, cap to 30
+      var merged = Object.values(byId).sort(function(a, b) {
+        return new Date(b.time) - new Date(a.time);
+      }).slice(0, 30);
+      this.notifications = merged;
+      localStorage.setItem('ee_notifications', JSON.stringify(merged));
       this.updateNotifBadge();
+      // Re-render dropdown if visible
+      var dd = document.getElementById('notif-dropdown');
+      if (dd && dd.style.display !== 'none') {
+        this.renderNotifList();
+      }
+    } catch (e) {
+      // Silent failure — we'll still show any cached notifications
     }
   },
 
@@ -4713,12 +5191,29 @@ const App = {
   toggleNotifDropdown() {
     const dd = document.getElementById('notif-dropdown');
     if (!dd) return;
-    dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
-    this.renderNotifList();
-    // Mark all as read
-    this.notifications.forEach(n => n.read = true);
+    var wasOpen = dd.style.display !== 'none';
+    dd.style.display = wasOpen ? 'none' : 'block';
+    if (!wasOpen) {
+      // Re-fetch fresh before rendering
+      this.fetchServerNotifications();
+      this.renderNotifList();
+    }
+  },
+
+  clickNotification(id) {
+    var notif = this.notifications.find(function(n) { return n.id === id; });
+    if (!notif) return;
+    notif.read = true;
+    this._markNotifRead(id);
     localStorage.setItem('ee_notifications', JSON.stringify(this.notifications));
     this.updateNotifBadge();
+    this.renderNotifList();
+    // If the notification has a tipId, navigate to it
+    if (notif.tipId) {
+      var dd = document.getElementById('notif-dropdown');
+      if (dd) dd.style.display = 'none';
+      window.location.hash = '#/tip/' + notif.tipId;
+    }
   },
 
   renderNotifList() {
@@ -4728,12 +5223,14 @@ const App = {
       list.innerHTML = '<p class="text-muted text-sm" style="padding:12px;">No notifications yet</p>';
       return;
     }
-    list.innerHTML = this.notifications.slice(0, 10).map(n => `
-      <div class="notif-item ${n.read ? '' : 'unread'}">
-        <div>${n.text}</div>
-        <div class="notif-time">${this.timeAgo(n.time)}</div>
-      </div>
-    `).join('');
+    var self = this;
+    list.innerHTML = this.notifications.slice(0, 20).map(function(n) {
+      var safeText = (n.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return '<div class="notif-item ' + (n.read ? '' : 'unread') + '" onclick="App.clickNotification(\'' + n.id + '\')">' +
+        '<div>' + safeText + '</div>' +
+        '<div class="notif-time">' + self.timeAgo(n.time) + '</div>' +
+      '</div>';
+    }).join('');
   },
 
   updateNotifBadge() {
@@ -4755,8 +5252,13 @@ const App = {
   },
 
   clearNotifications() {
-    this.notifications = [];
-    localStorage.setItem('ee_notifications', '[]');
+    // Mark all current notifications as read rather than wiping server data
+    var self = this;
+    this.notifications.forEach(function(n) {
+      if (n && n.id) self._markNotifRead(n.id);
+      if (n) n.read = true;
+    });
+    localStorage.setItem('ee_notifications', JSON.stringify(this.notifications));
     this.updateNotifBadge();
     this.renderNotifList();
   },
