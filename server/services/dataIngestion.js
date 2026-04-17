@@ -625,6 +625,426 @@ class HistoricalResultsSource extends DataSource {
 }
 
 // ---------------------------------------------------------------------------
+// BETFAIR EXCHANGE DATA SOURCE
+// ---------------------------------------------------------------------------
+
+/**
+ * Betfair Exchange Source
+ * Provides real exchange data: traded volume, back/lay prices, price movements.
+ * This is where PROFESSIONAL money flows — far more valuable than bookmaker odds.
+ *
+ * To activate:
+ *   1. Create a free Betfair account at https://www.betfair.com/
+ *   2. Register for a free developer app key at https://developer.betfair.com/
+ *   3. Set env: BETFAIR_APP_KEY, BETFAIR_USERNAME, BETFAIR_PASSWORD
+ */
+class BetfairExchangeSource extends DataSource {
+  constructor() {
+    super('betfair-exchange', {
+      refreshInterval: 60000, // 1 minute — exchange prices move fast
+      apiUrl: 'https://api.betfair.com/exchange/betting/rest/v1.0',
+      appKey: process.env.BETFAIR_APP_KEY || '',
+      username: process.env.BETFAIR_USERNAME || '',
+      password: process.env.BETFAIR_PASSWORD || '',
+    });
+    this._sessionToken = null;
+    this._sessionExpiry = null;
+    this._lastRequestTime = 0;
+    this._minRequestInterval = 200; // 5 requests/sec max = 200ms between calls
+  }
+
+  /** Rate-limit: wait if needed to stay under 5 req/sec */
+  async _rateLimit() {
+    const now = Date.now();
+    const elapsed = now - this._lastRequestTime;
+    if (elapsed < this._minRequestInterval) {
+      await new Promise(resolve => setTimeout(resolve, this._minRequestInterval - elapsed));
+    }
+    this._lastRequestTime = Date.now();
+  }
+
+  /** Check if Betfair credentials are configured */
+  isConfigured() {
+    return !!(this.config.appKey && this.config.username && this.config.password);
+  }
+
+  /**
+   * Login to Betfair SSO — returns session token (SSOID).
+   * Caches token for 4 hours to avoid re-login every call.
+   */
+  async _login() {
+    // Return cached token if still valid (4 hour expiry)
+    if (this._sessionToken && this._sessionExpiry && Date.now() < this._sessionExpiry) {
+      return this._sessionToken;
+    }
+
+    if (!this.isConfigured()) {
+      throw new Error('Betfair credentials not configured');
+    }
+
+    const https = require('https');
+    const querystring = require('querystring');
+
+    const postData = querystring.stringify({
+      username: this.config.username,
+      password: this.config.password,
+    });
+
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'identitysso.betfair.com',
+        path: '/api/login',
+        method: 'POST',
+        headers: {
+          'X-Application': this.config.appKey,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(postData),
+          'Accept': 'application/json',
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.token) {
+              this._sessionToken = parsed.token;
+              this._sessionExpiry = Date.now() + (4 * 60 * 60 * 1000); // 4 hours
+              console.log('[betfair-exchange] Login successful — session cached for 4 hours');
+              resolve(parsed.token);
+            } else {
+              reject(new Error('Betfair login failed: ' + (parsed.error || parsed.status || 'Unknown error')));
+            }
+          } catch (e) {
+            reject(new Error('Betfair login: invalid JSON response'));
+          }
+        });
+      });
+      req.on('error', reject);
+      req.setTimeout(15000, () => { req.destroy(); reject(new Error('Betfair login timeout')); });
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  /**
+   * Make an authenticated POST to the Betfair Exchange API.
+   * @param {string} endpoint — e.g. 'listMarketBook'
+   * @param {Object} body — JSON body for the request
+   * @returns {Promise<Object>} parsed response
+   */
+  async _apiPost(endpoint, body) {
+    await this._rateLimit();
+    const sessionToken = await this._login();
+    const https = require('https');
+    const postData = JSON.stringify(body);
+
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'api.betfair.com',
+        path: '/exchange/betting/rest/v1.0/' + endpoint + '/',
+        method: 'POST',
+        headers: {
+          'X-Application': this.config.appKey,
+          'X-Authentication': sessionToken,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+          'Accept': 'application/json',
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            // Handle session expiry
+            if (parsed.detail && parsed.detail.APINGException &&
+                parsed.detail.APINGException.errorCode === 'INVALID_SESSION_INFORMATION') {
+              this._sessionToken = null;
+              this._sessionExpiry = null;
+              reject(new Error('Betfair session expired — will re-login on next call'));
+            } else {
+              resolve(parsed);
+            }
+          } catch (e) {
+            reject(new Error('Betfair API: invalid JSON response'));
+          }
+        });
+      });
+      req.on('error', reject);
+      req.setTimeout(15000, () => { req.destroy(); reject(new Error('Betfair API timeout')); });
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  async fetch() {
+    if (!this.isConfigured()) {
+      console.log('[betfair-exchange] Not configured — set BETFAIR_APP_KEY, BETFAIR_USERNAME, BETFAIR_PASSWORD');
+      return [];
+    }
+    try {
+      await this._login();
+      console.log('[betfair-exchange] Connection verified');
+      return [];
+    } catch (err) {
+      console.error('[betfair-exchange] Connection test failed:', err.message);
+      return [];
+    }
+  }
+
+  normalise(raw) { return raw; }
+
+  /**
+   * Fetch market book (prices + traded volume) for a specific market.
+   * @param {string} marketId — Betfair market ID
+   * @returns {Object|null} Market book data
+   */
+  async fetchMarket(marketId) {
+    if (!this.isConfigured()) return null;
+    try {
+      const result = await this._apiPost('listMarketBook', {
+        marketIds: [marketId],
+        priceProjection: {
+          priceData: ['EX_BEST_OFFERS', 'EX_TRADED'],
+        },
+      });
+      return Array.isArray(result) && result.length > 0 ? result[0] : null;
+    } catch (err) {
+      console.error('[betfair-exchange] fetchMarket error:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Find racing WIN markets by meeting name and race time.
+   * @param {string} meetingName — e.g. "Ascot", "Cheltenham"
+   * @param {string} raceTime — e.g. "14:30" or ISO date string
+   * @returns {Array} Matching market catalogues
+   */
+  async fetchRacingMarkets(meetingName, raceTime) {
+    if (!this.isConfigured()) return [];
+    try {
+      const today = new Date();
+      const tomorrow = new Date(today.getTime() + 86400000);
+      const result = await this._apiPost('listMarketCatalogue', {
+        filter: {
+          eventTypeIds: ['7'], // Horse Racing
+          marketCountries: ['GB', 'IE'],
+          marketTypeCodes: ['WIN'],
+          marketStartTime: {
+            from: today.toISOString(),
+            to: tomorrow.toISOString(),
+          },
+        },
+        marketProjection: ['RUNNER_DESCRIPTION', 'MARKET_START_TIME', 'EVENT'],
+        maxResults: 100,
+        sort: 'FIRST_TO_START',
+      });
+
+      if (!Array.isArray(result)) return [];
+
+      // Filter by course name and optionally by time
+      const courseName = (meetingName || '').toLowerCase();
+      const targetTime = raceTime || '';
+
+      return result.filter(function(market) {
+        var eventName = (market.event && market.event.name ? market.event.name : '').toLowerCase();
+        var marketName = (market.marketName || '').toLowerCase();
+        var courseMatch = eventName.indexOf(courseName) !== -1 || marketName.indexOf(courseName) !== -1;
+
+        if (!courseMatch) return false;
+
+        // If a specific time was provided, match it
+        if (targetTime && market.marketStartTime) {
+          var marketTime = new Date(market.marketStartTime);
+          var marketTimeStr = marketTime.toTimeString().slice(0, 5); // "HH:MM"
+          var normalTarget = targetTime.slice(0, 5); // normalise to "HH:MM"
+          // Allow 5-minute window for time matching
+          var mMins = marketTime.getHours() * 60 + marketTime.getMinutes();
+          var tParts = normalTarget.split(':');
+          var tMins = parseInt(tParts[0]) * 60 + parseInt(tParts[1]);
+          return Math.abs(mMins - tMins) <= 5;
+        }
+
+        return true;
+      });
+    } catch (err) {
+      console.error('[betfair-exchange] fetchRacingMarkets error:', err.message);
+      return [];
+    }
+  }
+
+  /**
+   * Find football markets by team names.
+   * @param {string} homeTeam — Home team name
+   * @param {string} awayTeam — Away team name (optional, for disambiguation)
+   * @returns {Array} Matching market catalogues
+   */
+  async fetchFootballMarkets(homeTeam, awayTeam) {
+    if (!this.isConfigured()) return [];
+    try {
+      var searchQuery = homeTeam || '';
+      var result = await this._apiPost('listMarketCatalogue', {
+        filter: {
+          eventTypeIds: ['1'], // Football
+          textQuery: searchQuery,
+          marketTypeCodes: ['MATCH_ODDS', 'OVER_UNDER_25', 'BOTH_TEAMS_TO_SCORE'],
+        },
+        marketProjection: ['RUNNER_DESCRIPTION', 'MARKET_START_TIME', 'EVENT'],
+        maxResults: 10,
+        sort: 'FIRST_TO_START',
+      });
+
+      if (!Array.isArray(result)) return [];
+
+      // Further filter by away team if provided
+      if (awayTeam) {
+        var awayLower = awayTeam.toLowerCase();
+        var filtered = result.filter(function(market) {
+          var eventName = (market.event && market.event.name ? market.event.name : '').toLowerCase();
+          return eventName.indexOf(awayLower) !== -1;
+        });
+        if (filtered.length > 0) return filtered;
+      }
+
+      return result;
+    } catch (err) {
+      console.error('[betfair-exchange] fetchFootballMarkets error:', err.message);
+      return [];
+    }
+  }
+
+  /**
+   * Get full exchange intelligence for a market.
+   * Returns traded volume, back/lay prices, spread, VWAP, and price trend per runner.
+   * @param {string} marketId — Betfair market ID
+   * @returns {Object|null} Exchange intelligence data
+   */
+  async getExchangeData(marketId) {
+    if (!this.isConfigured()) return null;
+    try {
+      var marketBook = await this.fetchMarket(marketId);
+      if (!marketBook || !marketBook.runners) return null;
+
+      var totalMarketVolume = marketBook.totalMatched || 0;
+
+      // Sort runners by traded volume to determine volume rank
+      var runnerVolumes = marketBook.runners.map(function(r) {
+        var tradedVol = 0;
+        if (r.ex && r.ex.tradedVolume && Array.isArray(r.ex.tradedVolume)) {
+          tradedVol = r.ex.tradedVolume.reduce(function(sum, tv) { return sum + (tv.size || 0); }, 0);
+        }
+        return { selectionId: r.selectionId, volume: tradedVol };
+      }).sort(function(a, b) { return b.volume - a.volume; });
+
+      var volumeRanks = {};
+      runnerVolumes.forEach(function(rv, idx) {
+        volumeRanks[rv.selectionId] = idx + 1;
+      });
+
+      var runners = marketBook.runners.map(function(runner) {
+        // Best back price (highest price someone will lay at for you to back)
+        var backPrice = 0;
+        if (runner.ex && runner.ex.availableToBack && runner.ex.availableToBack.length > 0) {
+          backPrice = runner.ex.availableToBack[0].price || 0;
+        }
+
+        // Best lay price (lowest price someone will back at for you to lay)
+        var layPrice = 0;
+        if (runner.ex && runner.ex.availableToLay && runner.ex.availableToLay.length > 0) {
+          layPrice = runner.ex.availableToLay[0].price || 0;
+        }
+
+        // Spread: difference between lay and back (tight = market confident)
+        var spread = layPrice > 0 && backPrice > 0 ? layPrice - backPrice : 0;
+        var spreadPct = backPrice > 0 ? (spread / backPrice) * 100 : 0;
+
+        // Total traded volume for this runner
+        var tradedVolume = 0;
+        var tradedPriceVolume = [];
+        if (runner.ex && runner.ex.tradedVolume && Array.isArray(runner.ex.tradedVolume)) {
+          tradedPriceVolume = runner.ex.tradedVolume;
+          tradedVolume = tradedPriceVolume.reduce(function(sum, tv) { return sum + (tv.size || 0); }, 0);
+        }
+
+        // Volume-Weighted Average Price (VWAP)
+        var vwap = 0;
+        if (tradedPriceVolume.length > 0 && tradedVolume > 0) {
+          var weightedSum = tradedPriceVolume.reduce(function(sum, tv) {
+            return sum + ((tv.price || 0) * (tv.size || 0));
+          }, 0);
+          vwap = weightedSum / tradedVolume;
+        }
+
+        // Price movement: compare current back price to VWAP
+        // If current price < VWAP, price has shortened (money coming in)
+        // If current price > VWAP, price has drifted (money moving away)
+        var priceMovement = 'stable';
+        if (vwap > 0 && backPrice > 0) {
+          var movementPct = ((backPrice - vwap) / vwap) * 100;
+          if (movementPct < -3) priceMovement = 'shortening';
+          else if (movementPct > 5) priceMovement = 'drifting';
+        }
+
+        return {
+          selectionId: runner.selectionId,
+          runnerName: runner.runnerName || '',
+          status: runner.status,
+          backPrice: Math.round(backPrice * 100) / 100,
+          layPrice: Math.round(layPrice * 100) / 100,
+          spread: Math.round(spread * 1000) / 1000,
+          spreadPct: Math.round(spreadPct * 100) / 100,
+          tradedVolume: Math.round(tradedVolume),
+          vwap: Math.round(vwap * 100) / 100,
+          priceMovement: priceMovement,
+          volumeRank: volumeRanks[runner.selectionId] || 0,
+        };
+      });
+
+      return {
+        marketId: marketBook.marketId,
+        status: marketBook.status,
+        totalMatched: Math.round(totalMarketVolume),
+        runners: runners,
+      };
+    } catch (err) {
+      console.error('[betfair-exchange] getExchangeData error:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Match a runner name from Racing API to a Betfair exchange runner.
+   * Names may differ slightly between sources.
+   * @param {string} horseName — Runner name from our data
+   * @param {Array} exchangeRunners — Runners from exchange data
+   * @returns {Object|null} Matched exchange runner data
+   */
+  matchRunner(horseName, exchangeRunners) {
+    if (!horseName || !exchangeRunners || !Array.isArray(exchangeRunners)) return null;
+    var normalised = horseName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Exact match first
+    var exact = exchangeRunners.find(function(r) {
+      return (r.runnerName || '').toLowerCase().replace(/[^a-z0-9]/g, '') === normalised;
+    });
+    if (exact) return exact;
+
+    // Partial match (one name contains the other)
+    var partial = exchangeRunners.find(function(r) {
+      var rNorm = (r.runnerName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      return rNorm.indexOf(normalised) !== -1 || normalised.indexOf(rNorm) !== -1;
+    });
+    return partial || null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // INGESTION MANAGER
 // ---------------------------------------------------------------------------
 
@@ -643,6 +1063,7 @@ class DataIngestionManager {
     this.register(new InjuryNewsSource());
     this.register(new OddsMovementTracker());
     this.register(new HistoricalResultsSource());
+    this.register(new BetfairExchangeSource());
   }
 
   register(source) {

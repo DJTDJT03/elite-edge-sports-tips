@@ -451,6 +451,112 @@ class ScoringModel {
   }
 
   /**
+   * Score a racing runner with Betfair Exchange data for enhanced market intelligence.
+   * Falls back to basic scoreRunner() when exchangeData is null.
+   *
+   * @param {Object} runner — Runner object from Racing API (normalised)
+   * @param {Object} race — Race object from Racing API (normalised)
+   * @param {Object} oddsData — Optional odds data from Odds API
+   * @param {Object} exchangeData — Betfair exchange data for this runner:
+   *   - tradedVolume {number} — total GBP matched on this runner
+   *   - backPrice {number} — best available back price
+   *   - layPrice {number} — best available lay price
+   *   - spread {number} — lay - back (tight = market confident)
+   *   - priceMovement {string} — 'shortening', 'drifting', or 'stable'
+   *   - volumeRank {number} — 1 = most backed runner in the race by volume
+   * @returns {Object} Scored result with exchange-enhanced factors, or null
+   */
+  scoreRunnerEnhanced(runner, race, oddsData, exchangeData) {
+    // Fall back to basic scoring if no exchange data
+    if (!exchangeData) {
+      return this.scoreRunner(runner, race, oddsData);
+    }
+
+    // Start with base scoring
+    var baseResult = this.scoreRunner(runner, race, oddsData);
+    if (!baseResult) return null;
+
+    var factors = Object.assign({}, baseResult.factors);
+    var tradedVolume = exchangeData.tradedVolume || 0;
+    var backPrice = exchangeData.backPrice || 0;
+    var layPrice = exchangeData.layPrice || 0;
+    var spread = exchangeData.spread || 0;
+    var priceMovement = exchangeData.priceMovement || 'stable';
+    var volumeRank = exchangeData.volumeRank || 0;
+    var spreadPct = backPrice > 0 ? (spread / backPrice) * 100 : 100;
+
+    // --- Exchange Market Support Factor ---
+    // This replaces or enhances the basic marketSupport factor with real exchange data.
+    var exchangeScore = 0.5;
+
+    // High volume signals (above 5000 GBP indicates meaningful money)
+    var isHighVolume = tradedVolume > 5000;
+    var isLowVolume = tradedVolume < 1000;
+
+    if (isHighVolume && priceMovement === 'shortening') {
+      // Professional money backing this horse — strongest signal
+      exchangeScore = 0.85;
+    } else if (isHighVolume && priceMovement === 'stable') {
+      // Market confident at current price — good signal
+      exchangeScore = 0.7;
+    } else if (isHighVolume && priceMovement === 'drifting') {
+      // Money matched but price going out — mixed signal
+      exchangeScore = 0.45;
+    } else if (isLowVolume && priceMovement === 'drifting') {
+      // Market doesn't fancy — negative signal
+      exchangeScore = 0.3;
+    } else if (isLowVolume && priceMovement === 'shortening') {
+      // Some support but not heavy — moderate
+      exchangeScore = 0.6;
+    } else if (priceMovement === 'shortening') {
+      exchangeScore = 0.65;
+    } else if (priceMovement === 'drifting') {
+      exchangeScore = 0.35;
+    }
+
+    // Bonus: runner is the most-backed in the race by volume
+    if (volumeRank === 1) {
+      exchangeScore = Math.min(exchangeScore + 0.1, 1.0);
+    }
+
+    // Bonus: tight spread (< 2% of price) — market is very sure about the price
+    if (spreadPct < 2 && backPrice > 0) {
+      exchangeScore = Math.min(exchangeScore + 0.05, 1.0);
+    }
+
+    factors.marketSupport = Math.round(exchangeScore * 100) / 100;
+    factors.exchangeVolume = tradedVolume;
+    factors.exchangeMovement = priceMovement;
+
+    // Use exchange back price as odds if available and runner odds are missing
+    var bestOdds = baseResult.odds;
+    if (backPrice > 1 && (!bestOdds || bestOdds <= 1)) {
+      bestOdds = backPrice;
+    }
+
+    // Re-score with enhanced factors
+    var enhancedScoreResult = this.scoreRacing(factors, bestOdds);
+
+    return {
+      runner: runner,
+      race: race,
+      factors: factors,
+      odds: bestOdds,
+      enhanced: true,
+      exchangeDataUsed: true,
+      exchangeSummary: {
+        tradedVolume: tradedVolume,
+        backPrice: backPrice,
+        layPrice: layPrice,
+        spread: spread,
+        priceMovement: priceMovement,
+        volumeRank: volumeRank,
+      },
+      ...enhancedScoreResult,
+    };
+  }
+
+  /**
    * Score a football fixture from live API data
    * @param {Object} fixture — Fixture object from API-Football (normalised)
    * @param {Object} oddsData — Odds from Odds API for this fixture
@@ -605,6 +711,11 @@ class ScoringModel {
    * @param {Object} enhancedData.homeStats — Home team season stats from /teams/statistics
    * @param {Object} enhancedData.awayStats — Away team season stats from /teams/statistics
    * @param {Object} enhancedData.oddsMovement — Live odds data from /odds/live
+   * @param {Object} enhancedData.exchangeData — Betfair exchange data (optional)
+   * @param {number} enhancedData.exchangeData.tradedVolume — Total GBP matched
+   * @param {number} enhancedData.exchangeData.backPrice — Best back price
+   * @param {number} enhancedData.exchangeData.layPrice — Best lay price
+   * @param {string} enhancedData.exchangeData.priceMovement — 'shortening', 'drifting', 'stable'
    * @returns {Object} Scored fixture with enhanced factors, or null
    */
   scoreFixtureEnhanced(fixture, oddsData, enhancedData) {
@@ -622,6 +733,7 @@ class ScoringModel {
     var homeStats = enhancedData.homeStats || null;
     var awayStats = enhancedData.awayStats || null;
     var oddsMovement = enhancedData.oddsMovement || null;
+    var exchangeData = enhancedData.exchangeData || null;
 
     var factors = Object.assign({}, baseResult.factors);
     var selectedMarket = baseResult.selectedMarket;
@@ -813,6 +925,49 @@ class ScoringModel {
       factors.marketMovement = Math.round(marketMovementScore * 100) / 100;
     }
 
+    // --- Betfair Exchange Factor ---
+    // Real exchange data: traded volume + price movement = professional money signal
+    if (exchangeData && exchangeData.tradedVolume > 0) {
+      var exVolume = exchangeData.tradedVolume || 0;
+      var exMovement = exchangeData.priceMovement || 'stable';
+      var exSpread = exchangeData.spread || 0;
+      var exBackPrice = exchangeData.backPrice || 0;
+      var exSpreadPct = exBackPrice > 0 ? (exSpread / exBackPrice) * 100 : 100;
+
+      var exchangeFactor = 0.5;
+      var exHighVolume = exVolume > 10000; // Football markets are typically higher volume
+      var exLowVolume = exVolume < 2000;
+
+      if (exHighVolume && exMovement === 'shortening') {
+        // Heavy professional money on this outcome — very strong signal
+        exchangeFactor = 0.85;
+      } else if (exHighVolume && exMovement === 'stable') {
+        // Market confident at current price
+        exchangeFactor = 0.7;
+      } else if (exHighVolume && exMovement === 'drifting') {
+        // Volume but price going out — smart money may be on other side
+        exchangeFactor = 0.4;
+      } else if (exLowVolume && exMovement === 'drifting') {
+        // Market not interested
+        exchangeFactor = 0.3;
+      } else if (exMovement === 'shortening') {
+        exchangeFactor = 0.65;
+      } else if (exMovement === 'drifting') {
+        exchangeFactor = 0.35;
+      }
+
+      // Tight spread bonus
+      if (exSpreadPct < 2 && exBackPrice > 0) {
+        exchangeFactor = Math.min(exchangeFactor + 0.05, 1.0);
+      }
+
+      factors.exchangeSupport = Math.round(exchangeFactor * 100) / 100;
+      // Also boost/dampen market movement factor based on exchange data alignment
+      if (factors.marketMovement && exchangeFactor > 0.6) {
+        factors.marketMovement = Math.min(Math.round((factors.marketMovement + 0.1) * 100) / 100, 1.0);
+      }
+    }
+
     // Re-score with enhanced factors
     var enhancedScoreResult = this.scoreFootball(factors, selectedOdds);
 
@@ -832,7 +987,15 @@ class ScoringModel {
         predictions: !!(predictions && predictions.predictions),
         teamStats: !!(homeStats || awayStats),
         oddsMovement: !!(oddsMovement && oddsMovement.response && oddsMovement.response.length > 0),
+        exchangeData: !!(exchangeData && exchangeData.tradedVolume > 0),
       },
+      exchangeSummary: exchangeData ? {
+        tradedVolume: exchangeData.tradedVolume,
+        backPrice: exchangeData.backPrice,
+        layPrice: exchangeData.layPrice,
+        spread: exchangeData.spread,
+        priceMovement: exchangeData.priceMovement,
+      } : null,
       ...enhancedScoreResult,
     };
   }

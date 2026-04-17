@@ -657,6 +657,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 // Sign up: https://www.theracingapi.com/ (free 2-week trial)
 // ---------------------------------------------------------------------------
 const racingSource = dataIngestion.sources ? dataIngestion.sources.get('racing-cards') : null;
+const betfairSource = dataIngestion.sources ? dataIngestion.sources.get('betfair-exchange') : null;
 
 app.get('/api/racing/live-cards', async (req, res) => {
   try {
@@ -1080,6 +1081,61 @@ app.get('/api/racing/intelligence', async (req, res) => {
       };
     }).filter(Boolean);
 
+    // --- Betfair Exchange enrichment ---
+    // If Betfair is configured, enrich each race with exchange data
+    if (betfairSource && betfairSource.isConfigured()) {
+      for (var rIdx = 0; rIdx < intelligence.length; rIdx++) {
+        try {
+          var raceIntel = intelligence[rIdx];
+          if (!raceIntel || !raceIntel.meeting) continue;
+
+          var bfMarkets = await betfairSource.fetchRacingMarkets(raceIntel.meeting, raceIntel.time);
+          if (!bfMarkets || bfMarkets.length === 0) continue;
+
+          var bfMarket = bfMarkets[0];
+          var exchangeResult = await betfairSource.getExchangeData(bfMarket.marketId);
+          if (!exchangeResult || !exchangeResult.runners) continue;
+
+          // Add exchange data to the intelligence response
+          raceIntel.exchangeData = {
+            marketId: exchangeResult.marketId,
+            totalMatched: exchangeResult.totalMatched,
+            runners: exchangeResult.runners.map(function(er) {
+              return {
+                runnerName: er.runnerName,
+                backPrice: er.backPrice,
+                layPrice: er.layPrice,
+                spread: er.spread,
+                tradedVolume: er.tradedVolume,
+                priceMovement: er.priceMovement,
+                volumeRank: er.volumeRank,
+              };
+            }),
+          };
+
+          // Add exchange insight to analysis text
+          var topExRunner = exchangeResult.runners.filter(function(r) { return r.tradedVolume > 0; })
+            .sort(function(a, b) { return b.tradedVolume - a.tradedVolume; })[0];
+          if (topExRunner && topExRunner.tradedVolume > 500) {
+            var volFormatted = topExRunner.tradedVolume >= 1000
+              ? (topExRunner.tradedVolume / 1000).toFixed(1) + 'k'
+              : topExRunner.tradedVolume.toString();
+            var movementText = topExRunner.priceMovement === 'shortening' ? 'price shortening — strong professional backing'
+              : topExRunner.priceMovement === 'drifting' ? 'price drifting — market confidence weakening'
+              : 'price stable — market settled';
+            raceIntel.insights.exchangeAnalysis = 'Betfair Exchange: \u00A3' + volFormatted + ' traded on ' +
+              topExRunner.runnerName + ', ' + movementText + '. ' +
+              (exchangeResult.totalMatched >= 10000
+                ? 'Total market volume of \u00A3' + (exchangeResult.totalMatched / 1000).toFixed(0) + 'k indicates strong market interest.'
+                : 'Market still building — expect volume to increase closer to post time.');
+          }
+        } catch (bfErr) {
+          // Non-fatal — continue without exchange data for this race
+          console.log('[Racing Intelligence] Betfair data unavailable for race ' + (rIdx + 1) + ': ' + bfErr.message);
+        }
+      }
+    }
+
     res.json({ live: true, races: intelligence, fetchedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[Racing Intelligence] Error:', err.message);
@@ -1431,6 +1487,78 @@ app.get('/api/football/match-intelligence/:fixtureId', async (req, res) => {
       riskText = 'The data is inconclusive or contradictory. This selection carries above-average risk and should be approached with caution.';
     }
 
+    // --- Betfair Exchange enrichment for football ---
+    var matchExchangeData = null;
+    var exchangeAnalysisText = '';
+    if (betfairSource && betfairSource.isConfigured()) {
+      try {
+        var bfFootballMarkets = await betfairSource.fetchFootballMarkets(homeTeam.name, awayTeam.name);
+        if (bfFootballMarkets && bfFootballMarkets.length > 0) {
+          // Get exchange data for the main MATCH_ODDS market
+          var matchOddsMarket = bfFootballMarkets.find(function(m) {
+            return m.description && m.description.marketType === 'MATCH_ODDS';
+          }) || bfFootballMarkets[0];
+
+          var bfExData = await betfairSource.getExchangeData(matchOddsMarket.marketId);
+          if (bfExData && bfExData.runners && bfExData.runners.length > 0) {
+            matchExchangeData = {
+              marketId: bfExData.marketId,
+              totalMatched: bfExData.totalMatched,
+              runners: bfExData.runners.map(function(er) {
+                return {
+                  runnerName: er.runnerName,
+                  backPrice: er.backPrice,
+                  layPrice: er.layPrice,
+                  spread: er.spread,
+                  tradedVolume: er.tradedVolume,
+                  priceMovement: er.priceMovement,
+                  volumeRank: er.volumeRank,
+                };
+              }),
+            };
+
+            // Generate exchange analysis text
+            var topVolRunner = bfExData.runners.filter(function(r) { return r.tradedVolume > 0; })
+              .sort(function(a, b) { return b.tradedVolume - a.tradedVolume; })[0];
+            if (topVolRunner && topVolRunner.tradedVolume > 1000) {
+              var fVolFormatted = topVolRunner.tradedVolume >= 1000
+                ? '\u00A3' + (topVolRunner.tradedVolume / 1000).toFixed(0) + 'k'
+                : '\u00A3' + topVolRunner.tradedVolume;
+              var fMovText = topVolRunner.priceMovement === 'shortening' ? 'price shortening'
+                : topVolRunner.priceMovement === 'drifting' ? 'price drifting' : 'price stable';
+              exchangeAnalysisText = 'Betfair Exchange shows heavy money on ' + topVolRunner.runnerName +
+                ' \u2014 ' + fVolFormatted + ' traded, ' + fMovText + '.';
+
+              // Check for other interesting markets (BTTS, Over/Under)
+              for (var bmIdx = 0; bmIdx < bfFootballMarkets.length; bmIdx++) {
+                var bfMkt = bfFootballMarkets[bmIdx];
+                var mktType = bfMkt.description ? bfMkt.description.marketType : (bfMkt.marketName || '');
+                if (mktType === 'OVER_UNDER_25' || mktType === 'BOTH_TEAMS_TO_SCORE') {
+                  try {
+                    var altExData = await betfairSource.getExchangeData(bfMkt.marketId);
+                    if (altExData && altExData.runners) {
+                      var altTopRunner = altExData.runners.filter(function(r) { return r.tradedVolume > 0; })
+                        .sort(function(a, b) { return b.tradedVolume - a.tradedVolume; })[0];
+                      if (altTopRunner && altTopRunner.tradedVolume > 2000) {
+                        var altVolFmt = altTopRunner.tradedVolume >= 1000
+                          ? '\u00A3' + (altTopRunner.tradedVolume / 1000).toFixed(0) + 'k'
+                          : '\u00A3' + altTopRunner.tradedVolume;
+                        exchangeAnalysisText += ' Also: ' + altVolFmt + ' traded on ' +
+                          (altTopRunner.runnerName || mktType) + ' (' + fMovText + ').';
+                      }
+                    }
+                  } catch (altErr) { /* non-fatal */ }
+                  break; // Only check one additional market
+                }
+              }
+            }
+          }
+        }
+      } catch (bfMatchErr) {
+        console.log('[match-intelligence] Betfair data unavailable: ' + bfMatchErr.message);
+      }
+    }
+
     res.json({
       fixtureId: parseInt(fixtureId),
       match: {
@@ -1493,12 +1621,14 @@ app.get('/api/football/match-intelligence/:fixtureId', async (req, res) => {
         riskLevel: riskLevel,
         riskText: riskText
       },
+      exchangeData: matchExchangeData,
       analysis: {
         overview: overviewText,
         form: formText,
         h2h: h2hText,
         injuries: injuriesText,
         predictions: predictionsText,
+        exchange: exchangeAnalysisText || null,
       },
       generatedAt: new Date().toISOString()
     });
@@ -2794,6 +2924,53 @@ async function autoGenerateDailyTips() {
         });
       });
       console.log('[Auto-Tips] Racing candidates passing filter: ' + allCandidates.filter(function(c) { return c.type === 'racing'; }).length);
+
+      // --- Betfair Exchange enhancement for top racing candidates ---
+      if (betfairSource && betfairSource.isConfigured()) {
+        var racingCands = allCandidates.filter(function(c) { return c.type === 'racing'; });
+        // Sort by edge to enhance the best candidates first
+        racingCands.sort(function(a, b) { return b.edge - a.edge; });
+        var topRacingCount = Math.min(racingCands.length, 10);
+
+        for (var rcIdx = 0; rcIdx < topRacingCount; rcIdx++) {
+          try {
+            var rc = racingCands[rcIdx];
+            var rcRunner = rc.scored && rc.scored.runner ? rc.scored.runner : null;
+            var rcRace = rc.scored && rc.scored.race ? rc.scored.race : null;
+            if (!rcRunner || !rcRace) continue;
+
+            var bfRaceMarkets = await betfairSource.fetchRacingMarkets(rcRace.meeting, rcRace.time);
+            if (!bfRaceMarkets || bfRaceMarkets.length === 0) continue;
+
+            var bfRaceExData = await betfairSource.getExchangeData(bfRaceMarkets[0].marketId);
+            if (!bfRaceExData || !bfRaceExData.runners) continue;
+
+            var matchedRunner = betfairSource.matchRunner(rcRunner.horseName, bfRaceExData.runners);
+            if (!matchedRunner) continue;
+
+            // Re-score with exchange data
+            var exchangeRunnerData = {
+              tradedVolume: matchedRunner.tradedVolume,
+              backPrice: matchedRunner.backPrice,
+              layPrice: matchedRunner.layPrice,
+              spread: matchedRunner.spread,
+              priceMovement: matchedRunner.priceMovement,
+              volumeRank: matchedRunner.volumeRank,
+            };
+
+            var reScored = scoringModel.scoreRunnerEnhanced(rcRunner, rcRace, null, exchangeRunnerData);
+            if (reScored) {
+              rc.scored = reScored;
+              rc.edge = reScored.edge;
+              rc.confidence = reScored.confidence;
+              console.log('[Auto-Tips] Betfair data: ' + rcRunner.horseName + ' — \u00A3' + matchedRunner.tradedVolume + ' traded, back ' + matchedRunner.backPrice + ', ' + matchedRunner.priceMovement);
+            }
+          } catch (bfRcErr) {
+            // Non-fatal — continue with basic scoring
+          }
+        }
+      }
+
     } catch (err) {
       console.error('[Auto-Tips] Racing API error:', err.message);
     }
@@ -2919,6 +3096,69 @@ async function autoGenerateDailyTips() {
       }
 
       console.log('[Auto-Tips] Final football candidates: ' + footballCandidates.length);
+
+      // --- Betfair Exchange enhancement for top football candidates ---
+      if (betfairSource && betfairSource.isConfigured() && footballCandidates.length > 0) {
+        var topFbCount = Math.min(footballCandidates.length, 5);
+        for (var fcIdx = 0; fcIdx < topFbCount; fcIdx++) {
+          try {
+            var fc = footballCandidates[fcIdx];
+            var fcFixture = fc.scored && fc.scored.fixture ? fc.scored.fixture : null;
+            if (!fcFixture || !fcFixture.homeTeam) continue;
+
+            var bfFbMarkets = await betfairSource.fetchFootballMarkets(fcFixture.homeTeam, fcFixture.awayTeam);
+            if (!bfFbMarkets || bfFbMarkets.length === 0) continue;
+
+            // Find the most relevant market for our selected market type
+            var targetBfMarket = bfFbMarkets[0]; // Default to first (usually MATCH_ODDS)
+            var selectedMkt = (fc.scored.selectedMarket || '').toLowerCase();
+            if (selectedMkt.indexOf('over') !== -1 || selectedMkt.indexOf('under') !== -1) {
+              var ouMarket = bfFbMarkets.find(function(m) { return (m.marketName || '').indexOf('Over') !== -1; });
+              if (ouMarket) targetBfMarket = ouMarket;
+            } else if (selectedMkt.indexOf('both') !== -1 || selectedMkt.indexOf('btts') !== -1) {
+              var bttsMarket = bfFbMarkets.find(function(m) { return (m.marketName || '').indexOf('Both') !== -1; });
+              if (bttsMarket) targetBfMarket = bttsMarket;
+            }
+
+            var bfFbExData = await betfairSource.getExchangeData(targetBfMarket.marketId);
+            if (!bfFbExData || !bfFbExData.runners) continue;
+
+            // Find the runner matching our selection
+            var fcSelection = (fc.scored.selectedSelection || '').toLowerCase();
+            var matchedFbRunner = bfFbExData.runners.find(function(r) {
+              return fcSelection.indexOf((r.runnerName || '').toLowerCase()) !== -1 ||
+                     (r.runnerName || '').toLowerCase().indexOf(fcSelection.split(' ')[0]) !== -1;
+            }) || (bfFbExData.runners.length > 0 ? bfFbExData.runners[0] : null);
+
+            if (matchedFbRunner && matchedFbRunner.tradedVolume > 0) {
+              // Build exchange data and re-score
+              var fbExchangeData = {
+                tradedVolume: matchedFbRunner.tradedVolume,
+                backPrice: matchedFbRunner.backPrice,
+                layPrice: matchedFbRunner.layPrice,
+                spread: matchedFbRunner.spread,
+                priceMovement: matchedFbRunner.priceMovement,
+                volumeRank: matchedFbRunner.volumeRank,
+              };
+
+              var fbEnhancedData = { exchangeData: fbExchangeData };
+              var fbReScored = scoringModel.scoreFixtureEnhanced(fcFixture, oddsNormalised, fbEnhancedData);
+              if (fbReScored) {
+                fc.scored = fbReScored;
+                fc.edge = fbReScored.edge;
+                fc.confidence = fbReScored.confidence;
+                var fbVolFmt = matchedFbRunner.tradedVolume >= 1000
+                  ? '\u00A3' + (matchedFbRunner.tradedVolume / 1000).toFixed(0) + 'k'
+                  : '\u00A3' + matchedFbRunner.tradedVolume;
+                console.log('[Auto-Tips] Betfair data: ' + fcFixture.homeTeam + ' v ' + fcFixture.awayTeam + ' — ' + fbVolFmt + ' traded on ' + matchedFbRunner.runnerName + ', ' + matchedFbRunner.priceMovement);
+              }
+            }
+          } catch (bfFcErr) {
+            // Non-fatal — continue with basic scoring
+          }
+        }
+      }
+
     } catch (err) {
       console.error('[Auto-Tips] Football API error:', err.message);
     }
