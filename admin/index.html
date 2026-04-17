@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Admin — Elite Edge Sports Tips</title>
+  <link rel="stylesheet" href="css/admin.css">
+  <style>
+    /* Inline critical: prevent FOUC on login gate */
+    body { opacity: 0; transition: opacity 0.2s; }
+    body.ready { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <!-- ====================================================
+       LOGIN GATE
+       ==================================================== -->
+  <div id="loginGate" class="login-gate">
+    <div class="login-card">
+      <div class="brand">Elite Edge</div>
+      <div class="brand-sub">Admin Panel</div>
+
+      <div id="loginError" class="login-error">Invalid credentials. Please try again.</div>
+
+      <form id="loginForm" autocomplete="off">
+        <div class="form-group">
+          <label for="loginEmail">Email</label>
+          <input type="email" id="loginEmail" placeholder="admin@eliteedge.co.uk" required>
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" placeholder="Enter password" required>
+        </div>
+        <button type="submit" class="btn btn-gold" style="width:100%;margin-top:0.5rem;">
+          Sign In
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       ADMIN APP (hidden until authenticated)
+       ==================================================== -->
+  <div id="adminApp" class="admin-app hidden">
+
+    <!-- Sidebar backdrop (mobile) -->
+    <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">Elite Edge</div>
+        <div class="logo-sub">Admin Panel</div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#dashboard" data-section="dashboard" class="active">
+          <span class="nav-icon">&#9632;</span> Dashboard
+        </a>
+        <a href="#tips" data-section="tips">
+          <span class="nav-icon">&#9733;</span> Tips Management
+        </a>
+        <a href="#results" data-section="results">
+          <span class="nav-icon">&#9776;</span> Results &amp; Analytics
+        </a>
+        <a href="#users" data-section="users">
+          <span class="nav-icon">&#9823;</span> Users
+        </a>
+        <a href="#email" data-section="email">
+          <span class="nav-icon">&#9993;</span> Email Centre
+        </a>
+        <a href="#support" data-section="support">
+          <span class="nav-icon">&#9998;</span> Support Tickets
+        </a>
+        <a href="#livedata" data-section="livedata">
+          <span class="nav-icon">&#9889;</span> Live Data
+        </a>
+        <a href="#audit" data-section="audit">
+          <span class="nav-icon">&#128220;</span> Audit Log
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="admin-avatar" id="adminAvatar">AD</div>
+        <div class="admin-info">
+          <div class="admin-name" id="adminName">Admin</div>
+          <div class="admin-role">Super Admin</div>
+        </div>
+        <button class="btn-logout" id="btnLogout" title="Logout">&#10140;</button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="main-content">
+
+      <!-- Top bar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="hamburger" id="hamburger" aria-label="Toggle menu">&#9776;</button>
+          <div>
+            <div class="page-title" id="pageTitle">Dashboard</div>
+            <div class="page-subtitle" id="pageSubtitle">Overview of platform activity</div>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <span class="text-sm text-muted" id="topbarDate"></span>
+        </div>
+      </header>
+
+      <!-- Content body -->
+      <main class="content-body">
+
+        <!-- Dashboard -->
+        <div id="sec-dashboard" class="section active">
+          <div class="loading-state" id="dashboardLoading">
+            <div class="spinner"></div>
+            Loading dashboard&hellip;
+          </div>
+          <div id="dashboardContent" class="hidden"></div>
+        </div>
+
+        <!-- Tips Management -->
+        <div id="sec-tips" class="section">
+          <div class="loading-state" id="tipsLoading">
+            <div class="spinner"></div>
+            Loading tips&hellip;
+          </div>
+          <div id="tipsContent" class="hidden"></div>
+        </div>
+
+        <!-- Results & Analytics -->
+        <div id="sec-results" class="section">
+          <div class="loading-state" id="resultsLoading">
+            <div class="spinner"></div>
+            Loading results&hellip;
+          </div>
+          <div id="resultsContent" class="hidden"></div>
+        </div>
+
+        <!-- Users -->
+        <div id="sec-users" class="section">
+          <div class="loading-state" id="usersLoading">
+            <div class="spinner"></div>
+            Loading users&hellip;
+          </div>
+          <div id="usersContent" class="hidden"></div>
+        </div>
+
+        <!-- Email Centre -->
+        <div id="sec-email" class="section">
+          <div class="loading-state" id="emailLoading">
+            <div class="spinner"></div>
+            Loading email centre&hellip;
+          </div>
+          <div id="emailContent" class="hidden"></div>
+        </div>
+
+        <!-- Support Tickets -->
+        <div id="sec-support" class="section">
+          <div class="loading-state" id="supportLoading">
+            <div class="spinner"></div>
+            Loading support tickets&hellip;
+          </div>
+          <div id="supportContent" class="hidden"></div>
+        </div>
+
+        <!-- Live Data -->
+        <div id="sec-livedata" class="section">
+          <div class="loading-state" id="livedataLoading">
+            <div class="spinner"></div>
+            Loading live data&hellip;
+          </div>
+          <div id="livedataContent" class="hidden"></div>
+        </div>
+
+        <!-- Audit Log -->
+        <div id="sec-audit" class="section">
+          <div class="loading-state" id="auditLoading">
+            <div class="spinner"></div>
+            Loading audit log&hellip;
+          </div>
+          <div id="auditContent" class="hidden"></div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       MODAL SYSTEM
+       ==================================================== -->
+  <div id="modalOverlay" class="modal-overlay">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <h3 id="modalTitle">Confirm</h3>
+        <button class="modal-close" id="modalClose">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-footer" id="modalFooter">
+        <button class="btn btn-outline" id="modalCancel">Cancel</button>
+        <button class="btn btn-gold" id="modalConfirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       TOAST CONTAINER
+       ==================================================== -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- ====================================================
+       SCRIPTS
+       ==================================================== -->
+  <script src="js/admin.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/tips.js"></script>
+  <script src="js/results.js"></script>
+  <script src="js/users.js"></script>
+  <script src="js/email.js"></script>
+  <script src="js/support.js"></script>
+  <script src="js/livedata.js"></script>
+  <script src="js/audit.js"></script>
+</body>
+</html>
