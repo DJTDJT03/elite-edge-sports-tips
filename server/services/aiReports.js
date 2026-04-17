@@ -124,7 +124,7 @@ class AIReportGenerator {
       userPrompt += '- verdict: one-sentence final verdict\n';
 
       var response = await this.client.messages.create({
-        model: 'claude-sonnet-4-5-20250514',
+        model: 'claude-3-haiku-20240307',
         max_tokens: 1024,
         system: 'You are an elite UK sports analyst writing for Elite Edge Sports Tips, the UK\'s premium betting intelligence service. Write a professional, data-driven match preview. Tone: authoritative, analytical, concise. Use British English. Reference specific stats. Be honest about risks. Never guarantee outcomes. Format with clear sections. Around 300-400 words. Always respond with valid JSON only — no markdown, no code fences.',
         messages: [{ role: 'user', content: userPrompt }],
@@ -142,24 +142,7 @@ class AIReportGenerator {
     } catch (err) {
       console.error('[AI Reports] Football preview error:', err.message);
       if (err.status) console.error('[AI Reports] Status:', err.status, 'Type:', err.error?.type);
-      // Try fallback model if primary fails
-      try {
-        var response2 = await this.client.messages.create({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 1024,
-          system: 'You are an elite UK sports analyst writing for Elite Edge Sports Tips. Write a professional match preview. British English. 300-400 words. Respond with valid JSON only: { "preview": "...", "headline": "...", "keyStats": [...], "verdict": "..." }',
-          messages: [{ role: 'user', content: userPrompt }],
-        });
-        var text2 = response2.content[0].text.trim();
-        if (text2.startsWith('```')) text2 = text2.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
-        var result2 = JSON.parse(text2);
-        this._setCache(cacheKey, result2);
-        console.log('[AI Reports] Football preview generated via fallback model');
-        return result2;
-      } catch (err2) {
-        console.error('[AI Reports] Fallback also failed:', err2.message);
-        return null;
-      }
+      return null;
     }
   }
 
@@ -232,7 +215,7 @@ class AIReportGenerator {
       userPrompt += '- verdict: one-sentence final verdict\n';
 
       var response = await this.client.messages.create({
-        model: 'claude-sonnet-4-5-20250514',
+        model: 'claude-3-haiku-20240307',
         max_tokens: 1024,
         system: 'You are an elite UK horse racing analyst writing for Elite Edge Sports Tips. Write a professional race preview focused on our selection. Reference form figures, going preference, trainer/jockey stats, draw position, and course suitability. British English. Around 200-300 words. Be analytical, not promotional. Always respond with valid JSON only — no markdown, no code fences.',
         messages: [{ role: 'user', content: userPrompt }],
@@ -302,7 +285,7 @@ class AIReportGenerator {
       userPrompt += '- headline: a punchy headline for the day (max 60 chars)\n';
 
       var response = await this.client.messages.create({
-        model: 'claude-sonnet-4-5-20250514',
+        model: 'claude-3-haiku-20240307',
         max_tokens: 1024,
         system: 'You are writing a punchy morning briefing for Elite Edge Sports Tips subscribers. Cover the headline picks, key stats, and what to watch. 150-200 words. British English. Tone: confident, authoritative, concise. Not promotional — informative. Always respond with valid JSON only — no markdown, no code fences.',
         messages: [{ role: 'user', content: userPrompt }],
