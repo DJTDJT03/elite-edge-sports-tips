@@ -659,6 +659,8 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 const racingSource = dataIngestion.sources ? dataIngestion.sources.get('racing-cards') : null;
 const betfairSource = dataIngestion.sources ? dataIngestion.sources.get('betfair-exchange') : null;
 const weatherSource = dataIngestion.sources ? dataIngestion.sources.get('weather') : null;
+const racingOddsSource = dataIngestion.sources ? dataIngestion.sources.get('racing-odds') : null;
+const movementTracker = dataIngestion.sources ? dataIngestion.sources.get('odds-movement') : null;
 
 // Weather check endpoint
 app.get('/api/weather/check', async (req, res) => {
@@ -1913,7 +1915,292 @@ app.get('/api/odds/live', async (req, res) => {
     }
     var raw = await oddsSource.fetch();
     var normalised = oddsSource.normalise(raw);
+
+    // Record snapshots for movement tracking
+    if (movementTracker && normalised.length > 0) {
+      normalised.forEach(function(event) {
+        if (!event.bookmakerOdds) return;
+        var runners = [];
+        var allOutcomes = {};
+        for (var bk in event.bookmakerOdds) {
+          for (var outcome in event.bookmakerOdds[bk]) {
+            if (!allOutcomes[outcome]) allOutcomes[outcome] = [];
+            allOutcomes[outcome].push(event.bookmakerOdds[bk][outcome]);
+          }
+        }
+        for (var name in allOutcomes) {
+          var prices = allOutcomes[name];
+          var avg = prices.reduce(function(s, p) { return s + p; }, 0) / prices.length;
+          var best = Math.max.apply(null, prices);
+          runners.push({ name: name, averagePrice: Math.round(avg * 100) / 100, bestPrice: best });
+        }
+        movementTracker.recordSnapshot(event.eventId, event.homeTeam + ' v ' + event.awayTeam, 'football', event.kickoff, runners);
+      });
+    }
+
     res.json({ live: true, odds: normalised, fetchedAt: new Date().toISOString() });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ---------------------------------------------------------------------------
+// ELITE ODDS INTELLIGENCE ENDPOINTS
+// Premium market intelligence for subscribers — the core value proposition
+// ---------------------------------------------------------------------------
+
+// Racing odds — live multi-bookmaker prices for all UK/IRE races today
+app.get('/api/odds/racing', async (req, res) => {
+  try {
+    if (!oddsSource || !process.env.ODDS_API_KEY) {
+      return res.json({ live: false, message: 'Odds API not configured. Set ODDS_API_KEY.', races: [] });
+    }
+    var raw = await oddsSource.fetch();
+    var racingData = raw.racing || [];
+    var normalised = oddsSource.normaliseRacing(racingData);
+
+    // Record snapshots for movement tracking
+    if (movementTracker) {
+      normalised.forEach(function(race) {
+        if (race.runners && race.runners.length > 0) {
+          movementTracker.recordSnapshot(race.eventId, race.eventName, 'racing', race.commenceTime, race.runners);
+        }
+      });
+    }
+
+    res.json({
+      live: true,
+      raceCount: normalised.length,
+      races: normalised,
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Best price finder — find the best available price for any selection
+app.get('/api/odds/best-price', async (req, res) => {
+  try {
+    var selection = req.query.selection;
+    var sport = req.query.sport || 'all'; // 'racing', 'football', or 'all'
+    if (!selection) return res.status(400).json({ error: 'Selection name required. Use ?selection=Horse+Name' });
+    if (!oddsSource || !process.env.ODDS_API_KEY) {
+      return res.json({ error: 'Odds API not configured' });
+    }
+
+    var raw = await oddsSource.fetch();
+    var results = [];
+
+    // Search football odds
+    if (sport === 'all' || sport === 'football') {
+      var footballNorm = oddsSource.normalise(raw.football || raw);
+      var fbResult = oddsSource.findBestPrice(selection, footballNorm);
+      if (fbResult) results.push(Object.assign({ sport: 'football' }, fbResult));
+    }
+
+    // Search racing odds
+    if (sport === 'all' || sport === 'racing') {
+      var racingNorm = oddsSource.normaliseRacing(raw.racing || []);
+      var rcResult = oddsSource.findBestPrice(selection, racingNorm);
+      if (rcResult) results.push(Object.assign({ sport: 'racing' }, rcResult));
+    }
+
+    if (results.length === 0) {
+      return res.json({ found: false, message: 'No prices found for "' + selection + '"', selection: selection });
+    }
+
+    // Return the best result
+    var best = results.sort(function(a, b) { return (b.bestPrice || 0) - (a.bestPrice || 0); })[0];
+    res.json({
+      found: true,
+      selection: selection,
+      bestPrice: best.bestPrice,
+      bestBookmaker: best.bestBookmaker,
+      averagePrice: best.averagePrice,
+      edgeVsAverage: best.edgeVsAverage + '%',
+      bookmakerCount: best.bookmakerCount,
+      allPrices: best.allPrices,
+      sport: best.sport,
+      event: best.event,
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Market movers — steamers and drifters (premium subscriber feature)
+app.get('/api/odds/market-movers', async (req, res) => {
+  try {
+    if (!movementTracker) {
+      return res.json({ message: 'Movement tracker not available', steamers: [], drifters: [] });
+    }
+    res.json({
+      steamers: movementTracker.marketMovers.steamers,
+      drifters: movementTracker.marketMovers.drifters,
+      totalTracked: movementTracker.marketMovers.totalTracked || 0,
+      activeAlerts: movementTracker.activeAlerts.length,
+      alerts: movementTracker.activeAlerts.slice(0, 20),
+      updatedAt: movementTracker.marketMovers.updatedAt,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Movement history for a specific event — powers price movement charts
+app.get('/api/odds/movement/:eventId', async (req, res) => {
+  try {
+    if (!movementTracker) {
+      return res.json({ error: 'Movement tracker not available' });
+    }
+    var history = movementTracker.getEventHistory(req.params.eventId);
+    if (!history) {
+      return res.json({ found: false, message: 'No movement data for this event' });
+    }
+    res.json({ found: true, ...history });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Runner movement — track a specific horse or team across events
+app.get('/api/odds/runner-movement', async (req, res) => {
+  try {
+    var runner = req.query.runner;
+    if (!runner) return res.status(400).json({ error: 'Runner name required. Use ?runner=Horse+Name' });
+    if (!movementTracker) {
+      return res.json({ error: 'Movement tracker not available' });
+    }
+    var movements = movementTracker.getRunnerMovement(runner);
+    res.json({
+      runner: runner,
+      found: movements.length > 0,
+      events: movements,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Football market intelligence — full analysis for a fixture
+app.get('/api/odds/football-intelligence', async (req, res) => {
+  try {
+    var home = req.query.home;
+    var away = req.query.away;
+    if (!home) return res.status(400).json({ error: 'Home team required. Use ?home=Arsenal&away=Chelsea' });
+    if (!oddsSource || !process.env.ODDS_API_KEY) {
+      return res.json({ error: 'Odds API not configured' });
+    }
+
+    var raw = await oddsSource.fetch();
+    var normalised = oddsSource.normalise(raw.football || raw);
+    var intelligence = oddsSource.getFootballIntelligence(home, away, normalised);
+
+    if (!intelligence) {
+      return res.json({ found: false, message: 'No odds data found for ' + home + (away ? ' v ' + away : '') });
+    }
+
+    // Add movement data if available
+    if (movementTracker) {
+      var eventKey = (intelligence.homeTeam + ' v ' + intelligence.awayTeam).toLowerCase();
+      for (var outcomeName in intelligence.outcomes) {
+        var runnerMovements = movementTracker.getRunnerMovement(outcomeName);
+        if (runnerMovements.length > 0) {
+          intelligence.outcomes[outcomeName].movement = runnerMovements[0].movement;
+        }
+      }
+    }
+
+    res.json({ found: true, ...intelligence, fetchedAt: new Date().toISOString() });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Value bets — selections where best price significantly beats market average
+app.get('/api/odds/value-bets', async (req, res) => {
+  try {
+    if (!oddsSource || !process.env.ODDS_API_KEY) {
+      return res.json({ error: 'Odds API not configured', valueBets: [] });
+    }
+
+    var raw = await oddsSource.fetch();
+    var valueBets = [];
+    var minEdge = parseFloat(req.query.minEdge) || 5; // minimum % edge to qualify
+
+    // Scan football odds for value
+    var footballNorm = oddsSource.normalise(raw.football || raw);
+    footballNorm.forEach(function(event) {
+      if (!event.bookmakerOdds) return;
+      var allOutcomes = {};
+      for (var bk in event.bookmakerOdds) {
+        for (var outcome in event.bookmakerOdds[bk]) {
+          if (!allOutcomes[outcome]) allOutcomes[outcome] = { prices: [], best: 0, bestBk: '' };
+          var price = event.bookmakerOdds[bk][outcome];
+          allOutcomes[outcome].prices.push(price);
+          if (price > allOutcomes[outcome].best) {
+            allOutcomes[outcome].best = price;
+            allOutcomes[outcome].bestBk = bk;
+          }
+        }
+      }
+      for (var name in allOutcomes) {
+        var o = allOutcomes[name];
+        if (o.prices.length < 3) continue;
+        var avg = o.prices.reduce(function(s, p) { return s + p; }, 0) / o.prices.length;
+        var edge = ((o.best - avg) / avg) * 100;
+        if (edge >= minEdge) {
+          valueBets.push({
+            sport: 'football',
+            event: event.homeTeam + ' v ' + event.awayTeam,
+            kickoff: event.kickoff,
+            selection: name,
+            bestPrice: Math.round(o.best * 100) / 100,
+            bestBookmaker: o.bestBk,
+            averagePrice: Math.round(avg * 100) / 100,
+            edge: Math.round(edge * 10) / 10,
+            bookmakerCount: o.prices.length,
+          });
+        }
+      }
+    });
+
+    // Scan racing odds for value
+    var racingNorm = oddsSource.normaliseRacing(raw.racing || []);
+    racingNorm.forEach(function(race) {
+      (race.runners || []).forEach(function(runner) {
+        if (runner.bookmakerCount < 3) return;
+        var edge = runner.averagePrice > 0 ? ((runner.bestPrice - runner.averagePrice) / runner.averagePrice) * 100 : 0;
+        if (edge >= minEdge) {
+          valueBets.push({
+            sport: 'racing',
+            event: race.eventName,
+            raceTime: race.commenceTime,
+            selection: runner.name,
+            bestPrice: runner.bestPrice,
+            bestBookmaker: runner.bestBookmaker,
+            averagePrice: runner.averagePrice,
+            edge: Math.round(edge * 10) / 10,
+            bookmakerCount: runner.bookmakerCount,
+            marketRank: runner.marketRank,
+          });
+        }
+      });
+    });
+
+    // Sort by edge (biggest value first)
+    valueBets.sort(function(a, b) { return b.edge - a.edge; });
+
+    res.json({
+      valueBets: valueBets.slice(0, 30),
+      totalFound: valueBets.length,
+      minEdge: minEdge + '%',
+      fetchedAt: new Date().toISOString(),
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Active sports — check which markets are live right now
+app.get('/api/odds/active-sports', async (req, res) => {
+  try {
+    if (!oddsSource || !process.env.ODDS_API_KEY) {
+      return res.json({ error: 'Odds API not configured', sports: [] });
+    }
+    var sports = await oddsSource.fetchActiveSports();
+    res.json({
+      sports: sports,
+      totalActive: sports.length,
+      hasRacing: sports.some(function(s) { return s.key && s.key.indexOf('horse_racing') !== -1; }),
+      hasFootball: sports.some(function(s) { return s.key && s.key.indexOf('soccer') !== -1; }),
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -2761,10 +3048,25 @@ app.get('/api/chat/logs', authenticate, requireAdmin, (req, res) => {
 // API STATUS
 // ---------------------------------------------------------------------------
 app.get('/api/status', (req, res) => {
+  var movementStatus = movementTracker ? {
+    eventsTracked: Object.keys(movementTracker.snapshots).length,
+    activeAlerts: movementTracker.activeAlerts.length,
+    steamers: movementTracker.marketMovers.steamers.length,
+    drifters: movementTracker.marketMovers.drifters.length,
+  } : { eventsTracked: 0, activeAlerts: 0 };
+
   res.json({
     racing: { connected: !!(racingSource && process.env.RACING_API_KEY) },
     football: { connected: !!(footballSource && process.env.API_FOOTBALL_KEY) },
-    odds: { connected: !!(oddsSource && process.env.ODDS_API_KEY) },
+    odds: {
+      connected: !!(oddsSource && process.env.ODDS_API_KEY),
+      footballOdds: true,
+      racingOdds: true,
+      bestPriceFinder: true,
+      valueBetScanner: true,
+    },
+    racingOdds: { connected: !!(racingOddsSource && process.env.ODDS_API_KEY) },
+    movementTracker: movementStatus,
     ingestion: dataIngestion.getStatus ? dataIngestion.getStatus() : {}
   });
 });
@@ -3208,12 +3510,39 @@ async function autoGenerateDailyTips() {
       });
       console.log('[Auto-Tips] Racing candidates passing filter: ' + allCandidates.filter(function(c) { return c.type === 'racing'; }).length);
 
-      // --- Betfair Exchange enhancement for top racing candidates ---
-      if (betfairSource && betfairSource.isConfigured()) {
+      // --- Multi-Bookmaker Market Intelligence for top racing candidates ---
+      // Fetch racing odds from The Odds API and enhance candidates with:
+      // - Best available price across 40+ bookmakers
+      // - Market consensus (average price)
+      // - Price movement detection (steamer/drifter)
+      // - Value edge calculation
+      var racingOddsData = null;
+      if (oddsSource && process.env.ODDS_API_KEY) {
+        try {
+          var oddsRaw2 = await oddsSource.fetch();
+          var racingRaw = oddsRaw2.racing || [];
+          if (racingRaw.length > 0) {
+            racingOddsData = oddsSource.normaliseRacing(racingRaw);
+            console.log('[Auto-Tips] Fetched racing odds for ' + racingOddsData.length + ' races from ' + (racingRaw.length) + ' events');
+
+            // Record snapshots for movement tracking
+            if (movementTracker) {
+              racingOddsData.forEach(function(race) {
+                if (race.runners && race.runners.length > 0) {
+                  movementTracker.recordSnapshot(race.eventId, race.eventName, 'racing', race.commenceTime, race.runners);
+                }
+              });
+            }
+          }
+        } catch (oddsErr) {
+          console.log('[Auto-Tips] Racing odds fetch error (non-fatal): ' + oddsErr.message);
+        }
+      }
+
+      if (racingOddsData && racingOddsData.length > 0) {
         var racingCands = allCandidates.filter(function(c) { return c.type === 'racing'; });
-        // Sort by edge to enhance the best candidates first
         racingCands.sort(function(a, b) { return b.edge - a.edge; });
-        var topRacingCount = Math.min(racingCands.length, 10);
+        var topRacingCount = Math.min(racingCands.length, 15);
 
         for (var rcIdx = 0; rcIdx < topRacingCount; rcIdx++) {
           try {
@@ -3222,33 +3551,58 @@ async function autoGenerateDailyTips() {
             var rcRace = rc.scored && rc.scored.race ? rc.scored.race : null;
             if (!rcRunner || !rcRace) continue;
 
-            var bfRaceMarkets = await betfairSource.fetchRacingMarkets(rcRace.meeting, rcRace.time);
-            if (!bfRaceMarkets || bfRaceMarkets.length === 0) continue;
+            var horseName = rcRunner.horseName || rcRunner.name || '';
+            if (!horseName) continue;
 
-            var bfRaceExData = await betfairSource.getExchangeData(bfRaceMarkets[0].marketId);
-            if (!bfRaceExData || !bfRaceExData.runners) continue;
+            // Find this runner in the odds data
+            var bestPriceData = oddsSource.findBestPrice(horseName, racingOddsData);
+            if (!bestPriceData) continue;
 
-            var matchedRunner = betfairSource.matchRunner(rcRunner.horseName, bfRaceExData.runners);
-            if (!matchedRunner) continue;
+            // Get movement data if available
+            var runnerMovement = movementTracker ? movementTracker.getRunnerMovement(horseName) : [];
+            var movementInfo = runnerMovement.length > 0 ? runnerMovement[0].movement : {};
 
-            // Re-score with exchange data
-            var exchangeRunnerData = {
-              tradedVolume: matchedRunner.tradedVolume,
-              backPrice: matchedRunner.backPrice,
-              layPrice: matchedRunner.layPrice,
-              spread: matchedRunner.spread,
-              priceMovement: matchedRunner.priceMovement,
-              volumeRank: matchedRunner.volumeRank,
+            // Build market intelligence for the scoring model
+            var marketData = {
+              bestPrice: bestPriceData.bestPrice,
+              averagePrice: bestPriceData.averagePrice,
+              worstPrice: bestPriceData.worstPrice,
+              priceSpread: (bestPriceData.bestPrice || 0) - (bestPriceData.worstPrice || 0),
+              spreadPct: bestPriceData.averagePrice > 0 ? (((bestPriceData.bestPrice - bestPriceData.worstPrice) / bestPriceData.averagePrice) * 100) : 0,
+              bookmakerCount: bestPriceData.bookmakerCount,
+              bestBookmaker: bestPriceData.bestBookmaker,
+              marketRank: 0, // will be set if we find it in normalised data
+              marketConfidence: bestPriceData.marketConfidence || 'medium',
+              movement: movementInfo,
             };
 
-            var reScored = scoringModel.scoreRunnerEnhanced(rcRunner, rcRace, null, exchangeRunnerData);
+            // Find market rank from normalised race data
+            for (var rdIdx = 0; rdIdx < racingOddsData.length; rdIdx++) {
+              var raceRunners = racingOddsData[rdIdx].runners || [];
+              for (var rrIdx = 0; rrIdx < raceRunners.length; rrIdx++) {
+                var rr = raceRunners[rrIdx];
+                if (rr.name.toLowerCase().indexOf(horseName.toLowerCase()) !== -1 || horseName.toLowerCase().indexOf(rr.name.toLowerCase()) !== -1) {
+                  marketData.marketRank = rr.marketRank || 0;
+                  marketData.marketConfidence = rr.marketConfidence || marketData.marketConfidence;
+                  break;
+                }
+              }
+              if (marketData.marketRank > 0) break;
+            }
+
+            // Get weather for this meeting
+            var raceWeather = (rcRace.meeting && meetingWeather[rcRace.meeting]) ? meetingWeather[rcRace.meeting] : null;
+
+            // Re-score with multi-bookmaker market intelligence
+            var reScored = scoringModel.scoreRunnerEnhanced(rcRunner, rcRace, null, marketData, raceWeather);
             if (reScored) {
               rc.scored = reScored;
               rc.edge = reScored.edge;
               rc.confidence = reScored.confidence;
-              console.log('[Auto-Tips] Betfair data: ' + rcRunner.horseName + ' — \u00A3' + matchedRunner.tradedVolume + ' traded, back ' + matchedRunner.backPrice + ', ' + matchedRunner.priceMovement);
+              var moveSignal = movementInfo.signal || 'neutral';
+              console.log('[Auto-Tips] Market intel: ' + horseName + ' — best ' + bestPriceData.bestPrice + ' (' + bestPriceData.bestBookmaker + '), avg ' + bestPriceData.averagePrice + ', ' + bestPriceData.bookmakerCount + ' bookmakers, ' + moveSignal);
             }
-          } catch (bfRcErr) {
+          } catch (mktErr) {
             // Non-fatal — continue with basic scoring
           }
         }

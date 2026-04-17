@@ -490,87 +490,115 @@ class ScoringModel {
   }
 
   /**
-   * Score a racing runner with Betfair Exchange data for enhanced market intelligence.
-   * Falls back to basic scoreRunner() when exchangeData is null.
+   * Score a racing runner with multi-bookmaker market intelligence.
+   * Uses data from 40+ UK bookmakers via The Odds API to detect:
+   * - Market consensus (average price across all bookmakers)
+   * - Best available price (value for the subscriber)
+   * - Price movement (steamer/drifter detection)
+   * - Market confidence (tight spread = bookmakers agree)
+   * - Value edge (how much better is the best price vs average)
+   *
+   * Falls back to basic scoreRunner() when no market data available.
    *
    * @param {Object} runner — Runner object from Racing API (normalised)
    * @param {Object} race — Race object from Racing API (normalised)
    * @param {Object} oddsData — Optional odds data from Odds API
-   * @param {Object} exchangeData — Betfair exchange data for this runner:
-   *   - tradedVolume {number} — total GBP matched on this runner
-   *   - backPrice {number} — best available back price
-   *   - layPrice {number} — best available lay price
-   *   - spread {number} — lay - back (tight = market confident)
-   *   - priceMovement {string} — 'shortening', 'drifting', or 'stable'
-   *   - volumeRank {number} — 1 = most backed runner in the race by volume
-   * @returns {Object} Scored result with exchange-enhanced factors, or null
+   * @param {Object} marketData — Multi-bookmaker intelligence for this runner:
+   *   - bestPrice {number} — best available price across all bookmakers
+   *   - averagePrice {number} — market consensus price
+   *   - worstPrice {number} — worst price on offer
+   *   - priceSpread {number} — best - worst (tight = confident market)
+   *   - spreadPct {number} — spread as % of worst price
+   *   - bookmakerCount {number} — how many bookmakers are pricing this runner
+   *   - bestBookmaker {string} — which bookmaker has the best price
+   *   - marketRank {number} — 1 = market favourite
+   *   - marketConfidence {string} — 'very high', 'high', 'medium', 'low'
+   *   - movement {Object} — from OddsMovementTracker: direction, percentChange, signal
+   * @param {Object} weatherData — Optional weather data
+   * @returns {Object} Scored result with market-enhanced factors, or null
    */
-  scoreRunnerEnhanced(runner, race, oddsData, exchangeData, weatherData) {
-    // Fall back to basic scoring if no exchange data
-    if (!exchangeData) {
+  scoreRunnerEnhanced(runner, race, oddsData, marketData, weatherData) {
+    // Fall back to basic scoring if no market data
+    if (!marketData) {
       return this.scoreRunner(runner, race, oddsData, weatherData);
     }
 
-    // Start with base scoring (pass weather data through)
+    // Start with base scoring
     var baseResult = this.scoreRunner(runner, race, oddsData, weatherData);
     if (!baseResult) return null;
 
     var factors = Object.assign({}, baseResult.factors);
-    var tradedVolume = exchangeData.tradedVolume || 0;
-    var backPrice = exchangeData.backPrice || 0;
-    var layPrice = exchangeData.layPrice || 0;
-    var spread = exchangeData.spread || 0;
-    var priceMovement = exchangeData.priceMovement || 'stable';
-    var volumeRank = exchangeData.volumeRank || 0;
-    var spreadPct = backPrice > 0 ? (spread / backPrice) * 100 : 100;
+    var bestPrice = marketData.bestPrice || 0;
+    var avgPrice = marketData.averagePrice || 0;
+    var priceSpread = marketData.priceSpread || 0;
+    var spreadPct = marketData.spreadPct || 100;
+    var bookmakerCount = marketData.bookmakerCount || 0;
+    var marketRank = marketData.marketRank || 0;
+    var marketConfidence = marketData.marketConfidence || 'low';
+    var movement = marketData.movement || {};
+    var priceMovement = movement.direction || 'stable';
 
-    // --- Exchange Market Support Factor ---
-    // This replaces or enhances the basic marketSupport factor with real exchange data.
-    var exchangeScore = 0.5;
+    // --- Multi-Bookmaker Market Support Factor ---
+    var marketScore = 0.5;
 
-    // High volume signals (above 5000 GBP indicates meaningful money)
-    var isHighVolume = tradedVolume > 5000;
-    var isLowVolume = tradedVolume < 1000;
+    // Market confidence from bookmaker agreement
+    if (marketConfidence === 'very high') {
+      // 8+ bookmakers, <10% spread — market is very sure about this price
+      marketScore = 0.7;
+    } else if (marketConfidence === 'high') {
+      marketScore = 0.6;
+    } else if (marketConfidence === 'medium') {
+      marketScore = 0.5;
+    } else {
+      // Low confidence — few bookmakers or wide spread
+      marketScore = 0.4;
+    }
 
-    if (isHighVolume && priceMovement === 'shortening') {
-      // Professional money backing this horse — strongest signal
-      exchangeScore = 0.85;
-    } else if (isHighVolume && priceMovement === 'stable') {
-      // Market confident at current price — good signal
-      exchangeScore = 0.7;
-    } else if (isHighVolume && priceMovement === 'drifting') {
-      // Money matched but price going out — mixed signal
-      exchangeScore = 0.45;
-    } else if (isLowVolume && priceMovement === 'drifting') {
-      // Market doesn't fancy — negative signal
-      exchangeScore = 0.3;
-    } else if (isLowVolume && priceMovement === 'shortening') {
-      // Some support but not heavy — moderate
-      exchangeScore = 0.6;
+    // Price movement signals (from OddsMovementTracker)
+    if (movement.isGamble) {
+      // 15%+ shortening — serious money, strongest signal
+      marketScore = Math.max(marketScore, 0.85);
+    } else if (movement.isSteamMove) {
+      // 8%+ shortening — steamer, strong signal
+      marketScore = Math.max(marketScore, 0.75);
     } else if (priceMovement === 'shortening') {
-      exchangeScore = 0.65;
+      // Mild shortening — positive
+      marketScore = Math.min(marketScore + 0.1, 0.8);
+    } else if (movement.isDrift) {
+      // 12%+ drifting — market losing confidence
+      marketScore = Math.min(marketScore - 0.2, 0.35);
     } else if (priceMovement === 'drifting') {
-      exchangeScore = 0.35;
+      // Mild drift — slight negative
+      marketScore = Math.max(marketScore - 0.1, 0.3);
     }
 
-    // Bonus: runner is the most-backed in the race by volume
-    if (volumeRank === 1) {
-      exchangeScore = Math.min(exchangeScore + 0.1, 1.0);
+    // Market rank bonus — market favourite gets a boost
+    if (marketRank === 1) {
+      marketScore = Math.min(marketScore + 0.08, 1.0);
+    } else if (marketRank === 2) {
+      marketScore = Math.min(marketScore + 0.04, 1.0);
     }
 
-    // Bonus: tight spread (< 2% of price) — market is very sure about the price
-    if (spreadPct < 2 && backPrice > 0) {
-      exchangeScore = Math.min(exchangeScore + 0.05, 1.0);
+    // Bookmaker count bonus — more bookmakers pricing = more liquid market
+    if (bookmakerCount >= 10) {
+      marketScore = Math.min(marketScore + 0.05, 1.0);
     }
 
-    factors.marketSupport = Math.round(exchangeScore * 100) / 100;
-    factors.exchangeVolume = tradedVolume;
-    factors.exchangeMovement = priceMovement;
+    factors.marketSupport = Math.round(marketScore * 100) / 100;
+    factors.bookmakerCount = bookmakerCount;
+    factors.priceMovement = priceMovement;
+    factors.marketConfidence = marketConfidence;
 
-    // Use exchange back price as odds if available and runner odds are missing
+    // Use best available bookmaker price as odds
     var bestOdds = baseResult.odds;
-    if (backPrice > 1 && (!bestOdds || bestOdds <= 1)) {
-      bestOdds = backPrice;
+    if (bestPrice > 1) {
+      bestOdds = bestPrice; // Always use best available price for subscriber value
+    }
+
+    // Calculate value edge: how much better is best price vs market average?
+    var valueEdge = 0;
+    if (bestPrice > 0 && avgPrice > 0) {
+      valueEdge = ((bestPrice - avgPrice) / avgPrice) * 100;
     }
 
     // Re-score with enhanced factors
@@ -582,14 +610,22 @@ class ScoringModel {
       factors: factors,
       odds: bestOdds,
       enhanced: true,
-      exchangeDataUsed: true,
-      exchangeSummary: {
-        tradedVolume: tradedVolume,
-        backPrice: backPrice,
-        layPrice: layPrice,
-        spread: spread,
-        priceMovement: priceMovement,
-        volumeRank: volumeRank,
+      marketIntelligence: {
+        bestPrice: Math.round(bestPrice * 100) / 100,
+        bestBookmaker: marketData.bestBookmaker || '',
+        averagePrice: Math.round(avgPrice * 100) / 100,
+        worstPrice: Math.round((marketData.worstPrice || 0) * 100) / 100,
+        priceSpread: Math.round(priceSpread * 100) / 100,
+        bookmakerCount: bookmakerCount,
+        marketRank: marketRank,
+        marketConfidence: marketConfidence,
+        valueEdge: Math.round(valueEdge * 10) / 10,
+        movement: {
+          direction: priceMovement,
+          percentChange: movement.percentChange || 0,
+          signal: movement.signal || 'neutral',
+          signalStrength: movement.signalStrength || 'neutral',
+        },
       },
       ...enhancedScoreResult,
     };

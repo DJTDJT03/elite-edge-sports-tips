@@ -239,13 +239,19 @@ class FootballFixturesSource extends DataSource {
 }
 
 /**
- * Football Odds Source
- * Primary: The Odds API (the-odds-api.com) — 40+ bookmakers
- * Fallback: Betfair Exchange API (developer.betfair.com)
+ * Elite Odds Engine — The Odds API (the-odds-api.com)
+ * Unified odds intelligence for BOTH football AND horse racing.
+ * 40+ UK bookmakers, real-time prices, multi-market coverage.
+ *
+ * This is the core odds engine for Elite Edge — every tip gets enriched
+ * with best price, market consensus, bookmaker spread, and value detection.
  *
  * To activate:
  *   1. Sign up at https://the-odds-api.com/ and get API key
  *   2. Set env: ODDS_API_KEY=your_key
+ *
+ * Football markets: h2h, totals (O/U 2.5), btts, spreads
+ * Racing markets: win, place, each-way
  */
 class FootballOddsSource extends DataSource {
   constructor() {
@@ -254,26 +260,89 @@ class FootballOddsSource extends DataSource {
       apiUrl: 'https://api.the-odds-api.com/v4',
       apiKey: process.env.ODDS_API_KEY || '',
     });
-    // The Odds API sport keys for our leagues
-    this.sportKeys = ['soccer_epl', 'soccer_uefa_champs_league', 'soccer_spain_la_liga', 'soccer_italy_serie_a', 'soccer_germany_bundesliga', 'soccer_france_ligue_one', 'soccer_fa_cup'];
+    // Football sport keys — top European leagues
+    this.footballKeys = [
+      'soccer_epl', 'soccer_uefa_champs_league', 'soccer_spain_la_liga',
+      'soccer_italy_serie_a', 'soccer_germany_bundesliga', 'soccer_france_ligue_one',
+      'soccer_fa_cup', 'soccer_efl_champ', 'soccer_league_one', 'soccer_league_two',
+      'soccer_uefa_europa_league', 'soccer_scotland_premiership'
+    ];
+    // Racing sport keys — UK & IRE
+    this.racingKeys = [
+      'horse_racing_uk', 'horse_racing_ire'
+    ];
+    // All football markets we want
+    this.footballMarkets = 'h2h,totals,btts,spreads';
+    // Racing markets
+    this.racingMarkets = 'h2h'; // win market for racing
+    // Backwards compat
+    this.sportKeys = this.footballKeys;
   }
 
   async fetch() {
     if (!this.config.apiKey) {
-      console.log('[football-odds] No API key — set ODDS_API_KEY env var. Sign up: https://the-odds-api.com/');
-      return [];
+      console.log('[elite-odds] No API key — set ODDS_API_KEY env var. Sign up: https://the-odds-api.com/');
+      return { football: [], racing: [] };
     }
     try {
-      var allOdds = [];
-      // Fetch odds for each sport (to manage credit usage, just do PL + featured)
-      for (var i = 0; i < Math.min(this.sportKeys.length, 3); i++) {
-        var data = await this._apiGet('/sports/' + this.sportKeys[i] + '/odds/?regions=uk&markets=h2h,totals&oddsFormat=decimal&apiKey=' + this.config.apiKey);
-        if (Array.isArray(data)) allOdds = allOdds.concat(data);
+      var footballOdds = [];
+      var racingOdds = [];
+
+      // Fetch football odds — all configured leagues
+      for (var i = 0; i < this.footballKeys.length; i++) {
+        try {
+          var fbData = await this._apiGet('/sports/' + this.footballKeys[i] + '/odds/?regions=uk&markets=' + this.footballMarkets + '&oddsFormat=decimal&apiKey=' + this.config.apiKey);
+          if (Array.isArray(fbData)) footballOdds = footballOdds.concat(fbData);
+        } catch (e) {
+          // Sport may have no upcoming events — not an error
+        }
       }
-      console.log('[football-odds] Fetched odds for ' + allOdds.length + ' events');
-      return allOdds;
+
+      // Fetch horse racing odds — UK & IRE
+      for (var j = 0; j < this.racingKeys.length; j++) {
+        try {
+          var rcData = await this._apiGet('/sports/' + this.racingKeys[j] + '/odds/?regions=uk&markets=' + this.racingMarkets + '&oddsFormat=decimal&apiKey=' + this.config.apiKey);
+          if (Array.isArray(rcData)) racingOdds = racingOdds.concat(rcData);
+        } catch (e) {
+          // No racing events today — not an error
+        }
+      }
+
+      console.log('[elite-odds] Fetched ' + footballOdds.length + ' football + ' + racingOdds.length + ' racing events from ' + (this.footballKeys.length + this.racingKeys.length) + ' sport keys');
+      return { football: footballOdds, racing: racingOdds };
     } catch (err) {
-      console.error('[football-odds] Error: ' + err.message);
+      console.error('[elite-odds] Error: ' + err.message);
+      return { football: [], racing: [] };
+    }
+  }
+
+  /**
+   * Fetch odds for a single sport key with specific markets.
+   * Useful for on-demand fetches (e.g. user viewing a specific race).
+   */
+  async fetchSport(sportKey, markets) {
+    if (!this.config.apiKey) return [];
+    try {
+      var mkts = markets || 'h2h';
+      var data = await this._apiGet('/sports/' + sportKey + '/odds/?regions=uk&markets=' + mkts + '&oddsFormat=decimal&apiKey=' + this.config.apiKey);
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('[elite-odds] fetchSport(' + sportKey + ') error: ' + err.message);
+      return [];
+    }
+  }
+
+  /**
+   * List all available sports with active event counts.
+   * Useful for checking which racing/football markets are live.
+   */
+  async fetchActiveSports() {
+    if (!this.config.apiKey) return [];
+    try {
+      var data = await this._apiGet('/sports/?apiKey=' + this.config.apiKey);
+      return Array.isArray(data) ? data.filter(function(s) { return s.active; }) : [];
+    } catch (err) {
+      console.error('[elite-odds] fetchActiveSports error: ' + err.message);
       return [];
     }
   }
@@ -291,38 +360,298 @@ class FootballOddsSource extends DataSource {
         var data = '';
         res.on('data', function(chunk) { data += chunk; });
         res.on('end', function() {
-          try { resolve(JSON.parse(data)); }
-          catch (e) { reject(new Error('Invalid JSON')); }
+          try {
+            var parsed = JSON.parse(data);
+            // Log remaining API credits from response headers
+            var remaining = res.headers['x-requests-remaining'];
+            var used = res.headers['x-requests-used'];
+            if (remaining) {
+              console.log('[elite-odds] API credits: ' + used + ' used, ' + remaining + ' remaining');
+            }
+            resolve(parsed);
+          }
+          catch (e) { reject(new Error('Invalid JSON from The Odds API')); }
         });
       });
       req.on('error', reject);
-      req.setTimeout(15000, function() { req.destroy(); reject(new Error('Timeout')); });
+      req.setTimeout(15000, function() { req.destroy(); reject(new Error('The Odds API timeout')); });
       req.end();
     });
   }
 
   normalise(raw) {
-    if (!Array.isArray(raw)) return [];
-    return raw.map(function(event) {
+    // Handle both old format (array) and new format ({ football, racing })
+    var events = [];
+    if (Array.isArray(raw)) {
+      events = raw;
+    } else if (raw && raw.football) {
+      events = (raw.football || []).concat(raw.racing || []);
+    }
+    if (!events.length) return [];
+
+    return events.map(function(event) {
+      // Extract ALL markets per bookmaker (h2h, totals, btts, spreads)
       var bookmakerOdds = {};
+      var allMarkets = {};
+
       (event.bookmakers || []).forEach(function(bk) {
-        var market = (bk.markets || []).find(function(m) { return m.key === 'h2h'; });
-        if (market && market.outcomes) {
-          bookmakerOdds[bk.key] = {};
-          market.outcomes.forEach(function(o) {
-            bookmakerOdds[bk.key][o.name] = o.price;
-          });
-        }
+        bookmakerOdds[bk.key] = {};
+        (bk.markets || []).forEach(function(market) {
+          if (!allMarkets[market.key]) allMarkets[market.key] = {};
+          allMarkets[market.key][bk.key] = {};
+          if (market.outcomes) {
+            market.outcomes.forEach(function(o) {
+              if (market.key === 'h2h') {
+                bookmakerOdds[bk.key][o.name] = o.price;
+              }
+              allMarkets[market.key][bk.key][o.name] = o.price;
+            });
+          }
+        });
       });
+
       return {
         eventId: event.id,
         sport: event.sport_key,
         homeTeam: event.home_team,
         awayTeam: event.away_team,
         kickoff: event.commence_time,
-        bookmakerOdds: bookmakerOdds
+        bookmakerOdds: bookmakerOdds,
+        markets: allMarkets
       };
     });
+  }
+
+  /**
+   * Normalise racing odds into runner-level intelligence.
+   * Returns per-runner: best price, worst price, average, bookmaker count, value rating.
+   */
+  normaliseRacing(rawRacing) {
+    if (!Array.isArray(rawRacing)) return [];
+
+    return rawRacing.map(function(event) {
+      var runners = {};
+
+      (event.bookmakers || []).forEach(function(bk) {
+        var winMarket = (bk.markets || []).find(function(m) { return m.key === 'h2h'; });
+        if (winMarket && winMarket.outcomes) {
+          winMarket.outcomes.forEach(function(outcome) {
+            var name = outcome.name;
+            if (!runners[name]) {
+              runners[name] = {
+                name: name,
+                prices: [],
+                bookmakers: {},
+              };
+            }
+            runners[name].prices.push(outcome.price);
+            runners[name].bookmakers[bk.key] = outcome.price;
+          });
+        }
+      });
+
+      // Calculate intelligence per runner
+      var runnerList = Object.values(runners).map(function(r) {
+        var prices = r.prices.sort(function(a, b) { return b - a; }); // highest first
+        var bestPrice = prices[0] || 0;
+        var worstPrice = prices[prices.length - 1] || 0;
+        var avgPrice = prices.length > 0 ? prices.reduce(function(s, p) { return s + p; }, 0) / prices.length : 0;
+        var bestBookmaker = '';
+
+        // Find which bookmaker has the best price
+        for (var bk in r.bookmakers) {
+          if (r.bookmakers[bk] === bestPrice) {
+            bestBookmaker = bk;
+            break;
+          }
+        }
+
+        // Price spread across bookmakers (wide = market uncertain)
+        var priceSpread = bestPrice - worstPrice;
+        var spreadPct = worstPrice > 0 ? (priceSpread / worstPrice) * 100 : 0;
+
+        // Market confidence: tight spread + many bookmakers = confident market
+        var bookmakerCount = prices.length;
+        var marketConfidence = 'low';
+        if (bookmakerCount >= 8 && spreadPct < 10) marketConfidence = 'very high';
+        else if (bookmakerCount >= 5 && spreadPct < 15) marketConfidence = 'high';
+        else if (bookmakerCount >= 3 && spreadPct < 25) marketConfidence = 'medium';
+
+        return {
+          name: r.name,
+          bestPrice: Math.round(bestPrice * 100) / 100,
+          worstPrice: Math.round(worstPrice * 100) / 100,
+          averagePrice: Math.round(avgPrice * 100) / 100,
+          bestBookmaker: bestBookmaker,
+          bookmakerCount: bookmakerCount,
+          priceSpread: Math.round(priceSpread * 100) / 100,
+          spreadPct: Math.round(spreadPct * 10) / 10,
+          marketConfidence: marketConfidence,
+          allPrices: r.bookmakers,
+        };
+      });
+
+      // Sort by average price (shortest first = market favourite)
+      runnerList.sort(function(a, b) { return a.averagePrice - b.averagePrice; });
+
+      // Add market rank
+      runnerList.forEach(function(r, idx) { r.marketRank = idx + 1; });
+
+      return {
+        eventId: event.id,
+        sport: event.sport_key,
+        eventName: (event.home_team || '') + (event.away_team ? ' v ' + event.away_team : ''),
+        commenceTime: event.commence_time,
+        runners: runnerList,
+        runnerCount: runnerList.length,
+        bookmakerCount: (event.bookmakers || []).length,
+      };
+    });
+  }
+
+  /**
+   * Find best price for a specific selection across all bookmakers.
+   * Works for both football teams and racing runners.
+   * @param {string} selectionName — team or horse name
+   * @param {Array} normalisedOdds — output from normalise() or normaliseRacing()
+   * @returns {Object|null} Best price data
+   */
+  findBestPrice(selectionName, normalisedOdds) {
+    if (!selectionName || !Array.isArray(normalisedOdds)) return null;
+    var searchName = selectionName.toLowerCase();
+
+    for (var i = 0; i < normalisedOdds.length; i++) {
+      var event = normalisedOdds[i];
+
+      // Racing format (has runners array)
+      if (event.runners) {
+        var runner = event.runners.find(function(r) {
+          return r.name.toLowerCase() === searchName ||
+                 r.name.toLowerCase().indexOf(searchName) !== -1 ||
+                 searchName.indexOf(r.name.toLowerCase()) !== -1;
+        });
+        if (runner) {
+          return {
+            selection: runner.name,
+            bestPrice: runner.bestPrice,
+            bestBookmaker: runner.bestBookmaker,
+            averagePrice: runner.averagePrice,
+            worstPrice: runner.worstPrice,
+            edgeVsAverage: runner.bestPrice > 0 && runner.averagePrice > 0
+              ? Math.round(((runner.bestPrice - runner.averagePrice) / runner.averagePrice) * 10000) / 100
+              : 0,
+            bookmakerCount: runner.bookmakerCount,
+            marketConfidence: runner.marketConfidence,
+            allPrices: runner.allPrices,
+            event: event.eventName,
+          };
+        }
+      }
+
+      // Football format (has bookmakerOdds)
+      if (event.bookmakerOdds) {
+        var bestPrice = 0;
+        var bestBk = '';
+        var prices = [];
+        for (var bk in event.bookmakerOdds) {
+          for (var outcome in event.bookmakerOdds[bk]) {
+            if (outcome.toLowerCase().indexOf(searchName) !== -1 || searchName.indexOf(outcome.toLowerCase()) !== -1) {
+              var price = event.bookmakerOdds[bk][outcome];
+              prices.push(price);
+              if (price > bestPrice) {
+                bestPrice = price;
+                bestBk = bk;
+              }
+            }
+          }
+        }
+        if (bestPrice > 0) {
+          var avg = prices.reduce(function(s, p) { return s + p; }, 0) / prices.length;
+          return {
+            selection: selectionName,
+            bestPrice: Math.round(bestPrice * 100) / 100,
+            bestBookmaker: bestBk,
+            averagePrice: Math.round(avg * 100) / 100,
+            worstPrice: Math.round(Math.min.apply(null, prices) * 100) / 100,
+            edgeVsAverage: avg > 0 ? Math.round(((bestPrice - avg) / avg) * 10000) / 100 : 0,
+            bookmakerCount: prices.length,
+            allPrices: event.bookmakerOdds,
+            event: event.homeTeam + ' v ' + event.awayTeam,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Get full market intelligence for a football fixture.
+   * Returns consensus odds, best prices, value detection per outcome.
+   */
+  getFootballIntelligence(homeTeam, awayTeam, normalisedOdds) {
+    if (!homeTeam || !normalisedOdds) return null;
+    var homeLower = homeTeam.toLowerCase();
+    var awayLower = (awayTeam || '').toLowerCase();
+
+    var match = normalisedOdds.find(function(e) {
+      var eHome = (e.homeTeam || '').toLowerCase();
+      var eAway = (e.awayTeam || '').toLowerCase();
+      return (eHome.indexOf(homeLower) !== -1 || homeLower.indexOf(eHome) !== -1) &&
+             (!awayLower || eAway.indexOf(awayLower) !== -1 || awayLower.indexOf(eAway) !== -1);
+    });
+    if (!match || !match.bookmakerOdds) return null;
+
+    var outcomes = {}; // { 'Home': { prices: [], best, worst, avg, bestBk } }
+
+    for (var bk in match.bookmakerOdds) {
+      for (var outcomeName in match.bookmakerOdds[bk]) {
+        if (!outcomes[outcomeName]) {
+          outcomes[outcomeName] = { prices: [], bestPrice: 0, bestBookmaker: '' };
+        }
+        var price = match.bookmakerOdds[bk][outcomeName];
+        outcomes[outcomeName].prices.push(price);
+        if (price > outcomes[outcomeName].bestPrice) {
+          outcomes[outcomeName].bestPrice = price;
+          outcomes[outcomeName].bestBookmaker = bk;
+        }
+      }
+    }
+
+    var intelligence = {};
+    for (var name in outcomes) {
+      var o = outcomes[name];
+      var avg = o.prices.reduce(function(s, p) { return s + p; }, 0) / o.prices.length;
+      var worst = Math.min.apply(null, o.prices);
+      intelligence[name] = {
+        bestPrice: Math.round(o.bestPrice * 100) / 100,
+        bestBookmaker: o.bestBookmaker,
+        averagePrice: Math.round(avg * 100) / 100,
+        worstPrice: Math.round(worst * 100) / 100,
+        bookmakerCount: o.prices.length,
+        impliedProbability: Math.round((1 / avg) * 10000) / 100,
+        edgeAtBestPrice: Math.round(((o.bestPrice - avg) / avg) * 10000) / 100,
+      };
+    }
+
+    // Overround (total implied probability — how much bookmakers take)
+    var totalImplied = 0;
+    var avgPrices = {};
+    for (var n in intelligence) {
+      totalImplied += intelligence[n].impliedProbability;
+      avgPrices[n] = intelligence[n].averagePrice;
+    }
+
+    return {
+      homeTeam: match.homeTeam,
+      awayTeam: match.awayTeam,
+      kickoff: match.kickoff,
+      outcomes: intelligence,
+      overround: Math.round(totalImplied * 100) / 100,
+      fairOverround: 100, // true probability sums to 100%
+      bookmakerEdge: Math.round((totalImplied - 100) * 100) / 100,
+      bookmakerCount: Object.keys(match.bookmakerOdds).length,
+      markets: match.markets || {},
+    };
   }
 }
 
@@ -508,25 +837,115 @@ class RacingCardsSource extends DataSource {
 }
 
 /**
- * Racing Odds Source
- * Primary: Oddschecker API or Betfair SP data
- * Fallback: Scraped odds from major bookmakers
+ * Racing Odds Source — powered by The Odds API
+ * Fetches real-time horse racing odds from 40+ UK bookmakers.
+ * Provides per-runner best price, market consensus, and bookmaker comparison.
+ *
+ * This replaces Betfair exchange data with multi-bookmaker intelligence:
+ * - Best price across all bookmakers (better than any single exchange)
+ * - Market consensus (average price = what the market truly thinks)
+ * - Price spread (tight = market confident, wide = uncertainty)
+ * - Value detection (where best price significantly beats average)
  */
 class RacingOddsSource extends DataSource {
   constructor() {
     super('racing-odds', {
       refreshInterval: 60000, // 1 minute — pre-race markets move fast
+      apiKey: process.env.ODDS_API_KEY || '',
     });
   }
 
   async fetch() {
-    console.log(`[${this.name}] Fetch called — using sample data`);
-    return [];
+    if (!this.config.apiKey) {
+      console.log(`[${this.name}] No API key — set ODDS_API_KEY`);
+      return [];
+    }
+    try {
+      // Use the football-odds source to fetch racing (shared API)
+      var https = require('https');
+      var allRacing = [];
+      var sportKeys = ['horse_racing_uk', 'horse_racing_ire'];
+
+      for (var i = 0; i < sportKeys.length; i++) {
+        var data = await new Promise((resolve, reject) => {
+          var options = {
+            hostname: 'api.the-odds-api.com',
+            path: '/v4/sports/' + sportKeys[i] + '/odds/?regions=uk&markets=h2h&oddsFormat=decimal&apiKey=' + this.config.apiKey,
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+          };
+          var req = https.request(options, function(res) {
+            var body = '';
+            res.on('data', function(chunk) { body += chunk; });
+            res.on('end', function() {
+              try { resolve(JSON.parse(body)); }
+              catch (e) { resolve([]); }
+            });
+          });
+          req.on('error', function() { resolve([]); });
+          req.setTimeout(15000, function() { req.destroy(); resolve([]); });
+          req.end();
+        });
+        if (Array.isArray(data)) allRacing = allRacing.concat(data);
+      }
+
+      console.log(`[${this.name}] Fetched odds for ${allRacing.length} races from ${sportKeys.length} regions`);
+      return allRacing;
+    } catch (err) {
+      console.error(`[${this.name}] Error: ${err.message}`);
+      return [];
+    }
   }
 
   normalise(raw) {
-    // Transform to: { raceId, runnerId, bookmaker, odds, timestamp, movement }
-    return raw;
+    if (!Array.isArray(raw)) return [];
+    return raw.map(function(event) {
+      var runners = {};
+      (event.bookmakers || []).forEach(function(bk) {
+        var winMarket = (bk.markets || []).find(function(m) { return m.key === 'h2h'; });
+        if (winMarket && winMarket.outcomes) {
+          winMarket.outcomes.forEach(function(outcome) {
+            if (!runners[outcome.name]) {
+              runners[outcome.name] = { name: outcome.name, prices: [], bookmakers: {} };
+            }
+            runners[outcome.name].prices.push(outcome.price);
+            runners[outcome.name].bookmakers[bk.key] = outcome.price;
+          });
+        }
+      });
+
+      var runnerList = Object.values(runners).map(function(r) {
+        var sorted = r.prices.slice().sort(function(a, b) { return b - a; });
+        var best = sorted[0] || 0;
+        var worst = sorted[sorted.length - 1] || 0;
+        var avg = sorted.length > 0 ? sorted.reduce(function(s, p) { return s + p; }, 0) / sorted.length : 0;
+        var bestBk = '';
+        for (var bk in r.bookmakers) {
+          if (r.bookmakers[bk] === best) { bestBk = bk; break; }
+        }
+        return {
+          name: r.name,
+          bestPrice: Math.round(best * 100) / 100,
+          worstPrice: Math.round(worst * 100) / 100,
+          averagePrice: Math.round(avg * 100) / 100,
+          bestBookmaker: bestBk,
+          bookmakerCount: sorted.length,
+          priceSpread: Math.round((best - worst) * 100) / 100,
+          allPrices: r.bookmakers,
+        };
+      });
+      runnerList.sort(function(a, b) { return a.averagePrice - b.averagePrice; });
+      runnerList.forEach(function(r, idx) { r.marketRank = idx + 1; });
+
+      return {
+        eventId: event.id,
+        sport: event.sport_key,
+        raceName: event.home_team || event.away_team || '',
+        commenceTime: event.commence_time,
+        runners: runnerList,
+        bookmakerCount: (event.bookmakers || []).length,
+      };
+    });
   }
 }
 
@@ -571,38 +990,312 @@ class InjuryNewsSource extends DataSource {
 }
 
 /**
- * Odds Movement Tracker
- * Monitors odds changes across bookmakers to detect steam moves and value shifts.
- * Stores time-series data for movement charts.
+ * Odds Movement Tracker — Elite Market Intelligence
+ * Monitors odds changes across bookmakers to detect steam moves, drifters,
+ * and market confidence shifts. Stores time-series snapshots for movement charts.
+ *
+ * This is where the REAL edge lives for subscribers:
+ * - STEAMERS: Selections shortening rapidly = informed money arriving
+ * - DRIFTERS: Selections lengthening = market losing confidence
+ * - MARKET MOVERS: Biggest price changes across all events today
+ *
+ * Runs every 2 minutes. Stores up to 50 snapshots per event (covers full race day).
  */
 class OddsMovementTracker extends DataSource {
   constructor() {
-    super('odds-movement', { refreshInterval: 30000 }); // 30 seconds when active
-    this.movementLog = [];
+    super('odds-movement', {
+      refreshInterval: 120000, // 2 minutes — balance between freshness and API credits
+    });
+    // Time-series storage: { eventId: [{ timestamp, runners: { name: avgPrice } }] }
+    this.snapshots = {};
+    // Max snapshots per event (50 x 2min = ~100 minutes of tracking)
+    this.maxSnapshots = 50;
+    // Active alerts: selections with significant movement right now
+    this.activeAlerts = [];
+    // Today's market movers summary
+    this.marketMovers = { steamers: [], drifters: [], updatedAt: null };
   }
 
   async fetch() {
-    console.log(`[${this.name}] Fetch called — using sample data`);
-    return [];
+    // This source doesn't fetch its own data — it piggybacks off the odds sources.
+    // It gets called by recordSnapshot() when new odds data arrives.
+    console.log(`[${this.name}] ${Object.keys(this.snapshots).length} events tracked, ${this.activeAlerts.length} active alerts`);
+    return { tracked: Object.keys(this.snapshots).length, alerts: this.activeAlerts.length };
   }
 
   normalise(raw) { return raw; }
 
   /**
-   * Detect significant movement (steam move)
+   * Record an odds snapshot for an event.
+   * Call this every time fresh odds data arrives from The Odds API.
+   * @param {string} eventId — unique event identifier
+   * @param {string} eventName — human readable name
+   * @param {string} sport — 'racing' or 'football'
+   * @param {string} commenceTime — ISO datetime of the event
+   * @param {Array} runners — array of { name, averagePrice, bestPrice }
+   */
+  recordSnapshot(eventId, eventName, sport, commenceTime, runners) {
+    if (!eventId || !runners || !runners.length) return;
+
+    if (!this.snapshots[eventId]) {
+      this.snapshots[eventId] = {
+        eventName: eventName,
+        sport: sport,
+        commenceTime: commenceTime,
+        history: [],
+      };
+    }
+
+    var snapshot = {
+      timestamp: new Date().toISOString(),
+      runners: {},
+    };
+
+    runners.forEach(function(r) {
+      snapshot.runners[r.name] = {
+        avgPrice: r.averagePrice || r.avgPrice || 0,
+        bestPrice: r.bestPrice || 0,
+      };
+    });
+
+    this.snapshots[eventId].history.push(snapshot);
+
+    // Trim to max snapshots
+    if (this.snapshots[eventId].history.length > this.maxSnapshots) {
+      this.snapshots[eventId].history.shift();
+    }
+
+    // Analyse movement for this event
+    this._analyseEvent(eventId);
+  }
+
+  /**
+   * Analyse price movement for a tracked event.
+   * Compares current snapshot to opening snapshot and recent trend.
+   */
+  _analyseEvent(eventId) {
+    var event = this.snapshots[eventId];
+    if (!event || event.history.length < 2) return;
+
+    var opening = event.history[0];
+    var current = event.history[event.history.length - 1];
+    var previous = event.history.length >= 3 ? event.history[event.history.length - 3] : opening;
+
+    for (var runnerName in current.runners) {
+      var openPrice = (opening.runners[runnerName] || {}).avgPrice || 0;
+      var currentPrice = (current.runners[runnerName] || {}).avgPrice || 0;
+      var prevPrice = (previous.runners[runnerName] || {}).avgPrice || 0;
+
+      if (openPrice <= 0 || currentPrice <= 0) continue;
+
+      var movement = this.analyseMovement(openPrice, currentPrice);
+      var recentMovement = prevPrice > 0 ? this.analyseMovement(prevPrice, currentPrice) : null;
+
+      // Create alert for significant movements
+      if (movement.isSteamMove || movement.isDrift) {
+        // Check if alert already exists for this runner
+        var existingIdx = this.activeAlerts.findIndex(function(a) {
+          return a.eventId === eventId && a.runner === runnerName;
+        });
+
+        var alert = {
+          eventId: eventId,
+          eventName: event.eventName,
+          sport: event.sport,
+          commenceTime: event.commenceTime,
+          runner: runnerName,
+          openPrice: openPrice,
+          currentPrice: currentPrice,
+          movement: movement,
+          recentTrend: recentMovement,
+          detectedAt: new Date().toISOString(),
+          snapshotCount: event.history.length,
+        };
+
+        if (existingIdx >= 0) {
+          this.activeAlerts[existingIdx] = alert;
+        } else {
+          this.activeAlerts.push(alert);
+        }
+      }
+    }
+
+    // Clean up alerts for past events
+    var now = new Date().getTime();
+    this.activeAlerts = this.activeAlerts.filter(function(a) {
+      var eventTime = new Date(a.commenceTime).getTime();
+      return eventTime > now - 3600000; // Keep alerts for 1 hour after event start
+    });
+
+    // Update market movers summary
+    this._updateMarketMovers();
+  }
+
+  /**
+   * Build the market movers summary — top steamers and drifters today.
+   * This is the headline feature for the subscriber dashboard.
+   */
+  _updateMarketMovers() {
+    var allMovements = [];
+
+    for (var eventId in this.snapshots) {
+      var event = this.snapshots[eventId];
+      if (event.history.length < 2) continue;
+
+      var opening = event.history[0];
+      var current = event.history[event.history.length - 1];
+
+      for (var runner in current.runners) {
+        var openP = (opening.runners[runner] || {}).avgPrice || 0;
+        var currP = (current.runners[runner] || {}).avgPrice || 0;
+        if (openP <= 0 || currP <= 0) continue;
+
+        var pctChange = ((currP - openP) / openP) * 100;
+        allMovements.push({
+          eventId: eventId,
+          eventName: event.eventName,
+          sport: event.sport,
+          commenceTime: event.commenceTime,
+          runner: runner,
+          openPrice: Math.round(openP * 100) / 100,
+          currentPrice: Math.round(currP * 100) / 100,
+          percentChange: Math.round(pctChange * 10) / 10,
+          direction: pctChange < -2 ? 'shortening' : pctChange > 2 ? 'drifting' : 'stable',
+          isSteamer: pctChange <= -8,
+          isDrifter: pctChange >= 12,
+        });
+      }
+    }
+
+    // Sort: biggest shortening first for steamers, biggest drifting first for drifters
+    var steamers = allMovements
+      .filter(function(m) { return m.percentChange < -5; })
+      .sort(function(a, b) { return a.percentChange - b.percentChange; })
+      .slice(0, 10);
+
+    var drifters = allMovements
+      .filter(function(m) { return m.percentChange > 8; })
+      .sort(function(a, b) { return b.percentChange - a.percentChange; })
+      .slice(0, 10);
+
+    this.marketMovers = {
+      steamers: steamers,
+      drifters: drifters,
+      totalTracked: allMovements.length,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Get movement history for a specific event.
+   * Returns time-series data for price chart rendering.
+   */
+  getEventHistory(eventId) {
+    var event = this.snapshots[eventId];
+    if (!event) return null;
+
+    return {
+      eventId: eventId,
+      eventName: event.eventName,
+      sport: event.sport,
+      commenceTime: event.commenceTime,
+      snapshotCount: event.history.length,
+      history: event.history,
+    };
+  }
+
+  /**
+   * Get movement for a specific runner across all their entries.
+   */
+  getRunnerMovement(runnerName) {
+    var searchName = (runnerName || '').toLowerCase();
+    var results = [];
+
+    for (var eventId in this.snapshots) {
+      var event = this.snapshots[eventId];
+      if (event.history.length < 2) continue;
+
+      var opening = event.history[0];
+      var current = event.history[event.history.length - 1];
+
+      for (var name in current.runners) {
+        if (name.toLowerCase().indexOf(searchName) === -1 && searchName.indexOf(name.toLowerCase()) === -1) continue;
+
+        var openP = (opening.runners[name] || {}).avgPrice || 0;
+        var currP = (current.runners[name] || {}).avgPrice || 0;
+        if (openP <= 0 || currP <= 0) continue;
+
+        results.push({
+          eventId: eventId,
+          eventName: event.eventName,
+          runner: name,
+          openPrice: openP,
+          currentPrice: currP,
+          movement: this.analyseMovement(openP, currP),
+          history: event.history.map(function(h) {
+            return {
+              timestamp: h.timestamp,
+              price: (h.runners[name] || {}).avgPrice || null,
+            };
+          }).filter(function(h) { return h.price !== null; }),
+        });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Detect significant movement (steam move / drift).
    * @param {number} openOdds — Opening odds
    * @param {number} currentOdds — Current odds
-   * @returns {Object} Movement analysis
+   * @returns {Object} Movement analysis with signal strength
    */
   analyseMovement(openOdds, currentOdds) {
-    const change = ((currentOdds - openOdds) / openOdds) * 100;
+    if (!openOdds || openOdds <= 0) return { direction: 'unknown', percentChange: 0, signal: 'no data' };
+    var change = ((currentOdds - openOdds) / openOdds) * 100;
+    var absChange = Math.abs(change);
+
+    // Signal strength based on magnitude of move
+    var signalStrength = 'neutral';
+    if (absChange >= 20) signalStrength = 'extreme';
+    else if (absChange >= 12) signalStrength = 'strong';
+    else if (absChange >= 6) signalStrength = 'moderate';
+    else if (absChange >= 3) signalStrength = 'mild';
+
     return {
-      direction: change < 0 ? 'shortening' : change > 0 ? 'drifting' : 'stable',
+      direction: change < -2 ? 'shortening' : change > 2 ? 'drifting' : 'stable',
       percentChange: Math.round(change * 10) / 10,
-      isSteamMove: change < -10,  // 10%+ shortening = steam move
-      isDrift: change > 15,       // 15%+ lengthening = market drift
-      signal: change < -10 ? 'strong support' : change > 15 ? 'caution' : 'neutral',
+      isSteamMove: change <= -8,   // 8%+ shortening = steam move (pro money)
+      isDrift: change >= 12,        // 12%+ lengthening = market drift
+      isGamble: change <= -15,      // 15%+ shortening = serious gamble
+      signalStrength: signalStrength,
+      signal: change <= -15 ? 'GAMBLE — heavy money' :
+              change <= -8 ? 'STEAMER — strong support' :
+              change <= -5 ? 'supported' :
+              change >= 15 ? 'DRIFTER — avoid' :
+              change >= 8 ? 'drifting — caution' :
+              'neutral',
     };
+  }
+
+  /**
+   * Clean up old event data. Call daily or on server restart.
+   */
+  cleanup() {
+    var cutoff = Date.now() - (24 * 60 * 60 * 1000); // 24 hours
+    var removed = 0;
+    for (var eventId in this.snapshots) {
+      var event = this.snapshots[eventId];
+      var eventTime = new Date(event.commenceTime).getTime();
+      if (eventTime < cutoff) {
+        delete this.snapshots[eventId];
+        removed++;
+      }
+    }
+    if (removed > 0) {
+      console.log('[odds-movement] Cleaned up ' + removed + ' old events');
+    }
+    return removed;
   }
 }
 
