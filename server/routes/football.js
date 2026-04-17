@@ -641,6 +641,34 @@ module.exports = function(deps) {
     }
   });
 
+  // AI diagnostic — tests Claude API directly
+  router.get('/football/ai-test', async (req, res) => {
+    try {
+      if (!aiReports) return res.json({ error: 'aiReports not in deps' });
+      if (!aiReports.isAvailable()) return res.json({ error: 'AI not available — client is null', hasKey: !!process.env.ANTHROPIC_API_KEY, keyPrefix: process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_API_KEY.substring(0, 12) + '...' : 'NOT SET' });
+
+      var testResult = await aiReports.generateFootballPreview({
+        homeTeam: 'Arsenal',
+        awayTeam: 'Chelsea',
+        league: 'Premier League',
+        kickoff: '2026-04-19T15:00:00Z',
+        venue: 'Emirates Stadium',
+        homeForm: ['W', 'W', 'D', 'W', 'L'],
+        awayForm: ['L', 'D', 'W', 'W', 'W'],
+        homeGoals: 2.1,
+        awayGoals: 1.4,
+      });
+
+      if (testResult) {
+        res.json({ success: true, preview: testResult });
+      } else {
+        res.json({ success: false, error: 'generateFootballPreview returned null — check server logs for Claude API error' });
+      }
+    } catch (err) {
+      res.json({ success: false, error: err.message, stack: err.stack ? err.stack.split('\n').slice(0, 5) : [] });
+    }
+  });
+
   // Diagnostic: API-Football status check (admin only)
   router.get('/football/diagnostic', authenticate, async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'admin only' });
