@@ -20,6 +20,11 @@ module.exports = function(deps) {
       if (!name || !email || !subject || !message) {
         return res.status(400).json({ error: 'All fields are required' });
       }
+      // Input validation
+      if (typeof name !== 'string' || name.length > 200) return res.status(400).json({ error: 'Invalid name' });
+      if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email address' });
+      if (typeof subject !== 'string' || subject.length > 500) return res.status(400).json({ error: 'Subject too long (max 500 chars)' });
+      if (typeof message !== 'string' || message.length > 5000) return res.status(400).json({ error: 'Message too long (max 5000 chars)' });
 
       const ticket = {
         id: `sup_${Date.now()}`,

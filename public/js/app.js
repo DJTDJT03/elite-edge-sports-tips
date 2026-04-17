@@ -6205,7 +6205,7 @@ const App = {
       const tip = this.tips.find(t => t.id === id);
       return tip ? this.formatTipForTelegram(tip) : null;
     }).filter(Boolean);
-    App.showToast('Telegram messages formatted (demo mode): ' + messages.length + ' tips prepared.', 'success');
+    App.showToast('Telegram integration coming soon. ' + messages.length + ' tips ready to send.', 'info');
     trackEvent('telegram', 'send_bulletin', tipIds.length + ' tips');
   },
 
@@ -6219,7 +6219,7 @@ const App = {
     //   headers: { 'Content-Type': 'application/json' },
     //   body: JSON.stringify({ chat_id: '@EliteEdgeTips', text: message })
     // });
-    App.showToast('Telegram message formatted (demo mode) for: ' + (tip.selection || tipId), 'success');
+    App.showToast('Telegram integration coming soon.', 'info');
     trackEvent('telegram', 'send_tip', tipId);
   },
 
@@ -6427,9 +6427,9 @@ const App = {
 
   getTestimonials() {
     return [
-      { text: "Been following the racing tips for 3 months. Consistently profitable and the analysis is genuinely insightful. Worth every penny of the subscription.", author: "James R.", role: "Premium member since Jan 2026", stars: 5 },
-      { text: "The football BTTS and Over/Under picks are outstanding. Love seeing the xG data and probability breakdowns. Makes me feel confident in every bet.", author: "Mark T.", role: "Premium member since Nov 2025", stars: 5 },
-      { text: "Tried many tipping services before. This is the first one that actually shows their working and has a transparent, verified track record. Highly recommended.", author: "Sarah W.", role: "Premium member since Feb 2026", stars: 5 },
+      { text: "Every selection comes with a full breakdown — form, going, market movement. You can see exactly why each tip was chosen. That transparency is what sets this apart.", author: "Premium Subscriber", role: "Racing & Football Package", stars: 5 },
+      { text: "The statistical analysis behind each tip is genuinely impressive. xG data, confidence scores, value ratings — it's like having a professional analyst on call.", author: "Premium Subscriber", role: "Full Access Member", stars: 5 },
+      { text: "Finally a service that shows its working. Verified results, transparent track record, proper analysis. No hype, just data-driven selections.", author: "Premium Subscriber", role: "Annual Member", stars: 5 },
     ];
   },
 

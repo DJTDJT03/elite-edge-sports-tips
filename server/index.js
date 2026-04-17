@@ -30,10 +30,18 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'elite-edge-secret-key-change-in-production';
 
+// Warn if using default JWT secret
+if (!process.env.JWT_SECRET) {
+  console.warn('[SECURITY] WARNING: JWT_SECRET not set — using default. Set JWT_SECRET in production!');
+}
+
 // ---------------------------------------------------------------------------
 // Middleware
 // ---------------------------------------------------------------------------
-app.use(cors());
+const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',')
+  : ['http://localhost:3000', 'https://eliteedgesports.co.uk', 'https://www.eliteedgesports.co.uk'];
+app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(express.json({ limit: '1mb' }));
 
@@ -100,14 +108,25 @@ app.use('/api', require('./routes/support')(deps));
 app.use('/', require('./routes/public')(deps));
 
 // ---------------------------------------------------------------------------
+// Global error handler — catches unhandled errors in route handlers
+// ---------------------------------------------------------------------------
+app.use((err, req, res, next) => {
+  console.error('[ERROR] ' + req.method + ' ' + req.path + ':', err.message);
+  if (process.env.NODE_ENV !== 'production') console.error(err.stack);
+  res.status(err.status || 500).json({
+    error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Start scheduled tasks
 // ---------------------------------------------------------------------------
 const scheduler = require('./services/scheduler')(deps);
 
 // ---------------------------------------------------------------------------
-// Start server
+// Start server + graceful shutdown
 // ---------------------------------------------------------------------------
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('  ╔═══════════════════════════════════════════════════════╗');
   console.log('  ║     ELITE EDGE SPORTS TIPS — Server Running          ║');
@@ -117,5 +136,29 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('  ╚═══════════════════════════════════════════════════════╝');
   console.log('');
 });
+
+// Graceful shutdown — drain connections, close DB pool
+function shutdown(signal) {
+  console.log('\n[Server] ' + signal + ' received — shutting down gracefully...');
+  server.close(() => {
+    console.log('[Server] HTTP server closed');
+    if (db.pool) {
+      db.pool.end(() => {
+        console.log('[Server] Database pool closed');
+        process.exit(0);
+      });
+    } else {
+      process.exit(0);
+    }
+  });
+  // Force exit after 10 seconds if graceful shutdown fails
+  setTimeout(() => {
+    console.error('[Server] Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 module.exports = app;

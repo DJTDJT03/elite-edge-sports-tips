@@ -93,21 +93,32 @@ module.exports = function(deps) {
   // ---------------------------------------------------------------------------
   // ADMIN: Create tip
   // ---------------------------------------------------------------------------
+  // Allowed fields for tip creation/update — prevents injection of arbitrary fields
+  var TIP_FIELDS = ['sport','event','meeting','raceTime','raceClass','distance','going',
+    'league','kickoff','venue','market','selection','odds','confidence','modelProbability',
+    'impliedProbability','edge','valueRating','isPremium','staking','riskLevel','analysis',
+    'isNap','isOutsider','openingOdds','bookmakerOdds','recentForm','tipster','tipsterProfile','date'];
+
+  function pickFields(body, allowed) {
+    var result = {};
+    for (var i = 0; i < allowed.length; i++) {
+      if (body[allowed[i]] !== undefined) result[allowed[i]] = body[allowed[i]];
+    }
+    return result;
+  }
+
   router.post('/admin/tips', authenticate, requireAdmin, async (req, res) => {
-    const tips = await db.getTips();
-    const newTip = {
-      id: `tip_${Date.now()}`,
-      ...req.body,
-      date: req.body.date || new Date().toISOString().split('T')[0],
+    var fields = pickFields(req.body, TIP_FIELDS);
+    var newTip = Object.assign({
+      id: 'tip_' + Date.now(),
+      date: new Date().toISOString().split('T')[0],
       status: 'active',
       result: null,
-    };
-    // Calculate scoring if odds provided
+    }, fields);
     if (newTip.odds && !newTip.modelProbability) {
       newTip.impliedProbability = scoringModel.impliedProbability(newTip.odds);
     }
-    tips.push(newTip);
-    await db.saveTips(tips);
+    await db.createTip(newTip);
     res.json(newTip);
   });
 
@@ -115,12 +126,11 @@ module.exports = function(deps) {
   // ADMIN: Update tip
   // ---------------------------------------------------------------------------
   router.put('/admin/tips/:id', authenticate, requireAdmin, async (req, res) => {
-    const tips = await db.getTips();
-    const idx = tips.findIndex(t => t.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: 'Tip not found' });
-    tips[idx] = { ...tips[idx], ...req.body };
-    await db.saveTips(tips);
-    res.json(tips[idx]);
+    var existing = await db.getTipById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Tip not found' });
+    var fields = pickFields(req.body, TIP_FIELDS);
+    var updated = await db.updateTip(req.params.id, fields);
+    res.json(updated);
   });
 
   // ---------------------------------------------------------------------------
@@ -385,7 +395,7 @@ module.exports = function(deps) {
   // ---------------------------------------------------------------------------
   // EMAIL: Diagnostic
   // ---------------------------------------------------------------------------
-  router.get('/email/diagnostic', async (req, res) => {
+  router.get('/email/diagnostic', authenticate, requireAdmin, async (req, res) => {
     res.json({
       transport: emailService.transport ? emailService.transport.name : 'none',
       fromAddress: emailService.fromAddress,
@@ -402,7 +412,7 @@ module.exports = function(deps) {
   // ---------------------------------------------------------------------------
   // EMAIL: Test send
   // ---------------------------------------------------------------------------
-  router.post('/email/test', async (req, res) => {
+  router.post('/email/test', authenticate, requireAdmin, async (req, res) => {
     try {
       const to = req.body.to;
       if (!to) return res.status(400).json({ error: 'Missing "to" field' });
