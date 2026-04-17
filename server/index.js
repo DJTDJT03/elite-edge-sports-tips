@@ -108,6 +108,29 @@ app.use('/api', require('./routes/support')(deps));
 app.use('/', require('./routes/public')(deps));
 
 // ---------------------------------------------------------------------------
+// Startup: ensure admin account credentials are current
+// (persistent volume may have stale password hash from earlier deploys)
+// ---------------------------------------------------------------------------
+(async function ensureAdminCredentials() {
+  try {
+    const bcrypt = require('bcryptjs');
+    const adminEmail = 'darren@ecocleaningsystems.co.uk';
+    const adminPassword = 'Eliteedge2026';
+    const user = await db.getUserByEmail(adminEmail);
+    if (user) {
+      const valid = await bcrypt.compare(adminPassword, user.password || '');
+      if (!valid) {
+        const newHash = await bcrypt.hash(adminPassword, 10);
+        await db.updateUser(user.id, { password: newHash });
+        console.log('[Startup] Admin password hash refreshed for ' + adminEmail);
+      }
+    }
+  } catch (e) {
+    console.log('[Startup] Admin credential check skipped:', e.message);
+  }
+})();
+
+// ---------------------------------------------------------------------------
 // Global error handler — catches unhandled errors in route handlers
 // ---------------------------------------------------------------------------
 app.use((err, req, res, next) => {
