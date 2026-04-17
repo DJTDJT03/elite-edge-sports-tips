@@ -62,6 +62,7 @@ const App = {
     this.loadDailyStats();
     this.loadActivityTicker();
     this.initNotifications();
+    this.initOddsTicker();
     this.checkReferralParam();
     this.initCookieConsent();
     this.initChatTease();
@@ -675,6 +676,12 @@ const App = {
     const page = hash.split('/')[0] || 'dashboard';
     this.currentPage = page;
 
+    // Clear Live Hub intervals when navigating away
+    if (this._liveIntervals) {
+      this._liveIntervals.forEach(function(id) { clearInterval(id); });
+      this._liveIntervals = null;
+    }
+
     // Update active nav
     document.querySelectorAll('.nav-link').forEach(link => {
       link.classList.toggle('active', link.dataset.page === page);
@@ -686,8 +693,10 @@ const App = {
     switch (page) {
       case 'dashboard': case '': this.renderDashboard(); break;
       case 'racing': this.renderRacing(); break;
+      case 'live': this.renderLiveHub(); break;
       case 'football': this.renderFootball(); break;
       case 'selections': this.renderSelections(); break;
+      case 'value-bets': this.renderValueBets(); break;
       case 'festival': this.renderFestival(); break;
       case 'results': this.renderResults(); break;
       case 'pricing': this.renderPricing(); break;
@@ -2871,6 +2880,205 @@ const App = {
     if (value && type === 'going') tips = tips.filter(t => t.going === value);
     if (value && type === 'analyst') tips = tips.filter(t => t.tipsterProfile === value);
     document.getElementById('racing-tips').innerHTML = tips.map(t => this.renderTipCard(t)).join('') || '<p class="text-muted">No tips match these filters.</p>';
+  },
+
+  // -----------------------------------------------------------------------
+  // VALUE BETS PAGE
+  // -----------------------------------------------------------------------
+  async renderValueBets() {
+    // Clear any previous value-bet auto-refresh
+    if (this._valueBetsInterval) { clearInterval(this._valueBetsInterval); this._valueBetsInterval = null; }
+
+    var app = document.getElementById('app');
+    var isPremium = this.user && this.user.subscription === 'premium';
+    var self = this;
+
+    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Scanning for value bets...</div></div>';
+
+    async function fetchAndRender(minEdge) {
+      try {
+        var res = await fetch('/api/odds/value-bets?minEdge=' + (minEdge || 5));
+        var data = res.ok ? await res.json() : { valueBets: [] };
+        var bets = data.valueBets || data || [];
+        if (!Array.isArray(bets)) bets = [];
+        renderPage(bets, minEdge || 5);
+      } catch (e) {
+        renderPage([], minEdge || 5);
+      }
+    }
+
+    function renderPage(bets, minEdge) {
+      var now = new Date();
+      var timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      var html = '<div class="value-bets-page">';
+
+      // Header
+      html += '<div class="vb-header">';
+      html += '<div class="vb-header-top">';
+      html += '<div>';
+      html += '<h1 class="vb-title">Value Bet <span class="gold-accent">Scanner</span></h1>';
+      html += '<p class="vb-subtitle">Where the bookmakers disagree &mdash; find the biggest edges</p>';
+      html += '</div>';
+      html += '<div class="vb-refresh-info">';
+      html += '<span class="vb-refresh-dot"></span>';
+      html += '<span class="vb-refresh-text">Last scan: ' + timeStr + '</span>';
+      html += '</div>';
+      html += '</div>';
+
+      // Filters
+      html += '<div class="value-bet-filters">';
+      html += '<div class="vb-filter-group">';
+      html += '<label class="vb-filter-label">Min Edge</label>';
+      html += '<select id="vb-edge-filter" class="vb-select" onchange="App._valueBetsFilterEdge(this.value)">';
+      [3, 5, 8, 10, 15].forEach(function(v) {
+        html += '<option value="' + v + '"' + (v === minEdge ? ' selected' : '') + '>' + v + '%</option>';
+      });
+      html += '</select>';
+      html += '</div>';
+      html += '<div class="vb-filter-group">';
+      html += '<label class="vb-filter-label">Sort</label>';
+      html += '<select id="vb-sort" class="vb-select" onchange="App._valueBetsSortChange()">';
+      html += '<option value="edge">Highest Edge</option>';
+      html += '<option value="time">Soonest First</option>';
+      html += '<option value="sport">By Sport</option>';
+      html += '</select>';
+      html += '</div>';
+      html += '</div>';
+      html += '</div>';
+
+      // How it works (collapsible)
+      html += '<details class="vb-explainer">';
+      html += '<summary class="vb-explainer-toggle">How does the scanner work?</summary>';
+      html += '<div class="vb-explainer-body">';
+      html += '<p>When one bookmaker offers significantly better odds than the market average, that\'s a value bet. Our scanner compares <strong>40+ UK bookmakers</strong> in real-time to surface the selections where the pricing disagrees most. A higher edge percentage means a bigger discrepancy between the best available price and the market consensus.</p>';
+      html += '</div>';
+      html += '</details>';
+
+      // Bets grid
+      if (bets.length === 0) {
+        html += '<div class="vb-empty">';
+        html += '<div class="vb-empty-icon">&#128269;</div>';
+        html += '<h3>No value bets detected right now</h3>';
+        html += '<p>The scanner checks every 2 minutes. Try lowering the minimum edge filter or check back shortly.</p>';
+        html += '</div>';
+      } else {
+        html += '<div class="value-bet-grid" id="vb-grid">';
+        bets.forEach(function(bet, idx) {
+          var edgeNum = parseFloat(bet.edgePercent || bet.edge || 0);
+          var borderClass = edgeNum >= 10 ? 'vb-edge-high' : (edgeNum >= 5 ? 'vb-edge-medium' : 'vb-edge-low');
+          var sportBadge = (bet.sport || 'racing').toLowerCase();
+          var sportLabel = sportBadge === 'football' ? 'Football' : 'Racing';
+          var sportBadgeClass = sportBadge === 'football' ? 'vb-sport-football' : 'vb-sport-racing';
+
+          var showBlur = !isPremium && idx >= 2;
+
+          html += '<div class="value-bet-card ' + borderClass + (showBlur ? ' vb-card-blurred' : '') + '">';
+          html += '<div class="vb-card-header">';
+          html += '<span class="vb-sport-badge ' + sportBadgeClass + '">' + sportLabel + '</span>';
+          if (bet.marketRank) html += '<span class="vb-market-rank">Rank #' + bet.marketRank + '</span>';
+          html += '</div>';
+
+          html += '<div class="vb-event-name">' + (bet.eventName || bet.event || 'Unknown Event') + '</div>';
+          html += '<div class="vb-selection-name">' + (bet.selectionName || bet.selection || bet.runner || 'Unknown') + '</div>';
+
+          html += '<div class="vb-price-row">';
+          html += '<div class="vb-best-price-block">';
+          html += '<div class="value-bet-best-price">' + (bet.bestPrice || bet.bestOdds || '-') + '</div>';
+          html += '<div class="vb-best-at">Best at: <strong>' + (bet.bestBookmaker || bet.bookmaker || '-') + '</strong></div>';
+          html += '</div>';
+          html += '<div class="value-bet-edge">';
+          html += '<div class="vb-edge-label">EDGE</div>';
+          html += '<div class="vb-edge-value">+' + edgeNum.toFixed(1) + '%</div>';
+          html += '</div>';
+          html += '</div>';
+
+          html += '<div class="value-bet-comparison">';
+          html += '<div class="vb-comp-row">';
+          html += '<span class="vb-comp-label">Avg price</span>';
+          html += '<span class="vb-comp-value">' + (bet.avgPrice || bet.averageOdds || '-') + '</span>';
+          html += '</div>';
+          var barWidth = Math.min(edgeNum * 5, 100);
+          html += '<div class="vb-comp-bar"><div class="vb-comp-bar-fill" style="width:' + barWidth + '%"></div></div>';
+          html += '</div>';
+
+          html += '<div class="vb-card-footer">';
+          html += '<span class="value-bet-bookmaker">' + (bet.bookmakerCount || bet.numBookmakers || '-') + ' bookmakers</span>';
+          if (bet.eventTime || bet.time) {
+            var t = bet.eventTime || bet.time;
+            html += '<span class="vb-event-time">' + t + '</span>';
+          }
+          html += '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+
+        // Premium gate overlay
+        if (!isPremium && bets.length > 2) {
+          html += '<div class="vb-premium-gate">';
+          html += '<div class="vb-premium-gate-inner">';
+          html += '<h3>Unlock All Value Bets</h3>';
+          html += '<p>Premium members get full access to the value bet scanner with unlimited real-time alerts.</p>';
+          html += '<button class="btn btn-gold" onclick="window.location.hash=\'#/pricing\'">Upgrade to Premium</button>';
+          html += '</div>';
+          html += '</div>';
+        }
+      }
+
+      html += '</div>';
+      app.innerHTML = html;
+    }
+
+    // Initial fetch
+    await fetchAndRender(5);
+
+    // Auto-refresh every 120s
+    this._valueBetsInterval = setInterval(function() {
+      if (self.currentPage !== 'value-bets') { clearInterval(self._valueBetsInterval); self._valueBetsInterval = null; return; }
+      var sel = document.getElementById('vb-edge-filter');
+      var minEdge = sel ? parseInt(sel.value) : 5;
+      fetchAndRender(minEdge);
+    }, 120000);
+  },
+
+  _valueBetsFilterEdge(val) {
+    if (this._valueBetsInterval) { clearInterval(this._valueBetsInterval); this._valueBetsInterval = null; }
+    var self = this;
+    (async function() {
+      try {
+        var res = await fetch('/api/odds/value-bets?minEdge=' + val);
+        var data = res.ok ? await res.json() : { valueBets: [] };
+        var bets = data.valueBets || data || [];
+        if (!Array.isArray(bets)) bets = [];
+        self.renderValueBets();
+      } catch (e) {
+        self.renderValueBets();
+      }
+    })();
+  },
+
+  _valueBetsSortChange() {
+    var sortVal = document.getElementById('vb-sort') ? document.getElementById('vb-sort').value : 'edge';
+    var grid = document.getElementById('vb-grid');
+    if (!grid) return;
+    var cards = Array.from(grid.children);
+    cards.sort(function(a, b) {
+      if (sortVal === 'edge') {
+        var ea = parseFloat((a.querySelector('.vb-edge-value') || {}).textContent) || 0;
+        var eb = parseFloat((b.querySelector('.vb-edge-value') || {}).textContent) || 0;
+        return eb - ea;
+      } else if (sortVal === 'time') {
+        var ta = (a.querySelector('.vb-event-time') || {}).textContent || 'zzz';
+        var tb = (b.querySelector('.vb-event-time') || {}).textContent || 'zzz';
+        return ta.localeCompare(tb);
+      } else if (sortVal === 'sport') {
+        var sa = (a.querySelector('.vb-sport-badge') || {}).textContent || '';
+        var sb = (b.querySelector('.vb-sport-badge') || {}).textContent || '';
+        return sa.localeCompare(sb);
+      }
+      return 0;
+    });
+    cards.forEach(function(c) { grid.appendChild(c); });
   },
 
   // -----------------------------------------------------------------------
@@ -5112,6 +5320,66 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // LIVE ODDS TICKER (Market Movers — Steamers & Drifters)
+  // -----------------------------------------------------------------------
+  _oddsTickerTimer: null,
+
+  initOddsTicker() {
+    this.fetchOddsTicker();
+    if (!this._oddsTickerTimer) {
+      this._oddsTickerTimer = setInterval(() => {
+        this.fetchOddsTicker();
+      }, 60 * 1000);
+    }
+  },
+
+  async fetchOddsTicker() {
+    try {
+      var data = await this.api('/odds/market-movers');
+      var movers = (data && data.movers) || [];
+      var ticker = document.getElementById('odds-ticker');
+      var track = document.getElementById('odds-ticker-track');
+      if (!ticker || !track) return;
+      if (!movers.length) {
+        ticker.style.display = 'none';
+        return;
+      }
+      // Build items HTML
+      var html = '';
+      movers.forEach(function(m) {
+        var isSteamer = m.direction === 'steamer';
+        var cls = isSteamer ? 'steamer' : 'drifter';
+        var arrow = isSteamer ? '\u25BC' : '\u25B2';
+        var pctRaw = Math.abs(m.change_pct || 0);
+        var pct = pctRaw.toFixed(1);
+        var eventLabel = m.event_name ? '<span class="odds-ticker-event">' + App._escHtml(m.event_name) + '</span>' : '';
+        html += '<div class="odds-ticker-item ' + cls + '">' +
+          eventLabel +
+          '<span class="odds-ticker-name">' + App._escHtml(m.name || m.runner || '') + '</span>' +
+          '<span class="odds-ticker-price">' + Number(m.old_price).toFixed(2) + ' \u2192 ' + Number(m.new_price).toFixed(2) + '</span>' +
+          '<span class="odds-ticker-arrow">' + arrow + '</span>' +
+          '<span class="odds-ticker-change">' + pct + '%</span>' +
+          '</div>';
+      });
+      // Duplicate for seamless loop
+      track.innerHTML = html + html;
+      // Adjust animation speed based on number of items (roughly 3s per item)
+      var duration = Math.max(20, movers.length * 3);
+      track.style.animationDuration = duration + 's';
+      ticker.style.display = 'flex';
+    } catch (e) {
+      // Silently fail — ticker is non-critical
+    }
+  },
+
+  _escHtml(s) {
+    if (!s) return '';
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  },
+
+  // -----------------------------------------------------------------------
   // NOTIFICATION SYSTEM (Feature: In-app notifications)
   // -----------------------------------------------------------------------
   initNotifications() {
@@ -6431,6 +6699,274 @@ const App = {
       { text: "The statistical analysis behind each tip is genuinely impressive. xG data, confidence scores, value ratings — it's like having a professional analyst on call.", author: "Premium Subscriber", role: "Full Access Member", stars: 5 },
       { text: "Finally a service that shows its working. Verified results, transparent track record, proper analysis. No hype, just data-driven selections.", author: "Premium Subscriber", role: "Annual Member", stars: 5 },
     ];
+  },
+
+  /* ======================================================================
+     RACE DAY LIVE HUB
+     ====================================================================== */
+  _liveIntervals: null,
+  _liveHubData: null,
+
+  async renderLiveHub() {
+    var self = this;
+    var app = document.getElementById('app');
+    var isPremium = this.user && this.user.subscription === 'premium';
+    var today = new Date();
+    var todayStr = today.toISOString().split('T')[0];
+    var todayDisplay = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+    app.innerHTML = '<div class="live-hub"><div class="text-center pulse" style="padding:60px;color:var(--text-secondary);">Loading Live Hub...</div></div>';
+
+    // Fetch all data sources
+    var tips = [], liveCards = [], liveResults = [], settledResults = [];
+    try {
+      var responses = await Promise.allSettled([
+        fetch('/api/tips').then(function(r) { return r.ok ? r.json() : []; }),
+        fetch('/api/racing/live-cards').then(function(r) { return r.ok ? r.json() : []; }),
+        fetch('/api/racing/live-results').then(function(r) { return r.ok ? r.json() : []; }),
+        fetch('/api/results').then(function(r) { return r.ok ? r.json() : []; })
+      ]);
+      tips = (responses[0].status === 'fulfilled' ? responses[0].value : []);
+      if (tips.tips) tips = tips.tips;
+      if (!Array.isArray(tips)) tips = [];
+      liveCards = (responses[1].status === 'fulfilled' ? responses[1].value : []);
+      if (liveCards.meetings) liveCards = liveCards.meetings;
+      if (!Array.isArray(liveCards)) liveCards = [];
+      liveResults = (responses[2].status === 'fulfilled' ? responses[2].value : []);
+      if (liveResults.results) liveResults = liveResults.results;
+      if (!Array.isArray(liveResults)) liveResults = [];
+      settledResults = (responses[3].status === 'fulfilled' ? responses[3].value : []);
+      if (settledResults.results) settledResults = settledResults.results;
+      if (!Array.isArray(settledResults)) settledResults = [];
+    } catch (e) { console.error('Live Hub fetch error:', e); }
+
+    // Filter today's racing tips
+    var todayTips = tips.filter(function(t) {
+      return t.date === todayStr && (t.sport === 'racing' || t.sport === 'horse-racing' || t.category === 'racing');
+    });
+
+    // Calculate stats
+    var totalTips = todayTips.length;
+    var wonTips = todayTips.filter(function(t) { return t.result === 'won'; });
+    var lostTips = todayTips.filter(function(t) { return t.result === 'lost'; });
+    var placedTips = todayTips.filter(function(t) { return t.result === 'placed'; });
+    var settledCount = wonTips.length + lostTips.length + placedTips.length;
+    var strikeRate = settledCount > 0 ? Math.round((wonTips.length / settledCount) * 100) : 0;
+    var pnl = 0;
+    todayTips.forEach(function(t) {
+      if (t.result === 'won' && t.odds) {
+        var dec = typeof t.odds === 'number' ? t.odds : parseFloat(t.odds) || 0;
+        pnl += (dec - 1);
+      } else if (t.result === 'lost') {
+        pnl -= 1;
+      } else if (t.result === 'placed' && t.eachWayReturn) {
+        pnl += (parseFloat(t.eachWayReturn) || 0);
+      }
+    });
+
+    // Find next race from live cards
+    var now = new Date();
+    var nextRace = null;
+    var nextRaceTime = null;
+    var allRaces = [];
+    liveCards.forEach(function(meeting) {
+      var meetingName = meeting.meeting || meeting.name || meeting.course || '';
+      var races = meeting.races || [];
+      races.forEach(function(race) {
+        var raceTimeStr = race.time || race.offTime || '';
+        if (!raceTimeStr) return;
+        var parts = raceTimeStr.split(':');
+        var raceDate = new Date(now);
+        raceDate.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0, 0, 0);
+        allRaces.push({ meeting: meetingName, race: race, dateObj: raceDate, time: raceTimeStr });
+      });
+    });
+    allRaces.sort(function(a, b) { return a.dateObj - b.dateObj; });
+    for (var i = 0; i < allRaces.length; i++) {
+      if (allRaces[i].dateObj > now) {
+        nextRace = allRaces[i];
+        nextRaceTime = allRaces[i].dateObj;
+        break;
+      }
+    }
+
+    // Find our tip for the next race
+    var nextRaceTip = null;
+    if (nextRace) {
+      nextRaceTip = todayTips.find(function(t) {
+        return (t.time === nextRace.time || t.raceTime === nextRace.time) &&
+               (t.meeting === nextRace.meeting || t.course === nextRace.meeting);
+      }) || null;
+    }
+
+    // Today's results for the right column
+    var todayResults = liveResults.filter(function(r) {
+      return r.date === todayStr || !r.date;
+    });
+    // Also merge settled tips as results
+    var settledToday = settledResults.filter(function(r) { return r.date === todayStr; });
+
+    // Build the page
+    var blurClass = isPremium ? '' : ' live-hub-blurred';
+
+    // --- LEFT COLUMN: Next Race Countdown ---
+    var leftHTML = '<div class="live-hub-panel">' +
+      '<div class="live-hub-panel-header"><span class="live-pulse"></span> NEXT RACE</div>';
+    if (nextRace) {
+      leftHTML += '<div class="live-countdown-meeting">' + self._escHtml(nextRace.meeting) + '</div>' +
+        '<div class="live-countdown-time">' + nextRace.time + '</div>' +
+        '<div class="live-countdown" id="live-countdown">--:--:--</div>' +
+        '<div class="live-countdown-details">';
+      if (nextRace.race.raceName) leftHTML += '<div class="live-countdown-detail">' + self._escHtml(nextRace.race.raceName) + '</div>';
+      if (nextRace.race.class) leftHTML += '<div class="live-countdown-detail">Class ' + self._escHtml(String(nextRace.race.class)) + '</div>';
+      if (nextRace.race.distance) leftHTML += '<div class="live-countdown-detail">' + self._escHtml(nextRace.race.distance) + '</div>';
+      if (nextRace.race.going) leftHTML += '<div class="live-countdown-detail">' + self._escHtml(nextRace.race.going) + '</div>';
+      leftHTML += '</div>';
+      if (nextRaceTip) {
+        leftHTML += '<div class="live-next-tip' + blurClass + '">' +
+          '<div class="live-next-tip-label">OUR SELECTION</div>' +
+          '<div class="live-next-tip-horse">' + self._escHtml(nextRaceTip.selection || nextRaceTip.horse || nextRaceTip.name || '-') + '</div>' +
+          '<div class="live-next-tip-meta">' +
+            '<span>Odds: ' + (nextRaceTip.odds || '-') + '</span>' +
+            (nextRaceTip.confidence ? '<span>Confidence: ' + nextRaceTip.confidence + '%</span>' : '') +
+            (nextRaceTip.edge ? '<span>Edge: ' + nextRaceTip.edge + '%</span>' : '') +
+          '</div>' +
+        '</div>';
+        if (!isPremium) {
+          leftHTML += '<div class="live-upgrade-cta"><a href="#/pricing" class="btn btn-gold btn-sm">Upgrade to See Tips</a></div>';
+        }
+      }
+    } else {
+      leftHTML += '<div class="live-no-races"><div style="font-size:36px;margin-bottom:12px;">&#127939;</div>' +
+        '<div>No upcoming races</div><div class="text-muted text-sm">Check back on the next race day</div></div>';
+    }
+    leftHTML += '</div>';
+
+    // --- CENTRE COLUMN: Today's Tipped Selections ---
+    var centreHTML = '<div class="live-hub-panel live-hub-panel-centre">' +
+      '<div class="live-hub-panel-header">TODAY\'S SELECTIONS</div>' +
+      '<div class="live-selections-pnl">P/L: <span class="' + (pnl >= 0 ? 'ds-positive' : 'ds-negative') + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + 'u</span></div>';
+    if (todayTips.length === 0) {
+      centreHTML += '<div class="live-no-races"><div style="font-size:28px;margin-bottom:8px;">&#128203;</div><div>No racing tips today yet</div></div>';
+    } else {
+      centreHTML += '<div class="live-selections-list' + blurClass + '">';
+      todayTips.forEach(function(tip) {
+        var status = tip.result || 'pending';
+        var statusClass = 'pending';
+        var statusLabel = 'Pending';
+        var statusIcon = '';
+        if (status === 'won') { statusClass = 'won'; statusLabel = 'Won'; statusIcon = '&#10003;'; }
+        else if (status === 'lost') { statusClass = 'lost'; statusLabel = 'Lost'; statusIcon = '&#10007;'; }
+        else if (status === 'placed') { statusClass = 'placed'; statusLabel = 'Placed'; statusIcon = '&#9679;'; }
+        else if (status === 'running') { statusClass = 'running'; statusLabel = 'Running'; statusIcon = '&#9654;'; }
+
+        centreHTML += '<div class="live-selection ' + statusClass + '">' +
+          '<div class="live-selection-time">' + (tip.time || tip.raceTime || '-') + '</div>' +
+          '<div class="live-selection-body">' +
+            '<div class="live-selection-meeting">' + self._escHtml(tip.meeting || tip.course || '-') + '</div>' +
+            '<div class="live-selection-horse">' + self._escHtml(tip.selection || tip.horse || tip.name || '-') + '</div>' +
+          '</div>' +
+          '<div class="live-selection-odds">' + (tip.odds || '-') + '</div>' +
+          (tip.confidence ? '<div class="live-selection-conf">' + tip.confidence + '%</div>' : '') +
+          '<div class="live-selection-status live-status-' + statusClass + '">' + statusIcon + ' ' + statusLabel + '</div>' +
+        '</div>';
+      });
+      centreHTML += '</div>';
+      if (!isPremium) {
+        centreHTML += '<div class="live-upgrade-cta"><a href="#/pricing" class="btn btn-gold">Upgrade for Full Access</a></div>';
+      }
+    }
+    centreHTML += '</div>';
+
+    // --- RIGHT COLUMN: Live Results Feed ---
+    var rightHTML = '<div class="live-hub-panel">' +
+      '<div class="live-hub-panel-header">RESULTS</div>' +
+      '<div class="live-results-feed" id="live-results-feed">';
+    var combinedResults = todayResults.concat(settledToday);
+    if (combinedResults.length === 0) {
+      rightHTML += '<div class="live-no-races"><div style="font-size:28px;margin-bottom:8px;">&#9203;</div><div>Awaiting results</div><div class="text-muted text-sm">Results appear here as races finish</div></div>';
+    } else {
+      combinedResults.forEach(function(res) {
+        var winner = res.winner || res.selection || res.horse || res.name || '-';
+        var sp = res.sp || res.odds || '-';
+        var meeting = res.meeting || res.course || '-';
+        var time = res.time || res.raceTime || '-';
+        // Check if our tip called it
+        var calledIt = todayTips.some(function(t) {
+          return t.result === 'won' && (t.time === time || t.raceTime === time) &&
+                 (t.meeting === meeting || t.course === meeting);
+        });
+        var resultClass = calledIt ? 'live-result called-it' : (res.ourResult === 'lost' ? 'live-result lost' : 'live-result');
+        rightHTML += '<div class="' + resultClass + '">' +
+          '<div class="live-result-time">' + self._escHtml(String(time)) + '</div>' +
+          '<div class="live-result-body">' +
+            '<div class="live-result-meeting">' + self._escHtml(String(meeting)) + '</div>' +
+            '<div class="live-result-winner">' + self._escHtml(String(winner)) + '</div>' +
+          '</div>' +
+          '<div class="live-result-sp">SP: ' + self._escHtml(String(sp)) + '</div>' +
+          (calledIt ? '<div class="live-result-badge">WE CALLED IT</div>' : '') +
+        '</div>';
+      });
+    }
+    rightHTML += '</div></div>';
+
+    // --- ASSEMBLE ---
+    app.innerHTML = '<div class="live-hub">' +
+      '<div class="live-hub-topbar">' +
+        '<div class="live-hub-topbar-left">' +
+          '<span class="live-pulse"></span>' +
+          '<span class="live-hub-badge">LIVE</span>' +
+          '<span class="live-hub-date">' + todayDisplay + '</span>' +
+        '</div>' +
+        '<div class="live-hub-topbar-stats">' +
+          '<div class="live-hub-stat"><div class="live-hub-stat-value">' + totalTips + '</div><div class="live-hub-stat-label">Tips Today</div></div>' +
+          '<div class="live-hub-stat"><div class="live-hub-stat-value ds-positive">' + wonTips.length + '</div><div class="live-hub-stat-label">Won</div></div>' +
+          '<div class="live-hub-stat"><div class="live-hub-stat-value ' + (pnl >= 0 ? 'ds-positive' : 'ds-negative') + '">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + 'u</div><div class="live-hub-stat-label">P/L</div></div>' +
+          '<div class="live-hub-stat"><div class="live-hub-stat-value">' + strikeRate + '%</div><div class="live-hub-stat-label">Strike Rate</div></div>' +
+        '</div>' +
+        '<div class="live-hub-topbar-right">' +
+          '<span class="live-hub-refresh-label text-muted text-xs">Auto-refresh: 30s</span>' +
+          '<button class="btn btn-outline btn-sm" onclick="App.renderLiveHub()" title="Refresh now">&#8635; Refresh</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="live-hub-grid">' +
+        leftHTML +
+        centreHTML +
+        rightHTML +
+      '</div>' +
+    '</div>';
+
+    // --- COUNTDOWN TIMER ---
+    self._liveIntervals = [];
+    if (nextRaceTime) {
+      var countdownEl = document.getElementById('live-countdown');
+      var countdownInterval = setInterval(function() {
+        var now2 = new Date();
+        var diff = nextRaceTime - now2;
+        if (diff <= 0) {
+          if (countdownEl) countdownEl.textContent = '00:00:00';
+          return;
+        }
+        var h = Math.floor(diff / 3600000);
+        var m = Math.floor((diff % 3600000) / 60000);
+        var s = Math.floor((diff % 60000) / 1000);
+        if (countdownEl) {
+          countdownEl.textContent =
+            (h < 10 ? '0' : '') + h + ':' +
+            (m < 10 ? '0' : '') + m + ':' +
+            (s < 10 ? '0' : '') + s;
+        }
+      }, 1000);
+      self._liveIntervals.push(countdownInterval);
+    }
+
+    // --- AUTO-REFRESH every 30 seconds ---
+    var refreshInterval = setInterval(function() {
+      if (self.currentPage === 'live') {
+        self.renderLiveHub();
+      }
+    }, 30000);
+    self._liveIntervals.push(refreshInterval);
   },
 
   getFAQs() {

@@ -83,9 +83,11 @@
       <div class="nav-links" id="nav-links">
         <a href="#/" class="nav-link" data-page="dashboard">Dashboard</a>
         <a href="#/racing" class="nav-link" data-page="racing">Racing</a>
+        <a href="#/live" class="nav-link nav-link-live" data-page="live">LIVE</a>
         <a href="#/football" class="nav-link" data-page="football">Football</a>
         <!-- Festival tab removed: Aintree 2026 has finished -->
         <a href="#/selections" class="nav-link" data-page="selections">Selections</a>
+        <a href="#/value-bets" class="nav-link" data-page="value-bets">Value Bets</a>
         <a href="#/results" class="nav-link" data-page="results">Results</a>
         <a href="#/pricing" class="nav-link" data-page="pricing">Pricing</a>
         <a href="#/analysts" class="nav-link" data-page="analysts">Analysts</a>
@@ -144,6 +146,12 @@
     <div class="ds-item">Won: <span class="ds-value ds-positive" id="ds-won">-</span></div>
     <div class="ds-item">P/L: <span class="ds-value" id="ds-pnl">-</span></div>
     <div class="ds-item">Streak: <span class="ds-value" id="ds-streak">-</span></div>
+  </div>
+
+  <!-- Live Odds Ticker -->
+  <div class="odds-ticker" id="odds-ticker" style="display:none;">
+    <div class="odds-ticker-label">LIVE ODDS</div>
+    <div class="odds-ticker-track" id="odds-ticker-track"></div>
   </div>
 
   <!-- Social Proof Activity Ticker -->
