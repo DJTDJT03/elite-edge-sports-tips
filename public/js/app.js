@@ -1918,6 +1918,9 @@ const App = {
         <!-- Streak Badges -->
         ${streakBadgesHtml}
 
+        <!-- Breaking News & Team Updates -->
+        <div id="dashboard-news-section"></div>
+
         <!-- Recent Wins Ticker -->
         ${recentWins.length ? `
         <div class="ticker-wrap">
@@ -2170,6 +2173,73 @@ const App = {
     // Render bankroll chart after DOM update
     var self = this;
     setTimeout(function() { try { self.renderBankrollChart(); } catch (e) {} }, 50);
+
+    // Fetch and render breaking news section
+    this._fetchDashboardNews();
+  },
+
+  async _fetchDashboardNews() {
+    try {
+      var container = document.getElementById('dashboard-news-section');
+      if (!container) return;
+
+      var res = await fetch('/api/news/relevant');
+      if (!res.ok) return; // News service not available — silently skip
+
+      var data = await res.json();
+      if (!data.news || data.news.length === 0) return; // No news — don't show empty section
+
+      // Filter to only show high and medium relevance, limit to 8 articles
+      var relevant = data.news.filter(function(n) {
+        return n.relevance === 'high' || n.relevance === 'medium';
+      }).slice(0, 8);
+
+      if (relevant.length === 0) return;
+
+      var timeAgo = function(dateStr) {
+        if (!dateStr) return '';
+        var diff = Date.now() - new Date(dateStr).getTime();
+        var mins = Math.floor(diff / 60000);
+        if (mins < 60) return mins + 'm ago';
+        var hours = Math.floor(mins / 60);
+        if (hours < 24) return hours + 'h ago';
+        return Math.floor(hours / 24) + 'd ago';
+      };
+
+      var newsHtml = relevant.map(function(item) {
+        var article = item.article;
+        var isHigh = item.relevance === 'high';
+        var badgeColor = isHigh ? '#ef4444' : '#f59e0b';
+        var badgeLabel = isHigh ? 'HIGH IMPACT' : 'TEAM NEWS';
+        var icon = isHigh ? '\u26A0\uFE0F' : '\uD83D\uDCF0';
+        var keywords = (item.keywords && item.keywords.length > 0) ? ' \u2014 ' + item.keywords.join(', ') : '';
+
+        return '<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);">' +
+          '<div style="font-size:18px;flex-shrink:0;">' + icon + '</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+              '<span style="font-size:11px;font-weight:700;color:#fff;background:' + badgeColor + ';padding:2px 6px;border-radius:4px;">' + badgeLabel + '</span>' +
+              '<span style="font-size:11px;color:var(--text-muted);">' + (article.source || '') + ' \u2022 ' + timeAgo(article.publishedAt) + '</span>' +
+            '</div>' +
+            '<a href="' + (article.url || '#') + '" target="_blank" rel="noopener" style="font-size:13px;font-weight:600;color:#fff;text-decoration:none;line-height:1.4;display:block;">' +
+              (article.title || '') +
+            '</a>' +
+            (keywords ? '<div style="font-size:11px;color:' + badgeColor + ';margin-top:2px;">' + keywords + '</div>' : '') +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      container.innerHTML =
+        '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;">' +
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">' +
+            '<div style="font-size:22px;">\uD83D\uDCF0</div>' +
+            '<div style="font-size:16px;font-weight:800;color:#fff;">Breaking News & Team Updates</div>' +
+          '</div>' +
+          newsHtml +
+        '</div>';
+    } catch (e) {
+      // Non-fatal — silently skip news section if anything goes wrong
+    }
   },
 
   _dashDateFilter: 'today',
@@ -7379,7 +7449,7 @@ const App = {
       const tip = this.tips.find(t => t.id === id);
       return tip ? this.formatTipForTelegram(tip) : null;
     }).filter(Boolean);
-    App.showToast('Telegram integration coming soon. ' + messages.length + ' tips ready to send.', 'info');
+    App.showToast('Tips are automatically posted to our Telegram channel.', 'info');
     trackEvent('telegram', 'send_bulletin', tipIds.length + ' tips');
   },
 
@@ -7393,7 +7463,7 @@ const App = {
     //   headers: { 'Content-Type': 'application/json' },
     //   body: JSON.stringify({ chat_id: '@EliteEdgeTips', text: message })
     // });
-    App.showToast('Telegram integration coming soon.', 'info');
+    App.showToast('Tips are automatically posted to our Telegram channel.', 'info');
     trackEvent('telegram', 'send_tip', tipId);
   },
 

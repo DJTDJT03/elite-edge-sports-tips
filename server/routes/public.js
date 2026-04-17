@@ -1,7 +1,7 @@
 module.exports = function(deps) {
   const router = require('express').Router();
   const path = require('path');
-  const { db, racingSource, footballSource, oddsSource, racingOddsSource, movementTracker, dataIngestion, aiReports } = deps;
+  const { db, racingSource, footballSource, oddsSource, racingOddsSource, movementTracker, dataIngestion, aiReports, newsService } = deps;
 
   // GET /api/status — API connection status overview
   router.get('/status', async (req, res) => {
@@ -80,6 +80,65 @@ module.exports = function(deps) {
     } catch (err) {
       console.error('[AI Daily Briefing] Error:', err.message);
       res.status(500).json({ error: 'Failed to generate daily briefing: ' + err.message });
+    }
+  });
+
+  // GET /api/news/latest — latest UK sports headlines
+  router.get('/api/news/latest', async (req, res) => {
+    try {
+      if (!newsService || !newsService.isAvailable()) {
+        return res.status(503).json({ error: 'News service not available. NEWS_API_KEY not configured.' });
+      }
+      var articles = await newsService.fetchSportsNews();
+      res.json({ articles: articles, count: articles.length });
+    } catch (err) {
+      console.error('[News API] /latest error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/news/team/:teamName — news for specific team
+  router.get('/api/news/team/:teamName', async (req, res) => {
+    try {
+      if (!newsService || !newsService.isAvailable()) {
+        return res.status(503).json({ error: 'News service not available. NEWS_API_KEY not configured.' });
+      }
+      var teamName = decodeURIComponent(req.params.teamName);
+      var articles = await newsService.fetchTeamNews(teamName);
+      res.json({ team: teamName, articles: articles, count: articles.length });
+    } catch (err) {
+      console.error('[News API] /team error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/news/relevant — news relevant to today's tipped selections
+  router.get('/api/news/relevant', async (req, res) => {
+    try {
+      if (!newsService || !newsService.isAvailable()) {
+        return res.status(503).json({ error: 'News service not available. NEWS_API_KEY not configured.' });
+      }
+
+      var allTips = [];
+      try {
+        allTips = await db.getTips() || [];
+      } catch (e) { /* fallback to empty */ }
+
+      var today = new Date().toISOString().split('T')[0];
+      var todayTips = allTips.filter(function(t) {
+        return t.status === 'active' && (!t.date || t.date === today);
+      });
+
+      var results = await newsService.scanForRelevantNews(todayTips);
+      res.json({
+        date: today,
+        tipsScanned: todayTips.length,
+        news: results,
+        count: results.length,
+      });
+    } catch (err) {
+      console.error('[News API] /relevant error:', err.message);
+      res.status(500).json({ error: err.message });
     }
   });
 

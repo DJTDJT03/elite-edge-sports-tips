@@ -237,6 +237,77 @@ class AIReportGenerator {
   }
 
   // ---------------------------------------------------------------------------
+  // EMAIL BULLETIN (AI-personalised morning email)
+  // ---------------------------------------------------------------------------
+  async generateEmailBulletin(data) {
+    if (!this.client) return null;
+
+    var cacheKey = 'bulletin:' + (data.userName || '') + ':' + (data.date || new Date().toISOString().split('T')[0]);
+    var cached = this._getCached(cacheKey);
+    if (cached) return cached;
+
+    try {
+      var userPrompt = 'Generate a personalised morning email bulletin.\n\n';
+      userPrompt += 'SUBSCRIBER NAME: ' + (data.userName || 'Subscriber') + '\n';
+      userPrompt += 'DATE: ' + (data.date || new Date().toLocaleDateString('en-GB')) + '\n\n';
+
+      if (data.yesterdayResults) {
+        userPrompt += 'YESTERDAY\'S RESULTS:\n';
+        userPrompt += '  Wins: ' + (data.yesterdayResults.wins || 0) + '\n';
+        userPrompt += '  Losses: ' + (data.yesterdayResults.losses || 0) + '\n';
+        userPrompt += '  P&L: ' + (data.yesterdayResults.pnl || 0) + ' units\n';
+        userPrompt += '  Strike Rate: ' + (data.yesterdayResults.strikeRate || 0) + '%\n\n';
+      }
+
+      if (data.tips && data.tips.length > 0) {
+        userPrompt += 'TODAY\'S TIPS (' + data.tips.length + '):\n';
+        data.tips.forEach(function(tip) {
+          userPrompt += '  - ' + (tip.selection || 'Selection') + ' in ' + (tip.event || '') + ' at ' + (tip.odds || 'TBC');
+          if (tip.isPremium) userPrompt += ' [PREMIUM]';
+          if (tip.confidence) userPrompt += ' (confidence: ' + tip.confidence + '/10)';
+          userPrompt += '\n';
+        });
+        userPrompt += '\n';
+      }
+
+      if (data.napSelection) {
+        userPrompt += 'NAP OF THE DAY: ' + (typeof data.napSelection === 'string' ? data.napSelection : data.napSelection.selection || data.napSelection) + '\n\n';
+      }
+
+      if (data.streak) {
+        userPrompt += 'CURRENT STREAK: ' + data.streak + '\n\n';
+      }
+
+      userPrompt += 'Return your response as JSON with these fields:\n';
+      userPrompt += '- subject: email subject line (max 60 chars)\n';
+      userPrompt += '- greeting: personalised morning greeting using the subscriber name once\n';
+      userPrompt += '- resultsReview: brief summary of yesterday\'s results\n';
+      userPrompt += '- todaysPicks: overview of today\'s headline picks\n';
+      userPrompt += '- signOff: warm professional sign-off\n';
+
+      var response = await this.client.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 1024,
+        system: 'You are writing a premium morning email bulletin for Elite Edge Sports Tips, the UK\'s #1 sports analysis service. Write a personalised, engaging email in British English. Be confident but never guarantee outcomes. Include a brief morning greeting, yesterday\'s results summary, today\'s headline picks, and a sign-off. Keep it under 250 words. Tone: professional, warm, data-driven. The subscriber\'s name is provided — use it once in the greeting. Always respond with valid JSON only — no markdown, no code fences. JSON fields: subject, greeting, resultsReview, todaysPicks, signOff.',
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+
+      var text = response.content[0].text.trim();
+      if (text.startsWith('```')) {
+        text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+      }
+      var result = JSON.parse(text);
+
+      this._setCache(cacheKey, result);
+      return result;
+    } catch (err) {
+      console.error('[AI Reports] Email bulletin error:', err.message);
+      if (err.status) console.error('[AI Reports] Status:', err.status, 'Type:', err.error?.type);
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // DAILY SUMMARY / MORNING BRIEFING
   // ---------------------------------------------------------------------------
   async generateDailySummary(data) {

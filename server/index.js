@@ -22,6 +22,8 @@ const emailService = require('./services/emailService');
 const dataIngestion = require('./services/dataIngestion');
 const aiReports = require('./services/aiReports');
 const alertEngine = require('./services/alertEngine');
+const telegramBot = require('./services/telegramBot');
+const newsService = require('./services/newsService');
 
 // Utilities
 const helpers = require('./utils/helpers');
@@ -96,6 +98,8 @@ const deps = {
   movementTracker,
   aiReports,
   alertEngine,
+  telegramBot,
+  newsService,
 };
 
 // ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@
 module.exports = function startScheduler(deps) {
   const { db, racingSource, footballSource, oddsSource, racingOddsSource, betfairSource,
           weatherSource, movementTracker, scoringModel, emailService, dataIngestion,
-          oddsHelpers, helpers, alertEngine } = deps;
+          oddsHelpers, helpers, alertEngine, telegramBot, aiReports } = deps;
 
   // -------------------------------------------------------------------------
   // In-memory state (session-scoped, resets on restart)
@@ -918,6 +918,23 @@ module.exports = function startScheduler(deps) {
         console.error('[Auto-Tips] Alert engine error (non-fatal):', alertErr.message);
       }
     }
+
+    // --- Telegram Bot: send daily bulletin + individual tips ---
+    if (telegramBot && telegramBot.isAvailable()) {
+      try {
+        await telegramBot.sendDailyBulletin(newTips);
+        for (var tgi = 0; tgi < newTips.length; tgi++) {
+          // 2-second delay between messages to avoid rate limiting
+          if (tgi > 0) {
+            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
+          }
+          await telegramBot.sendTip(newTips[tgi]);
+        }
+        console.log('[Auto-Tips] Telegram: sent bulletin + ' + newTips.length + ' tip(s)');
+      } catch (tgErr) {
+        console.error('[Auto-Tips] Telegram error (non-fatal):', tgErr.message);
+      }
+    }
   }
 
   // =========================================================================
@@ -1067,6 +1084,16 @@ module.exports = function startScheduler(deps) {
                     });
                   }
                 } catch (e) { /* non-fatal */ }
+
+                // Send Telegram result notification for wins
+                if (telegramBot && telegramBot.isAvailable() && (resultVal === 'won' || resultVal === 'placed')) {
+                  try {
+                    await telegramBot.sendResult({
+                      selection: tip.selection, odds: tip.odds, result: resultVal,
+                      pnl: Math.round(pnl * 100) / 100, event: tip.event,
+                    });
+                  } catch (tgErr) { /* non-fatal */ }
+                }
               }
             }
           }
@@ -1167,6 +1194,16 @@ module.exports = function startScheduler(deps) {
                   });
                 }
               } catch (e) { /* non-fatal */ }
+
+              // Send Telegram result notification for wins
+              if (telegramBot && telegramBot.isAvailable() && won) {
+                try {
+                  await telegramBot.sendResult({
+                    selection: ftip.selection, odds: ftip.odds, result: fResultVal,
+                    pnl: Math.round(fPnl * 100) / 100, event: ftip.event,
+                  });
+                } catch (tgErr) { /* non-fatal */ }
+              }
             }
           }
         } catch (err) { console.error('[Auto-Settle] Football error:', err.message); }
@@ -1538,14 +1575,94 @@ module.exports = function startScheduler(deps) {
         return u.subscription === 'premium' && (!u.emailPrefs || u.emailPrefs.dailyBulletin !== false);
       });
 
+      // Compute yesterday's stats for AI bulletin
+      var yWins = yesterdayResults.filter(function(r) { return r.result === 'won'; }).length;
+      var yLosses = yesterdayResults.filter(function(r) { return r.result === 'lost'; }).length;
+      var yPnl = yesterdayResults.reduce(function(sum, r) { return sum + (r.pnl || 0); }, 0);
+      var yStrikeRate = yesterdayResults.length > 0 ? Math.round((yWins / yesterdayResults.length) * 100) : 0;
+
+      // Calculate current streak
+      var allResultsSorted = allResults.slice().sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+      var streak = 0;
+      var streakType = '';
+      if (allResultsSorted.length > 0) {
+        streakType = allResultsSorted[0].result === 'won' ? 'W' : 'L';
+        for (var s = 0; s < allResultsSorted.length; s++) {
+          if ((allResultsSorted[s].result === 'won' ? 'W' : 'L') === streakType) {
+            streak++;
+          } else {
+            break;
+          }
+        }
+      }
+      var streakStr = streak + streakType;
+
       var sentCount = 0;
       for (var i = 0; i < premiumUsers.length; i++) {
         var u = premiumUsers[i];
-        emailService.sendDailyBulletin({
-          name: u.name, email: u.email,
-          nap: nap, premiumTips: premiumTips,
-          yesterdayResults: yesterdayResults.length > 0 ? yesterdayResults : null
-        }).catch(function(err) { console.error('[Email] Daily bulletin failed:', err.message); });
+
+        // Try AI-enhanced bulletin
+        var aiContent = null;
+        if (aiReports && aiReports.isAvailable()) {
+          try {
+            aiContent = await aiReports.generateEmailBulletin({
+              userName: u.name || 'Subscriber',
+              date: dateStr,
+              tips: todayTips,
+              yesterdayResults: {
+                wins: yWins,
+                losses: yLosses,
+                pnl: Math.round(yPnl * 100) / 100,
+                strikeRate: yStrikeRate
+              },
+              napSelection: nap ? nap.selection : null,
+              streak: streakStr
+            });
+          } catch (aiErr) {
+            console.error('[Bulletin] AI generation failed, using standard template:', aiErr.message);
+          }
+        }
+
+        if (aiContent) {
+          // Build AI-enhanced HTML email
+          var tipCardsHtml = '';
+          for (var t = 0; t < todayTips.length; t++) {
+            var tip = todayTips[t];
+            tipCardsHtml += '<div style="background:#141824;border-left:3px solid #d4a843;padding:12px 16px;margin:8px 0;border-radius:4px;">';
+            tipCardsHtml += '<strong style="color:#d4a843;">' + (tip.selection || '') + '</strong>';
+            tipCardsHtml += '<br><span style="color:#8b8d93;">' + (tip.event || '') + '</span>';
+            if (tip.odds) tipCardsHtml += ' &mdash; <span style="color:#e8e6e3;">' + tip.odds + '</span>';
+            if (tip.isPremium) tipCardsHtml += ' <span style="background:#d4a843;color:#0a0e1a;padding:2px 6px;border-radius:3px;font-size:11px;">PREMIUM</span>';
+            tipCardsHtml += '</div>';
+          }
+
+          var htmlBody = '<div style="font-family:Inter,sans-serif;background:#0a0e1a;color:#e8e6e3;padding:32px;">';
+          htmlBody += '<h1 style="color:#d4a843;">Elite Edge Sports Tips</h1>';
+          htmlBody += '<p>' + (aiContent.greeting || '') + '</p>';
+          htmlBody += '<h2 style="color:#d4a843;">Yesterday\'s Results</h2>';
+          htmlBody += '<p>' + (aiContent.resultsReview || '') + '</p>';
+          htmlBody += '<h2 style="color:#d4a843;">Today\'s Picks</h2>';
+          htmlBody += '<p>' + (aiContent.todaysPicks || '') + '</p>';
+          htmlBody += tipCardsHtml;
+          htmlBody += '<p style="color:#8b8d93;margin-top:24px;">' + (aiContent.signOff || '') + '</p>';
+          htmlBody += '<p style="font-size:11px;color:#64748b;margin-top:32px;">18+ | Entertainment & statistical analysis only | BeGambleAware.org</p>';
+          htmlBody += '</div>';
+
+          emailService.sendRawEmail({
+            to: u.email,
+            subject: aiContent.subject || 'Elite Edge — Your Daily Bulletin',
+            html: htmlBody
+          }).catch(function(err) { console.error('[Email] AI bulletin failed:', err.message); });
+
+          console.log('[Bulletin] AI-enhanced bulletin sent to ' + u.email);
+        } else {
+          // Fall back to standard template
+          emailService.sendDailyBulletin({
+            name: u.name, email: u.email,
+            nap: nap, premiumTips: premiumTips,
+            yesterdayResults: yesterdayResults.length > 0 ? yesterdayResults : null
+          }).catch(function(err) { console.error('[Email] Daily bulletin failed:', err.message); });
+        }
         sentCount++;
       }
 
@@ -1742,6 +1859,100 @@ module.exports = function startScheduler(deps) {
   }
 
   // =========================================================================
+  // NON-RUNNER AUTO-DETECTION
+  // Monitors racing cards for withdrawn horses and voids affected tips.
+  // =========================================================================
+  var voidedNonRunnerTips = new Set();
+
+  async function checkNonRunners() {
+    if (!racingSource) return;
+
+    try {
+      var tips = await db.getTips({ sport: 'racing', status: 'active' });
+      if (!tips || tips.length === 0) return;
+
+      var rawCards = await racingSource.fetch();
+      var cards = racingSource.normalise(rawCards);
+      if (!cards || cards.length === 0) return;
+
+      for (var i = 0; i < tips.length; i++) {
+        var tip = tips[i];
+        if (voidedNonRunnerTips.has(tip.id)) continue;
+
+        var selectionName = (tip.selection || '').toLowerCase().trim();
+        if (!selectionName) continue;
+
+        // Find the matching race card for this tip
+        var matchedCard = null;
+        for (var c = 0; c < cards.length; c++) {
+          var card = cards[c];
+          var eventMatch = (tip.event || '').toLowerCase().trim();
+          var cardName = ((card.meeting || '') + ' ' + (card.raceTime || '')).toLowerCase().trim();
+          if (eventMatch && (cardName.indexOf(eventMatch) !== -1 || eventMatch.indexOf(card.meeting ? card.meeting.toLowerCase() : '') !== -1)) {
+            matchedCard = card;
+            break;
+          }
+        }
+
+        if (!matchedCard || !matchedCard.runners || matchedCard.runners.length === 0) continue;
+
+        // Check if the tipped horse is still among the runners (fuzzy match)
+        var found = false;
+        for (var r = 0; r < matchedCard.runners.length; r++) {
+          var runnerName = (matchedCard.runners[r].name || matchedCard.runners[r].horse || '').toLowerCase().trim();
+          if (runnerName === selectionName || runnerName.indexOf(selectionName) !== -1 || selectionName.indexOf(runnerName) !== -1) {
+            found = true;
+            break;
+          }
+        }
+
+        if (!found) {
+          // Horse is a non-runner — void the tip
+          voidedNonRunnerTips.add(tip.id);
+
+          await db.updateTip(tip.id, { status: 'settled', result: 'void' });
+
+          await db.createResult({
+            id: 'auto_void_' + Date.now(),
+            tipId: tip.id,
+            date: new Date().toISOString().split('T')[0],
+            selection: tip.selection,
+            event: tip.event,
+            result: 'void',
+            pnl: 0,
+            timestamp: new Date().toISOString()
+          });
+
+          await db.createNotification({
+            id: 'nr_' + Date.now(),
+            type: 'warning',
+            message: 'NON-RUNNER: ' + tip.selection + ' withdrawn from ' + tip.event + '. Tip voided.',
+            tipId: tip.id,
+            timestamp: new Date().toISOString()
+          });
+
+          if (telegramBot) {
+            telegramBot.sendMessage('\u26a0\ufe0f NON-RUNNER: ' + tip.selection + ' withdrawn from ' + tip.event + '. This tip has been voided.');
+          }
+
+          if (alertEngine) {
+            try {
+              var users = await db.getUsers();
+              await alertEngine.checkPreRace([tip], users, db);
+            } catch (alertErr) {
+              console.error('[Non-Runner] Alert engine error:', alertErr.message);
+            }
+          }
+
+          console.log('[Non-Runner] Detected: ' + tip.selection + ' in ' + tip.event);
+        }
+      }
+    } catch (err) {
+      console.error('[Non-Runner] Check error:', err.message);
+    }
+  }
+
+  // =========================================================================
   // SCHEDULE ALL INTERVALS / TIMEOUTS
   // All intervals wrapped with error handling to prevent silent crashes.
   // =========================================================================
@@ -1845,6 +2056,10 @@ module.exports = function startScheduler(deps) {
   // Pre-race alerts: check every 1 minute
   setInterval(safeRun('PreRaceAlerts', checkPreRaceAlerts), 60 * 1000);
   setTimeout(safeRun('PreRaceAlerts', checkPreRaceAlerts), 90000);
+
+  // Non-runner detection: check every 5 minutes
+  setInterval(safeRun('NonRunners', checkNonRunners), 5 * 60 * 1000);
+  setTimeout(safeRun('NonRunners', checkNonRunners), 90000); // 90s after startup
 
   console.log('[Scheduler] All scheduled tasks registered');
 
