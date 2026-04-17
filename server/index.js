@@ -660,6 +660,32 @@ const racingSource = dataIngestion.sources ? dataIngestion.sources.get('racing-c
 const betfairSource = dataIngestion.sources ? dataIngestion.sources.get('betfair-exchange') : null;
 const weatherSource = dataIngestion.sources ? dataIngestion.sources.get('weather') : null;
 
+// Weather check endpoint
+app.get('/api/weather/check', async (req, res) => {
+  var course = req.query.course || 'Ayr';
+  res.json({
+    envSet: !!process.env.OPENWEATHER_API_KEY,
+    envPrefix: process.env.OPENWEATHER_API_KEY ? process.env.OPENWEATHER_API_KEY.substring(0, 8) + '...' : 'NOT SET',
+    sourceFound: !!weatherSource,
+    configured: weatherSource ? weatherSource.isConfigured() : false,
+    testResult: null
+  });
+  // If configured, also try a live fetch (async, not blocking response)
+});
+
+app.get('/api/weather/test', async (req, res) => {
+  try {
+    if (!weatherSource || !weatherSource.isConfigured()) {
+      return res.json({ error: 'Weather not configured', envSet: !!process.env.OPENWEATHER_API_KEY });
+    }
+    var course = req.query.course || 'Ayr';
+    var data = await weatherSource.fetchForCourse(course);
+    res.json({ course: course, weather: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/racing/live-cards', async (req, res) => {
   try {
     if (!racingSource || !process.env.RACING_API_KEY) {
