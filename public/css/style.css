@@ -4280,3 +4280,33 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   .recovery-tip-info { grid-template-columns: 1fr; }
   .recovery-tip-info .rt-odds, .recovery-tip-info .rt-odds-label { text-align: left; }
 }
+
+/* =========================================================================
+   EW OUTSIDER OF THE DAY
+   ========================================================================= */
+.outsider-card {
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  background: linear-gradient(135deg, var(--bg-card), rgba(239, 68, 68, 0.03)) !important;
+}
+.outsider-banner {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: #fff;
+  text-align: center;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  border-radius: var(--radius) var(--radius) 0 0;
+  margin: -16px -16px 12px;
+}
+.badge-outsider {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}

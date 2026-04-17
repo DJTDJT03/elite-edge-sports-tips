@@ -2129,11 +2129,12 @@ const App = {
     const inAcca = this.accaSelections.some(a => a.tipId === tip.id);
 
     return `
-      <div class="tip-card ${tip.isPremium ? 'premium' : ''} ${isLocked ? 'locked' : ''}" onclick="window.location.hash='#/tip/${tip.id}'">
+      <div class="tip-card ${tip.isPremium ? 'premium' : ''} ${isLocked ? 'locked' : ''} ${tip.isOutsider ? 'outsider-card' : ''}" onclick="window.location.hash='#/tip/${tip.id}'">
+        ${tip.isOutsider ? '<div class="outsider-banner">EW Outsider of the Day</div>' : ''}
         <div class="tip-top">
           <div class="tip-badges">
             <span class="tip-sport-badge ${tip.sport === 'racing' ? 'badge-racing' : 'badge-football'}">${tip.sport === 'racing' ? 'Racing' : 'Football'}</span>
-            <span class="${tip.isPremium ? 'badge-premium' : 'badge-free'}">${tip.isPremium ? 'Premium' : 'Free'}</span>
+            ${tip.isOutsider ? '<span class="badge-outsider">Outsider</span>' : `<span class="${tip.isPremium ? 'badge-premium' : 'badge-free'}">${tip.isPremium ? 'Premium' : 'Free'}</span>`}
             ${tip.valueRating ? `<span class="badge-premium">${tip.valueRating}</span>` : ''}
             ${tip.tipsterProfile ? `<span class="analyst-badge ${tip.tipsterProfile === 'The Professor' ? 'professor' : tip.tipsterProfile === 'The Scout' ? 'scout' : 'edge'}">${tip.tipsterProfile}</span>` : ''}
           </div>
