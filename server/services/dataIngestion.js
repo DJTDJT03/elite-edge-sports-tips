@@ -1045,6 +1045,208 @@ class BetfairExchangeSource extends DataSource {
 }
 
 // ---------------------------------------------------------------------------
+// WEATHER DATA SOURCE (OpenWeather API)
+// ---------------------------------------------------------------------------
+
+/**
+ * Weather Source — OpenWeather API for UK racecourse weather data.
+ * Weather significantly affects horse racing: rain softens going, wind
+ * affects sprinters, temperature impacts turf conditions.
+ *
+ * To activate:
+ *   1. Sign up at https://openweathermap.org/api and get API key
+ *   2. Set env: OPENWEATHER_API_KEY=your_key
+ */
+class WeatherSource extends DataSource {
+  constructor() {
+    super('weather', {
+      refreshInterval: 600000, // 10 minutes
+      apiUrl: 'https://api.openweathermap.org/data/2.5',
+      apiKey: process.env.OPENWEATHER_API_KEY || '',
+    });
+
+    // UK racecourse coordinates
+    this.courseCoords = {
+      'Ascot': {lat: 51.41, lon: -0.68},
+      'Aintree': {lat: 53.47, lon: -2.95},
+      'Ayr': {lat: 55.47, lon: -4.62},
+      'Bath': {lat: 51.40, lon: -2.34},
+      'Beverley': {lat: 53.86, lon: -0.40},
+      'Brighton': {lat: 50.85, lon: -0.11},
+      'Carlisle': {lat: 54.90, lon: -2.93},
+      'Catterick': {lat: 54.38, lon: -1.63},
+      'Cheltenham': {lat: 51.92, lon: -2.07},
+      'Chepstow': {lat: 51.64, lon: -2.68},
+      'Chester': {lat: 53.18, lon: -2.90},
+      'Doncaster': {lat: 53.51, lon: -1.10},
+      'Epsom': {lat: 51.32, lon: -0.25},
+      'Goodwood': {lat: 50.91, lon: -0.76},
+      'Hamilton': {lat: 55.78, lon: -4.04},
+      'Haydock': {lat: 53.47, lon: -2.62},
+      'Hexham': {lat: 55.00, lon: -2.08},
+      'Huntingdon': {lat: 52.33, lon: -0.19},
+      'Kempton': {lat: 51.40, lon: -0.40},
+      'Leicester': {lat: 52.62, lon: -1.08},
+      'Lingfield': {lat: 51.17, lon: -0.02},
+      'Musselburgh': {lat: 55.94, lon: -3.06},
+      'Newbury': {lat: 51.40, lon: -1.31},
+      'Newcastle': {lat: 55.01, lon: -1.71},
+      'Newmarket': {lat: 52.24, lon: 0.37},
+      'Nottingham': {lat: 52.93, lon: -1.09},
+      'Perth': {lat: 56.41, lon: -3.44},
+      'Plumpton': {lat: 50.91, lon: -0.06},
+      'Pontefract': {lat: 53.69, lon: -1.31},
+      'Redcar': {lat: 54.62, lon: -1.06},
+      'Ripon': {lat: 54.14, lon: -1.51},
+      'Salisbury': {lat: 51.10, lon: -1.78},
+      'Sandown': {lat: 51.38, lon: -0.36},
+      'Sedgefield': {lat: 54.65, lon: -1.46},
+      'Southwell': {lat: 53.09, lon: -0.89},
+      'Stratford': {lat: 52.19, lon: -1.71},
+      'Thirsk': {lat: 54.23, lon: -1.34},
+      'Uttoxeter': {lat: 52.91, lon: -1.86},
+      'Warwick': {lat: 52.28, lon: -1.59},
+      'Wetherby': {lat: 53.93, lon: -1.38},
+      'Wincanton': {lat: 51.07, lon: -2.42},
+      'Windsor': {lat: 51.49, lon: -0.62},
+      'Wolverhampton': {lat: 52.60, lon: -2.11},
+      'Worcester': {lat: 52.19, lon: -2.22},
+      'York': {lat: 53.95, lon: -1.06}
+    };
+  }
+
+  isConfigured() {
+    return !!(this.config.apiKey);
+  }
+
+  async fetch() {
+    // WeatherSource does not use the generic fetch() pattern.
+    // Use fetchWeather(lat, lon) or fetchForCourse(courseName) instead.
+    return [];
+  }
+
+  normalise(raw) {
+    return raw;
+  }
+
+  /**
+   * Fetch current weather for a lat/lon
+   * @returns {{ temp, windSpeed, windDirection, rain, humidity, description }}
+   */
+  async fetchWeather(lat, lon) {
+    if (!this.isConfigured()) return null;
+    try {
+      var data = await this._apiGet('/weather?lat=' + lat + '&lon=' + lon + '&units=metric&appid=' + this.config.apiKey);
+      if (!data || !data.main) return null;
+      var windDeg = data.wind && data.wind.deg ? data.wind.deg : 0;
+      var directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+      var windDirection = directions[Math.round(windDeg / 45) % 8];
+      return {
+        temp: data.main.temp,
+        windSpeed: data.wind ? Math.round((data.wind.speed || 0) * 2.237) : 0, // m/s to mph
+        windDirection: windDirection,
+        rain: data.rain ? (data.rain['1h'] || data.rain['3h'] || 0) : 0,
+        humidity: data.main.humidity || 0,
+        description: data.weather && data.weather[0] ? data.weather[0].description : 'unknown',
+      };
+    } catch (err) {
+      console.error('[weather] fetchWeather error:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Fetch 3-hourly forecast for a lat/lon (next 5 days)
+   */
+  async fetchForecast(lat, lon) {
+    if (!this.isConfigured()) return null;
+    try {
+      var data = await this._apiGet('/forecast?lat=' + lat + '&lon=' + lon + '&units=metric&appid=' + this.config.apiKey);
+      if (!data || !data.list) return null;
+      return data.list.map(function(entry) {
+        var windDeg = entry.wind && entry.wind.deg ? entry.wind.deg : 0;
+        var directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+        var windDirection = directions[Math.round(windDeg / 45) % 8];
+        return {
+          timestamp: entry.dt_txt,
+          temp: entry.main ? entry.main.temp : 0,
+          windSpeed: entry.wind ? Math.round((entry.wind.speed || 0) * 2.237) : 0,
+          windDirection: windDirection,
+          rain: entry.rain ? (entry.rain['3h'] || 0) : 0,
+          humidity: entry.main ? entry.main.humidity : 0,
+          description: entry.weather && entry.weather[0] ? entry.weather[0].description : 'unknown',
+        };
+      });
+    } catch (err) {
+      console.error('[weather] fetchForecast error:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Fetch weather for a named UK racecourse
+   * @param {string} courseName — e.g. 'Ascot', 'Newmarket'
+   * @returns {Object|null} weather data or null
+   */
+  async fetchForCourse(courseName) {
+    if (!this.isConfigured()) return null;
+    // Try exact match first, then partial match
+    var coords = this.courseCoords[courseName];
+    if (!coords) {
+      var lowerName = (courseName || '').toLowerCase();
+      var keys = Object.keys(this.courseCoords);
+      for (var i = 0; i < keys.length; i++) {
+        if (keys[i].toLowerCase() === lowerName || lowerName.indexOf(keys[i].toLowerCase()) !== -1) {
+          coords = this.courseCoords[keys[i]];
+          break;
+        }
+      }
+    }
+    if (!coords) return null;
+    return this.fetchWeather(coords.lat, coords.lon);
+  }
+
+  /**
+   * Get coordinates for a course name
+   */
+  getCourseCoords(courseName) {
+    var coords = this.courseCoords[courseName];
+    if (coords) return coords;
+    var lowerName = (courseName || '').toLowerCase();
+    var keys = Object.keys(this.courseCoords);
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].toLowerCase() === lowerName || lowerName.indexOf(keys[i].toLowerCase()) !== -1) {
+        return this.courseCoords[keys[i]];
+      }
+    }
+    return null;
+  }
+
+  _apiGet(path) {
+    return new Promise(function(resolve, reject) {
+      var https = require('https');
+      var options = {
+        hostname: 'api.openweathermap.org',
+        path: '/data/2.5' + path,
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      };
+      var req = https.request(options, function(res) {
+        var data = '';
+        res.on('data', function(chunk) { data += chunk; });
+        res.on('end', function() {
+          try { resolve(JSON.parse(data)); }
+          catch (e) { reject(new Error('Invalid JSON from OpenWeather')); }
+        });
+      });
+      req.on('error', reject);
+      req.setTimeout(15000, function() { req.destroy(); reject(new Error('OpenWeather timeout')); });
+      req.end();
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // INGESTION MANAGER
 // ---------------------------------------------------------------------------
 
@@ -1064,6 +1266,7 @@ class DataIngestionManager {
     this.register(new OddsMovementTracker());
     this.register(new HistoricalResultsSource());
     this.register(new BetfairExchangeSource());
+    this.register(new WeatherSource());
   }
 
   register(source) {

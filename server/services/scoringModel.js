@@ -300,7 +300,7 @@ class ScoringModel {
    * @param {Object} oddsData — Optional odds data from Odds API
    * @returns {Object} { factors, score, edge, confidence, ... } or null if not scoreable
    */
-  scoreRunner(runner, race, oddsData) {
+  scoreRunner(runner, race, oddsData, weatherData) {
     if (!runner || !race) return null;
 
     // Parse form string (e.g. "12341" or "1/2/3/4/1")
@@ -357,6 +357,41 @@ class ScoringModel {
       goingScore = Math.min(goingScore + 0.15, 1.0); // recent winner on any going = ok
     }
 
+    // --- Weather adjustment to going factor ---
+    var weatherDrawAdjust = 0; // applied to draw factor later
+    if (weatherData) {
+      try {
+        // Rain forecast — going likely to soften
+        if (weatherData.rain > 0 || (weatherData.description && weatherData.description.indexOf('rain') !== -1)) {
+          var hasWins = formPositions.length > 0 && formPositions.includes(1);
+          // Runner with good form + rain = likely handles soft ground
+          if (hasWins && formScore >= 0.5) {
+            goingScore = Math.min(goingScore + 0.2, 1.0);
+          } else if (formScore < 0.35) {
+            goingScore = Math.max(goingScore - 0.2, 0.05);
+          }
+        }
+
+        // Strong wind (>20mph) affects sprint races — reduce draw advantage
+        if (weatherData.windSpeed > 20) {
+          var distStr = (race.distance || '').toLowerCase();
+          var isSprint = distStr.indexOf('5f') !== -1 || distStr.indexOf('6f') !== -1;
+          if (isSprint) {
+            weatherDrawAdjust = -0.05;
+          }
+        }
+
+        // Extreme cold — going may be harder than advertised
+        if (weatherData.temp < 5) {
+          if (raceGoing.indexOf('soft') !== -1 || raceGoing.indexOf('heavy') !== -1) {
+            goingScore = Math.min(goingScore + 0.05, 1.0);
+          }
+        }
+      } catch (weatherErr) {
+        // Non-fatal — ignore weather adjustment errors
+      }
+    }
+
     // --- Class factor ---
     let classScore = 0.5;
     const raceClass = parseInt((race.raceClass || '').replace(/\D/g, '')) || 5;
@@ -388,6 +423,10 @@ class ScoringModel {
     let drawScore = 0.5; // neutral
     const draw = runner.draw || 0;
     if (draw > 0 && draw <= 4) drawScore = 0.55; // slight low-draw advantage on many courses
+    // Apply weather-based draw adjustment (wind affects draw advantage in sprints)
+    if (weatherDrawAdjust !== 0) {
+      drawScore = Math.max(drawScore + weatherDrawAdjust, 0.1);
+    }
 
     // --- Weight factor ---
     let weightScore = 0.5;
@@ -466,14 +505,14 @@ class ScoringModel {
    *   - volumeRank {number} — 1 = most backed runner in the race by volume
    * @returns {Object} Scored result with exchange-enhanced factors, or null
    */
-  scoreRunnerEnhanced(runner, race, oddsData, exchangeData) {
+  scoreRunnerEnhanced(runner, race, oddsData, exchangeData, weatherData) {
     // Fall back to basic scoring if no exchange data
     if (!exchangeData) {
-      return this.scoreRunner(runner, race, oddsData);
+      return this.scoreRunner(runner, race, oddsData, weatherData);
     }
 
-    // Start with base scoring
-    var baseResult = this.scoreRunner(runner, race, oddsData);
+    // Start with base scoring (pass weather data through)
+    var baseResult = this.scoreRunner(runner, race, oddsData, weatherData);
     if (!baseResult) return null;
 
     var factors = Object.assign({}, baseResult.factors);

@@ -658,6 +658,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 // ---------------------------------------------------------------------------
 const racingSource = dataIngestion.sources ? dataIngestion.sources.get('racing-cards') : null;
 const betfairSource = dataIngestion.sources ? dataIngestion.sources.get('betfair-exchange') : null;
+const weatherSource = dataIngestion.sources ? dataIngestion.sources.get('weather') : null;
 
 app.get('/api/racing/live-cards', async (req, res) => {
   try {
@@ -1136,6 +1137,57 @@ app.get('/api/racing/intelligence', async (req, res) => {
       }
     }
 
+    // --- Weather enrichment ---
+    if (weatherSource && weatherSource.isConfigured()) {
+      // Collect unique meetings to avoid duplicate API calls
+      var meetingWeatherCache = {};
+      for (var wIdx = 0; wIdx < intelligence.length; wIdx++) {
+        try {
+          var wRace = intelligence[wIdx];
+          if (!wRace || !wRace.meeting) continue;
+          var meetingName = wRace.meeting;
+          if (!meetingWeatherCache[meetingName]) {
+            meetingWeatherCache[meetingName] = await weatherSource.fetchForCourse(meetingName);
+          }
+          var courseWeather = meetingWeatherCache[meetingName];
+          if (courseWeather) {
+            wRace.weather = {
+              temp: courseWeather.temp,
+              windSpeed: courseWeather.windSpeed,
+              windDirection: courseWeather.windDirection,
+              rain: courseWeather.rain,
+              description: courseWeather.description
+            };
+            // Generate weather impact assessment
+            var weatherImpact = '';
+            if (courseWeather.rain > 0 || (courseWeather.description && courseWeather.description.indexOf('rain') !== -1)) {
+              var currentGoing = (wRace.going || '').toLowerCase();
+              if (currentGoing.indexOf('good') !== -1 && currentGoing.indexOf('soft') === -1) {
+                weatherImpact = 'Rain forecast \u2014 going may soften from ' + (wRace.going || 'Good') + ' to Good to Soft. Horses with soft ground form are favoured.';
+              } else if (currentGoing.indexOf('soft') !== -1) {
+                weatherImpact = 'Further rain expected \u2014 ground could deteriorate further. Proven soft/heavy ground form essential.';
+              } else {
+                weatherImpact = 'Rain forecast \u2014 going likely to soften. Horses with soft ground form are favoured.';
+              }
+            } else if (courseWeather.windSpeed > 20) {
+              var distCheck = (wRace.distance || '').toLowerCase();
+              var isSprintRace = distCheck.indexOf('5f') !== -1 || distCheck.indexOf('6f') !== -1;
+              if (isSprintRace) {
+                weatherImpact = 'Strong crosswind (' + courseWeather.windSpeed + 'mph) \u2014 may affect sprinters in the home straight.';
+              } else {
+                weatherImpact = 'Strong wind (' + courseWeather.windSpeed + 'mph) \u2014 may be a factor for front-runners exposed to the elements.';
+              }
+            } else {
+              weatherImpact = 'Dry and ' + (courseWeather.temp > 15 ? 'warm' : courseWeather.temp > 5 ? 'mild' : 'cold') + ' \u2014 going should remain as advertised.';
+            }
+            wRace.insights.weatherAnalysis = 'Weather at ' + meetingName + ': ' + courseWeather.description + ', ' + Math.round(courseWeather.temp) + '\u00B0C, wind ' + courseWeather.windSpeed + 'mph ' + courseWeather.windDirection + '. ' + weatherImpact;
+          }
+        } catch (wErr) {
+          // Non-fatal — continue without weather for this race
+        }
+      }
+    }
+
     res.json({ live: true, races: intelligence, fetchedAt: new Date().toISOString() });
   } catch (err) {
     console.error('[Racing Intelligence] Error:', err.message);
@@ -1158,6 +1210,122 @@ function App_formatOddsFrac(dec) {
 // ---------------------------------------------------------------------------
 const footballSource = dataIngestion.sources ? dataIngestion.sources.get('football-fixtures') : null;
 const oddsSource = dataIngestion.sources ? dataIngestion.sources.get('football-odds') : null;
+
+// ---------------------------------------------------------------------------
+// ODDS MOVEMENT INTELLIGENCE — In-memory cache for detecting market movement
+// ---------------------------------------------------------------------------
+var oddsHistory = {}; // { eventKey: [{ timestamp, odds: {bookmaker: price} }, ...] }
+
+/**
+ * Store a snapshot of odds for an event.
+ * Keeps last 6 snapshots per event (24 hours at 4 refreshes/day).
+ */
+function storeOddsSnapshot(oddsNormalised) {
+  if (!oddsNormalised || !Array.isArray(oddsNormalised)) return;
+  var timestamp = new Date().toISOString();
+  oddsNormalised.forEach(function(event) {
+    if (!event || !event.homeTeam || !event.awayTeam || !event.bookmakerOdds) return;
+    var eventKey = (event.homeTeam + ' v ' + event.awayTeam).toLowerCase();
+    if (!oddsHistory[eventKey]) oddsHistory[eventKey] = [];
+    oddsHistory[eventKey].push({
+      timestamp: timestamp,
+      odds: JSON.parse(JSON.stringify(event.bookmakerOdds))
+    });
+    // Keep last 6 snapshots
+    if (oddsHistory[eventKey].length > 6) {
+      oddsHistory[eventKey] = oddsHistory[eventKey].slice(-6);
+    }
+  });
+  // Clean up old events (more than 48 hours old)
+  var cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  var keys = Object.keys(oddsHistory);
+  for (var i = 0; i < keys.length; i++) {
+    var snapshots = oddsHistory[keys[i]];
+    if (snapshots.length > 0 && snapshots[snapshots.length - 1].timestamp < cutoff) {
+      delete oddsHistory[keys[i]];
+    }
+  }
+}
+
+/**
+ * Analyse odds movement for a specific event and selection.
+ * Compares earliest snapshot to latest across all bookmakers.
+ *
+ * @param {string} eventKey — e.g. 'arsenal v chelsea' (lowercase)
+ * @param {string} selectionName — e.g. 'Arsenal' (team name to look up in bookmaker odds)
+ * @returns {{ direction, openingAvg, currentAvg, changePercent, bookmakerCount, strongestMover }|null}
+ */
+function analyseOddsMovement(eventKey, selectionName) {
+  try {
+    var key = (eventKey || '').toLowerCase();
+    var snapshots = oddsHistory[key];
+    if (!snapshots || snapshots.length < 2) return null;
+
+    var earliest = snapshots[0];
+    var latest = snapshots[snapshots.length - 1];
+    var selLower = (selectionName || '').toLowerCase();
+
+    // Collect opening and current prices from each bookmaker
+    var openingPrices = [];
+    var currentPrices = [];
+    var strongestMover = { bookmaker: '', change: 0 };
+
+    var bookmakers = Object.keys(latest.odds);
+    for (var i = 0; i < bookmakers.length; i++) {
+      var bk = bookmakers[i];
+      var latestBkOdds = latest.odds[bk] || {};
+      var earliestBkOdds = (earliest.odds[bk]) || {};
+
+      // Find the selection in bookmaker odds (partial match on name)
+      var latestPrice = 0;
+      var earliestPrice = 0;
+      var selKeys = Object.keys(latestBkOdds);
+      for (var j = 0; j < selKeys.length; j++) {
+        if (selKeys[j].toLowerCase().indexOf(selLower) !== -1 || selLower.indexOf(selKeys[j].toLowerCase()) !== -1) {
+          latestPrice = latestBkOdds[selKeys[j]];
+          break;
+        }
+      }
+      var earlyKeys = Object.keys(earliestBkOdds);
+      for (var k = 0; k < earlyKeys.length; k++) {
+        if (earlyKeys[k].toLowerCase().indexOf(selLower) !== -1 || selLower.indexOf(earlyKeys[k].toLowerCase()) !== -1) {
+          earliestPrice = earliestBkOdds[earlyKeys[k]];
+          break;
+        }
+      }
+
+      if (latestPrice > 0 && earliestPrice > 0) {
+        openingPrices.push(earliestPrice);
+        currentPrices.push(latestPrice);
+        var change = ((latestPrice - earliestPrice) / earliestPrice) * 100;
+        if (Math.abs(change) > Math.abs(strongestMover.change)) {
+          strongestMover = { bookmaker: bk, change: Math.round(change * 10) / 10 };
+        }
+      }
+    }
+
+    if (openingPrices.length === 0) return null;
+
+    var openingAvg = openingPrices.reduce(function(s, p) { return s + p; }, 0) / openingPrices.length;
+    var currentAvg = currentPrices.reduce(function(s, p) { return s + p; }, 0) / currentPrices.length;
+    var changePercent = ((currentAvg - openingAvg) / openingAvg) * 100;
+
+    var direction = 'stable';
+    if (changePercent < -2) direction = 'shortening';
+    else if (changePercent > 2) direction = 'drifting';
+
+    return {
+      direction: direction,
+      openingAvg: Math.round(openingAvg * 100) / 100,
+      currentAvg: Math.round(currentAvg * 100) / 100,
+      changePercent: Math.round(changePercent * 10) / 10,
+      bookmakerCount: openingPrices.length,
+      strongestMover: strongestMover
+    };
+  } catch (err) {
+    return null;
+  }
+}
 
 app.get('/api/football/live-fixtures', async (req, res) => {
   try {
@@ -1559,6 +1727,49 @@ app.get('/api/football/match-intelligence/:fixtureId', async (req, res) => {
       }
     }
 
+    // --- Odds Movement Intelligence ---
+    var oddsMovementData = null;
+    var oddsMovementText = '';
+    try {
+      var miEventKey = (homeTeam.name + ' v ' + awayTeam.name).toLowerCase();
+      // Analyse movement for home team (most common selection)
+      var homeMovement = analyseOddsMovement(miEventKey, homeTeam.name);
+      var awayMovement = analyseOddsMovement(miEventKey, awayTeam.name);
+      // Use the movement for the verdict pick if available, otherwise home team
+      var primaryMovement = null;
+      var primarySelection = '';
+      if (verdictPick && verdictPick.indexOf(homeTeam.name) !== -1) {
+        primaryMovement = homeMovement;
+        primarySelection = homeTeam.name;
+      } else if (verdictPick && verdictPick.indexOf(awayTeam.name) !== -1) {
+        primaryMovement = awayMovement;
+        primarySelection = awayTeam.name;
+      } else {
+        primaryMovement = homeMovement;
+        primarySelection = homeTeam.name;
+      }
+
+      if (primaryMovement) {
+        oddsMovementData = {
+          direction: primaryMovement.direction,
+          openingAvg: primaryMovement.openingAvg,
+          currentAvg: primaryMovement.currentAvg,
+          changePercent: primaryMovement.changePercent,
+          bookmakers: primaryMovement.bookmakerCount,
+          selection: primarySelection,
+        };
+        if (primaryMovement.direction === 'shortening') {
+          oddsMovementText = 'Market movement: odds have shortened from ' + primaryMovement.openingAvg.toFixed(2) + ' to ' + primaryMovement.currentAvg.toFixed(2) + ' across ' + primaryMovement.bookmakerCount + ' bookmakers \u2014 strong market confidence in ' + primarySelection + '.';
+        } else if (primaryMovement.direction === 'drifting') {
+          oddsMovementText = 'Market movement: odds have drifted from ' + primaryMovement.openingAvg.toFixed(2) + ' to ' + primaryMovement.currentAvg.toFixed(2) + ' across ' + primaryMovement.bookmakerCount + ' bookmakers \u2014 market confidence in ' + primarySelection + ' is weakening.';
+        } else {
+          oddsMovementText = 'Market movement: odds stable around ' + primaryMovement.currentAvg.toFixed(2) + ' across ' + primaryMovement.bookmakerCount + ' bookmakers \u2014 no significant market shifts detected.';
+        }
+      }
+    } catch (omIntelErr) {
+      // Non-fatal — skip odds movement
+    }
+
     res.json({
       fixtureId: parseInt(fixtureId),
       match: {
@@ -1621,6 +1832,7 @@ app.get('/api/football/match-intelligence/:fixtureId', async (req, res) => {
         riskLevel: riskLevel,
         riskText: riskText
       },
+      oddsMovement: oddsMovementData,
       exchangeData: matchExchangeData,
       analysis: {
         overview: overviewText,
@@ -1628,6 +1840,7 @@ app.get('/api/football/match-intelligence/:fixtureId', async (req, res) => {
         h2h: h2hText,
         injuries: injuriesText,
         predictions: predictionsText,
+        oddsMovement: oddsMovementText || null,
         exchange: exchangeAnalysisText || null,
       },
       generatedAt: new Date().toISOString()
@@ -2903,11 +3116,32 @@ async function autoGenerateDailyTips() {
       var races = racingSource.normalise(raceData);
       console.log('[Auto-Tips] Found ' + races.length + ' races to analyse');
 
+      // Fetch weather per meeting (once per meeting, not per race)
+      var meetingWeather = {};
+      if (weatherSource && weatherSource.isConfigured()) {
+        var meetingNames = [];
+        races.forEach(function(r) {
+          if (r.meeting && meetingNames.indexOf(r.meeting) === -1) meetingNames.push(r.meeting);
+        });
+        for (var mwIdx = 0; mwIdx < meetingNames.length; mwIdx++) {
+          try {
+            var mwData = await weatherSource.fetchForCourse(meetingNames[mwIdx]);
+            if (mwData) {
+              meetingWeather[meetingNames[mwIdx]] = mwData;
+              console.log('[Auto-Tips] Weather at ' + meetingNames[mwIdx] + ': ' + Math.round(mwData.temp) + '\u00B0C, ' + mwData.description + ', wind ' + mwData.windSpeed + 'mph ' + mwData.windDirection);
+            }
+          } catch (mwErr) {
+            // Non-fatal — skip weather for this meeting
+          }
+        }
+      }
+
       races.forEach(function(race) {
         if (!race.runners || race.runners.length === 0) return;
+        var raceWeather = (race.meeting && meetingWeather[race.meeting]) ? meetingWeather[race.meeting] : null;
         race.runners.forEach(function(runner) {
           try {
-            var scored = scoringModel.scoreRunner(runner, race, null);
+            var scored = scoringModel.scoreRunner(runner, race, null, raceWeather);
             if (!scored) return;
             // Filter: edge > 5% AND confidence >= 6
             if (scored.edge > 0.05 && scored.confidence >= 6) {
@@ -2989,6 +3223,8 @@ async function autoGenerateDailyTips() {
       var oddsRaw = await oddsSource.fetch();
       oddsNormalised = oddsSource.normalise(oddsRaw);
       console.log('[Auto-Tips] Fetched odds for ' + (oddsNormalised || []).length + ' events');
+      // Store odds snapshot for movement analysis
+      try { storeOddsSnapshot(oddsNormalised); } catch (snapErr) { /* non-fatal */ }
     } catch (err) {
       console.error('[Auto-Tips] Odds API error:', err.message);
     }
@@ -3072,6 +3308,29 @@ async function autoGenerateDailyTips() {
           edge: scored.edge,
           confidence: scored.confidence,
         });
+      }
+
+      // --- Odds movement analysis for scored football fixtures ---
+      try {
+        for (var omIdx = 0; omIdx < allScoredFixtures.length; omIdx++) {
+          var omEntry = allScoredFixtures[omIdx];
+          var omScored = omEntry.scored;
+          if (!omScored || !omScored.selectedSelection) continue;
+          var omFixture = omScored.fixture || {};
+          var omEventKey = ((omFixture.homeTeam || '') + ' v ' + (omFixture.awayTeam || '')).toLowerCase();
+          var omMovement = analyseOddsMovement(omEventKey, omScored.selectedSelection);
+          if (omMovement && omMovement.bookmakerCount >= 3) {
+            if (omMovement.direction === 'shortening') {
+              omScored.factors.marketSupport = Math.min((omScored.factors.marketSupport || 0.5) + 0.15, 1.0);
+              console.log('[Auto-Tips] Odds movement for ' + omScored.selectedSelection + ': shortening across ' + omMovement.bookmakerCount + ' bookmakers (avg ' + omMovement.changePercent + '%)');
+            } else if (omMovement.direction === 'drifting') {
+              omScored.factors.marketSupport = Math.max((omScored.factors.marketSupport || 0.5) - 0.15, 0.05);
+              console.log('[Auto-Tips] Odds movement for ' + omScored.selectedSelection + ': drifting across ' + omMovement.bookmakerCount + ' bookmakers (avg +' + omMovement.changePercent + '%)');
+            }
+          }
+        }
+      } catch (omErr) {
+        console.log('[Auto-Tips] Odds movement analysis skipped:', omErr.message);
       }
 
       // Primary filter: edge > 4% AND confidence >= 6
@@ -3770,13 +4029,20 @@ async function scheduledDataRefresh() {
       } catch (err) { console.log('[Refresh] Football data fetch skipped:', err.message); }
     }
 
-    // 4. Pull fresh odds data
+    // 4. Pull fresh odds data and store snapshot for movement tracking
     if (oddsSource && process.env.ODDS_API_KEY) {
       try {
         var oddsData = await oddsSource.fetch();
         var odds = oddsSource.normalise(oddsData);
         if (odds.length > 0) {
           console.log('[Refresh] Cached ' + odds.length + ' odds events');
+          // Store snapshot for odds movement analysis
+          try {
+            storeOddsSnapshot(odds);
+            console.log('[Refresh] Stored odds snapshot (' + Object.keys(oddsHistory).length + ' events tracked)');
+          } catch (snapErr) {
+            console.log('[Refresh] Odds snapshot storage failed:', snapErr.message);
+          }
         }
       } catch (err) { console.log('[Refresh] Odds data fetch skipped:', err.message); }
     }
