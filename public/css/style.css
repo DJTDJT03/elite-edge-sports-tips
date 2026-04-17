@@ -78,7 +78,7 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
 .logo-icon { font-size: 28px; color: var(--gold); filter: drop-shadow(0 0 8px rgba(212,168,67,.3)); }
 .logo-text { font-size: 18px; font-weight: 800; color: var(--text-primary); letter-spacing: -.3px; line-height: 1.1; }
 .logo-sub { display: block; font-size: 11px; font-weight: 500; color: var(--gold); text-transform: uppercase; letter-spacing: 1.5px; }
-.nav-links { display: flex; gap: 4px; }
+.nav-links { display: flex; gap: 4px; align-items: center; }
 .nav-link {
   padding: 8px 16px; border-radius: var(--radius-sm);
   font-size: 14px; font-weight: 500; color: var(--text-secondary);
@@ -88,18 +88,18 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
 .nav-link.active { color: var(--gold); }
 .nav-link-admin { color: var(--purple) !important; }
 /* Nav dropdown menus */
-.nav-dropdown { position: relative; }
+.nav-dropdown { position: relative; display: flex; align-items: center; }
 .nav-dropdown > .nav-link { cursor: pointer; }
 .nav-dropdown-menu {
-  display: none; position: absolute; top: 100%; left: 0; min-width: 180px;
-  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 100; padding: 4px 0;
-  margin-top: 4px;
+  display: none; position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+  min-width: 190px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5); z-index: 100; padding: 6px 0;
 }
 .nav-dropdown:hover .nav-dropdown-menu { display: block; }
 .nav-dropdown-menu a {
-  display: block; padding: 10px 16px; font-size: 13px; font-weight: 500;
-  color: var(--text-secondary); transition: all 0.15s;
+  display: block; padding: 10px 18px; font-size: 13px; font-weight: 500;
+  color: var(--text-secondary); transition: all 0.15s; white-space: nowrap;
 }
 .nav-dropdown-menu a:hover { color: var(--gold); background: var(--bg-elevated); }
 .nav-right { display: flex; align-items: center; gap: 10px; }
