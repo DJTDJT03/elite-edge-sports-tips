@@ -697,6 +697,7 @@ const App = {
       case 'football': this.renderFootball(); break;
       case 'selections': this.renderSelections(); break;
       case 'value-bets': this.renderValueBets(); break;
+      case 'compare': this.renderCompare(); break;
       case 'festival': this.renderFestival(); break;
       case 'results': this.renderResults(); break;
       case 'pricing': this.renderPricing(); break;
@@ -3079,6 +3080,549 @@ const App = {
       return 0;
     });
     cards.forEach(function(c) { grid.appendChild(c); });
+  },
+
+  // -----------------------------------------------------------------------
+  // HEAD-TO-HEAD COMPARISON PAGE
+  // -----------------------------------------------------------------------
+  async renderCompare() {
+    const app = document.getElementById('app');
+    const self = this;
+    const isPremium = this.user && this.user.subscription === 'premium';
+    this._compareSport = this._compareSport || 'football';
+
+    app.innerHTML = `
+      <div class="compare-page container">
+        <div class="page-header" style="text-align:center;margin-bottom:24px;">
+          <h1 style="font-size:28px;font-weight:800;margin-bottom:4px;">Head-to-Head Comparison</h1>
+          <p class="text-muted" style="font-size:14px;">Compare any two teams or horses side by side</p>
+          <div class="compare-sport-toggle" style="margin-top:16px;">
+            <button class="compare-sport-btn ${this._compareSport === 'football' ? 'active' : ''}" data-sport="football">Football</button>
+            <button class="compare-sport-btn ${this._compareSport === 'racing' ? 'active' : ''}" data-sport="racing">Racing</button>
+          </div>
+        </div>
+        <div id="compare-body">
+          <div class="text-center pulse" style="padding:40px;">Loading...</div>
+        </div>
+      </div>
+    `;
+
+    // Sport toggle
+    app.querySelectorAll('.compare-sport-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        self._compareSport = this.getAttribute('data-sport');
+        self._compareDataA = null;
+        self._compareDataB = null;
+        self.renderCompare();
+      });
+    });
+
+    if (this._compareSport === 'football') {
+      await this._renderCompareFootball();
+    } else {
+      await this._renderCompareRacing();
+    }
+  },
+
+  async _renderCompareFootball() {
+    const self = this;
+    const isPremium = this.user && this.user.subscription === 'premium';
+    const body = document.getElementById('compare-body');
+    if (!body) return;
+
+    // Fetch fixtures for autocomplete and quick-compare
+    var fixtures = [];
+    var allTeams = [];
+    try {
+      var res = await fetch('/api/football/live-fixtures');
+      if (res.ok) {
+        var data = await res.json();
+        fixtures = data.fixtures || data || [];
+        if (!Array.isArray(fixtures)) fixtures = [];
+        var teamSet = {};
+        fixtures.forEach(function(f) {
+          if (f.homeTeam) teamSet[f.homeTeam] = true;
+          if (f.awayTeam) teamSet[f.awayTeam] = true;
+          // Also check home/away names
+          if (f.home) teamSet[f.home] = true;
+          if (f.away) teamSet[f.away] = true;
+        });
+        allTeams = Object.keys(teamSet).sort();
+      }
+    } catch(e) {}
+
+    // Quick compare links
+    var quickLinks = '';
+    if (fixtures.length > 0) {
+      var ql = fixtures.slice(0, 6).map(function(f) {
+        var home = f.homeTeam || f.home || '';
+        var away = f.awayTeam || f.away || '';
+        if (!home || !away) return '';
+        return '<button class="compare-quick-link" data-home="' + self._escHtml(home) + '" data-away="' + self._escHtml(away) + '" data-fixture-id="' + (f.fixtureId || f.id || '') + '">' + self._escHtml(home) + ' vs ' + self._escHtml(away) + ' &mdash; Compare Now</button>';
+      }).filter(Boolean).join('');
+      if (ql) quickLinks = '<div class="compare-quick-links"><p class="text-muted text-sm" style="margin-bottom:8px;">Quick Compare from Today\'s Fixtures:</p><div class="compare-quick-grid">' + ql + '</div></div>';
+    }
+
+    body.innerHTML = `
+      <div class="compare-inputs">
+        <div class="compare-search">
+          <label class="text-sm text-muted">Team A</label>
+          <div class="compare-search-wrap">
+            <input type="text" id="compare-team-a" class="compare-input" placeholder="Search team..." autocomplete="off">
+            <div class="compare-autocomplete" id="compare-ac-a"></div>
+          </div>
+        </div>
+        <div class="compare-vs-small">VS</div>
+        <div class="compare-search">
+          <label class="text-sm text-muted">Team B</label>
+          <div class="compare-search-wrap">
+            <input type="text" id="compare-team-b" class="compare-input" placeholder="Search team..." autocomplete="off">
+            <div class="compare-autocomplete" id="compare-ac-b"></div>
+          </div>
+        </div>
+        <button class="btn btn-gold compare-btn" id="compare-go-btn">Compare</button>
+      </div>
+      ${quickLinks}
+      <div id="compare-result">
+        <div class="compare-empty-state">
+          <div style="font-size:48px;margin-bottom:12px;opacity:.4;">&#9878;</div>
+          <p class="text-muted">Select two teams to compare</p>
+        </div>
+      </div>
+    `;
+
+    // Autocomplete logic
+    function setupAC(inputId, acId) {
+      var input = document.getElementById(inputId);
+      var ac = document.getElementById(acId);
+      if (!input || !ac) return;
+      input.addEventListener('input', function() {
+        var val = this.value.toLowerCase().trim();
+        if (val.length < 2) { ac.style.display = 'none'; ac.innerHTML = ''; return; }
+        var matches = allTeams.filter(function(t) { return t.toLowerCase().indexOf(val) !== -1; }).slice(0, 8);
+        if (matches.length === 0) { ac.style.display = 'none'; ac.innerHTML = ''; return; }
+        ac.innerHTML = matches.map(function(m) { return '<div class="compare-ac-item">' + self._escHtml(m) + '</div>'; }).join('');
+        ac.style.display = 'block';
+        ac.querySelectorAll('.compare-ac-item').forEach(function(item) {
+          item.addEventListener('click', function() {
+            input.value = this.textContent;
+            ac.style.display = 'none';
+          });
+        });
+      });
+      input.addEventListener('blur', function() { setTimeout(function() { ac.style.display = 'none'; }, 200); });
+      input.addEventListener('focus', function() { if (ac.innerHTML) ac.style.display = 'block'; });
+    }
+    setupAC('compare-team-a', 'compare-ac-a');
+    setupAC('compare-team-b', 'compare-ac-b');
+
+    // Compare button
+    var goBtn = document.getElementById('compare-go-btn');
+    if (goBtn) goBtn.addEventListener('click', function() { self._doFootballCompare(fixtures); });
+
+    // Quick links
+    body.querySelectorAll('.compare-quick-link').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var home = this.getAttribute('data-home');
+        var away = this.getAttribute('data-away');
+        var inp1 = document.getElementById('compare-team-a');
+        var inp2 = document.getElementById('compare-team-b');
+        if (inp1) inp1.value = home;
+        if (inp2) inp2.value = away;
+        self._doFootballCompare(fixtures);
+      });
+    });
+  },
+
+  async _doFootballCompare(fixtures) {
+    var teamA = (document.getElementById('compare-team-a') || {}).value || '';
+    var teamB = (document.getElementById('compare-team-b') || {}).value || '';
+    if (!teamA.trim() || !teamB.trim()) return;
+
+    var result = document.getElementById('compare-result');
+    if (!result) return;
+    result.innerHTML = '<div class="text-center pulse" style="padding:40px;">Analysing matchup...</div>';
+
+    var self = this;
+    var isPremium = this.user && this.user.subscription === 'premium';
+    var blurClass = isPremium ? '' : 'compare-blurred';
+
+    // Find matching fixture
+    var fixtureMatch = null;
+    fixtures.forEach(function(f) {
+      var home = (f.homeTeam || f.home || '').toLowerCase();
+      var away = (f.awayTeam || f.away || '').toLowerCase();
+      if ((home.indexOf(teamA.toLowerCase()) !== -1 || teamA.toLowerCase().indexOf(home) !== -1) &&
+          (away.indexOf(teamB.toLowerCase()) !== -1 || teamB.toLowerCase().indexOf(away) !== -1)) {
+        fixtureMatch = f;
+      }
+      if ((home.indexOf(teamB.toLowerCase()) !== -1 || teamB.toLowerCase().indexOf(home) !== -1) &&
+          (away.indexOf(teamA.toLowerCase()) !== -1 || teamA.toLowerCase().indexOf(away) !== -1)) {
+        fixtureMatch = f;
+      }
+    });
+
+    // Fetch intelligence data if fixture found
+    var intel = null;
+    if (fixtureMatch && (fixtureMatch.fixtureId || fixtureMatch.id)) {
+      try {
+        var res = await fetch('/api/football/match-intelligence/' + (fixtureMatch.fixtureId || fixtureMatch.id));
+        if (res.ok) intel = await res.json();
+      } catch(e) {}
+    }
+
+    // Fetch H2H
+    var h2h = null;
+    try {
+      var res2 = await fetch('/api/football/h2h/' + encodeURIComponent(teamA) + '/' + encodeURIComponent(teamB));
+      if (res2.ok) h2h = await res2.json();
+    } catch(e) {}
+
+    // Fetch tips to see if we have a verdict
+    var matchTip = null;
+    try {
+      var tips = await this.api('/tips?sport=football');
+      if (Array.isArray(tips)) {
+        tips.forEach(function(t) {
+          var ev = (t.event || t.match || '').toLowerCase();
+          if (ev.indexOf(teamA.toLowerCase()) !== -1 && ev.indexOf(teamB.toLowerCase()) !== -1) matchTip = t;
+        });
+      }
+    } catch(e) {}
+
+    // Extract stats
+    var statsA = (intel && intel.homeTeam) ? intel.homeTeam : (intel && intel.teamA) ? intel.teamA : {};
+    var statsB = (intel && intel.awayTeam) ? intel.awayTeam : (intel && intel.teamB) ? intel.teamB : {};
+    var homeStats = intel && intel.homeStats ? intel.homeStats : statsA;
+    var awayStats = intel && intel.awayStats ? intel.awayStats : statsB;
+
+    function formBox(form) {
+      if (!form) return '<span class="text-muted">-</span>';
+      var letters = (typeof form === 'string') ? form.split('') : (Array.isArray(form) ? form : []);
+      return letters.slice(-5).map(function(r) {
+        var c = (r || '').toUpperCase();
+        var cls = c === 'W' ? 'form-w' : c === 'D' ? 'form-d' : c === 'L' ? 'form-l' : '';
+        return '<span class="compare-form-box ' + cls + '">' + c + '</span>';
+      }).join('');
+    }
+
+    function statBar(label, valA, valB) {
+      var a = parseFloat(valA) || 0;
+      var b = parseFloat(valB) || 0;
+      var max = Math.max(a, b, 1);
+      var pctA = Math.round((a / max) * 100);
+      var pctB = Math.round((b / max) * 100);
+      return '<div class="compare-stat-row"><div class="compare-stat-bar-left"><div class="compare-stat-fill-left" style="width:' + pctA + '%"></div><span class="compare-stat-val">' + a + '</span></div><div class="compare-stat-label">' + label + '</div><div class="compare-stat-bar-right"><span class="compare-stat-val">' + b + '</span><div class="compare-stat-fill-right" style="width:' + pctB + '%"></div></div></div>';
+    }
+
+    // H2H section
+    var h2hHtml = '';
+    if (h2h) {
+      var meetings = h2h.meetings || h2h.matches || h2h.results || [];
+      var meetingsHtml = meetings.slice(0, 5).map(function(m) {
+        return '<div class="compare-h2h-match"><span class="text-muted text-xs">' + (m.date || '') + '</span> <strong>' + (m.score || m.result || '') + '</strong> <span class="text-xs text-muted">' + (m.venue || '') + '</span></div>';
+      }).join('');
+
+      var winsA = h2h.winsA || h2h.homeWins || 0;
+      var draws = h2h.draws || 0;
+      var winsB = h2h.winsB || h2h.awayWins || 0;
+      var totalH = winsA + draws + winsB || 1;
+      var pctWa = Math.round((winsA / totalH) * 100);
+      var pctD = Math.round((draws / totalH) * 100);
+      var pctWb = 100 - pctWa - pctD;
+
+      h2hHtml = `
+        <div class="compare-h2h ${blurClass}">
+          <h3 style="text-align:center;font-size:16px;margin-bottom:16px;">Head-to-Head Record</h3>
+          <div class="compare-h2h-bar-wrap">
+            <div class="compare-h2h-bar">
+              <div class="compare-h2h-seg seg-a" style="width:${pctWa}%"><span>${winsA}</span></div>
+              <div class="compare-h2h-seg seg-draw" style="width:${pctD}%"><span>${draws}</span></div>
+              <div class="compare-h2h-seg seg-b" style="width:${pctWb}%"><span>${winsB}</span></div>
+            </div>
+            <div class="compare-h2h-labels"><span>${self._escHtml(teamA)} wins</span><span>Draws</span><span>${self._escHtml(teamB)} wins</span></div>
+          </div>
+          ${h2h.avgGoals != null ? '<div class="compare-h2h-stats"><span>Avg Goals: <strong>' + (h2h.avgGoals || '-') + '</strong></span><span>BTTS: <strong>' + (h2h.bttsPercent != null ? h2h.bttsPercent + '%' : '-') + '</strong></span><span>Over 2.5: <strong>' + (h2h.over25Percent != null ? h2h.over25Percent + '%' : '-') + '</strong></span></div>' : ''}
+          ${meetingsHtml ? '<div class="compare-h2h-meetings"><h4 class="text-sm text-muted" style="margin-bottom:8px;">Last Meetings</h4>' + meetingsHtml + '</div>' : ''}
+        </div>
+      `;
+    }
+
+    // Verdict
+    var verdictHtml = '';
+    if (matchTip) {
+      verdictHtml = `
+        <div class="compare-verdict ${blurClass}">
+          <h3 style="margin-bottom:12px;">Our Verdict</h3>
+          <div class="compare-verdict-inner">
+            <div><span class="text-muted">Selection:</span> <strong>${self._escHtml(matchTip.selection || matchTip.tip || '')}</strong></div>
+            <div><span class="text-muted">Market:</span> ${self._escHtml(matchTip.market || '')}</div>
+            <div><span class="text-muted">Odds:</span> <strong class="text-gold">${matchTip.odds || '-'}</strong></div>
+            ${matchTip.confidence ? '<div><span class="text-muted">Confidence:</span> <strong>' + matchTip.confidence + '%</strong></div>' : ''}
+            ${matchTip.edge ? '<div><span class="text-muted">Edge:</span> <strong class="text-green">+' + matchTip.edge + '%</strong></div>' : ''}
+            <a href="#/selections" class="btn btn-outline btn-sm" style="margin-top:12px;">View Full Analysis</a>
+          </div>
+        </div>
+      `;
+    }
+
+    // Premium gate overlay
+    var premiumGate = !isPremium ? `
+      <div class="compare-premium-gate">
+        <div class="compare-gate-content">
+          <h3>Premium Analysis</h3>
+          <p>Upgrade to unlock full H2H data, stat bars, and our expert verdict.</p>
+          <a href="#/pricing" class="btn btn-gold">Upgrade Now</a>
+        </div>
+      </div>
+    ` : '';
+
+    result.innerHTML = `
+      <div class="compare-grid">
+        <div class="compare-column">
+          <h2 class="compare-team-name">${self._escHtml(teamA)}</h2>
+          <div class="compare-team-stats ${blurClass}">
+            ${statsA.leaguePosition ? '<div class="compare-badge">League Pos: <strong>' + statsA.leaguePosition + '</strong></div>' : ''}
+            <div class="compare-form-row"><span class="text-sm text-muted">Form:</span> ${formBox(statsA.form || homeStats.form)}</div>
+            ${statsA.goalsScored != null || homeStats.goalsScored != null ? '<div class="compare-stat-item"><span class="text-muted">Goals Scored:</span> <strong>' + (statsA.goalsScored || homeStats.goalsScored || '-') + '</strong></div>' : ''}
+            ${statsA.goalsConceded != null || homeStats.goalsConceded != null ? '<div class="compare-stat-item"><span class="text-muted">Goals Conceded:</span> <strong>' + (statsA.goalsConceded || homeStats.goalsConceded || '-') + '</strong></div>' : ''}
+            ${statsA.xG != null || homeStats.xG != null ? '<div class="compare-stat-item"><span class="text-muted">xG:</span> <strong>' + (statsA.xG || homeStats.xG || '-') + '</strong></div>' : ''}
+            ${statsA.xGA != null || homeStats.xGA != null ? '<div class="compare-stat-item"><span class="text-muted">xGA:</span> <strong>' + (statsA.xGA || homeStats.xGA || '-') + '</strong></div>' : ''}
+            ${statsA.cleanSheets != null || homeStats.cleanSheets != null ? '<div class="compare-stat-item"><span class="text-muted">Clean Sheets:</span> <strong>' + (statsA.cleanSheets || homeStats.cleanSheets || '-') + '</strong></div>' : ''}
+            ${statsA.homeRecord || homeStats.homeRecord ? '<div class="compare-stat-item"><span class="text-muted">Home Record:</span> <strong>' + (statsA.homeRecord || homeStats.homeRecord || '-') + '</strong></div>' : ''}
+          </div>
+        </div>
+        <div class="compare-vs">
+          <div class="compare-vs-line"></div>
+          <div class="compare-vs-circle">VS</div>
+          <div class="compare-vs-line"></div>
+        </div>
+        <div class="compare-column">
+          <h2 class="compare-team-name">${self._escHtml(teamB)}</h2>
+          <div class="compare-team-stats ${blurClass}">
+            ${statsB.leaguePosition ? '<div class="compare-badge">League Pos: <strong>' + statsB.leaguePosition + '</strong></div>' : ''}
+            <div class="compare-form-row"><span class="text-sm text-muted">Form:</span> ${formBox(statsB.form || awayStats.form)}</div>
+            ${statsB.goalsScored != null || awayStats.goalsScored != null ? '<div class="compare-stat-item"><span class="text-muted">Goals Scored:</span> <strong>' + (statsB.goalsScored || awayStats.goalsScored || '-') + '</strong></div>' : ''}
+            ${statsB.goalsConceded != null || awayStats.goalsConceded != null ? '<div class="compare-stat-item"><span class="text-muted">Goals Conceded:</span> <strong>' + (statsB.goalsConceded || awayStats.goalsConceded || '-') + '</strong></div>' : ''}
+            ${statsB.xG != null || awayStats.xG != null ? '<div class="compare-stat-item"><span class="text-muted">xG:</span> <strong>' + (statsB.xG || awayStats.xG || '-') + '</strong></div>' : ''}
+            ${statsB.xGA != null || awayStats.xGA != null ? '<div class="compare-stat-item"><span class="text-muted">xGA:</span> <strong>' + (statsB.xGA || awayStats.xGA || '-') + '</strong></div>' : ''}
+            ${statsB.cleanSheets != null || awayStats.cleanSheets != null ? '<div class="compare-stat-item"><span class="text-muted">Clean Sheets:</span> <strong>' + (statsB.cleanSheets || awayStats.cleanSheets || '-') + '</strong></div>' : ''}
+            ${statsB.awayRecord || awayStats.awayRecord ? '<div class="compare-stat-item"><span class="text-muted">Away Record:</span> <strong>' + (statsB.awayRecord || awayStats.awayRecord || '-') + '</strong></div>' : ''}
+          </div>
+        </div>
+      </div>
+      <div class="compare-stat-bars ${blurClass}">
+        <h3 style="text-align:center;font-size:16px;margin-bottom:16px;">Key Stats</h3>
+        ${statBar('Possession', statsA.possession || homeStats.possession || 0, statsB.possession || awayStats.possession || 0)}
+        ${statBar('Shots/Game', statsA.shotsOnTarget || homeStats.shotsOnTarget || 0, statsB.shotsOnTarget || awayStats.shotsOnTarget || 0)}
+        ${statBar('Goals/Game', statsA.goalsPerGame || homeStats.goalsPerGame || 0, statsB.goalsPerGame || awayStats.goalsPerGame || 0)}
+        ${statBar('xG', statsA.xG || homeStats.xG || 0, statsB.xG || awayStats.xG || 0)}
+      </div>
+      ${h2hHtml}
+      ${verdictHtml}
+      ${premiumGate}
+    `;
+  },
+
+  async _renderCompareRacing() {
+    var self = this;
+    var isPremium = this.user && this.user.subscription === 'premium';
+    var blurClass = isPremium ? '' : 'compare-blurred';
+    var body = document.getElementById('compare-body');
+    if (!body) return;
+
+    // Fetch racing cards for autocomplete
+    var allHorses = [];
+    var cards = [];
+    try {
+      var res = await fetch('/api/racing/live-cards');
+      if (res.ok) {
+        var data = await res.json();
+        cards = data.cards || data.races || data || [];
+        if (!Array.isArray(cards)) cards = [];
+        var nameSet = {};
+        cards.forEach(function(race) {
+          var runners = race.runners || race.horses || [];
+          runners.forEach(function(h) {
+            var name = h.name || h.horse || '';
+            if (name) nameSet[name] = h;
+          });
+        });
+        allHorses = Object.keys(nameSet).sort();
+        self._compareHorseData = nameSet;
+      }
+    } catch(e) {}
+
+    body.innerHTML = `
+      <div class="compare-inputs">
+        <div class="compare-search">
+          <label class="text-sm text-muted">Horse A</label>
+          <div class="compare-search-wrap">
+            <input type="text" id="compare-horse-a" class="compare-input" placeholder="Search horse..." autocomplete="off">
+            <div class="compare-autocomplete" id="compare-ac-ha"></div>
+          </div>
+        </div>
+        <div class="compare-vs-small">VS</div>
+        <div class="compare-search">
+          <label class="text-sm text-muted">Horse B</label>
+          <div class="compare-search-wrap">
+            <input type="text" id="compare-horse-b" class="compare-input" placeholder="Search horse..." autocomplete="off">
+            <div class="compare-autocomplete" id="compare-ac-hb"></div>
+          </div>
+        </div>
+        <button class="btn btn-gold compare-btn" id="compare-go-btn-racing">Compare</button>
+      </div>
+      <div id="compare-result">
+        <div class="compare-empty-state">
+          <div style="font-size:48px;margin-bottom:12px;opacity:.4;">&#127943;</div>
+          <p class="text-muted">Select two horses to compare</p>
+        </div>
+      </div>
+    `;
+
+    // Autocomplete
+    function setupAC(inputId, acId) {
+      var input = document.getElementById(inputId);
+      var ac = document.getElementById(acId);
+      if (!input || !ac) return;
+      input.addEventListener('input', function() {
+        var val = this.value.toLowerCase().trim();
+        if (val.length < 2) { ac.style.display = 'none'; ac.innerHTML = ''; return; }
+        var matches = allHorses.filter(function(h) { return h.toLowerCase().indexOf(val) !== -1; }).slice(0, 8);
+        if (matches.length === 0) { ac.style.display = 'none'; ac.innerHTML = ''; return; }
+        ac.innerHTML = matches.map(function(m) { return '<div class="compare-ac-item">' + self._escHtml(m) + '</div>'; }).join('');
+        ac.style.display = 'block';
+        ac.querySelectorAll('.compare-ac-item').forEach(function(item) {
+          item.addEventListener('click', function() {
+            input.value = this.textContent;
+            ac.style.display = 'none';
+          });
+        });
+      });
+      input.addEventListener('blur', function() { setTimeout(function() { ac.style.display = 'none'; }, 200); });
+      input.addEventListener('focus', function() { if (ac.innerHTML) ac.style.display = 'block'; });
+    }
+    setupAC('compare-horse-a', 'compare-ac-ha');
+    setupAC('compare-horse-b', 'compare-ac-hb');
+
+    var goBtn = document.getElementById('compare-go-btn-racing');
+    if (goBtn) goBtn.addEventListener('click', function() { self._doRacingCompare(); });
+  },
+
+  async _doRacingCompare() {
+    var horseA = (document.getElementById('compare-horse-a') || {}).value || '';
+    var horseB = (document.getElementById('compare-horse-b') || {}).value || '';
+    if (!horseA.trim() || !horseB.trim()) return;
+
+    var result = document.getElementById('compare-result');
+    if (!result) return;
+    result.innerHTML = '<div class="text-center pulse" style="padding:40px;">Analysing runners...</div>';
+
+    var self = this;
+    var isPremium = this.user && this.user.subscription === 'premium';
+    var blurClass = isPremium ? '' : 'compare-blurred';
+    var hData = self._compareHorseData || {};
+    var dataA = hData[horseA] || {};
+    var dataB = hData[horseB] || {};
+
+    // Fetch best odds
+    var oddsA = null, oddsB = null;
+    try {
+      var p1 = fetch('/api/odds/best-price?selection=' + encodeURIComponent(horseA));
+      var p2 = fetch('/api/odds/best-price?selection=' + encodeURIComponent(horseB));
+      var r = await Promise.all([p1, p2]);
+      if (r[0].ok) oddsA = await r[0].json();
+      if (r[1].ok) oddsB = await r[1].json();
+    } catch(e) {}
+
+    // Check if we have tips for either horse
+    var tipA = null, tipB = null;
+    try {
+      var tips = await this.api('/tips?sport=racing');
+      if (Array.isArray(tips)) {
+        tips.forEach(function(t) {
+          var sel = (t.selection || t.horse || '').toLowerCase();
+          if (sel === horseA.toLowerCase()) tipA = t;
+          if (sel === horseB.toLowerCase()) tipB = t;
+        });
+      }
+    } catch(e) {}
+
+    function racingFormBox(form) {
+      if (!form) return '<span class="text-muted">-</span>';
+      var positions = (typeof form === 'string') ? form.split(/[\s\/,-]+/) : (Array.isArray(form) ? form : []);
+      return positions.slice(-5).map(function(p) {
+        var n = parseInt(p);
+        var cls = n === 1 ? 'form-1st' : (n >= 2 && n <= 3) ? 'form-2nd3rd' : 'form-other';
+        if (isNaN(n)) cls = 'form-other';
+        return '<span class="compare-form-box ' + cls + '">' + self._escHtml(p) + '</span>';
+      }).join('');
+    }
+
+    function horseColumn(name, data, odds, tip) {
+      var bestPrice = odds && (odds.bestPrice || odds.price || odds.odds) ? (odds.bestPrice || odds.price || odds.odds) : '-';
+      var bookmaker = odds && odds.bookmaker ? odds.bookmaker : '';
+      return `
+        <div class="compare-column">
+          <h2 class="compare-team-name">${self._escHtml(name)}</h2>
+          <div class="compare-team-stats">
+            ${data.trainer ? '<div class="compare-stat-item"><span class="text-muted">Trainer:</span> <strong>' + self._escHtml(data.trainer) + '</strong></div>' : ''}
+            ${data.jockey ? '<div class="compare-stat-item"><span class="text-muted">Jockey:</span> <strong>' + self._escHtml(data.jockey) + '</strong></div>' : ''}
+            ${data.age ? '<div class="compare-stat-item"><span class="text-muted">Age:</span> <strong>' + data.age + '</strong></div>' : ''}
+            ${data.weight ? '<div class="compare-stat-item"><span class="text-muted">Weight:</span> <strong>' + self._escHtml(data.weight) + '</strong></div>' : ''}
+            ${data.officialRating || data.or ? '<div class="compare-stat-item"><span class="text-muted">Official Rating:</span> <strong>' + (data.officialRating || data.or) + '</strong></div>' : ''}
+            <div class="compare-form-row"><span class="text-sm text-muted">Form:</span> ${racingFormBox(data.form)}</div>
+            ${data.courseDistanceRecord || data.cdRecord ? '<div class="compare-stat-item"><span class="text-muted">C&D Record:</span> <strong>' + self._escHtml(data.courseDistanceRecord || data.cdRecord || '-') + '</strong></div>' : ''}
+            ${data.goingPreference || data.going ? '<div class="compare-stat-item"><span class="text-muted">Going Pref:</span> <strong>' + self._escHtml(data.goingPreference || data.going || '-') + '</strong></div>' : ''}
+            <div class="compare-stat-item compare-price"><span class="text-muted">Best Price:</span> <strong class="text-gold">${self._escHtml(String(bestPrice))}</strong> ${bookmaker ? '<span class="text-xs text-muted">(' + self._escHtml(bookmaker) + ')</span>' : ''}</div>
+          </div>
+          ${tip ? '<div class="compare-verdict-mini ' + blurClass + '"><span class="text-xs" style="color:var(--gold);">OUR TIP</span><div><strong>' + self._escHtml(tip.selection || tip.horse || '') + '</strong> @ <span class="text-gold">' + (tip.odds || '-') + '</span></div>' + (tip.confidence ? '<div class="text-xs text-muted">Confidence: ' + tip.confidence + '%</div>' : '') + (tip.edge ? '<div class="text-xs text-green">Edge: +' + tip.edge + '%</div>' : '') + '</div>' : ''}
+        </div>
+      `;
+    }
+
+    // Side-by-side stat comparison
+    function racingStatBar(label, valA, valB) {
+      var a = parseFloat(valA) || 0;
+      var b = parseFloat(valB) || 0;
+      var max = Math.max(a, b, 1);
+      var pctA = Math.round((a / max) * 100);
+      var pctB = Math.round((b / max) * 100);
+      return '<div class="compare-stat-row"><div class="compare-stat-bar-left"><div class="compare-stat-fill-left" style="width:' + pctA + '%"></div><span class="compare-stat-val">' + a + '</span></div><div class="compare-stat-label">' + label + '</div><div class="compare-stat-bar-right"><span class="compare-stat-val">' + b + '</span><div class="compare-stat-fill-right" style="width:' + pctB + '%"></div></div></div>';
+    }
+
+    var formScoreA = dataA.formRating || dataA.formScore || 0;
+    var formScoreB = dataB.formRating || dataB.formScore || 0;
+
+    // Premium gate
+    var premiumGate = !isPremium ? `
+      <div class="compare-premium-gate">
+        <div class="compare-gate-content">
+          <h3>Premium Analysis</h3>
+          <p>Upgrade to unlock full comparison data, form scores, and our expert verdict.</p>
+          <a href="#/pricing" class="btn btn-gold">Upgrade Now</a>
+        </div>
+      </div>
+    ` : '';
+
+    result.innerHTML = `
+      <div class="compare-grid">
+        ${horseColumn(horseA, dataA, oddsA, tipA)}
+        <div class="compare-vs">
+          <div class="compare-vs-line"></div>
+          <div class="compare-vs-circle">VS</div>
+          <div class="compare-vs-line"></div>
+        </div>
+        ${horseColumn(horseB, dataB, oddsB, tipB)}
+      </div>
+      <div class="compare-stat-bars ${blurClass}">
+        <h3 style="text-align:center;font-size:16px;margin-bottom:16px;">Stat Comparison</h3>
+        ${racingStatBar('Form Score', Math.round(formScoreA * 100), Math.round(formScoreB * 100))}
+        ${racingStatBar('Official Rating', dataA.officialRating || dataA.or || 0, dataB.officialRating || dataB.or || 0)}
+        ${racingStatBar('Age', dataA.age || 0, dataB.age || 0)}
+      </div>
+      ${premiumGate}
+    `;
   },
 
   // -----------------------------------------------------------------------
