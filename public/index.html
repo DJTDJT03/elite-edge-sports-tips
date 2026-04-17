@@ -82,20 +82,30 @@
       </a>
       <div class="nav-links" id="nav-links">
         <a href="#/" class="nav-link" data-page="dashboard">Dashboard</a>
-        <a href="#/racing" class="nav-link" data-page="racing">Racing</a>
         <a href="#/live" class="nav-link nav-link-live" data-page="live">LIVE</a>
+        <a href="#/racing" class="nav-link" data-page="racing">Racing</a>
         <a href="#/football" class="nav-link" data-page="football">Football</a>
-        <!-- Festival tab removed: Aintree 2026 has finished -->
-        <a href="#/selections" class="nav-link" data-page="selections">Selections</a>
-        <a href="#/value-bets" class="nav-link" data-page="value-bets">Value Bets</a>
-        <a href="#/compare" class="nav-link" data-page="compare">H2H</a>
+        <div class="nav-dropdown">
+          <a href="#/selections" class="nav-link" data-page="selections">Tips &#9662;</a>
+          <div class="nav-dropdown-menu">
+            <a href="#/selections" data-page="selections">Selections</a>
+            <a href="#/value-bets" data-page="value-bets">Value Bets</a>
+            <a href="#/compare" data-page="compare">H2H Compare</a>
+            <a href="#" onclick="App.showModal('calculator');return false;">Staking Calc</a>
+          </div>
+        </div>
         <a href="#/results" class="nav-link" data-page="results">Results</a>
         <a href="#/pricing" class="nav-link" data-page="pricing">Pricing</a>
-        <a href="#/analysts" class="nav-link" data-page="analysts">Analysts</a>
-        <a href="#/support" class="nav-link" data-page="support">Support</a>
-        <a href="#/blog" class="nav-link" data-page="blog">Blog</a>
+        <div class="nav-dropdown">
+          <a href="#/support" class="nav-link" data-page="support">More &#9662;</a>
+          <div class="nav-dropdown-menu">
+            <a href="#/analysts" data-page="analysts">Analysts</a>
+            <a href="#/support" data-page="support">Support</a>
+            <a href="#/blog" data-page="blog">Blog</a>
+            <a href="#/how-it-works" data-page="how-it-works">How It Works</a>
+          </div>
+        </div>
         <a href="#/admin" class="nav-link nav-link-admin" data-page="admin" id="nav-admin" style="display:none;">Admin</a>
-        <a href="#" class="nav-link" onclick="App.showModal('calculator');return false;" title="Staking Calculator">Calc</a>
         <a href="#" class="nav-link" id="nav-mybets" onclick="App.showModal('mybets');return false;" style="display:none;">My Bets</a>
         <!-- Mobile auth buttons (hidden on desktop, shown in hamburger menu) -->
         <div id="nav-auth-guest-mobile">
