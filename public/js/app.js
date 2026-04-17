@@ -594,6 +594,10 @@ const App = {
     const adminLink = document.getElementById('nav-admin');
     const subBar = document.getElementById('sub-bar');
     const myBetsLink = document.getElementById('nav-mybets');
+    // Mobile auth elements
+    const guestMobile = document.getElementById('nav-auth-guest-mobile');
+    const userMobile = document.getElementById('nav-auth-user-mobile');
+    const badgeMobile = document.getElementById('user-badge-mobile');
 
     if (this.user) {
       guest.style.display = 'none';
@@ -601,6 +605,10 @@ const App = {
       badge.textContent = this.user.name;
       badge.style.cursor = 'pointer';
       badge.onclick = () => { window.location.hash = '#/account'; };
+      // Mobile auth
+      if (guestMobile) guestMobile.style.display = 'none';
+      if (userMobile) userMobile.style.display = '';
+      if (badgeMobile) { badgeMobile.textContent = this.user.name; badgeMobile.style.cursor = 'pointer'; badgeMobile.onclick = () => { window.location.hash = '#/account'; }; }
       adminLink.style.display = this.user.role === 'admin' ? 'inline-block' : 'none';
       if (myBetsLink) myBetsLink.style.display = 'inline-block';
       if (this.user.subscription === 'free') {
@@ -615,6 +623,9 @@ const App = {
     } else {
       guest.style.display = 'flex';
       userEl.style.display = 'none';
+      // Mobile auth
+      if (guestMobile) guestMobile.style.display = '';
+      if (userMobile) userMobile.style.display = 'none';
       adminLink.style.display = 'none';
       if (myBetsLink) myBetsLink.style.display = 'none';
       subBar.style.display = 'none';
