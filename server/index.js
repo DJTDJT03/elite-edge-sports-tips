@@ -679,10 +679,33 @@ app.get('/api/weather/test', async (req, res) => {
       return res.json({ error: 'Weather not configured', envSet: !!process.env.OPENWEATHER_API_KEY });
     }
     var course = req.query.course || 'Ayr';
-    var data = await weatherSource.fetchForCourse(course);
-    res.json({ course: course, weather: data });
+    var coords = weatherSource.getCourseCoords(course);
+    if (!coords) {
+      return res.json({ error: 'Course not found in lookup', course: course, availableCourses: Object.keys(weatherSource.courseCoords).slice(0, 10) });
+    }
+    // Try raw API call directly
+    var https = require('https');
+    var url = '/data/2.5/weather?lat=' + coords.lat + '&lon=' + coords.lon + '&units=metric&appid=' + process.env.OPENWEATHER_API_KEY;
+    var rawData = await new Promise(function(resolve, reject) {
+      var r = https.request({
+        hostname: 'api.openweathermap.org',
+        path: url,
+        method: 'GET'
+      }, function(resp) {
+        var b = '';
+        resp.on('data', function(c) { b += c; });
+        resp.on('end', function() { resolve({ status: resp.statusCode, body: b.substring(0, 500) }); });
+      });
+      r.on('error', function(e) { reject(e); });
+      r.setTimeout(10000, function() { r.destroy(); reject(new Error('timeout')); });
+      r.end();
+    });
+    var parsed = null;
+    try { parsed = JSON.parse(rawData.body); } catch(e) {}
+    var weather = await weatherSource.fetchForCourse(course);
+    res.json({ course: course, coords: coords, rawStatus: rawData.status, rawResponse: parsed, processedWeather: weather });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
 
