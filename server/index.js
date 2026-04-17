@@ -1165,15 +1165,31 @@ app.get('/api/football/match-intelligence/:fixtureId', async (req, res) => {
     );
     var h2hMatches = h2hData.response || [];
 
-    // 3. Fetch last 10 fixtures for each team (for form analysis)
-    var homeFixturesData = await footballSource._apiGet(
-      '/fixtures?team=' + homeTeam.id + '&last=10&status=FT'
-    );
-    var awayFixturesData = await footballSource._apiGet(
-      '/fixtures?team=' + awayTeam.id + '&last=10&status=FT'
-    );
+    // 3. Fetch last 10 fixtures for each team + enhanced data (in parallel)
+    var parallelResults = await Promise.allSettled([
+      footballSource._apiGet('/fixtures?team=' + homeTeam.id + '&last=10&status=FT'),
+      footballSource._apiGet('/fixtures?team=' + awayTeam.id + '&last=10&status=FT'),
+      footballSource.fetchInjuries(parseInt(fixtureId)),
+      footballSource.fetchPredictions(parseInt(fixtureId)),
+      footballSource.fetchTeamStats(homeTeam.id, league.id, '2025'),
+      footballSource.fetchTeamStats(awayTeam.id, league.id, '2025'),
+    ]);
+
+    var homeFixturesData = parallelResults[0].status === 'fulfilled' ? parallelResults[0].value : { response: [] };
+    var awayFixturesData = parallelResults[1].status === 'fulfilled' ? parallelResults[1].value : { response: [] };
+    var injuriesData = parallelResults[2].status === 'fulfilled' ? parallelResults[2].value : { response: [] };
+    var predictionsData = parallelResults[3].status === 'fulfilled' ? parallelResults[3].value : { response: [] };
+    var homeTeamStatsData = parallelResults[4].status === 'fulfilled' ? parallelResults[4].value : { response: null };
+    var awayTeamStatsData = parallelResults[5].status === 'fulfilled' ? parallelResults[5].value : { response: null };
+
     var homeFixtures = homeFixturesData.response || [];
     var awayFixtures = awayFixturesData.response || [];
+
+    // Parse enhanced data
+    var injuriesList = injuriesData.response || [];
+    var predictionsObj = (predictionsData.response && predictionsData.response.length > 0) ? predictionsData.response[0] : null;
+    var homeTeamSeasonStats = homeTeamStatsData.response || null;
+    var awayTeamSeasonStats = awayTeamStatsData.response || null;
 
     // --- Build analysis ---
 
@@ -1340,12 +1356,69 @@ app.get('/api/football/match-intelligence/:fixtureId', async (req, res) => {
       (homeStats.cleanSheetPct >= 40 ? homeTeam.name + ' have been solid defensively with clean sheets in ' + homeStats.cleanSheetPct + '% of recent outings. ' : '') +
       (awayStats.cleanSheetPct >= 40 ? awayTeam.name + ' have kept things tight at the back with ' + awayStats.cleanSheetPct + '% clean sheets. ' : '');
 
+    // Enhanced: add season stats context to form text
+    if (homeTeamSeasonStats && homeTeamSeasonStats.goals && homeTeamSeasonStats.goals.for && homeTeamSeasonStats.goals.for.average) {
+      var hSeasonGpg = homeTeamSeasonStats.goals.for.average.total;
+      var hSeasonPlayed = homeTeamSeasonStats.fixtures && homeTeamSeasonStats.fixtures.played ? homeTeamSeasonStats.fixtures.played.home || 0 : 0;
+      if (hSeasonGpg && hSeasonPlayed) {
+        formText += homeTeam.name + ' have scored in ' + hSeasonPlayed + ' home games this season, averaging ' + hSeasonGpg + ' goals per game. ';
+      }
+    }
+    if (awayTeamSeasonStats && awayTeamSeasonStats.goals && awayTeamSeasonStats.goals.for && awayTeamSeasonStats.goals.for.average) {
+      var aSeasonGpg = awayTeamSeasonStats.goals.for.average.total;
+      var aCleanSheetTotal = awayTeamSeasonStats.clean_sheet ? awayTeamSeasonStats.clean_sheet.total || 0 : 0;
+      var aPlayedTotal = awayTeamSeasonStats.fixtures && awayTeamSeasonStats.fixtures.played ? awayTeamSeasonStats.fixtures.played.total || 1 : 1;
+      var aBttsPctSeason = Math.round(((aPlayedTotal - aCleanSheetTotal) / aPlayedTotal) * 100);
+      if (aBttsPctSeason) {
+        formText += 'BTTS has landed in ' + aBttsPctSeason + '% of ' + awayTeam.name + '\'s away games. ';
+      }
+    }
+
     var h2hText = h2hMatches.length > 0 ?
       'In their last ' + h2hMatches.length + ' meetings, ' + homeTeam.name + ' have won ' + h2hHomeWins +
       ', ' + awayTeam.name + ' have won ' + h2hAwayWins + ', with ' + h2hDraws + ' draws. ' +
       'These fixtures produce an average of ' + h2hAvgGoals + ' goals per game' +
       (h2hBttsPct >= 50 ? ' with both teams scoring in ' + h2hBttsPct + '% of encounters.' : '.') :
       'No recent head-to-head data available for this matchup.';
+
+    // Enhanced analysis: injuries text
+    var injuriesText = 'Check team news closer to kick-off for any late changes.';
+    if (injuriesList.length > 0) {
+      var homeInjuredPlayers = injuriesList.filter(function(inj) { return inj.team && inj.team.id === homeTeam.id; });
+      var awayInjuredPlayers = injuriesList.filter(function(inj) { return inj.team && inj.team.id === awayTeam.id; });
+      var homeInjuredNames = homeInjuredPlayers.map(function(inj) { return inj.player ? inj.player.name : 'Unknown'; });
+      var awayInjuredNames = awayInjuredPlayers.map(function(inj) { return inj.player ? inj.player.name : 'Unknown'; });
+
+      injuriesText = 'Key injuries: ';
+      if (homeInjuredNames.length > 0) {
+        injuriesText += homeTeam.name + ' missing ' + homeInjuredNames.join(', ') + '. ';
+      } else {
+        injuriesText += homeTeam.name + ' at full strength. ';
+      }
+      if (awayInjuredNames.length > 0) {
+        injuriesText += awayTeam.name + ' missing ' + awayInjuredNames.join(', ') + '.';
+      } else {
+        injuriesText += awayTeam.name + ' at full strength.';
+      }
+    }
+
+    // Enhanced analysis: predictions text
+    var predictionsText = '';
+    if (predictionsObj && predictionsObj.predictions && predictionsObj.predictions.percent) {
+      var pct = predictionsObj.predictions.percent;
+      var predHomePct = pct.home || '0%';
+      var predDrawPct = pct.draw || '0%';
+      var predAwayPct = pct.away || '0%';
+      var predWinner = 'draw';
+      var predWinnerPct = predDrawPct;
+      if (parseInt(predHomePct) > parseInt(predAwayPct) && parseInt(predHomePct) > parseInt(predDrawPct)) {
+        predWinner = homeTeam.name; predWinnerPct = predHomePct;
+      } else if (parseInt(predAwayPct) > parseInt(predHomePct)) {
+        predWinner = awayTeam.name; predWinnerPct = predAwayPct;
+      }
+      predictionsText = 'Independent prediction model gives ' + predWinner + ' a ' + predWinnerPct + ' chance of winning. ' +
+        '(Home: ' + predHomePct + ', Draw: ' + predDrawPct + ', Away: ' + predAwayPct + ')';
+    }
 
     var riskText = '';
     if (riskLevel === 'Low') {
@@ -1395,6 +1468,23 @@ app.get('/api/football/match-intelligence/:fixtureId', async (req, res) => {
         home: homeStats,
         away: awayStats
       },
+      injuries: {
+        home: injuriesList.filter(function(inj) { return inj.team && inj.team.id === homeTeam.id; }).map(function(inj) {
+          return { player: inj.player ? inj.player.name : 'Unknown', type: inj.player ? inj.player.type : '', reason: inj.player ? inj.player.reason : '' };
+        }),
+        away: injuriesList.filter(function(inj) { return inj.team && inj.team.id === awayTeam.id; }).map(function(inj) {
+          return { player: inj.player ? inj.player.name : 'Unknown', type: inj.player ? inj.player.type : '', reason: inj.player ? inj.player.reason : '' };
+        }),
+      },
+      predictions: predictionsObj ? {
+        winProbability: predictionsObj.predictions && predictionsObj.predictions.percent ? predictionsObj.predictions.percent : null,
+        predictedGoals: predictionsObj.predictions && predictionsObj.predictions.goals ? predictionsObj.predictions.goals : null,
+        advice: predictionsObj.predictions ? predictionsObj.predictions.advice : null,
+      } : null,
+      seasonStats: {
+        home: homeTeamSeasonStats || null,
+        away: awayTeamSeasonStats || null,
+      },
       verdict: {
         market: verdictMarket,
         pick: verdictPick,
@@ -1406,7 +1496,9 @@ app.get('/api/football/match-intelligence/:fixtureId', async (req, res) => {
       analysis: {
         overview: overviewText,
         form: formText,
-        h2h: h2hText
+        h2h: h2hText,
+        injuries: injuriesText,
+        predictions: predictionsText,
       },
       generatedAt: new Date().toISOString()
     });
@@ -2742,22 +2834,68 @@ async function autoGenerateDailyTips() {
         console.log('[Auto-Tips] No top-league fixtures — using all ' + fixtures.length + ' available fixtures');
       }
 
-      // Score all top-league fixtures
+      // Score all top-league fixtures — fetch enhanced data for top candidates
       var allScoredFixtures = [];
+
+      // First pass: basic scoring to identify top candidates
+      var basicScored = [];
       topFixtures.forEach(function(fixture) {
         try {
           var scored = scoringModel.scoreFixture(fixture, oddsNormalised);
           if (!scored) return;
-          allScoredFixtures.push({
-            type: 'football',
-            scored: scored,
-            edge: scored.edge,
-            confidence: scored.confidence,
-          });
+          basicScored.push({ fixture: fixture, scored: scored });
         } catch (err) {
           // Skip individual fixture errors
         }
       });
+
+      // Sort by edge to find the top candidates worth enhancing
+      basicScored.sort(function(a, b) { return b.scored.edge - a.scored.edge; });
+      var topCandidateCount = Math.min(basicScored.length, 15); // Enhance top 15 to stay within API budget
+
+      // Second pass: fetch enhanced data for top candidates and re-score
+      for (var fIdx = 0; fIdx < basicScored.length; fIdx++) {
+        var entry = basicScored[fIdx];
+        var fixture = entry.fixture;
+        var scored = entry.scored;
+
+        // Try enhanced scoring for top candidates
+        if (fIdx < topCandidateCount && fixture.id && fixture.homeTeamId && fixture.awayTeamId) {
+          try {
+            var enhancedResults = await Promise.allSettled([
+              footballSource.fetchInjuries(fixture.id),
+              footballSource.fetchPredictions(fixture.id),
+              footballSource.fetchTeamStats(fixture.homeTeamId, fixture.leagueId, '2025'),
+              footballSource.fetchTeamStats(fixture.awayTeamId, fixture.leagueId, '2025'),
+            ]);
+
+            var enhancedData = {
+              injuries: enhancedResults[0].status === 'fulfilled' ? (enhancedResults[0].value.response || []) : null,
+              predictions: enhancedResults[1].status === 'fulfilled' && enhancedResults[1].value.response && enhancedResults[1].value.response.length > 0 ? enhancedResults[1].value.response[0] : null,
+              homeStats: enhancedResults[2].status === 'fulfilled' ? enhancedResults[2].value : null,
+              awayStats: enhancedResults[3].status === 'fulfilled' ? enhancedResults[3].value : null,
+              oddsMovement: null,
+            };
+
+            // Check if we got any enhanced data at all
+            var hasEnhanced = enhancedData.injuries || enhancedData.predictions || enhancedData.homeStats || enhancedData.awayStats;
+            if (hasEnhanced) {
+              scored = scoringModel.scoreFixtureEnhanced(fixture, oddsNormalised, enhancedData);
+              if (!scored) scored = entry.scored; // fallback if enhanced scoring returns null
+            }
+          } catch (enhErr) {
+            console.log('[Auto-Tips] Enhanced data fetch failed for fixture ' + fixture.id + ': ' + enhErr.message + ' — using basic scoring');
+            // scored stays as basic result
+          }
+        }
+
+        allScoredFixtures.push({
+          type: 'football',
+          scored: scored,
+          edge: scored.edge,
+          confidence: scored.confidence,
+        });
+      }
 
       // Primary filter: edge > 4% AND confidence >= 6
       footballCandidates = allScoredFixtures.filter(function(c) {

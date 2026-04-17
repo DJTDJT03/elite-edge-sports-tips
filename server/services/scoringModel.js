@@ -594,6 +594,250 @@ class ScoringModel {
   }
 
   /**
+   * Score a football fixture with enhanced data from API-Football Pro endpoints.
+   * Falls back to scoreFixture() if enhancedData is null/undefined.
+   *
+   * @param {Object} fixture — Normalised fixture object
+   * @param {Object} oddsData — Odds from Odds API
+   * @param {Object} enhancedData — Optional enhanced data object
+   * @param {Array} enhancedData.injuries — Injured/suspended players from /injuries
+   * @param {Object} enhancedData.predictions — API-Football prediction from /predictions
+   * @param {Object} enhancedData.homeStats — Home team season stats from /teams/statistics
+   * @param {Object} enhancedData.awayStats — Away team season stats from /teams/statistics
+   * @param {Object} enhancedData.oddsMovement — Live odds data from /odds/live
+   * @returns {Object} Scored fixture with enhanced factors, or null
+   */
+  scoreFixtureEnhanced(fixture, oddsData, enhancedData) {
+    // Fall back to basic scoring if no enhanced data
+    if (!enhancedData) {
+      return this.scoreFixture(fixture, oddsData);
+    }
+
+    // Start with base scoring to get odds, market selection, etc.
+    var baseResult = this.scoreFixture(fixture, oddsData);
+    if (!baseResult) return null;
+
+    var injuries = enhancedData.injuries || null;
+    var predictions = enhancedData.predictions || null;
+    var homeStats = enhancedData.homeStats || null;
+    var awayStats = enhancedData.awayStats || null;
+    var oddsMovement = enhancedData.oddsMovement || null;
+
+    var factors = Object.assign({}, baseResult.factors);
+    var selectedMarket = baseResult.selectedMarket;
+    var selectedSelection = baseResult.selectedSelection;
+    var selectedOdds = baseResult.selectedOdds;
+    var homeName = (fixture.homeTeam || '').toLowerCase();
+
+    // Determine which side we're tipping
+    var tippingHome = selectedSelection && selectedSelection.toLowerCase().indexOf(homeName) !== -1;
+
+    // --- Enhanced Injuries Factor ---
+    if (injuries && Array.isArray(injuries) && injuries.length > 0) {
+      var homeInjuries = injuries.filter(function(inj) {
+        return inj.team && inj.team.id === fixture.homeTeamId;
+      });
+      var awayInjuries = injuries.filter(function(inj) {
+        return inj.team && inj.team.id === fixture.awayTeamId;
+      });
+
+      var homeKeyInjuries = homeInjuries.filter(function(inj) {
+        var pos = (inj.player && inj.player.type ? inj.player.type : '').toLowerCase();
+        var reason = (inj.player && inj.player.reason ? inj.player.reason : '').toLowerCase();
+        // Key players: goalkeepers, or any player marked as important
+        return pos === 'goalkeeper' || reason.indexOf('suspended') !== -1 ||
+               pos === 'attacker' || pos === 'forward';
+      });
+      var awayKeyInjuries = awayInjuries.filter(function(inj) {
+        var pos = (inj.player && inj.player.type ? inj.player.type : '').toLowerCase();
+        var reason = (inj.player && inj.player.reason ? inj.player.reason : '').toLowerCase();
+        return pos === 'goalkeeper' || reason.indexOf('suspended') !== -1 ||
+               pos === 'attacker' || pos === 'forward';
+      });
+
+      var injuryScore = 0.5; // neutral
+      if (tippingHome) {
+        // We're tipping home — home injuries hurt, away injuries help
+        if (homeInjuries.length >= 3 || homeKeyInjuries.length >= 2) injuryScore = 0.3;
+        else if (homeInjuries.length >= 2) injuryScore = 0.4;
+        if (awayKeyInjuries.length >= 2) injuryScore = Math.min(injuryScore + 0.3, 0.9);
+        else if (awayInjuries.length >= 3) injuryScore = Math.min(injuryScore + 0.2, 0.85);
+      } else {
+        // We're tipping away or goals market
+        if (awayInjuries.length >= 3 || awayKeyInjuries.length >= 2) injuryScore = 0.3;
+        else if (awayInjuries.length >= 2) injuryScore = 0.4;
+        if (homeKeyInjuries.length >= 2) injuryScore = Math.min(injuryScore + 0.3, 0.9);
+        else if (homeInjuries.length >= 3) injuryScore = Math.min(injuryScore + 0.2, 0.85);
+      }
+      // For goals markets, injuries to defenders can mean more goals
+      if (selectedMarket === 'Over 2.5 Goals' || selectedMarket === 'Both Teams to Score') {
+        var totalInjuries = homeInjuries.length + awayInjuries.length;
+        if (totalInjuries >= 4) injuryScore = Math.max(injuryScore, 0.7); // weakened defences = goals
+      }
+      factors.injuries = Math.round(injuryScore * 100) / 100;
+    }
+
+    // --- Enhanced xG/Predictions Factor ---
+    if (predictions && predictions.predictions) {
+      var pred = predictions.predictions;
+      var pctHome = pred.percent && pred.percent.home ? parseInt(pred.percent.home) : 0;
+      var pctDraw = pred.percent && pred.percent.draw ? parseInt(pred.percent.draw) : 0;
+      var pctAway = pred.percent && pred.percent.away ? parseInt(pred.percent.away) : 0;
+
+      var xgScore = 0.5;
+      var apiPredictedWinner = 'draw';
+      if (pctHome > pctAway && pctHome > pctDraw) apiPredictedWinner = 'home';
+      else if (pctAway > pctHome && pctAway > pctDraw) apiPredictedWinner = 'away';
+
+      var ourPick = 'neutral';
+      if (selectedSelection && selectedSelection.toLowerCase().indexOf(homeName) !== -1 &&
+          selectedMarket === 'Match Result') {
+        ourPick = 'home';
+      } else if (selectedSelection && selectedMarket === 'Match Result' &&
+                 selectedSelection.toLowerCase().indexOf(homeName) === -1) {
+        ourPick = 'away';
+      }
+
+      if (ourPick !== 'neutral') {
+        if (apiPredictedWinner === ourPick) {
+          // Agreement — boost confidence
+          var winPct = ourPick === 'home' ? pctHome : pctAway;
+          xgScore = winPct >= 60 ? 0.9 : winPct >= 50 ? 0.8 : 0.7;
+        } else {
+          // Disagreement — caution
+          xgScore = apiPredictedWinner === 'draw' ? 0.4 : 0.3;
+        }
+      } else {
+        // Goals market — use the overall prediction quality
+        if (pred.goals && pred.goals.home && pred.goals.away) {
+          var predTotalGoals = parseFloat(pred.goals.home) + parseFloat(pred.goals.away);
+          if (selectedMarket === 'Over 2.5 Goals') {
+            xgScore = predTotalGoals > 2.8 ? 0.85 : predTotalGoals > 2.3 ? 0.6 : 0.35;
+          } else if (selectedMarket === 'Both Teams to Score') {
+            xgScore = (parseFloat(pred.goals.home) > 0.8 && parseFloat(pred.goals.away) > 0.8) ? 0.8 : 0.45;
+          } else {
+            xgScore = 0.55;
+          }
+        }
+      }
+      factors.xG = Math.round(xgScore * 100) / 100;
+    }
+
+    // --- Enhanced Team Stats Factor (enhances form) ---
+    if (homeStats || awayStats) {
+      var formScore = factors.form; // start from base
+      var hStats = homeStats && homeStats.response ? homeStats.response : null;
+      var aStats = awayStats && awayStats.response ? awayStats.response : null;
+
+      // Extract goals_per_game, clean_sheet_percentage, btts from team stats
+      var hGoalsPerGame = 0, aGoalsPerGame = 0;
+      var hCleanSheetPct = 0, aCleanSheetPct = 0;
+      var hBttsPct = 50, aBttsPct = 50;
+
+      if (hStats && hStats.goals && hStats.goals.for && hStats.goals.for.average) {
+        hGoalsPerGame = parseFloat(hStats.goals.for.average.total) || 0;
+      }
+      if (aStats && aStats.goals && aStats.goals.for && aStats.goals.for.average) {
+        aGoalsPerGame = parseFloat(aStats.goals.for.average.total) || 0;
+      }
+      if (hStats && hStats.clean_sheet && hStats.fixtures && hStats.fixtures.played) {
+        var hPlayed = (hStats.fixtures.played.total || 1);
+        hCleanSheetPct = ((hStats.clean_sheet.total || 0) / hPlayed) * 100;
+      }
+      if (aStats && aStats.clean_sheet && aStats.fixtures && aStats.fixtures.played) {
+        var aPlayed = (aStats.fixtures.played.total || 1);
+        aCleanSheetPct = ((aStats.clean_sheet.total || 0) / aPlayed) * 100;
+      }
+      // BTTS: if both teams fail to keep clean sheets often, BTTS is likely
+      hBttsPct = 100 - hCleanSheetPct;
+      aBttsPct = 100 - aCleanSheetPct;
+
+      if (selectedMarket === 'Both Teams to Score') {
+        if (hBttsPct > 55 && aBttsPct > 55) formScore = 0.85;
+        else if (hBttsPct > 45 && aBttsPct > 45) formScore = 0.65;
+        else formScore = 0.4;
+      } else if (selectedMarket === 'Over 2.5 Goals') {
+        var combinedGoals = hGoalsPerGame + aGoalsPerGame;
+        if (combinedGoals > 2.8) formScore = 0.85;
+        else if (combinedGoals > 2.3) formScore = 0.65;
+        else formScore = 0.4;
+      } else if (selectedMarket === 'Match Result') {
+        // Use actual season stats for the tipped side
+        if (tippingHome && hStats && hStats.fixtures && hStats.fixtures.wins) {
+          var hWinPct = (hStats.fixtures.wins.total || 0) / (hStats.fixtures.played.total || 1);
+          formScore = Math.min(hWinPct + 0.15, 0.95); // home win% + small boost
+        } else if (!tippingHome && aStats && aStats.fixtures && aStats.fixtures.wins) {
+          var aWinPct = (aStats.fixtures.wins.total || 0) / (aStats.fixtures.played.total || 1);
+          formScore = Math.min(aWinPct + 0.1, 0.9);
+        }
+      }
+      factors.form = Math.round(formScore * 100) / 100;
+    }
+
+    // --- Enhanced Odds Movement Factor ---
+    if (oddsMovement && oddsMovement.response && oddsMovement.response.length > 0) {
+      var liveOddsData = oddsMovement.response[0];
+      var marketMovementScore = 0.5;
+
+      // Check if odds array has entries showing movement
+      if (liveOddsData.odds && Array.isArray(liveOddsData.odds) && liveOddsData.odds.length > 0) {
+        // Look for the main market odds
+        var mainOdds = liveOddsData.odds.find(function(o) {
+          return o.id === 1 || (o.name && o.name.toLowerCase().indexOf('winner') !== -1);
+        });
+        if (mainOdds && mainOdds.values && mainOdds.values.length > 0) {
+          // If live odds are shorter than pre-match, money is coming in (shortening)
+          // We compare with our base odds
+          var relevantValue = mainOdds.values.find(function(v) {
+            return v.value && (
+              (tippingHome && v.value.toLowerCase() === 'home') ||
+              (!tippingHome && v.value.toLowerCase() === 'away')
+            );
+          });
+          if (relevantValue && relevantValue.odd) {
+            var liveOdd = parseFloat(relevantValue.odd);
+            var preMatchOdd = selectedOdds;
+            if (liveOdd < preMatchOdd * 0.95) {
+              // Shortening — smart money coming in
+              marketMovementScore = 0.8;
+            } else if (liveOdd > preMatchOdd * 1.1) {
+              // Drifting — money going elsewhere
+              marketMovementScore = 0.3;
+            } else {
+              // Stable
+              marketMovementScore = 0.5;
+            }
+          }
+        }
+      }
+      factors.marketMovement = Math.round(marketMovementScore * 100) / 100;
+    }
+
+    // Re-score with enhanced factors
+    var enhancedScoreResult = this.scoreFootball(factors, selectedOdds);
+
+    return {
+      fixture: fixture,
+      factors: factors,
+      selectedMarket: selectedMarket,
+      selectedSelection: selectedSelection,
+      selectedOdds: selectedOdds,
+      bookmakerOdds: baseResult.bookmakerOdds,
+      homeOdds: baseResult.homeOdds,
+      drawOdds: baseResult.drawOdds,
+      awayOdds: baseResult.awayOdds,
+      enhanced: true,
+      enhancedDataUsed: {
+        injuries: !!(injuries && injuries.length > 0),
+        predictions: !!(predictions && predictions.predictions),
+        teamStats: !!(homeStats || awayStats),
+        oddsMovement: !!(oddsMovement && oddsMovement.response && oddsMovement.response.length > 0),
+      },
+      ...enhancedScoreResult,
+    };
+  }
+
+  /**
    * Generate analysis text for an auto-generated tip
    * @param {Object} scored — Scored selection from scoreRunner or scoreFixture
    * @param {string} sport — 'racing' or 'football'

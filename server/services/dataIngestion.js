@@ -144,6 +144,51 @@ class FootballFixturesSource extends DataSource {
     return this._apiGet('/injuries?fixture=' + fixtureId);
   }
 
+  async fetchPredictions(fixtureId) {
+    if (!this.config.apiKey) return { response: [] };
+    try {
+      var data = await this._apiGet('/predictions?fixture=' + fixtureId);
+      return data;
+    } catch (err) {
+      console.error('[football-fixtures] fetchPredictions Error: ' + err.message);
+      return { response: [] };
+    }
+  }
+
+  async fetchTeamStats(teamId, leagueId, season) {
+    if (!this.config.apiKey) return { response: [] };
+    try {
+      var s = season || '2025';
+      var data = await this._apiGet('/teams/statistics?team=' + teamId + '&league=' + leagueId + '&season=' + s);
+      return data;
+    } catch (err) {
+      console.error('[football-fixtures] fetchTeamStats Error: ' + err.message);
+      return { response: [] };
+    }
+  }
+
+  async fetchOddsLive(fixtureId) {
+    if (!this.config.apiKey) return { response: [] };
+    try {
+      var data = await this._apiGet('/odds/live?fixture=' + fixtureId);
+      return data;
+    } catch (err) {
+      console.error('[football-fixtures] fetchOddsLive Error: ' + err.message);
+      return { response: [] };
+    }
+  }
+
+  async fetchLineups(fixtureId) {
+    if (!this.config.apiKey) return { response: [] };
+    try {
+      var data = await this._apiGet('/fixtures/lineups?fixture=' + fixtureId);
+      return data;
+    } catch (err) {
+      console.error('[football-fixtures] fetchLineups Error: ' + err.message);
+      return { response: [] };
+    }
+  }
+
   async fetchH2H(team1Id, team2Id) {
     if (!this.config.apiKey) return { response: [] };
     return this._apiGet('/fixtures/headtohead?h2h=' + team1Id + '-' + team2Id + '&last=10');
