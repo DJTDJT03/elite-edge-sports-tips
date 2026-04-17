@@ -4837,7 +4837,7 @@ const App = {
 
           <h2>15. Contact</h2>
           <p>For questions about these Terms, contact us at: <a href="mailto:support@eliteedgesports.co.uk">support@eliteedgesports.co.uk</a></p>
-          <p>Elite Edge Sports Tips Ltd<br>Registered in England &amp; Wales</p>
+          <p>Elite Edge Sports Tips Ltd<br>Registered in England &amp; Wales. Company No. 17138566</p>
 
           <p style="margin-top:32px;"><a href="#/" class="text-gold">&larr; Back to Dashboard</a></p>
         </div>
