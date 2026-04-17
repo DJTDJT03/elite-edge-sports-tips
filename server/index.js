@@ -108,25 +108,23 @@ app.use('/api', require('./routes/support')(deps));
 app.use('/', require('./routes/public')(deps));
 
 // ---------------------------------------------------------------------------
-// Startup: ensure admin account credentials are current
-// (persistent volume may have stale password hash from earlier deploys)
+// Startup: sync bundled user data to persistent volume
+// Forces the persistent volume to use the latest bundled sample-users.json
+// This ensures profile resets and credential changes take effect on Railway.
 // ---------------------------------------------------------------------------
-(async function ensureAdminCredentials() {
+(function syncBundledUsers() {
   try {
-    const bcrypt = require('bcryptjs');
-    const adminEmail = 'darren@ecocleaningsystems.co.uk';
-    const adminPassword = 'Eliteedge2026';
-    const user = await db.getUserByEmail(adminEmail);
-    if (user) {
-      const valid = await bcrypt.compare(adminPassword, user.password || '');
-      if (!valid) {
-        const newHash = await bcrypt.hash(adminPassword, 10);
-        await db.updateUser(user.id, { password: newHash });
-        console.log('[Startup] Admin password hash refreshed for ' + adminEmail);
-      }
+    const fs = require('fs');
+    const path = require('path');
+    const fileStore = require('./dataFileStore');
+    const bundledPath = path.join(__dirname, 'data', 'sample-users.json');
+    const persistentPath = path.join(fileStore.dataDir, 'sample-users.json');
+    if (bundledPath !== persistentPath && fs.existsSync(bundledPath)) {
+      fs.copyFileSync(bundledPath, persistentPath);
+      console.log('[Startup] Synced bundled sample-users.json to persistent volume');
     }
   } catch (e) {
-    console.log('[Startup] Admin credential check skipped:', e.message);
+    console.log('[Startup] User sync skipped:', e.message);
   }
 })();
 
