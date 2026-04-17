@@ -647,23 +647,24 @@ module.exports = function(deps) {
       if (!aiReports) return res.json({ error: 'aiReports not in deps' });
       if (!aiReports.isAvailable()) return res.json({ error: 'AI not available — client is null', hasKey: !!process.env.ANTHROPIC_API_KEY, keyPrefix: process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_API_KEY.substring(0, 12) + '...' : 'NOT SET' });
 
-      var testResult = await aiReports.generateFootballPreview({
-        homeTeam: 'Arsenal',
-        awayTeam: 'Chelsea',
-        league: 'Premier League',
-        kickoff: '2026-04-19T15:00:00Z',
-        venue: 'Emirates Stadium',
-        homeForm: ['W', 'W', 'D', 'W', 'L'],
-        awayForm: ['L', 'D', 'W', 'W', 'W'],
-        homeGoals: 2.1,
-        awayGoals: 1.4,
-      });
-
-      if (testResult) {
-        res.json({ success: true, preview: testResult });
-      } else {
-        res.json({ success: false, error: 'generateFootballPreview returned null — check server logs for Claude API error' });
+      // Test Claude API directly
+      var Anthropic = require('@anthropic-ai/sdk').default;
+      var testClient = new Anthropic();
+      var models = ['claude-sonnet-4-5-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-haiku-20240307'];
+      var lastError = null;
+      for (var i = 0; i < models.length; i++) {
+        try {
+          var testResponse = await testClient.messages.create({
+            model: models[i],
+            max_tokens: 256,
+            messages: [{ role: 'user', content: 'Say "Hello from Elite Edge" in one sentence.' }],
+          });
+          return res.json({ success: true, model: models[i], response: testResponse.content[0].text });
+        } catch (modelErr) {
+          lastError = { model: models[i], status: modelErr.status, message: modelErr.message, type: modelErr.error ? modelErr.error.type : null, errorBody: modelErr.error || null };
+        }
       }
+      res.json({ success: false, error: 'All models failed', lastError: lastError });
     } catch (err) {
       res.json({ success: false, error: err.message, stack: err.stack ? err.stack.split('\n').slice(0, 5) : [] });
     }
