@@ -6,7 +6,7 @@
 module.exports = function startScheduler(deps) {
   const { db, racingSource, footballSource, oddsSource, racingOddsSource, betfairSource,
           weatherSource, movementTracker, scoringModel, emailService, dataIngestion,
-          oddsHelpers, helpers } = deps;
+          oddsHelpers, helpers, alertEngine } = deps;
 
   // -------------------------------------------------------------------------
   // In-memory state (session-scoped, resets on restart)
@@ -905,6 +905,19 @@ module.exports = function startScheduler(deps) {
     var freeCount = newTips.filter(function(t) { return !t.isPremium; }).length;
     var premCount = newTips.filter(function(t) { return t.isPremium; }).length;
     console.log('[Auto-Tips] Summary: ' + freeCount + ' free, ' + premCount + ' premium');
+
+    // --- Alert Engine: notify users with matching alert preferences ---
+    if (alertEngine) {
+      try {
+        var alertUsers = await db.getUsers();
+        for (var ati = 0; ati < newTips.length; ati++) {
+          await alertEngine.checkNewTip(newTips[ati], alertUsers, db, emailService);
+        }
+        console.log('[Auto-Tips] Alert engine processed ' + newTips.length + ' tip(s) for user alerts');
+      } catch (alertErr) {
+        console.error('[Auto-Tips] Alert engine error (non-fatal):', alertErr.message);
+      }
+    }
   }
 
   // =========================================================================
@@ -1261,6 +1274,48 @@ module.exports = function startScheduler(deps) {
             try {
               storeOddsSnapshot(odds);
               console.log('[Refresh] Stored odds snapshot (' + Object.keys(oddsHistory).length + ' events tracked)');
+
+              // Check for steamers and trigger alerts
+              if (alertEngine && Object.keys(oddsHistory).length > 0) {
+                try {
+                  var histKeys = Object.keys(oddsHistory);
+                  for (var hki = 0; hki < histKeys.length; hki++) {
+                    var hKey = histKeys[hki];
+                    var snapshots = oddsHistory[hKey];
+                    if (!snapshots || snapshots.length < 2) continue;
+                    var earliest = snapshots[0];
+                    var latest = snapshots[snapshots.length - 1];
+                    // Check each selection in the latest snapshot for steamer movement
+                    var latestBks = Object.keys(latest.odds);
+                    for (var lbi = 0; lbi < latestBks.length; lbi++) {
+                      var bkName = latestBks[lbi];
+                      var latestSelections = Object.keys(latest.odds[bkName] || {});
+                      for (var lsi = 0; lsi < latestSelections.length; lsi++) {
+                        var selName = latestSelections[lsi];
+                        var latestPrice = latest.odds[bkName][selName];
+                        var earlyBkOdds = (earliest.odds[bkName]) || {};
+                        var earlyPrice = earlyBkOdds[selName] || 0;
+                        if (earlyPrice > 0 && latestPrice > 0 && latestPrice < earlyPrice) {
+                          var steamerChange = ((earlyPrice - latestPrice) / earlyPrice) * 100;
+                          // Steamer threshold: 15%+ shortening
+                          if (steamerChange >= 15) {
+                            var steamerUsers = await db.getUsers();
+                            await alertEngine.checkSteamer({
+                              runner: selName,
+                              open: earlyPrice,
+                              current: latestPrice,
+                              changePercent: Math.round(steamerChange * 10) / 10,
+                            }, steamerUsers, db);
+                            console.log('[Refresh] Steamer detected: ' + selName + ' shortened ' + steamerChange.toFixed(1) + '%');
+                          }
+                        }
+                      }
+                    }
+                  }
+                } catch (steamerErr) {
+                  console.log('[Refresh] Steamer detection error (non-fatal):', steamerErr.message);
+                }
+              }
             } catch (snapErr) {
               console.log('[Refresh] Odds snapshot storage failed:', snapErr.message);
             }
@@ -1745,6 +1800,51 @@ module.exports = function startScheduler(deps) {
   });
   setInterval(runEmailSchedulers, 15 * 60 * 1000);
   setTimeout(runEmailSchedulers, 45000);
+
+  // =========================================================================
+  // PRE-RACE ALERT CHECK (every 1 minute)
+  // Checks if any tipped races start in the next 30-35 minutes
+  // =========================================================================
+  async function checkPreRaceAlerts() {
+    if (!alertEngine) return;
+    try {
+      var now = new Date();
+      var tips = await db.getTips({ status: 'active' });
+      if (!tips || tips.length === 0) return;
+
+      var matchingTips = [];
+      for (var i = 0; i < tips.length; i++) {
+        var tip = tips[i];
+        if (tip.sport !== 'racing' || !tip.raceTime || !tip.date) continue;
+
+        // Build race datetime from date + raceTime (e.g. "14:30")
+        var raceDateTime;
+        try {
+          raceDateTime = new Date(tip.date + 'T' + tip.raceTime + ':00');
+          // If raceTime doesn't parse well, try with Z
+          if (isNaN(raceDateTime.getTime())) continue;
+        } catch (e) { continue; }
+
+        var minsUntilRace = (raceDateTime.getTime() - now.getTime()) / 60000;
+        // Alert window: 30-35 minutes before race
+        if (minsUntilRace >= 25 && minsUntilRace <= 35) {
+          matchingTips.push(tip);
+        }
+      }
+
+      if (matchingTips.length > 0) {
+        var users = await db.getUsers();
+        await alertEngine.checkPreRace(matchingTips, users, db);
+        console.log('[PreRace] Sent pre-race alerts for ' + matchingTips.length + ' upcoming race(s)');
+      }
+    } catch (err) {
+      console.error('[PreRace] Alert check error:', err.message);
+    }
+  }
+
+  // Pre-race alerts: check every 1 minute
+  setInterval(safeRun('PreRaceAlerts', checkPreRaceAlerts), 60 * 1000);
+  setTimeout(safeRun('PreRaceAlerts', checkPreRaceAlerts), 90000);
 
   console.log('[Scheduler] All scheduled tasks registered');
 

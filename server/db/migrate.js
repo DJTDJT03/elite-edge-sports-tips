@@ -41,6 +41,7 @@ const tables = [
       flagged               BOOLEAN DEFAULT FALSE,
       trusted_devices       TEXT[] DEFAULT '{}',
       email_prefs           JSONB DEFAULT '{"dailyBulletin":true,"weeklySummary":true,"marketing":true,"bigWins":true}',
+      alert_prefs           JSONB DEFAULT '{}',
       agreement_timestamp   TIMESTAMPTZ,
       agreement_text        TEXT,
       login_history         JSONB DEFAULT '[]',

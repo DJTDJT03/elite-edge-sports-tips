@@ -1,7 +1,7 @@
 module.exports = function(deps) {
   const router = require('express').Router();
   const path = require('path');
-  const { db, racingSource, footballSource, oddsSource, racingOddsSource, movementTracker, dataIngestion } = deps;
+  const { db, racingSource, footballSource, oddsSource, racingOddsSource, movementTracker, dataIngestion, aiReports } = deps;
 
   // GET /api/status — API connection status overview
   router.get('/status', async (req, res) => {
@@ -36,6 +36,51 @@ module.exports = function(deps) {
       var reviews = await db.getBlogReviews() || [];
       res.json(reviews);
     } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /api/ai/daily-briefing — AI-generated morning briefing
+  router.get('/ai/daily-briefing', async (req, res) => {
+    try {
+      if (!aiReports || !aiReports.isAvailable()) {
+        return res.status(503).json({ error: 'AI reports not available. ANTHROPIC_API_KEY not configured.' });
+      }
+
+      var today = new Date().toISOString().split('T')[0];
+
+      // Gather today's tips
+      var allTips = [];
+      try {
+        allTips = await db.getTips() || [];
+      } catch (e) { /* fallback to empty */ }
+
+      var todayTips = allTips.filter(function(t) {
+        return t.status === 'active' && (!t.date || t.date === today);
+      });
+      var racingTips = todayTips.filter(function(t) { return t.sport === 'racing'; });
+      var footballTips = todayTips.filter(function(t) { return t.sport === 'football'; });
+      var napSelection = todayTips.find(function(t) { return t.isNap; });
+      var premiumTips = todayTips.filter(function(t) { return t.tier === 'premium'; });
+
+      var briefingData = {
+        date: today,
+        racingTips: racingTips.map(function(t) { return { selection: t.selection, meeting: t.meeting || t.event, odds: t.odds }; }),
+        footballTips: footballTips.map(function(t) { return { selection: t.selection, event: t.event, odds: t.odds }; }),
+        totalTips: todayTips.length,
+        premiumTips: premiumTips.length,
+        napSelection: napSelection ? { selection: napSelection.selection, meeting: napSelection.meeting || napSelection.event } : null,
+        keyRaces: [],
+      };
+
+      var result = await aiReports.generateDailySummary(briefingData);
+      if (!result) {
+        return res.status(500).json({ error: 'Failed to generate daily briefing. Please try again.' });
+      }
+
+      res.json({ date: today, aiBriefing: result, totalTips: todayTips.length, generatedAt: new Date().toISOString() });
+    } catch (err) {
+      console.error('[AI Daily Briefing] Error:', err.message);
+      res.status(500).json({ error: 'Failed to generate daily briefing: ' + err.message });
+    }
   });
 
   // SPA fallback — serve index.html for client-side routing

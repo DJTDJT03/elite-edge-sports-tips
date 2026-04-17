@@ -1,6 +1,6 @@
 module.exports = function(deps) {
   const router = require('express').Router();
-  const { racingSource, weatherSource, betfairSource, racingOddsSource, movementTracker, scoringModel, authenticate, db } = deps;
+  const { racingSource, weatherSource, betfairSource, racingOddsSource, movementTracker, scoringModel, authenticate, db, aiReports } = deps;
 
   // Helper for server-side fractional odds formatting
   function formatOddsFrac(dec) {
@@ -228,6 +228,101 @@ module.exports = function(deps) {
       res.json({ live: true, form });
     } catch (err) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // AI RACE PREVIEW — Claude-powered written race analysis
+  // ---------------------------------------------------------------------------
+  router.get('/racing/ai-preview/:raceId', async (req, res) => {
+    try {
+      if (!aiReports || !aiReports.isAvailable()) {
+        return res.status(503).json({ error: 'AI reports not available. ANTHROPIC_API_KEY not configured.' });
+      }
+      if (!racingSource || !process.env.RACING_API_KEY) {
+        return res.status(503).json({ error: 'Racing API not configured.' });
+      }
+
+      var raceId = req.params.raceId;
+
+      // Fetch today's race cards and intelligence data
+      var raw = await racingSource.fetch();
+      var races = racingSource.normalise(raw);
+      races = races.filter(function(r) { return r.region === 'GB'; });
+
+      // Find the race by raceId or time
+      var race = races.find(function(r) { return r.raceId === raceId || r.time === raceId; });
+      if (!race) {
+        return res.status(404).json({ error: 'Race not found.' });
+      }
+
+      var runners = race.runners || [];
+      if (runners.length === 0) {
+        return res.status(404).json({ error: 'No runners found for this race.' });
+      }
+
+      // Find favourite (shortest price)
+      var sortedByOdds = runners.filter(function(r) { return r.odds && parseFloat(r.odds) > 1; })
+        .sort(function(a, b) { return parseFloat(a.odds) - parseFloat(b.odds); });
+      var favourite = sortedByOdds[0] || runners[0];
+
+      // Get weather if available
+      var weatherData = null;
+      if (weatherSource && weatherSource.isConfigured()) {
+        try {
+          weatherData = await weatherSource.fetchForCourse(race.meeting);
+        } catch (wErr) { /* non-fatal */ }
+      }
+
+      // Build best odds for the selection
+      var bestOdds = null;
+      if (favourite.allOdds && favourite.allOdds.length) {
+        var bestDec = 0;
+        for (var i = 0; i < favourite.allOdds.length; i++) {
+          var dec = parseFloat(favourite.allOdds[i].decimal) || 0;
+          if (dec > bestDec) { bestDec = dec; bestOdds = favourite.allOdds[i]; }
+        }
+      }
+
+      var previewData = {
+        meeting: race.meeting,
+        raceTime: race.time,
+        raceName: race.raceName || race.raceClass || 'Race',
+        raceClass: race.raceClass || '',
+        distance: race.distance || '',
+        going: race.going || '',
+        runners: runners.length,
+        selection: {
+          name: favourite.horseName,
+          trainer: favourite.trainer,
+          jockey: favourite.jockey,
+          form: favourite.form,
+          officialRating: favourite.officialRating,
+          age: favourite.age,
+          weight: favourite.weight,
+          draw: favourite.draw,
+        },
+        odds: {
+          bestPrice: bestOdds ? (bestOdds.fractional || bestOdds.decimal) : (favourite.odds || 'N/A'),
+          bestBookmaker: bestOdds ? bestOdds.bookmaker : '',
+          averagePrice: favourite.odds || '',
+        },
+        weather: weatherData ? {
+          temp: weatherData.temp,
+          conditions: weatherData.description,
+          windSpeed: weatherData.windSpeed,
+        } : null,
+      };
+
+      var result = await aiReports.generateRacingPreview(previewData);
+      if (!result) {
+        return res.status(500).json({ error: 'Failed to generate AI preview. Please try again.' });
+      }
+
+      res.json({ raceId: raceId, meeting: race.meeting, time: race.time, aiPreview: result, generatedAt: new Date().toISOString() });
+    } catch (err) {
+      console.error('[AI Racing Preview] Error:', err.message);
+      res.status(500).json({ error: 'Failed to generate AI preview: ' + err.message });
     }
   });
 

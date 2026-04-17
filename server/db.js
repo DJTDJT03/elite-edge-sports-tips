@@ -97,11 +97,11 @@ async function createUser(data) {
   await query(
     `INSERT INTO users (id, email, password_hash, name, role, subscription, subscription_expiry,
      joined, bank, session_id, failed_attempts, lock_until, flagged, trusted_devices,
-     email_prefs, agreement_timestamp, agreement_text, login_history, reset_token, reset_token_expiry, expiry_warned)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+     email_prefs, alert_prefs, agreement_timestamp, agreement_text, login_history, reset_token, reset_token_expiry, expiry_warned)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
     [u.id, u.email, u.password_hash, u.name, u.role, u.subscription, u.subscription_expiry,
      u.joined, u.bank, u.session_id, u.failed_attempts, u.lock_until, u.flagged,
-     u.trusted_devices, u.email_prefs, u.agreement_timestamp, u.agreement_text,
+     u.trusted_devices, u.email_prefs, u.alert_prefs, u.agreement_timestamp, u.agreement_text,
      u.login_history, u.reset_token, u.reset_token_expiry, u.expiry_warned]
   );
   return data;
@@ -176,6 +176,7 @@ function dbUserToApp(row) {
     flagged: row.flagged || false,
     trustedDevices: row.trusted_devices || [],
     emailPrefs: row.email_prefs || { dailyBulletin: true, weeklySummary: true, marketing: true, bigWins: true },
+    alertPrefs: row.alert_prefs || { highConfidence: false, steamers: false, preRace: false, bigOdds: false, newTips: false },
     agreementTimestamp: row.agreement_timestamp,
     agreementText: row.agreement_text,
     loginHistory: row.login_history || [],
@@ -202,6 +203,7 @@ function appUserToDb(data) {
   if (data.flagged !== undefined) result.flagged = data.flagged;
   if (data.trustedDevices !== undefined) result.trusted_devices = Array.isArray(data.trustedDevices) ? data.trustedDevices : [];
   if (data.emailPrefs !== undefined) result.email_prefs = JSON.stringify(data.emailPrefs);
+  if (data.alertPrefs !== undefined) result.alert_prefs = JSON.stringify(data.alertPrefs);
   if (data.agreementTimestamp !== undefined) result.agreement_timestamp = data.agreementTimestamp;
   if (data.agreementText !== undefined) result.agreement_text = data.agreementText;
   if (data.loginHistory !== undefined) result.login_history = JSON.stringify(data.loginHistory);

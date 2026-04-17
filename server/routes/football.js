@@ -1,6 +1,6 @@
 module.exports = function(deps) {
   const router = require('express').Router();
-  const { footballSource, oddsSource, betfairSource, scoringModel, authenticate, db } = deps;
+  const { footballSource, oddsSource, betfairSource, scoringModel, authenticate, db, aiReports } = deps;
   const { storeOddsSnapshot, analyseOddsMovement } = deps.oddsHelpers;
 
   // ---------------------------------------------------------------------------
@@ -528,6 +528,116 @@ module.exports = function(deps) {
     } catch (err) {
       console.error('[match-intelligence] Error:', err.message);
       res.status(500).json({ error: 'Failed to generate match intelligence: ' + err.message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // AI MATCH PREVIEW — Claude-powered written analysis
+  // ---------------------------------------------------------------------------
+  router.get('/football/ai-preview/:fixtureId', async (req, res) => {
+    try {
+      if (!aiReports || !aiReports.isAvailable()) {
+        return res.status(503).json({ error: 'AI reports not available. ANTHROPIC_API_KEY not configured.' });
+      }
+      if (!footballSource || !process.env.API_FOOTBALL_KEY) {
+        return res.status(503).json({ error: 'API-Football not configured.' });
+      }
+
+      var fixtureId = req.params.fixtureId;
+
+      // Fetch fixture details (reuse match-intelligence logic)
+      var fixtureData = await footballSource._apiGet('/fixtures?id=' + fixtureId);
+      if (!fixtureData.response || !fixtureData.response.length) {
+        return res.status(404).json({ error: 'Fixture not found.' });
+      }
+      var fixture = fixtureData.response[0];
+      var homeTeam = fixture.teams.home;
+      var awayTeam = fixture.teams.away;
+      var league = fixture.league;
+      var venue = fixture.fixture.venue;
+      var kickoff = fixture.fixture.date;
+
+      // Fetch supporting data in parallel
+      var parallelResults = await Promise.allSettled([
+        footballSource._apiGet('/fixtures?team=' + homeTeam.id + '&last=5&status=FT'),
+        footballSource._apiGet('/fixtures?team=' + awayTeam.id + '&last=5&status=FT'),
+        footballSource._apiGet('/fixtures/headtohead?h2h=' + homeTeam.id + '-' + awayTeam.id + '&last=5'),
+        footballSource.fetchInjuries(parseInt(fixtureId)),
+      ]);
+
+      var homeFixtures = (parallelResults[0].status === 'fulfilled' ? parallelResults[0].value : { response: [] }).response || [];
+      var awayFixtures = (parallelResults[1].status === 'fulfilled' ? parallelResults[1].value : { response: [] }).response || [];
+      var h2hMatches = (parallelResults[2].status === 'fulfilled' ? parallelResults[2].value : { response: [] }).response || [];
+      var injuriesList = (parallelResults[3].status === 'fulfilled' ? parallelResults[3].value : { response: [] }).response || [];
+
+      // Build form arrays
+      function getFormArray(fixtures, teamId) {
+        return fixtures.slice(0, 5).map(function(f) {
+          var isHome = f.teams.home.id === teamId;
+          var gf = isHome ? (f.goals.home || 0) : (f.goals.away || 0);
+          var ga = isHome ? (f.goals.away || 0) : (f.goals.home || 0);
+          return gf > ga ? 'W' : gf < ga ? 'L' : 'D';
+        });
+      }
+
+      // Build goals stats
+      function avgGoals(fixtures, teamId) {
+        if (!fixtures.length) return 0;
+        var total = 0;
+        fixtures.forEach(function(f) {
+          var isHome = f.teams.home.id === teamId;
+          total += isHome ? (f.goals.home || 0) : (f.goals.away || 0);
+        });
+        return +(total / fixtures.length).toFixed(2);
+      }
+
+      // H2H record
+      var h2hHomeWins = 0, h2hAwayWins = 0, h2hDraws = 0;
+      var h2hLastMeetings = h2hMatches.slice(0, 5).map(function(f) {
+        var hg = f.goals.home || 0;
+        var ag = f.goals.away || 0;
+        var isHomeTeamHome = f.teams.home.id === homeTeam.id;
+        if (hg > ag) { if (isHomeTeamHome) h2hHomeWins++; else h2hAwayWins++; }
+        else if (ag > hg) { if (isHomeTeamHome) h2hAwayWins++; else h2hHomeWins++; }
+        else { h2hDraws++; }
+        return { home: f.teams.home.name, away: f.teams.away.name, homeGoals: hg, awayGoals: ag };
+      });
+
+      // Injuries
+      var homeInjuries = injuriesList.filter(function(inj) { return inj.team && inj.team.id === homeTeam.id; }).map(function(inj) { return inj.player ? inj.player.name : 'Unknown'; });
+      var awayInjuries = injuriesList.filter(function(inj) { return inj.team && inj.team.id === awayTeam.id; }).map(function(inj) { return inj.player ? inj.player.name : 'Unknown'; });
+
+      var previewData = {
+        homeTeam: homeTeam.name,
+        awayTeam: awayTeam.name,
+        league: league.name,
+        kickoff: kickoff,
+        venue: venue ? venue.name : '',
+        homeForm: getFormArray(homeFixtures, homeTeam.id),
+        awayForm: getFormArray(awayFixtures, awayTeam.id),
+        homeGoals: avgGoals(homeFixtures, homeTeam.id),
+        awayGoals: avgGoals(awayFixtures, awayTeam.id),
+        h2hRecord: {
+          homeWins: h2hHomeWins,
+          draws: h2hDraws,
+          awayWins: h2hAwayWins,
+          lastMeetings: h2hLastMeetings,
+        },
+        injuries: {
+          home: homeInjuries,
+          away: awayInjuries,
+        },
+      };
+
+      var result = await aiReports.generateFootballPreview(previewData);
+      if (!result) {
+        return res.status(500).json({ error: 'Failed to generate AI preview. Please try again.' });
+      }
+
+      res.json({ fixtureId: parseInt(fixtureId), aiPreview: result, generatedAt: new Date().toISOString() });
+    } catch (err) {
+      console.error('[AI Football Preview] Error:', err.message);
+      res.status(500).json({ error: 'Failed to generate AI preview: ' + err.message });
     }
   });
 

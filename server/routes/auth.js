@@ -274,8 +274,31 @@ module.exports = function(deps) {
     if (!user) return res.status(404).json({ error: 'User not found' });
     const updates = {};
     if (req.body.oddsFormat) updates.oddsFormat = req.body.oddsFormat;
+    if (req.body.alertPrefs !== undefined) updates.alertPrefs = req.body.alertPrefs;
     await db.updateUser(user.id, updates);
     res.json({ message: 'Preferences updated' });
+  });
+
+  // ---------------------------------------------------------------------------
+  // ALERT PREFERENCES
+  // ---------------------------------------------------------------------------
+  router.get('/alert-prefs', authenticate, async (req, res) => {
+    const user = await db.getUserById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const prefs = user.alertPrefs || { highConfidence: false, steamers: false, preRace: false, bigOdds: false, newTips: false };
+    res.json({ alertPrefs: prefs });
+  });
+
+  router.put('/alert-prefs', authenticate, async (req, res) => {
+    const user = await db.getUserById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const allowed = ['highConfidence', 'steamers', 'preRace', 'bigOdds', 'newTips'];
+    const alertPrefs = user.alertPrefs || { highConfidence: false, steamers: false, preRace: false, bigOdds: false, newTips: false };
+    for (var key of allowed) {
+      if (req.body[key] !== undefined) alertPrefs[key] = !!req.body[key];
+    }
+    await db.updateUser(user.id, { alertPrefs });
+    res.json({ message: 'Alert preferences updated', alertPrefs });
   });
 
   // ---------------------------------------------------------------------------

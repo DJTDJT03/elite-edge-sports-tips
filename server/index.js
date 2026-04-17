@@ -20,6 +20,8 @@ const db = require('./db');
 const scoringModel = require('./services/scoringModel');
 const emailService = require('./services/emailService');
 const dataIngestion = require('./services/dataIngestion');
+const aiReports = require('./services/aiReports');
+const alertEngine = require('./services/alertEngine');
 
 // Utilities
 const helpers = require('./utils/helpers');
@@ -92,6 +94,8 @@ const deps = {
   weatherSource,
   racingOddsSource,
   movementTracker,
+  aiReports,
+  alertEngine,
 };
 
 // ---------------------------------------------------------------------------
