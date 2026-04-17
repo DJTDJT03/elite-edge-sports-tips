@@ -3830,10 +3830,14 @@ const App = {
                     '<div style="display:grid;gap:4px;margin-top:4px;">' +
                     byLeague[lg].map(function(f) {
                       var ko = f.kickoff ? new Date(f.kickoff).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '';
-                      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg-elevated);border-radius:4px;font-size:13px;">' +
+                      var clickAttr = f.id ? ' onclick="App.openMatchIntelligence(' + f.id + ', this)" style="cursor:pointer;" title="Click for full match analysis"' : '';
+                      return '<div class="fixture-card-clickable"' + clickAttr + ' style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-elevated);border-radius:6px;font-size:13px;cursor:pointer;transition:all 0.15s;border:1px solid transparent;"' +
+                        ' onmouseover="this.style.borderColor=\'var(--gold)\';this.style.background=\'rgba(212,168,67,0.08)\'"' +
+                        ' onmouseout="this.style.borderColor=\'transparent\';this.style.background=\'var(--bg-elevated)\'">' +
                         '<span class="text-muted" style="min-width:40px;">' + ko + '</span>' +
                         '<span style="flex:1;font-weight:500;">' + (f.homeTeam || '') + ' vs ' + (f.awayTeam || '') + '</span>' +
-                        '<span class="text-muted text-xs">' + (f.venue || '') + '</span>' +
+                        '<span class="text-muted text-xs" style="margin-right:4px;">' + (f.venue || '') + '</span>' +
+                        '<span style="color:var(--gold);font-size:11px;">Analysis &#8250;</span>' +
                       '</div>';
                     }).join('') +
                     '</div></div>';
