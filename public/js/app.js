@@ -250,17 +250,42 @@ const App = {
     } catch (e) { return { live: false, races: [] }; }
   },
 
-  async fetchLiveFootball(forceRefresh) {
+  async fetchLiveFootball(forceRefresh, date) {
+    var cacheKey = 'football' + (date ? '_' + date : '');
     if (!forceRefresh) {
-      var cached = this._getCached('football', 600000); // 10 min
+      var cached = this._getCached(cacheKey, 600000); // 10 min
       if (cached) return cached;
     }
     try {
-      var data = await this.api('/football/live-fixtures');
-      if (data) this._setCache('football', data);
+      var url = '/football/live-fixtures' + (date ? '?date=' + date : '');
+      var data = await this.api(url);
+      if (data) this._setCache(cacheKey, data);
       return data;
     } catch (e) { return { live: false, fixtures: [] }; }
   },
+
+  // Fetch weekend fixtures (Sat + Sun) — used on Fridays for weekend preview
+  async fetchWeekendFootball() {
+    var d = new Date();
+    var day = d.getDay(); // 0=Sun, 5=Fri, 6=Sat
+    // Calculate next Saturday and Sunday
+    var sat = new Date(d); sat.setDate(d.getDate() + (6 - day));
+    var sun = new Date(d); sun.setDate(d.getDate() + (7 - day));
+    var satStr = sat.toISOString().split('T')[0];
+    var sunStr = sun.toISOString().split('T')[0];
+    try {
+      var results = await Promise.all([
+        this.fetchLiveFootball(false, satStr),
+        this.fetchLiveFootball(false, sunStr)
+      ]);
+      var allFixtures = [];
+      if (results[0] && results[0].fixtures) allFixtures = allFixtures.concat(results[0].fixtures);
+      if (results[1] && results[1].fixtures) allFixtures = allFixtures.concat(results[1].fixtures);
+      return { live: true, fixtures: allFixtures, fetchedAt: new Date().toISOString(), isWeekend: true };
+    } catch (e) { return { live: false, fixtures: [], isWeekend: true }; }
+  },
+
+  _isFriday() { return new Date().getDay() === 5; },
 
   async fetchLiveOdds(forceRefresh) {
     if (!forceRefresh) {
@@ -3644,13 +3669,23 @@ const App = {
     app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading football tips...</div></div>';
 
     var liveData = null;
+    var weekendFixtures = null;
+    var isFriday = this._isFriday();
+    // On Friday, default to weekend tab so punters can plan weekend bets
+    if (!this._footballDateTab && isFriday) this._footballDateTab = 'weekend';
     try {
-      var results = await Promise.all([
+      var fetches = [
         this.api('/tips?sport=football'),
         this.fetchLiveFootball()
-      ]);
+      ];
+      // On Fri/Sat/Sun, also fetch weekend fixtures
+      if (isFriday || new Date().getDay() === 6 || new Date().getDay() === 0) {
+        fetches.push(this.fetchWeekendFootball());
+      }
+      var results = await Promise.all(fetches);
       this.tips = results[0];
       liveData = results[1];
+      weekendFixtures = results[2] || null;
     } catch { try { this.tips = await this.api('/tips?sport=football'); } catch {} }
 
     var todayDate = this._getToday();
@@ -3763,6 +3798,50 @@ const App = {
             <option value="The Edge">The Edge</option>
           </select>
         </div>
+
+        <!-- Weekend Fixtures Preview (shown on Fri/Sat/Sun when weekend tab selected) -->
+        ${dateTab === 'weekend' && weekendFixtures && weekendFixtures.fixtures && weekendFixtures.fixtures.length > 0 ? (() => {
+          var wkFixtures = weekendFixtures.fixtures;
+          var wkByDate = {};
+          wkFixtures.forEach(function(f) {
+            var fDate = f.kickoff ? f.kickoff.split('T')[0] : 'Unknown';
+            if (!wkByDate[fDate]) wkByDate[fDate] = [];
+            wkByDate[fDate].push(f);
+          });
+          var dayNames = { 0: 'Sunday', 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
+          return '<div class="card mb-24" style="border-left:3px solid var(--gold);">' +
+            '<h3 class="mb-4" style="color:var(--gold);">&#128197; Weekend Fixtures Preview</h3>' +
+            '<p class="text-muted text-sm mb-16">All confirmed fixtures for this weekend. Get your bets on early for the best prices.</p>' +
+            Object.keys(wkByDate).sort().map(function(dateKey) {
+              var dayDate = new Date(dateKey + 'T12:00:00');
+              var dayLabel = dayNames[dayDate.getDay()] || dateKey;
+              var dayFixtures = wkByDate[dateKey];
+              // Group by league
+              var byLeague = {};
+              dayFixtures.forEach(function(f) {
+                var lg = f.league || 'Other';
+                if (!byLeague[lg]) byLeague[lg] = [];
+                byLeague[lg].push(f);
+              });
+              return '<div class="mb-16">' +
+                '<h4 style="color:var(--text-primary);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px;">' + dayLabel + ' ' + dateKey.split('-').reverse().join('/') + ' — ' + dayFixtures.length + ' fixtures</h4>' +
+                Object.keys(byLeague).map(function(lg) {
+                  return '<div class="mb-8"><span class="text-gold text-xs" style="font-weight:600;letter-spacing:0.5px;">' + lg + '</span>' +
+                    '<div style="display:grid;gap:4px;margin-top:4px;">' +
+                    byLeague[lg].map(function(f) {
+                      var ko = f.kickoff ? new Date(f.kickoff).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '';
+                      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg-elevated);border-radius:4px;font-size:13px;">' +
+                        '<span class="text-muted" style="min-width:40px;">' + ko + '</span>' +
+                        '<span style="flex:1;font-weight:500;">' + (f.homeTeam || '') + ' vs ' + (f.awayTeam || '') + '</span>' +
+                        '<span class="text-muted text-xs">' + (f.venue || '') + '</span>' +
+                      '</div>';
+                    }).join('') +
+                    '</div></div>';
+                }).join('') +
+              '</div>';
+            }).join('') +
+          '</div>';
+        })() : ''}
 
         <!-- League Badges -->
         <div class="card mb-24">
