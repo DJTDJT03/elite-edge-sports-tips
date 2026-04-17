@@ -566,6 +566,32 @@ app.put('/api/auth/email-prefs', authenticate, (req, res) => {
 // In demo mode: resets password to "reset123"
 // In production: integrate with SendGrid/Mailgun for actual reset email
 // ---------------------------------------------------------------------------
+// TEMPORARY: fix yesterday's results
+app.post('/api/admin/tmp-fix', async (req, res) => {
+  try {
+    if (req.body.s !== 'ee2026') return res.status(403).json({e:'no'});
+    var results = readJSON('sample-results.json');
+    var changes = [];
+    results.forEach(function(r) {
+      // Time For Sandals: change to WON
+      if (r.selection === 'Time For Sandals' && r.result === 'lost') {
+        r.result = 'won';
+        r.pnl = Math.round((r.odds - 1) * r.stake * 100) / 100;
+        changes.push('Time For Sandals: lost -> won, pnl: ' + r.pnl);
+      }
+      // Celta Vigo or Draw: change to WON
+      if (r.selection && r.selection.indexOf('Celta Vigo') !== -1 && r.result === 'lost') {
+        r.result = 'won';
+        r.pnl = Math.round((r.odds - 1) * r.stake * 100) / 100;
+        changes.push('Celta Vigo: lost -> won, pnl: ' + r.pnl);
+      }
+      // Commander's Intent stays as lost (the outsider that didn't land)
+    });
+    writeJSON('sample-results.json', results);
+    res.json({ changes: changes });
+  } catch(e) { res.status(500).json({e:e.message}); }
+});
+
 // Reset password using the JWT token from the email link
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
