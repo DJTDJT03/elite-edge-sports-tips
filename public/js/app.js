@@ -4820,11 +4820,24 @@ const App = {
           </ul>
           <p><strong>You expressly acknowledge and agree that your use of this Service and any gambling activity is at your sole risk.</strong> Our total liability to you for all claims arising from the Service shall not exceed the amount you have paid to us in subscription fees in the 12 months preceding the claim.</p>
 
-          <h2>10. Governing Law</h2>
+          <h2>10. Third-Party Bookmakers &amp; Affiliate Links</h2>
+          <p>Elite Edge Sports Tips is <strong>not affiliated with, endorsed by, or in any partnership with</strong> any bookmaker, betting exchange, or licensed gambling operator unless explicitly stated. Any references to bookmaker odds, prices, or promotions are provided for informational and comparison purposes only. If we display affiliate links, we may receive a commission from the bookmaker at no additional cost to you. This does not influence our analysis or selections. You are under no obligation to use any particular bookmaker.</p>
+
+          <h2>11. Age Verification &amp; Self-Exclusion</h2>
+          <p>This Service is strictly for persons aged 18 years or over. By using this Service, you confirm that you are at least 18 years old. We support responsible gambling and encourage anyone who may have a gambling problem to register with <a href="https://www.gamstop.co.uk" target="_blank" style="color:#d4a843;">GamStop</a> for self-exclusion from all UK-licensed online gambling operators. If you are registered with GamStop or any self-exclusion scheme, the analysis content on this platform may not be suitable for you and we advise you to discontinue use.</p>
+
+          <h2>12. Severability</h2>
+          <p>If any provision of these Terms is found to be invalid or unenforceable by a court of competent jurisdiction, the remaining provisions shall continue in full force and effect.</p>
+
+          <h2>13. Entire Agreement</h2>
+          <p>These Terms, together with our Privacy Policy, Disclaimer, and Responsible Gambling Policy, constitute the entire agreement between you and Elite Edge Sports Tips Ltd regarding your use of the Service.</p>
+
+          <h2>14. Governing Law</h2>
           <p>These Terms and Conditions are governed by and construed in accordance with the laws of England and Wales. Any disputes arising from these Terms shall be subject to the exclusive jurisdiction of the courts of England and Wales.</p>
 
-          <h2>11. Contact</h2>
+          <h2>15. Contact</h2>
           <p>For questions about these Terms, contact us at: <a href="mailto:support@eliteedgesports.co.uk">support@eliteedgesports.co.uk</a></p>
+          <p>Elite Edge Sports Tips Ltd<br>Registered in England &amp; Wales</p>
 
           <p style="margin-top:32px;"><a href="#/" class="text-gold">&larr; Back to Dashboard</a></p>
         </div>
@@ -4862,7 +4875,16 @@ const App = {
             <li><strong>Cookie data:</strong> See Section 7 below</li>
           </ul>
 
-          <h2>3. How We Use Your Data</h2>
+          <h2>3. Legal Basis for Processing (UK GDPR)</h2>
+          <p>We process your personal data on the following legal bases:</p>
+          <ul>
+            <li><strong>Contract:</strong> Processing necessary to perform our contract with you (providing the Service, managing your subscription)</li>
+            <li><strong>Consent:</strong> Where you have given consent (marketing emails, analytics cookies). You may withdraw consent at any time.</li>
+            <li><strong>Legitimate interests:</strong> Processing necessary for our legitimate interests (improving the Service, fraud prevention, platform security) where these are not overridden by your rights</li>
+            <li><strong>Legal obligation:</strong> Processing necessary to comply with UK law (tax records, fraud prevention)</li>
+          </ul>
+
+          <h2>4. How We Use Your Data</h2>
           <ul>
             <li><strong>Service delivery:</strong> To provide you with access to tips, analysis, and platform features</li>
             <li><strong>Communication:</strong> To send email bulletins, service updates, and respond to support queries</li>
@@ -4870,7 +4892,7 @@ const App = {
             <li><strong>Legal compliance:</strong> To comply with applicable laws, regulations, and legal processes</li>
           </ul>
 
-          <h2>4. Third Parties</h2>
+          <h2>5. Third Parties</h2>
           <p>We may share your data with the following categories of third parties:</p>
           <ul>
             <li><strong>Payment processor:</strong> To process subscription payments securely (e.g., Stripe)</li>
@@ -4880,7 +4902,7 @@ const App = {
           </ul>
           <p>We do not sell your personal data to third parties.</p>
 
-          <h2>5. Data Retention</h2>
+          <h2>6. Data Retention</h2>
           <ul>
             <li>Account data is retained for the duration of your account plus 12 months after deletion.</li>
             <li>Support ticket data is retained for 24 months.</li>
@@ -4888,7 +4910,7 @@ const App = {
             <li>Payment records are retained for 7 years as required by UK tax law.</li>
           </ul>
 
-          <h2>6. Your Rights</h2>
+          <h2>7. Your Rights (UK GDPR)</h2>
           <p>Under UK GDPR, you have the following rights:</p>
           <ul>
             <li><strong>Right of access:</strong> Request a copy of your personal data</li>
@@ -4900,7 +4922,7 @@ const App = {
           </ul>
           <p>To exercise any of these rights, contact us at: <a href="mailto:privacy@eliteedgesports.co.uk">privacy@eliteedgesports.co.uk</a></p>
 
-          <h2>7. Cookies</h2>
+          <h2>8. Cookies</h2>
           <p>We use the following types of cookies:</p>
           <ul>
             <li><strong>Essential cookies:</strong> Required for the platform to function (authentication, preferences)</li>
@@ -4909,13 +4931,13 @@ const App = {
           </ul>
           <p>You can manage cookie preferences through your browser settings. Disabling essential cookies may affect platform functionality.</p>
 
-          <h2>8. Data Security</h2>
+          <h2>9. Data Security</h2>
           <p>We implement appropriate technical and organisational measures to protect your data, including encryption of passwords, secure HTTPS connections, and regular security reviews. However, no method of electronic transmission or storage is 100% secure.</p>
 
-          <h2>9. Changes to This Policy</h2>
+          <h2>10. Changes to This Policy</h2>
           <p>We may update this Privacy Policy from time to time. Changes will be posted on this page with an updated date. We will notify registered users of significant changes by email.</p>
 
-          <h2>10. Contact &amp; Complaints</h2>
+          <h2>11. Contact &amp; Complaints</h2>
           <p>For data protection queries: <a href="mailto:privacy@eliteedgesports.co.uk">privacy@eliteedgesports.co.uk</a></p>
           <p>If you are not satisfied with our response, you have the right to lodge a complaint with the Information Commissioner's Office (ICO): <a href="https://ico.org.uk" target="_blank" rel="noopener">ico.org.uk</a></p>
 
