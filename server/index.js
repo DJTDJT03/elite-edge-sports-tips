@@ -108,23 +108,24 @@ app.use('/api', require('./routes/support')(deps));
 app.use('/', require('./routes/public')(deps));
 
 // ---------------------------------------------------------------------------
-// Startup: sync bundled user data to persistent volume
-// Forces the persistent volume to use the latest bundled sample-users.json
-// This ensures profile resets and credential changes take effect on Railway.
+// Startup: ensure admin account is promoted
 // ---------------------------------------------------------------------------
-(function syncBundledUsers() {
+(async function ensureAdmin() {
   try {
-    const fs = require('fs');
-    const path = require('path');
-    const fileStore = require('./dataFileStore');
-    const bundledPath = path.join(__dirname, 'data', 'sample-users.json');
-    const persistentPath = path.join(fileStore.dataDir, 'sample-users.json');
-    if (bundledPath !== persistentPath && fs.existsSync(bundledPath)) {
-      fs.copyFileSync(bundledPath, persistentPath);
-      console.log('[Startup] Synced bundled sample-users.json to persistent volume');
+    var adminEmail = 'darren@ecocleaningsystems.co.uk';
+    var user = await db.getUserByEmail(adminEmail);
+    if (user && (user.role !== 'admin' || user.subscription !== 'premium')) {
+      await db.updateUser(user.id, {
+        role: 'admin',
+        subscription: 'premium',
+        subscriptionExpiry: '2027-12-31',
+      });
+      console.log('[Startup] Promoted ' + adminEmail + ' to admin + premium');
+    } else if (user) {
+      console.log('[Startup] ' + adminEmail + ' already admin + premium');
     }
   } catch (e) {
-    console.log('[Startup] User sync skipped:', e.message);
+    console.log('[Startup] Admin promotion skipped:', e.message);
   }
 })();
 
