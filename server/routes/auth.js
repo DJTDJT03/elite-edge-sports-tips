@@ -38,8 +38,11 @@ module.exports = function(deps) {
         password: hashed,
         name,
         role: 'free',
-        subscription: 'free',
-        subscriptionExpiry: null,
+        subscription: 'premium',
+        subscriptionExpiry: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        trialActive: true,
+        trialStart: new Date().toISOString(),
+        trialEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         joined: new Date().toISOString().split('T')[0],
         bank: 100,
         agreementTimestamp: agreementTimestamp || now,
@@ -78,7 +81,7 @@ module.exports = function(deps) {
         console.error('[Email] Admin notification failed:', err.message);
       });
 
-      res.json({ token, tokenExpiry, user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, joined: user.joined } });
+      res.json({ token, tokenExpiry, user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, joined: user.joined, trialActive: user.trialActive, trialEnd: user.trialEnd } });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -191,7 +194,7 @@ module.exports = function(deps) {
       res.json({
         token,
         tokenExpiry,
-        user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, joined: user.joined, subscriptionExpiry: user.subscriptionExpiry },
+        user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, joined: user.joined, subscriptionExpiry: user.subscriptionExpiry, trialActive: user.trialActive, trialEnd: user.trialEnd },
         isNewDevice
       });
     } catch (err) {
@@ -212,6 +215,8 @@ module.exports = function(deps) {
         joined: user.joined,
         lastLogin: user.lastLogin,
         loginHistory: (user.loginHistory || []).slice(0, 5),
+        trialActive: user.trialActive,
+        trialEnd: user.trialEnd,
       }
     });
   });

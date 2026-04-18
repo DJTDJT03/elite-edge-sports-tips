@@ -97,12 +97,14 @@ async function createUser(data) {
   await query(
     `INSERT INTO users (id, email, password_hash, name, role, subscription, subscription_expiry,
      joined, bank, session_id, failed_attempts, lock_until, flagged, trusted_devices,
-     email_prefs, alert_prefs, agreement_timestamp, agreement_text, login_history, reset_token, reset_token_expiry, expiry_warned)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
+     email_prefs, alert_prefs, agreement_timestamp, agreement_text, login_history, reset_token, reset_token_expiry, expiry_warned,
+     trial_active, trial_start, trial_end, trial_warned)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)`,
     [u.id, u.email, u.password_hash, u.name, u.role, u.subscription, u.subscription_expiry,
      u.joined, u.bank, u.session_id, u.failed_attempts, u.lock_until, u.flagged,
      u.trusted_devices, u.email_prefs, u.alert_prefs, u.agreement_timestamp, u.agreement_text,
-     u.login_history, u.reset_token, u.reset_token_expiry, u.expiry_warned]
+     u.login_history, u.reset_token, u.reset_token_expiry, u.expiry_warned,
+     u.trial_active, u.trial_start, u.trial_end, u.trial_warned]
   );
   return data;
 }
@@ -183,6 +185,10 @@ function dbUserToApp(row) {
     resetToken: row.reset_token,
     resetTokenExpiry: row.reset_token_expiry,
     expiryWarned: row.expiry_warned,
+    trialActive: row.trial_active || false,
+    trialStart: row.trial_start,
+    trialEnd: row.trial_end,
+    trialWarned: row.trial_warned || false,
   };
 }
 
@@ -210,6 +216,10 @@ function appUserToDb(data) {
   if (data.resetToken !== undefined) result.reset_token = data.resetToken;
   if (data.resetTokenExpiry !== undefined) result.reset_token_expiry = data.resetTokenExpiry;
   if (data.expiryWarned !== undefined) result.expiry_warned = data.expiryWarned;
+  if (data.trialActive !== undefined) result.trial_active = data.trialActive;
+  if (data.trialStart !== undefined) result.trial_start = data.trialStart;
+  if (data.trialEnd !== undefined) result.trial_end = data.trialEnd;
+  if (data.trialWarned !== undefined) result.trial_warned = data.trialWarned;
   return result;
 }
 

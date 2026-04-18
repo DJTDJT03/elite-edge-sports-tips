@@ -48,6 +48,10 @@ const tables = [
       reset_token           TEXT,
       reset_token_expiry    TIMESTAMPTZ,
       expiry_warned         TEXT,
+      trial_active          BOOLEAN DEFAULT FALSE,
+      trial_start           TIMESTAMPTZ,
+      trial_end             TIMESTAMPTZ,
+      trial_warned          BOOLEAN DEFAULT FALSE,
       created_at            TIMESTAMPTZ DEFAULT NOW(),
       updated_at            TIMESTAMPTZ DEFAULT NOW()
     )`,

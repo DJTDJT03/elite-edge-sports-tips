@@ -369,7 +369,7 @@ const App = {
       const data = await res.json();
       if (!res.ok) {
         // Handle session expired (login from another device)
-        if (res.status === 401 && data.code === 'session_expired') {
+        if (res.status === 401 && (data.code === 'session_expired' || (data.error && data.error.includes('another device')))) {
           this.handleSessionExpired();
           throw new Error(data.error);
         }
@@ -406,9 +406,29 @@ const App = {
     localStorage.removeItem('ee_token_expiry');
     this.updateAuthUI();
     window.location.hash = '#/';
-    // Show session expired message
+    // Show session expired modal
     setTimeout(() => {
-      App.showToast('Your session has ended because your account was logged in on another device. Only one active session is allowed per account.', 'error');
+      const overlay = document.getElementById('modal-overlay');
+      overlay.style.display = 'block';
+      // Create a temporary modal for session expired
+      let sessionModal = document.getElementById('modal-session-expired');
+      if (!sessionModal) {
+        sessionModal = document.createElement('div');
+        sessionModal.id = 'modal-session-expired';
+        sessionModal.className = 'modal';
+        document.body.appendChild(sessionModal);
+      }
+      sessionModal.style.display = 'block';
+      sessionModal.innerHTML = `
+        <button class="modal-close" onclick="App.closeModal()">&times;</button>
+        <div style="text-align:center;padding:20px 0;">
+          <div style="font-size:48px;margin-bottom:16px;">&#128274;</div>
+          <h2 style="margin-bottom:12px;color:var(--gold);">Session Ended</h2>
+          <p style="font-size:14px;color:var(--text-secondary);margin-bottom:20px;line-height:1.6;">Your session has ended because your account was accessed from another device.<br><br>Each subscription allows one active session only.<br><br>If this wasn't you, please change your password immediately.</p>
+          <button class="btn btn-gold btn-full" onclick="App.closeModal();App.showModal('login');" style="margin-bottom:12px;">Log In Again</button>
+          <a href="#" onclick="App.closeModal();App.showModal('forgotpassword');return false;" style="font-size:13px;color:var(--gold);text-decoration:underline;">Change Password</a>
+        </div>
+      `;
     }, 100);
   },
 
@@ -636,11 +656,21 @@ const App = {
       if (badgeMobile) { badgeMobile.textContent = this.user.name; badgeMobile.style.cursor = 'pointer'; badgeMobile.onclick = () => { window.location.hash = '#/account'; }; }
       adminLink.style.display = this.user.role === 'admin' ? 'inline-block' : 'none';
       if (myBetsLink) myBetsLink.style.display = 'inline-block';
-      if (this.user.subscription === 'free') {
+      if (this.user.trialActive && this.user.trialEnd) {
+        const trialDaysLeft = Math.max(0, Math.ceil((new Date(this.user.trialEnd).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
         subBar.style.display = 'block';
+        subBar.style.background = 'linear-gradient(135deg, rgba(212,168,67,0.15), rgba(212,168,67,0.05))';
+        subBar.style.borderBottom = '2px solid var(--gold)';
+        subBar.innerHTML = '<strong style="color:var(--gold);">FREE TRIAL</strong> — ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' remaining. <a href="#/pricing" style="color:var(--gold);font-weight:700;text-decoration:underline;">Upgrade to Premium &rarr;</a>';
+      } else if (this.user.subscription === 'free') {
+        subBar.style.display = 'block';
+        subBar.style.background = '';
+        subBar.style.borderBottom = '';
         subBar.innerHTML = '<strong>Free</strong> member — You have access to daily NAP, race cards, results, and weekly blog. <a href="#/pricing">View Premium features</a>';
       } else if (this.user.subscription === 'premium') {
         subBar.style.display = 'block';
+        subBar.style.background = '';
+        subBar.style.borderBottom = '';
         subBar.innerHTML = '<strong>Premium</strong> member — Full access enabled. Thank you for your subscription.';
       } else {
         subBar.style.display = 'none';
@@ -4888,6 +4918,8 @@ const App = {
     const app = document.getElementById('app');
     const isLoggedIn = !!this.user;
     const isPremium = this.user && this.user.subscription === 'premium';
+    const isOnTrial = this.user && this.user.trialActive && this.user.trialEnd;
+    const trialDaysLeft = isOnTrial ? Math.max(0, Math.ceil((new Date(this.user.trialEnd).getTime() - Date.now()) / (24 * 60 * 60 * 1000))) : 0;
     app.innerHTML = `
       <div class="container">
         <div class="page-header text-center">
@@ -4895,6 +4927,7 @@ const App = {
           <p>Sign up free in 30 seconds. No bank details required. Upgrade when you're ready.</p>
         </div>
 
+        ${isOnTrial ? '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.15),rgba(212,168,67,0.05));border:2px solid var(--gold);border-radius:14px;padding:24px;margin-bottom:32px;text-align:center;"><div style="font-size:28px;margin-bottom:8px;">&#9201;</div><div style="font-size:20px;font-weight:800;color:var(--gold);margin-bottom:8px;">You\'re on your free trial — ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' left</div><div style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">Subscribe now to continue enjoying full premium access after your trial ends.</div></div>' : ''}
         ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(34,197,94,0.03));border:2px solid rgba(34,197,94,0.3);border-radius:14px;padding:24px;margin-bottom:32px;text-align:center;"><div style="font-size:28px;margin-bottom:8px;">&#127881;</div><div style="font-size:20px;font-weight:800;color:#22c55e;margin-bottom:8px;">Start Free — No Bank Details Needed</div><div style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">Create your free account to access daily tips, race cards, results, and our weekly blog. Upgrade to Premium anytime from inside your account.</div><button class="btn btn-gold btn-lg" onclick="App.showModal(\'register\')">Create Free Account</button></div>' : ''}
 
         <!-- Confidence Tier Leaderboard (social proof before plans) -->
