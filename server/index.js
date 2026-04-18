@@ -448,6 +448,22 @@ app.use('/', require('./routes/public')(deps));
   }
 })();
 
+// Fix users who registered during the trial_active column bug — ensure they have trial access
+(async function fixTrialUsers() {
+  try {
+    if (!db.isAvailable()) return;
+    var result = await db.query("SELECT id, email, subscription, trial_active FROM users WHERE subscription = 'free' AND trial_active IS NULL AND created_at > NOW() - INTERVAL '2 days'");
+    if (result.rows.length > 0) {
+      for (var i = 0; i < result.rows.length; i++) {
+        await db.query("UPDATE users SET subscription = 'premium', trial_active = true, trial_start = NOW(), trial_end = NOW() + INTERVAL '7 days' WHERE id = $1", [result.rows[i].id]);
+        console.log('[Startup] Fixed trial for ' + result.rows[i].email);
+      }
+    }
+  } catch(e) {
+    console.log('[Startup] Trial fix skipped:', e.message);
+  }
+})();
+
 // ---------------------------------------------------------------------------
 // Global error handler — catches unhandled errors in route handlers
 // ---------------------------------------------------------------------------

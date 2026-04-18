@@ -32,6 +32,17 @@ module.exports = function(deps) {
         } catch {}
       }
 
+      // Also check if user is on active trial — they get premium access
+      if (userRole === 'free' && authHeader) {
+        try {
+          var decoded2 = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
+          var dbUser = await db.getUserById(decoded2.id);
+          if (dbUser && (dbUser.subscription === 'premium' || dbUser.trialActive)) {
+            userRole = 'premium';
+          }
+        } catch {}
+      }
+
       const result = filtered.map(tip => {
         if (tip.isPremium && userRole !== 'premium' && userRole !== 'admin') {
           return {
