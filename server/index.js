@@ -24,6 +24,7 @@ const aiReports = require('./services/aiReports');
 const alertEngine = require('./services/alertEngine');
 const telegramBot = require('./services/telegramBot');
 const newsService = require('./services/newsService');
+const stripeService = require('./services/stripeService');
 
 // Utilities
 const helpers = require('./utils/helpers');
@@ -47,6 +48,8 @@ const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
   : ['http://localhost:3000', 'https://eliteedgesports.co.uk', 'https://www.eliteedgesports.co.uk'];
 app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+// Stripe webhook needs raw body — exclude from JSON parsing
+app.use('/api/stripe/webhook', require('express').raw({ type: 'application/json' }));
 app.use(express.json({ limit: '1mb' }));
 
 // Geo-restriction (conditional on GEO_RESTRICT env)
@@ -100,6 +103,7 @@ const deps = {
   alertEngine,
   telegramBot,
   newsService,
+  stripeService,
 };
 
 // ---------------------------------------------------------------------------
@@ -113,6 +117,7 @@ app.use('/api', require('./routes/tips')(deps));
 app.use('/api', require('./routes/results')(deps));
 app.use('/api', require('./routes/admin')(deps));
 app.use('/api', require('./routes/support')(deps));
+app.use('/api', require('./routes/stripe')(deps));
 app.use('/', require('./routes/public')(deps));
 
 // ---------------------------------------------------------------------------
@@ -201,7 +206,8 @@ app.use('/', require('./routes/public')(deps));
           alert_prefs JSONB DEFAULT '{}',
           agreement_timestamp TIMESTAMPTZ, agreement_text TEXT,
           login_history JSONB DEFAULT '[]', reset_token TEXT, reset_token_expiry TIMESTAMPTZ,
-          expiry_warned TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+          expiry_warned TEXT, stripe_customer_id TEXT, stripe_subscription_id TEXT,
+          created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
         )`,
         `CREATE TABLE IF NOT EXISTS tips (
           id TEXT PRIMARY KEY, sport TEXT NOT NULL, event TEXT, meeting TEXT,

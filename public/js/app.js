@@ -722,6 +722,41 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // STRIPE CHECKOUT & BILLING
+  // -----------------------------------------------------------------------
+  async startCheckout(plan) {
+    try {
+      if (!this.user) {
+        this.showModal('login');
+        return;
+      }
+      this.closeModal();
+      App.showToast('Redirecting to secure checkout...', 'info');
+      var res = await this.api('/stripe/create-checkout', { method: 'POST', body: JSON.stringify({ plan: plan }) });
+      if (res.url) {
+        window.location.href = res.url;
+      } else {
+        App.showToast('Unable to start checkout. Please try again.', 'error');
+      }
+    } catch(err) {
+      App.showToast('Checkout error: ' + (err.message || 'Please try again'), 'error');
+    }
+  },
+
+  async openBillingPortal() {
+    try {
+      var res = await this.api('/stripe/portal', { method: 'POST', body: '{}' });
+      if (res.url) {
+        window.location.href = res.url;
+      } else {
+        App.showToast('Unable to open billing portal.', 'error');
+      }
+    } catch(err) {
+      App.showToast('Unable to open billing portal: ' + (err.message || 'Please try again'), 'error');
+    }
+  },
+
+  // -----------------------------------------------------------------------
   // NAVIGATION
   // -----------------------------------------------------------------------
   bindNav() {
@@ -752,6 +787,22 @@ const App = {
     document.querySelectorAll('.nav-link').forEach(link => {
       link.classList.toggle('active', link.dataset.page === page);
     });
+
+    // Check for upgrade success
+    const queryString = hashRaw.includes('?') ? hashRaw.split('?')[1] : '';
+    if (queryString.includes('upgraded=true')) {
+      this.showToast('Welcome to Premium! You now have full access to all features.', 'success');
+      // Refresh user data
+      this.api('/auth/me').then(function(data) {
+        if (data && data.user) {
+          App.user = data.user;
+          localStorage.setItem('ee_user', JSON.stringify(data.user));
+          App.updateAuthUI();
+        }
+      }).catch(function() {});
+      // Clean the URL
+      window.location.hash = '#/account';
+    }
 
     const app = document.getElementById('app');
     app.className = 'animate-in';
@@ -5277,8 +5328,8 @@ const App = {
               <li>Exclusive Telegram group</li>
             </ul>
             ${isPremium ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
-              isLoggedIn ? '<button class="btn btn-gold btn-full" onclick="App.showToast(\'Premium subscriptions launching soon. You will be notified by email when Premium is available.\',\'info\')">Coming Soon — Get Notified</button><p class="text-xs text-muted mt-8">Premium subscriptions are launching soon. As a free member, you will be first to know when Premium goes live.</p>' :
-              '<button class="btn btn-outline btn-full" onclick="App.showModal(\'register\')">Sign Up Free First</button><p class="text-xs text-muted mt-8">Create your free account first. You can upgrade to Premium from inside your account once subscriptions launch.</p>'}
+              isLoggedIn ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'monthly\')">Subscribe — &pound;19.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'annual\')">Annual — &pound;199.99/year (Save &pound;40)</button>' :
+              '<button class="btn btn-outline btn-full" onclick="App.showModal(\'register\')">Sign Up Free First</button><p class="text-xs text-muted mt-8">Create your free account first, then upgrade to Premium from inside your account.</p>'}
           </div>
         </div>
 
@@ -7070,6 +7121,25 @@ const App = {
           </div>
         </div>
 
+        <!-- Subscription Management -->
+        <div class="card mb-16" id="subscription-management">
+          <h3 class="mb-16">Subscription</h3>
+          ${u.subscription === 'premium' ? `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+              <span style="background:var(--gold);color:#0a0e1a;padding:4px 12px;border-radius:20px;font-weight:700;font-size:13px;">Premium Active</span>
+            </div>
+            <p class="text-sm text-muted mb-8">Next billing date: <strong>${expiryLabel}</strong></p>
+            <div id="stripe-sub-details"></div>
+            <button class="btn btn-outline btn-sm" onclick="App.openBillingPortal()">Manage Billing</button>
+          ` : `
+            <p class="text-muted text-sm mb-12">You are on the Free plan. Upgrade to Premium for full access to all tips, analysis, and features.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-gold btn-sm" onclick="App.startCheckout('monthly')">Subscribe — &pound;19.99/month</button>
+              <button class="btn btn-outline btn-sm" onclick="App.startCheckout('annual')">Annual — &pound;199.99/year</button>
+            </div>
+          `}
+        </div>
+
         <!-- Current Session -->
         <div class="card mb-16">
           <h3 class="mb-16">Current Session</h3>
@@ -7231,6 +7301,25 @@ const App = {
         if (el) el.checked = !!prefs[f];
       });
     });
+
+    // Load Stripe subscription details for premium users
+    if (u.subscription === 'premium') {
+      this.api('/stripe/status').then(function(status) {
+        var el = document.getElementById('stripe-sub-details');
+        if (!el) return;
+        if (status.stripeStatus) {
+          var statusLabel = status.stripeStatus === 'active' ? 'Active' : status.stripeStatus;
+          var html = '<p class="text-sm text-muted mb-4">Status: <strong>' + statusLabel + '</strong></p>';
+          if (status.cancelAtPeriodEnd) {
+            html += '<p class="text-sm" style="color:var(--red);margin-bottom:8px;">Cancels at end of current period</p>';
+          }
+          if (status.currentPeriodEnd) {
+            html += '<p class="text-sm text-muted mb-8">Current period ends: <strong>' + formatDateUK(status.currentPeriodEnd) + '</strong></p>';
+          }
+          el.innerHTML = html;
+        }
+      }).catch(function() {});
+    }
 
     // Scroll to alert preferences if hash contains anchor
     if (window.location.hash.indexOf('alerts') !== -1) {

@@ -52,6 +52,8 @@ const tables = [
       trial_start           TIMESTAMPTZ,
       trial_end             TIMESTAMPTZ,
       trial_warned          BOOLEAN DEFAULT FALSE,
+      stripe_customer_id    TEXT,
+      stripe_subscription_id TEXT,
       created_at            TIMESTAMPTZ DEFAULT NOW(),
       updated_at            TIMESTAMPTZ DEFAULT NOW()
     )`,

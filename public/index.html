@@ -401,15 +401,18 @@
   <div class="modal" id="modal-stripe" style="display:none;">
     <button class="modal-close" onclick="App.closeModal()">&times;</button>
     <div style="text-align:center;padding:20px 0;">
-      <div style="font-size:48px;margin-bottom:16px;">&#128179;</div>
-      <h2 style="margin-bottom:12px;">Payment Coming Soon</h2>
-      <p class="text-muted mb-16">Secure payment integration is being finalised. To subscribe now, please contact us directly.</p>
-      <p style="font-size:16px;font-weight:700;color:var(--gold);margin-bottom:16px;">support@eliteedgesports.co.uk</p>
-      <div style="padding:12px;background:var(--bg-elevated);border-radius:var(--radius-sm);margin-bottom:16px;">
-        <p class="text-xs text-muted">Secure payment powered by</p>
-        <p style="font-size:20px;font-weight:800;color:var(--text-primary);letter-spacing:1px;">Stripe</p>
+      <h2 style="margin-bottom:16px;">Choose Your Plan</h2>
+      <div style="display:grid;gap:12px;">
+        <button class="btn btn-gold btn-full" onclick="App.startCheckout('monthly')" style="padding:16px;">
+          <strong>Monthly — &pound;19.99/month</strong><br>
+          <span style="font-size:12px;opacity:0.8;">Cancel anytime</span>
+        </button>
+        <button class="btn btn-outline btn-full" onclick="App.startCheckout('annual')" style="padding:16px;">
+          <strong>Annual — &pound;199.99/year</strong><br>
+          <span style="font-size:12px;opacity:0.8;">Save &pound;40 — best value</span>
+        </button>
       </div>
-      <p class="text-xs text-muted">Your subscription will be processed securely. Cancel anytime.</p>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:12px;text-align:center;">Secure payment via Stripe. Cancel anytime. 14-day money-back guarantee.</p>
     </div>
   </div>
 
