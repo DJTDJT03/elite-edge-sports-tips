@@ -2263,19 +2263,20 @@ const App = {
           </div>
         </div>` : `
         <div class="nap-card-wrapper">
-          <div class="nap-label"><span class="star">\u2605</span> NAP OF THE DAY — Premium Only <span class="star">\u2605</span></div>
+          <div class="nap-label"><span class="star">\u2605</span> NAP OF THE DAY — Revealed After Race <span class="star">\u2605</span></div>
           <div class="nap-card" style="position:relative;min-height:280px;cursor:pointer;" onclick="window.location.hash='#/pricing'">
             <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#141828,#1a1f35);border-radius:12px;padding:24px;">
               <div style="font-size:42px;margin-bottom:14px;">&#128274;</div>
-              <div style="font-size:20px;font-weight:800;color:#d4a843;margin-bottom:8px;">Today's NAP is Ready</div>
-              <div style="font-size:14px;color:#8a8fa0;margin-bottom:8px;text-align:center;max-width:320px;">Our highest-confidence selection of the day</div>
-              <div style="display:flex;gap:16px;margin-bottom:20px;">
+              <div style="font-size:20px;font-weight:800;color:#d4a843;margin-bottom:8px;">Today's NAP is Live</div>
+              <div style="font-size:14px;color:#8a8fa0;margin-bottom:8px;text-align:center;max-width:360px;">Premium members received this selection before the off. Free members see it after the result.</div>
+              <div style="display:flex;gap:16px;margin-bottom:12px;">
                 <div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#22c55e;">${napTip.confidence}/10</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Confidence</div></div>
                 <div style="width:1px;background:#2a2d45;"></div>
                 <div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#d4a843;">${((napTip.edge||0)*100).toFixed(1)}%</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Edge</div></div>
               </div>
-              <div style="background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:15px;">Unlock — First Month FREE</div>
-              <div style="font-size:11px;color:#555;margin-top:10px;">Then &pound;19.99/mo. Cancel anytime.</div>
+              <div style="font-size:12px;color:#ef4444;margin-bottom:16px;">&#9200; Selection revealed after the event</div>
+              <div style="background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:15px;">Get Tips Before Kick-Off — Free Trial</div>
+              <div style="font-size:11px;color:#555;margin-top:10px;">7 days free. No card required. Cancel anytime.</div>
             </div>
           </div>
         </div>`) : ''}
@@ -2313,13 +2314,13 @@ const App = {
             <div style="font-size:13px;color:#c0c4d0;line-height:1.6;">Our model has identified <strong style="color:#fff;">${todayTips.filter(t => !t.isWeeklyAcca).length} edge opportunities</strong> today across racing and football. The strongest selection carries a confidence rating of <strong style="color:#d4a843;">${napTip ? napTip.confidence + '/10' : '—'}</strong> with an edge of <strong style="color:#22c55e;">${napTip ? ((napTip.edge||0)*100).toFixed(1) + '%' : '—'}</strong> against the market. Premium members have full access to all selections, analysis, and staking recommendations.</div>
           </div>
           <div style="text-align:center;">
-            <a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;">Unlock All Selections — First Month FREE</a>
-            <div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;19.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>
+            <button onclick="App.showTrialOffer()" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;border:none;font-weight:700;font-size:14px;cursor:pointer;">Start 7-Day Free Trial — Full Premium Access</button>
+            <div style="font-size:11px;color:#6b7280;margin-top:8px;">No credit card required. Cancel anytime. 18+ BeGambleAware.org</div>
           </div>
         </div>` : ''}
 
-        <!-- Free Weekly Acca -->
-        ${this.renderWeeklyAcca(tips)}
+        <!-- Yesterday's Best Winner Showcase (replaces free acca) -->
+        <div id="yesterday-winner-showcase"></div>
 
         <!-- How It Works — Educational Section -->
         <div style="background:linear-gradient(135deg,#141828,#1a1f35);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:24px;">
@@ -2454,6 +2455,9 @@ const App = {
 
     // Render dynamic big winner banner
     this.renderBigWinnerBanner();
+
+    // Render yesterday's winner showcase (replaces free acca)
+    this.renderYesterdayShowcase();
 
     // Fetch and render breaking news section
     this._fetchDashboardNews();
@@ -6195,43 +6199,103 @@ const App = {
   // -----------------------------------------------------------------------
   // FREE WEEKLY ACCA
   // -----------------------------------------------------------------------
-  renderWeeklyAcca(tips) {
-    // Find the most recent weekly acca that's within the current/upcoming week
-    const now = new Date();
-    const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString().split('T')[0];
-    const acca = tips.filter(t => t.isWeeklyAcca && t.date >= weekAgo).sort((a, b) => b.date.localeCompare(a.date))[0];
-    if (!acca || !acca.accaSelections) return '';
-    return `
-      <div class="acca-free-card-wrapper">
-        <div class="acca-free-header">
-          <span class="acca-free-badge">FREE</span>
-          Weekly 5-Fold Accumulator &mdash; Weekend ${formatDateUK(acca.date)}
-        </div>
-        <div class="acca-free-card">
-          ${acca.accaSelections.map((s, i) => `
-            <div class="acca-selection-row">
-              <div>
-                <div class="acca-selection-match">${i + 1}. ${s.match}</div>
-                <div class="acca-selection-pick">${s.selection} &bull; ${s.league}</div>
-                <div class="acca-selection-reasoning">${s.reasoning}</div>
-              </div>
-              <div class="acca-selection-odds">${this.formatOdds(s.odds)}</div>
-            </div>
-          `).join('')}
-          <div class="acca-total-row">
-            <div class="acca-total-label">Combined Odds</div>
-            <div class="acca-total-value">${this.formatOdds(acca.odds || acca.accaCombinedOdds || 0)}</div>
-          </div>
-          <div class="acca-return-info">
-            <div class="return-label">&pound;10 Stake Returns</div>
-            <div class="return-amount">&pound;${((acca.odds || acca.accaCombinedOdds || 0) * 10).toFixed(2)}</div>
-          </div>
-          <p style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:12px;">
-            This accumulator is provided for entertainment purposes only. Please gamble responsibly. 18+.
-          </p>
-        </div>
-      </div>
-    `;
+  async renderYesterdayShowcase() {
+    var container = document.getElementById('yesterday-winner-showcase');
+    if (!container) return;
+    try {
+      var results = await this.api('/results');
+      if (!Array.isArray(results) || results.length === 0) return;
+
+      var yesterday = this._getYesterday();
+      var twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString().split('T')[0];
+
+      // Get yesterday's results (or day before if yesterday had none)
+      var dayResults = results.filter(function(r) { return r.date === yesterday; });
+      var showDate = yesterday;
+      if (dayResults.length === 0) {
+        dayResults = results.filter(function(r) { return r.date === twoDaysAgo; });
+        showDate = twoDaysAgo;
+      }
+      if (dayResults.length === 0) return;
+
+      var wins = dayResults.filter(function(r) { return r.result === 'won'; });
+      var totalPnl = dayResults.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+      var strikeRate = dayResults.length > 0 ? Math.round((wins.length / dayResults.length) * 100) : 0;
+      var bestWin = wins.sort(function(a, b) { return (b.pnl || 0) - (a.pnl || 0); })[0];
+      var isPremium = this.user && this.user.subscription === 'premium';
+      var self = this;
+
+      var dateObj = new Date(showDate + 'T12:00:00');
+      var dateLabel = dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+
+      container.innerHTML =
+        '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.08),rgba(212,168,67,0.05));border:1px solid rgba(34,197,94,0.25);border-radius:14px;padding:24px;margin-bottom:24px;">' +
+          '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">' +
+            '<div style="font-size:28px;">&#128270;</div>' +
+            '<div>' +
+              '<div style="font-size:16px;font-weight:800;color:#d4a843;">What Premium Members Got Yesterday</div>' +
+              '<div style="font-size:12px;color:#8a8fa0;">' + dateLabel + ' — Full analysis was available before kick-off</div>' +
+            '</div>' +
+          '</div>' +
+
+          // Stats bar
+          '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">' +
+            '<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:12px;text-align:center;">' +
+              '<div style="font-size:20px;font-weight:800;color:#fff;">' + dayResults.length + '</div>' +
+              '<div style="font-size:10px;color:#8a8fa0;text-transform:uppercase;">Selections</div>' +
+            '</div>' +
+            '<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:12px;text-align:center;">' +
+              '<div style="font-size:20px;font-weight:800;color:#22c55e;">' + wins.length + '</div>' +
+              '<div style="font-size:10px;color:#8a8fa0;text-transform:uppercase;">Winners</div>' +
+            '</div>' +
+            '<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:12px;text-align:center;">' +
+              '<div style="font-size:20px;font-weight:800;color:' + (strikeRate >= 50 ? '#22c55e' : '#ef4444') + ';">' + strikeRate + '%</div>' +
+              '<div style="font-size:10px;color:#8a8fa0;text-transform:uppercase;">Strike Rate</div>' +
+            '</div>' +
+            '<div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:12px;text-align:center;">' +
+              '<div style="font-size:20px;font-weight:800;color:' + (totalPnl >= 0 ? '#22c55e' : '#ef4444') + ';">' + (totalPnl >= 0 ? '+' : '') + totalPnl.toFixed(2) + 'u</div>' +
+              '<div style="font-size:10px;color:#8a8fa0;text-transform:uppercase;">P/L</div>' +
+            '</div>' +
+          '</div>' +
+
+          // Results list
+          '<div style="display:grid;gap:6px;margin-bottom:16px;">' +
+          dayResults.map(function(r) {
+            var isWin = r.result === 'won';
+            var isPlaced = r.result === 'placed';
+            var resultColor = isWin ? '#22c55e' : isPlaced ? '#60a5fa' : '#ef4444';
+            var resultLabel = isWin ? 'WON' : isPlaced ? 'PLACED' : 'LOST';
+            var oddsDisplay = self.formatOdds ? self.formatOdds(r.odds) : r.odds;
+            // Free users see selection names but NOT odds or analysis (the value is in the timing)
+            return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:8px;border-left:3px solid ' + resultColor + ';">' +
+              '<span style="font-size:11px;padding:3px 8px;border-radius:4px;font-weight:700;background:' + resultColor + '20;color:' + resultColor + ';">' + resultLabel + '</span>' +
+              '<span style="flex:1;font-weight:600;font-size:13px;color:#e8e6e3;">' + (r.selection || '') + '</span>' +
+              '<span style="font-size:13px;color:#8a8fa0;">' + (r.event || '').substring(0, 40) + '</span>' +
+              (isPremium ? '<span style="font-weight:700;font-size:14px;color:' + resultColor + ';">' + oddsDisplay + '</span>' : '<span style="font-size:12px;color:#d4a843;">&#128274;</span>') +
+            '</div>';
+          }).join('') +
+          '</div>' +
+
+          // Best winner highlight
+          (bestWin ? '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:14px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">' +
+            '<div style="font-size:28px;">&#127942;</div>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#22c55e;">Best Winner</div>' +
+              '<div style="font-size:16px;font-weight:800;color:#fff;">' + bestWin.selection + ' at ' + (self.formatOdds ? self.formatOdds(bestWin.odds) : bestWin.odds) + '</div>' +
+              '<div style="font-size:12px;color:#8a8fa0;">' + (bestWin.event || '') + ' — <strong style="color:#22c55e;">+' + (bestWin.pnl || 0).toFixed(2) + ' units</strong></div>' +
+            '</div>' +
+          '</div>' : '') +
+
+          // CTA for free users
+          (!isPremium ? '<div style="text-align:center;padding-top:8px;">' +
+            '<p style="font-size:13px;color:#c0c4d0;margin-bottom:12px;">Premium members received these selections <strong style="color:#d4a843;">before kick-off</strong> with full analysis, staking plans, and AI previews.</p>' +
+            '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;">Start Your 7-Day Free Trial</a>' +
+            '<div style="font-size:11px;color:#6b7280;margin-top:8px;">No credit card required. Cancel anytime. 18+</div>' +
+          '</div>' : '') +
+        '</div>';
+    } catch (e) {
+      // Non-fatal
+    }
   },
 
   // -----------------------------------------------------------------------
