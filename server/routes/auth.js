@@ -38,11 +38,11 @@ module.exports = function(deps) {
         password: hashed,
         name,
         role: 'free',
-        subscription: 'premium',
-        subscriptionExpiry: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        trialActive: true,
-        trialStart: new Date().toISOString(),
-        trialEnd: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        subscription: 'free',
+        subscriptionExpiry: null,
+        trialActive: false,
+        trialStart: null,
+        trialEnd: null,
         joined: new Date().toISOString().split('T')[0],
         bank: 100,
         agreementTimestamp: agreementTimestamp || now,
@@ -196,6 +196,47 @@ module.exports = function(deps) {
         tokenExpiry,
         user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, joined: user.joined, subscriptionExpiry: user.subscriptionExpiry, trialActive: user.trialActive, trialEnd: user.trialEnd },
         isNewDevice
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // START FREE TRIAL — separate from registration
+  // ---------------------------------------------------------------------------
+  router.post('/start-trial', authenticate, async (req, res) => {
+    try {
+      var user = await db.getUserById(req.user.id);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      // Check if user already had a trial
+      if (user.trialStart) {
+        return res.status(400).json({ error: 'You have already used your free trial.' });
+      }
+
+      // Check if already premium
+      if (user.subscription === 'premium') {
+        return res.status(400).json({ error: 'You already have premium access.' });
+      }
+
+      // Activate 7-day trial
+      var trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      await db.updateUser(user.id, {
+        subscription: 'premium',
+        subscriptionExpiry: trialEnd,
+        trialActive: true,
+        trialStart: new Date().toISOString(),
+        trialEnd: trialEnd,
+      });
+
+      console.log('[Trial] Started 7-day trial for ' + user.email);
+
+      res.json({
+        message: 'Your 7-day free trial has started! You now have full premium access.',
+        trialEnd: trialEnd,
+        subscription: 'premium',
+        trialActive: true,
       });
     } catch (err) {
       res.status(500).json({ error: err.message });

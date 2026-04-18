@@ -477,6 +477,10 @@ const App = {
       if (!localStorage.getItem('onboardingDone')) {
         this.showOnboarding();
       }
+      // Show free trial offer for free users who haven't tried yet
+      if (this.user && this.user.subscription === 'free' && !this.user.trialStart) {
+        setTimeout(() => this.showTrialOffer(), 1500);
+      }
       this.route();
     } catch (err) {
       document.getElementById('login-error').textContent = err.message;
@@ -617,6 +621,8 @@ const App = {
       this.showEmailVerificationMessage();
       this.showWelcomeEmailNotice();
       trackEvent('auth', 'register', email);
+      // Show free trial offer after registration
+      setTimeout(() => this.showTrialOffer(), 2000);
       this.route();
     } catch (err) {
       document.getElementById('reg-error').textContent = err.message;
@@ -7571,6 +7577,65 @@ const App = {
         setTimeout(() => { if (b) b.remove(); }, 3000);
       }
     }, 2000);
+  },
+
+  showTrialOffer() {
+    // Don't show if already premium or already had trial
+    if (!this.user || this.user.subscription === 'premium' || this.user.trialStart) return;
+
+    var overlay = document.createElement('div');
+    overlay.id = 'trial-offer-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);';
+
+    overlay.innerHTML =
+      '<div style="background:var(--bg-card,#141828);border:2px solid #d4a843;border-radius:16px;padding:40px;max-width:440px;width:90%;text-align:center;animation:celebrateIn 0.4s ease-out;box-shadow:0 0 60px rgba(212,168,67,0.2);">' +
+        '<div style="font-size:48px;margin-bottom:12px;">&#127775;</div>' +
+        '<h2 style="color:#d4a843;margin-bottom:8px;font-size:22px;">Unlock 7 Days Free Premium</h2>' +
+        '<p style="color:#8b8d93;font-size:14px;margin-bottom:20px;">Get full access to all premium tips, AI analysis, value bets, custom alerts, and expert selections. No payment required.</p>' +
+        '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:12px;margin-bottom:20px;">' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:#e8e6e3;">' +
+            '<div>&#10003; All premium tips</div>' +
+            '<div>&#10003; AI match previews</div>' +
+            '<div>&#10003; Value bet scanner</div>' +
+            '<div>&#10003; Custom alerts</div>' +
+            '<div>&#10003; Race day live hub</div>' +
+            '<div>&#10003; Expert analysis</div>' +
+          '</div>' +
+        '</div>' +
+        '<button onclick="App.startFreeTrial()" style="width:100%;padding:14px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:12px;">Start My Free Trial</button>' +
+        '<button onclick="document.getElementById(\'trial-offer-overlay\').remove()" style="width:100%;padding:10px;background:transparent;color:#8b8d93;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:13px;cursor:pointer;">Maybe Later</button>' +
+        '<p style="font-size:11px;color:#64748b;margin-top:12px;">No credit card required. Trial ends automatically after 7 days.</p>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+  },
+
+  async startFreeTrial() {
+    try {
+      var overlay = document.getElementById('trial-offer-overlay');
+      var btn = overlay ? overlay.querySelector('button') : null;
+      if (btn) { btn.textContent = 'Activating...'; btn.disabled = true; }
+
+      var data = await this.api('/auth/start-trial', { method: 'POST', body: '{}' });
+
+      // Update local user data
+      this.user.subscription = 'premium';
+      this.user.trialActive = true;
+      this.user.trialEnd = data.trialEnd;
+      localStorage.setItem('ee_user', JSON.stringify(this.user));
+
+      // Remove overlay
+      if (overlay) overlay.remove();
+
+      // Show celebration
+      this.showToast('Your 7-day free trial is active! Enjoy full premium access.', 'success');
+      this.updateAuthUI();
+      this.route(); // Re-render current page with premium content unlocked
+    } catch (err) {
+      this.showToast(err.message || 'Unable to start trial. Please try again.', 'error');
+      var overlay2 = document.getElementById('trial-offer-overlay');
+      if (overlay2) overlay2.remove();
+    }
   },
 
   showWelcomeEmailNotice() {
