@@ -902,9 +902,22 @@ module.exports = function startScheduler(deps) {
       newTips.push(tip);
     });
 
-    // Save tips
+    // Save tips — check for duplicates by selection+date before creating
+    var existingTips = await db.getTips();
+    var savedCount = 0;
     for (var nti = 0; nti < newTips.length; nti++) {
-      await db.createTip(newTips[nti]);
+      var nt = newTips[nti];
+      var ntDate = (nt.date || '').split('T')[0];
+      var alreadyExists = existingTips.some(function(et) {
+        var etDate = (et.date || '').split('T')[0];
+        return et.selection === nt.selection && etDate === ntDate;
+      });
+      if (alreadyExists) {
+        console.log('[Auto-Tips] Skipping duplicate: ' + nt.selection + ' already exists for ' + ntDate);
+        continue;
+      }
+      await db.createTip(nt);
+      savedCount++;
     }
     lastAutoTipDate = today;
 
@@ -1084,10 +1097,16 @@ module.exports = function startScheduler(deps) {
                 var stake = parseFloat(tip.staking) || 2;
                 var pnl = tipWon ? ((tip.odds - 1) * stake) : (placed ? (((tip.odds - 1) / 4) * stake) : -stake);
 
-                // Check if result already exists for this tip (prevent duplicates)
-                var existingResults = await db.getResults({ tipId: tip.id });
-                if (existingResults && existingResults.length > 0) {
-                  console.log('[Auto-Settle] Result already exists for ' + tip.selection + ' — skipping');
+                // Check if result already exists for this selection+date (prevent duplicates)
+                var allResults = await db.getResults();
+                var alreadySettled = allResults.some(function(r) {
+                  var rDate = r.date && typeof r.date !== 'string' ? new Date(r.date).toISOString().split('T')[0] : (r.date || '').split('T')[0];
+                  var tDate = (tip.date || '').split('T')[0];
+                  return r.selection === tip.selection && rDate === tDate;
+                });
+                if (alreadySettled) {
+                  // Also mark the tip as settled so it doesn't get re-processed
+                  if (tip.status === 'active') await db.updateTip(tip.id, { status: 'settled' });
                   continue;
                 }
 
@@ -1201,10 +1220,15 @@ module.exports = function startScheduler(deps) {
               var fStake = parseFloat(ftip.staking) || 2;
               var fPnl = won ? ((ftip.odds - 1) * fStake) : -fStake;
 
-              // Check if result already exists for this tip (prevent duplicates)
-              var fExisting = await db.getResults({ tipId: ftip.id });
-              if (fExisting && fExisting.length > 0) {
-                console.log('[Auto-Settle] Result already exists for ' + ftip.selection + ' — skipping');
+              // Check if result already exists for this selection+date (prevent duplicates)
+              var fAllResults = await db.getResults();
+              var fAlreadySettled = fAllResults.some(function(r) {
+                var rDate = r.date && typeof r.date !== 'string' ? new Date(r.date).toISOString().split('T')[0] : (r.date || '').split('T')[0];
+                var tDate = (ftip.date || '').split('T')[0];
+                return r.selection === ftip.selection && rDate === tDate;
+              });
+              if (fAlreadySettled) {
+                if (ftip.status === 'active') await db.updateTip(ftip.id, { status: 'settled' });
                 continue;
               }
 

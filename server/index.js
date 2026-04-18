@@ -427,19 +427,27 @@ app.use('/', require('./routes/public')(deps));
 })();
 
 // ---------------------------------------------------------------------------
-// Startup: deduplicate results — keep only the first result per tip_id
+// Startup: deduplicate results — keep only the first result per selection+date
 // ---------------------------------------------------------------------------
 (async function deduplicateResults() {
   try {
     if (!db.isAvailable()) return;
+    // Remove duplicates: keep the earliest result for each selection+date combination
     var dupeResult = await db.query(
-      "DELETE FROM results WHERE id NOT IN (SELECT MIN(id) FROM results GROUP BY tip_id)"
+      "DELETE FROM results WHERE id NOT IN (SELECT MIN(id) FROM results GROUP BY selection, date)"
     );
     if (dupeResult.rowCount > 0) {
       console.log('[Startup] Removed ' + dupeResult.rowCount + ' duplicate results');
     }
+    // Also deduplicate tips by selection+date (same root cause)
+    var dupeTips = await db.query(
+      "DELETE FROM tips WHERE id NOT IN (SELECT MIN(id) FROM tips GROUP BY selection, date)"
+    );
+    if (dupeTips.rowCount > 0) {
+      console.log('[Startup] Removed ' + dupeTips.rowCount + ' duplicate tips');
+    }
   } catch(e) {
-    // Table might not have data yet
+    console.log('[Startup] Dedup skipped:', e.message);
   }
 })();
 
