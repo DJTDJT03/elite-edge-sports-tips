@@ -2165,17 +2165,8 @@ const App = {
         <!-- Would Have Won (non-premium users only) -->
         ${wouldHaveWonHtml}
 
-        <!-- Grand National Winner Banner -->
-        <div style="background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(212,168,67,0.08));border:2px solid rgba(34,197,94,0.4);border-radius:14px;padding:20px 24px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;" onclick="window.location.hash='#/results'">
-          <div style="display:flex;align-items:center;gap:16px;">
-            <div style="font-size:36px;">&#127942;</div>
-            <div style="flex:1;">
-              <div style="font-weight:900;font-size:18px;color:#22c55e;margin-bottom:4px;">Grand National 2026 &mdash; I Am Maximus WINS at 8/1</div>
-              <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">Our NAP selection delivered a sensational back-to-back victory. +16.00 units profit from one race.</div>
-              <div style="display:inline-block;background:#22c55e;color:#0a0e1a;padding:8px 20px;border-radius:8px;font-weight:700;font-size:13px;">View Full Results &rarr;</div>
-            </div>
-          </div>
-        </div>
+        <!-- Dynamic Big Winner Banner — shows biggest recent winner -->
+        <div id="big-winner-banner"></div>
 
         <!-- Quality Philosophy Banner -->
         <div style="background:linear-gradient(135deg, rgba(212,168,67,0.1), rgba(212,168,67,0.02));border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;">
@@ -2460,6 +2451,9 @@ const App = {
 
     // Check for new wins and show celebrations
     setTimeout(function() { try { self.checkForNewWins(); } catch (e) {} }, 500);
+
+    // Render dynamic big winner banner
+    this.renderBigWinnerBanner();
 
     // Fetch and render breaking news section
     this._fetchDashboardNews();
@@ -7577,6 +7571,51 @@ const App = {
         setTimeout(() => { if (b) b.remove(); }, 3000);
       }
     }, 2000);
+  },
+
+  async renderBigWinnerBanner() {
+    var container = document.getElementById('big-winner-banner');
+    if (!container) return;
+    try {
+      var results = await this.api('/results');
+      if (!Array.isArray(results) || results.length === 0) return;
+
+      // Find the biggest winner from last 14 days (by P/L, minimum odds 3.0 for "big" winner)
+      var cutoff = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0];
+      var bigWins = results.filter(function(r) {
+        return r.result === 'won' && r.pnl > 0 && r.odds >= 3.0 && r.date >= cutoff;
+      }).sort(function(a, b) { return b.pnl - a.pnl; });
+
+      if (bigWins.length === 0) {
+        // Fall back to any recent winner
+        bigWins = results.filter(function(r) {
+          return r.result === 'won' && r.pnl > 0 && r.date >= cutoff;
+        }).sort(function(a, b) { return b.pnl - a.pnl; });
+      }
+      if (bigWins.length === 0) return;
+
+      var win = bigWins[0];
+      var oddsDisplay = this.formatOdds ? this.formatOdds(win.odds) : win.odds;
+      var dateObj = new Date(win.date + 'T12:00:00');
+      var dateDisplay = dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      var sportIcon = win.sport === 'racing' ? '&#127943;' : '&#9917;';
+      var pnlDisplay = '+' + win.pnl.toFixed(2);
+
+      container.innerHTML =
+        '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(212,168,67,0.08));border:2px solid rgba(34,197,94,0.4);border-radius:14px;padding:20px 24px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;" onclick="window.location.hash=\'#/results\'">' +
+          '<div style="display:flex;align-items:center;gap:16px;">' +
+            '<div style="font-size:36px;">&#127942;</div>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#d4a843;margin-bottom:4px;">Latest Big Winner</div>' +
+              '<div style="font-weight:900;font-size:18px;color:#22c55e;margin-bottom:4px;">' + sportIcon + ' ' + (win.selection || 'Winner') + ' WINS at ' + oddsDisplay + '</div>' +
+              '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">' + (win.event || '') + ' — ' + dateDisplay + ' — <strong style="color:#22c55e;">' + pnlDisplay + ' units profit</strong></div>' +
+              '<div style="display:inline-block;background:#22c55e;color:#0a0e1a;padding:8px 20px;border-radius:8px;font-weight:700;font-size:13px;">View Full Results &rarr;</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    } catch(e) {
+      // Non-fatal — just don't show banner
+    }
   },
 
   showTrialOffer() {

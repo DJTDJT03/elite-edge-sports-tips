@@ -159,8 +159,8 @@ app.use('/', require('./routes/public')(deps));
           var pvTips = JSON.parse(fs2.readFileSync(pvTipsFile, 'utf8'));
           var dbTipCount = await db.query('SELECT COUNT(*) FROM tips');
           var dbCount = parseInt(dbTipCount.rows[0].count);
-          if (Array.isArray(pvTips) && pvTips.length > dbCount) {
-            console.log('[Startup] Persistent volume has ' + pvTips.length + ' tips vs DB has ' + dbCount + ' — re-seeding...');
+          if (Array.isArray(pvTips) && pvTips.length > 0 && pvTips.length > dbCount) {
+            console.log('[Startup] Persistent volume has ' + pvTips.length + ' tips vs DB has ' + dbCount + ' — syncing missing entries...');
             // Import tips not already in DB
             var imported = 0;
             for (var ti = 0; ti < pvTips.length; ti++) {
