@@ -39,7 +39,7 @@ module.exports = function(deps) {
   });
 
   // GET /api/ai/daily-briefing — AI-generated morning briefing
-  router.get('/ai/daily-briefing', async (req, res) => {
+  router.get('/api/ai/daily-briefing', async (req, res) => {
     try {
       if (!aiReports || !aiReports.isAvailable()) {
         return res.status(503).json({ error: 'AI reports not available. ANTHROPIC_API_KEY not configured.' });
