@@ -126,7 +126,58 @@ app.use('/', require('./routes/public')(deps));
     // Check if tables exist by querying users table
     try {
       await db.query('SELECT 1 FROM users LIMIT 1');
-      console.log('[Startup] Database tables already exist — skipping migration');
+      console.log('[Startup] Database tables exist');
+
+      // One-time re-seed: import persistent volume data into DB if DB has fewer tips
+      // This fixes the case where DB was seeded from bundled (old) data instead of live data
+      try {
+        var fs2 = require('fs');
+        var path2 = require('path');
+        var pvDir = process.env.PERSISTENT_DATA_DIR || '/data';
+        var pvTipsFile = path2.join(pvDir, 'sample-tips.json');
+        if (fs2.existsSync(pvTipsFile)) {
+          var pvTips = JSON.parse(fs2.readFileSync(pvTipsFile, 'utf8'));
+          var dbTipCount = await db.query('SELECT COUNT(*) FROM tips');
+          var dbCount = parseInt(dbTipCount.rows[0].count);
+          if (Array.isArray(pvTips) && pvTips.length > dbCount) {
+            console.log('[Startup] Persistent volume has ' + pvTips.length + ' tips vs DB has ' + dbCount + ' — re-seeding...');
+            // Import tips not already in DB
+            var imported = 0;
+            for (var ti = 0; ti < pvTips.length; ti++) {
+              try { await db.createTip(pvTips[ti]); imported++; } catch(e) { /* duplicate — skip */ }
+            }
+            console.log('[Startup] Imported ' + imported + ' tips from persistent volume');
+
+            // Also import results
+            var pvResultsFile = path2.join(pvDir, 'sample-results.json');
+            if (fs2.existsSync(pvResultsFile)) {
+              var pvResults = JSON.parse(fs2.readFileSync(pvResultsFile, 'utf8'));
+              var resImported = 0;
+              if (Array.isArray(pvResults)) {
+                for (var ri = 0; ri < pvResults.length; ri++) {
+                  try { await db.createResult(pvResults[ri]); resImported++; } catch(e) {}
+                }
+              }
+              console.log('[Startup] Imported ' + resImported + ' results from persistent volume');
+            }
+
+            // Import blog reviews
+            var pvBlogFile = path2.join(pvDir, 'blog-reviews.json');
+            if (fs2.existsSync(pvBlogFile)) {
+              var pvBlog = JSON.parse(fs2.readFileSync(pvBlogFile, 'utf8'));
+              if (Array.isArray(pvBlog)) {
+                for (var bi = 0; bi < pvBlog.length; bi++) {
+                  try { await db.upsertBlogReview(pvBlog[bi]); } catch(e) {}
+                }
+                console.log('[Startup] Imported ' + pvBlog.length + ' blog reviews from persistent volume');
+              }
+            }
+          }
+        }
+      } catch(reseedErr) {
+        console.log('[Startup] Re-seed check skipped:', reseedErr.message);
+      }
+
     } catch (tableErr) {
       // Tables don't exist — run migration
       console.log('[Startup] Database tables not found — running auto-migration...');
@@ -210,19 +261,43 @@ app.use('/', require('./routes/public')(deps));
       await migrationPool.end();
       console.log('[Startup] Auto-migration complete — all tables created');
 
-      // Seed from JSON files if tables are empty
+      // Seed from persistent volume first (has live data), fallback to bundled
       try {
-        var userCount = await db.query('SELECT COUNT(*) FROM users');
-        if (parseInt(userCount.rows[0].count) === 0) {
+        var tipCount = await db.query('SELECT COUNT(*) FROM tips');
+        if (parseInt(tipCount.rows[0].count) === 0) {
           console.log('[Startup] Seeding database from JSON files...');
           var fs = require('fs');
           var path = require('path');
-          var dataDir = path.join(__dirname, 'data');
+          // Prefer persistent volume (/data/) over bundled (server/data/)
+          var persistentDir = process.env.PERSISTENT_DATA_DIR || '/data';
+          var bundledDir = path.join(__dirname, 'data');
+          var seedDir = bundledDir;
+          try {
+            fs.accessSync(persistentDir, fs.constants.R_OK);
+            if (fs.existsSync(path.join(persistentDir, 'sample-tips.json'))) {
+              seedDir = persistentDir;
+              console.log('[Startup] Seeding from PERSISTENT volume at ' + persistentDir);
+            }
+          } catch(e) {
+            console.log('[Startup] Seeding from BUNDLED data at ' + bundledDir);
+          }
+
+          // Seed users
+          try {
+            var usersFile = path.join(seedDir, 'sample-users.json');
+            if (fs.existsSync(usersFile)) {
+              var users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+              if (Array.isArray(users) && users.length > 0) {
+                for (var u = 0; u < users.length; u++) { try { await db.createUser(users[u]); } catch(e) {} }
+                console.log('[Startup] Seeded ' + users.length + ' users');
+              }
+            }
+          } catch(e) {}
 
           // Seed tips
           try {
-            var tips = JSON.parse(fs.readFileSync(path.join(dataDir, 'sample-tips.json'), 'utf8'));
-            if (Array.isArray(tips)) {
+            var tips = JSON.parse(fs.readFileSync(path.join(seedDir, 'sample-tips.json'), 'utf8'));
+            if (Array.isArray(tips) && tips.length > 0) {
               for (var t = 0; t < tips.length; t++) { try { await db.createTip(tips[t]); } catch(e) {} }
               console.log('[Startup] Seeded ' + tips.length + ' tips');
             }
@@ -230,14 +305,40 @@ app.use('/', require('./routes/public')(deps));
 
           // Seed results
           try {
-            var results = JSON.parse(fs.readFileSync(path.join(dataDir, 'sample-results.json'), 'utf8'));
-            if (Array.isArray(results)) {
+            var results = JSON.parse(fs.readFileSync(path.join(seedDir, 'sample-results.json'), 'utf8'));
+            if (Array.isArray(results) && results.length > 0) {
               for (var r = 0; r < results.length; r++) { try { await db.createResult(results[r]); } catch(e) {} }
               console.log('[Startup] Seeded ' + results.length + ' results');
             }
           } catch(e) {}
 
+          // Seed support tickets
+          try {
+            var supportFile = path.join(seedDir, 'sample-support.json');
+            if (fs.existsSync(supportFile)) {
+              var tickets = JSON.parse(fs.readFileSync(supportFile, 'utf8'));
+              if (Array.isArray(tickets) && tickets.length > 0) {
+                for (var s = 0; s < tickets.length; s++) { try { await db.createTicket(tickets[s]); } catch(e) {} }
+                console.log('[Startup] Seeded ' + tickets.length + ' support tickets');
+              }
+            }
+          } catch(e) {}
+
+          // Seed blog reviews
+          try {
+            var blogFile = path.join(seedDir, 'blog-reviews.json');
+            if (fs.existsSync(blogFile)) {
+              var reviews = JSON.parse(fs.readFileSync(blogFile, 'utf8'));
+              if (Array.isArray(reviews) && reviews.length > 0) {
+                for (var b = 0; b < reviews.length; b++) { try { await db.upsertBlogReview(reviews[b]); } catch(e) {} }
+                console.log('[Startup] Seeded ' + reviews.length + ' blog reviews');
+              }
+            }
+          } catch(e) {}
+
           console.log('[Startup] Database seeding complete');
+        } else {
+          console.log('[Startup] Database has ' + tipCount.rows[0].count + ' tips — skipping seed');
         }
       } catch(seedErr) {
         console.log('[Startup] Seeding skipped:', seedErr.message);
