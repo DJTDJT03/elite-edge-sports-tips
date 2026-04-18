@@ -1058,6 +1058,13 @@ module.exports = function startScheduler(deps) {
                 var stake = parseFloat(tip.staking) || 2;
                 var pnl = tipWon ? ((tip.odds - 1) * stake) : (placed ? (((tip.odds - 1) / 4) * stake) : -stake);
 
+                // Check if result already exists for this tip (prevent duplicates)
+                var existingResults = await db.getResults({ tipId: tip.id });
+                if (existingResults && existingResults.length > 0) {
+                  console.log('[Auto-Settle] Result already exists for ' + tip.selection + ' — skipping');
+                  continue;
+                }
+
                 await db.updateTip(tip.id, { status: 'settled', result: resultVal });
                 tip.status = 'settled';
                 tip.result = resultVal;
@@ -1167,6 +1174,13 @@ module.exports = function startScheduler(deps) {
               var fResultVal = won ? 'won' : 'lost';
               var fStake = parseFloat(ftip.staking) || 2;
               var fPnl = won ? ((ftip.odds - 1) * fStake) : -fStake;
+
+              // Check if result already exists for this tip (prevent duplicates)
+              var fExisting = await db.getResults({ tipId: ftip.id });
+              if (fExisting && fExisting.length > 0) {
+                console.log('[Auto-Settle] Result already exists for ' + ftip.selection + ' — skipping');
+                continue;
+              }
 
               await db.updateTip(ftip.id, { status: 'settled', result: fResultVal });
               ftip.status = 'settled';
