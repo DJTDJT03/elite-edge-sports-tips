@@ -350,6 +350,48 @@ app.use('/', require('./routes/public')(deps));
 })();
 
 // ---------------------------------------------------------------------------
+// Startup: remove incorrect selections from tips and results
+// ---------------------------------------------------------------------------
+(async function cleanupBadSelections() {
+  var removeSelections = ["Commander's Intent", "Caballo Grande", "Lavender Hill Mob"];
+  try {
+    // Clean from database
+    if (db.isAvailable()) {
+      for (var i = 0; i < removeSelections.length; i++) {
+        try {
+          await db.query("DELETE FROM results WHERE LOWER(selection) = LOWER($1)", [removeSelections[i]]);
+          await db.query("DELETE FROM tips WHERE LOWER(selection) = LOWER($1)", [removeSelections[i]]);
+        } catch(e) {}
+      }
+      console.log('[Startup] Cleaned up ' + removeSelections.length + ' incorrect selections from DB');
+    }
+    // Clean from persistent volume JSON files
+    var fs3 = require('fs');
+    var path3 = require('path');
+    var pvDir2 = process.env.PERSISTENT_DATA_DIR || '/data';
+    ['sample-tips.json', 'sample-results.json'].forEach(function(file) {
+      try {
+        var filePath = path3.join(pvDir2, file);
+        if (!fs3.existsSync(filePath)) return;
+        var data = JSON.parse(fs3.readFileSync(filePath, 'utf8'));
+        if (!Array.isArray(data)) return;
+        var before = data.length;
+        data = data.filter(function(item) {
+          var sel = (item.selection || '').toLowerCase();
+          return !removeSelections.some(function(r) { return r.toLowerCase() === sel; });
+        });
+        if (data.length < before) {
+          fs3.writeFileSync(filePath, JSON.stringify(data, null, 2));
+          console.log('[Startup] Removed ' + (before - data.length) + ' entries from ' + file);
+        }
+      } catch(e) {}
+    });
+  } catch(e) {
+    console.log('[Startup] Cleanup skipped:', e.message);
+  }
+})();
+
+// ---------------------------------------------------------------------------
 // Startup: ensure admin account is promoted
 // ---------------------------------------------------------------------------
 (async function ensureAdmin() {
