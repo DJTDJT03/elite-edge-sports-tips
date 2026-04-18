@@ -465,17 +465,7 @@ app.use('/', require('./routes/public')(deps));
   }
 })();
 
-// One-time: delete test account
-(async function cleanupTestAccounts() {
-  try {
-    if (!db.isAvailable()) return;
-    var testEmails = ['daz.1pt@outlook.com'];
-    for (var i = 0; i < testEmails.length; i++) {
-      await db.query("DELETE FROM users WHERE LOWER(email) = LOWER($1)", [testEmails[i]]);
-    }
-    console.log('[Startup] Test accounts cleaned up');
-  } catch(e) {}
-})();
+// Test account cleanup REMOVED — was deleting users on every deploy
 
 // ---------------------------------------------------------------------------
 // Global error handler — catches unhandled errors in route handlers
