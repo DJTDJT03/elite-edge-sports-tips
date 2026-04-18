@@ -1615,7 +1615,10 @@ const App = {
     if (idx >= 0) {
       this.accaSelections.splice(idx, 1);
     } else {
-      this.accaSelections.push({ tipId, selection, odds });
+      // Look up tip to get modelProbability
+      var tip = (this.tips || []).find(function(t) { return t.id === tipId; });
+      var modelProb = tip && tip.modelProbability ? tip.modelProbability : null;
+      this.accaSelections.push({ tipId, selection, odds, modelProbability: modelProb });
     }
     this.renderAccaBar();
     // Update checkbox
@@ -1644,6 +1647,9 @@ const App = {
 
     if (!this.accaSelections.length) {
       bar.classList.remove('active');
+      // Remove intelligence section if present
+      var existingIntel = document.getElementById('acca-intelligence');
+      if (existingIntel) existingIntel.remove();
       return;
     }
     bar.classList.add('active');
@@ -1657,6 +1663,91 @@ const App = {
     const combined = this.accaSelections.reduce((acc, a) => acc * a.odds, 1);
     oddsEl.textContent = this.formatOdds(combined);
     returnEl.textContent = '\u00a3' + (combined * 10).toFixed(2);
+
+    // Smart Accumulator Intelligence (Feature #4)
+    this.renderAccaIntelligence(combined);
+  },
+
+  renderAccaIntelligence(combinedOdds) {
+    var bar = document.getElementById('acca-bar');
+    if (!bar) return;
+    var inner = bar.querySelector('.acca-inner');
+    if (!inner) return;
+
+    // Remove existing intelligence section
+    var existing = document.getElementById('acca-intelligence');
+    if (existing) existing.remove();
+
+    var selections = this.accaSelections;
+    var foldCount = selections.length;
+
+    // Combined model probability (multiply individual probabilities)
+    var hasModelData = selections.some(function(a) { return a.modelProbability && a.modelProbability > 0; });
+    var combinedModelProb = 1;
+    selections.forEach(function(a) {
+      var prob = a.modelProbability && a.modelProbability > 0 ? a.modelProbability : (1 / a.odds);
+      combinedModelProb *= prob;
+    });
+
+    // Combined implied probability from odds
+    var combinedImpliedProb = 1 / combinedOdds;
+
+    // Edge on acca
+    var edge = combinedModelProb - combinedImpliedProb;
+    var edgePct = (edge * 100).toFixed(1);
+    var edgeColor = edge >= 0 ? 'color:var(--green);' : 'color:var(--red);';
+    var edgeSign = edge >= 0 ? '+' : '';
+
+    // Expected value
+    var ev = (combinedModelProb * combinedOdds) - 1;
+    var evDisplay = (ev >= 0 ? '+' : '') + ev.toFixed(2);
+    var evColor = ev >= 0 ? 'color:var(--green);' : 'color:var(--red);';
+
+    // Risk rating
+    var riskLabel = 'Low';
+    var riskColor = 'color:var(--green);';
+    if (foldCount >= 5) { riskLabel = 'Very High'; riskColor = 'color:var(--red);'; }
+    else if (foldCount >= 4) { riskLabel = 'High'; riskColor = 'color:#f59e0b;'; }
+    else if (foldCount >= 3) { riskLabel = 'Medium'; riskColor = 'color:#f59e0b;'; }
+
+    // Kelly stake suggestion (simplified Kelly criterion)
+    // Kelly fraction = (edge) / (odds - 1), capped at reasonable amounts
+    var kellyFraction = 0;
+    if (edge > 0 && combinedOdds > 1) {
+      kellyFraction = edge / (combinedOdds - 1);
+    }
+    // Cap Kelly at 5% of bankroll, quarter Kelly for safety
+    var quarterKelly = Math.max(0, Math.min(kellyFraction * 0.25, 0.05));
+    var kellyUnits = (quarterKelly * 100).toFixed(1);
+
+    var intelHtml = '<div class="acca-intelligence" id="acca-intelligence">' +
+      '<div class="acca-intel-item">' +
+        '<span class="acca-intel-label">Model Prob</span>' +
+        '<span class="acca-intel-value">' + (combinedModelProb * 100).toFixed(1) + '%</span>' +
+      '</div>' +
+      '<div class="acca-intel-item">' +
+        '<span class="acca-intel-label">Implied Prob</span>' +
+        '<span class="acca-intel-value">' + (combinedImpliedProb * 100).toFixed(1) + '%</span>' +
+      '</div>' +
+      '<div class="acca-intel-item">' +
+        '<span class="acca-intel-label">Edge</span>' +
+        '<span class="acca-intel-value" style="' + edgeColor + '">' + edgeSign + edgePct + '%</span>' +
+      '</div>' +
+      '<div class="acca-intel-item">' +
+        '<span class="acca-intel-label">EV</span>' +
+        '<span class="acca-intel-value" style="' + evColor + '">' + evDisplay + '</span>' +
+      '</div>' +
+      '<div class="acca-intel-item">' +
+        '<span class="acca-intel-label">Risk</span>' +
+        '<span class="acca-intel-value" style="' + riskColor + '">' + riskLabel + '</span>' +
+      '</div>' +
+      '<div class="acca-intel-item">' +
+        '<span class="acca-intel-label">Kelly Stake</span>' +
+        '<span class="acca-intel-value">' + kellyUnits + ' units</span>' +
+      '</div>' +
+    '</div>';
+
+    inner.insertAdjacentHTML('beforeend', intelHtml);
   },
 
   // -----------------------------------------------------------------------
@@ -1831,6 +1922,108 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // MONTHLY TARGET TRACKER (Feature #3)
+  // -----------------------------------------------------------------------
+  renderMonthlyTarget(results, tips) {
+    var now = new Date();
+    var monthName = now.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+    var year = now.getFullYear();
+    var month = now.getMonth();
+
+    // Filter results to current month
+    var monthResults = (results || []).filter(function(r) {
+      if (!r.date) return false;
+      var d = new Date(r.date);
+      return d.getFullYear() === year && d.getMonth() === month;
+    });
+
+    var settled = monthResults.filter(function(r) {
+      return r.result === 'won' || r.result === 'lost' || r.result === 'placed';
+    });
+    var wins = settled.filter(function(r) { return r.result === 'won' || r.result === 'placed'; });
+    var totalSettled = settled.length;
+    var strikeRate = totalSettled > 0 ? (wins.length / totalSettled) * 100 : 0;
+    var pnl = settled.reduce(function(sum, r) { return sum + (r.pnl || 0); }, 0);
+    var totalStaked = settled.reduce(function(sum, r) { return sum + (r.stake || 1); }, 0);
+    var roi = totalStaked > 0 ? (pnl / totalStaked) * 100 : 0;
+
+    // Count unique days tracked
+    var daysTracked = {};
+    settled.forEach(function(r) { if (r.date) daysTracked[r.date] = true; });
+    var dayCount = Object.keys(daysTracked).length;
+
+    // Targets
+    var srTarget = 55;
+    var plTarget = 20;
+    var roiTarget = 15;
+
+    // Status helpers
+    function getStatus(actual, target) {
+      var pct = target > 0 ? (actual / target) : (actual >= 0 ? 1 : 0);
+      if (actual >= target) return { cls: 'hit', label: 'Target Hit!', fillCls: 'on-track' };
+      if (pct >= 0.75) return { cls: 'on-track', label: 'On Track', fillCls: 'on-track' };
+      if (pct >= 0.5) return { cls: 'on-track', label: 'On Track', fillCls: 'close' };
+      return { cls: 'needs-work', label: 'Needs Work', fillCls: 'behind' };
+    }
+
+    function getStatusPL(actual, target) {
+      if (actual >= target) return { cls: 'hit', label: 'Target Hit!', fillCls: 'on-track' };
+      if (actual >= target * 0.5) return { cls: 'on-track', label: 'On Track', fillCls: 'on-track' };
+      if (actual >= 0) return { cls: 'on-track', label: 'On Track', fillCls: 'close' };
+      return { cls: 'needs-work', label: 'Needs Work', fillCls: 'behind' };
+    }
+
+    var srStatus = getStatus(strikeRate, srTarget);
+    var plStatus = getStatusPL(pnl, plTarget);
+    var roiStatus = getStatusPL(roi, roiTarget);
+
+    var allHit = strikeRate >= srTarget && pnl >= plTarget && roi >= roiTarget;
+
+    var srFill = Math.min((strikeRate / srTarget) * 100, 100);
+    var plFill = pnl >= 0 ? Math.min((pnl / plTarget) * 100, 100) : 0;
+    var roiFill = roi >= 0 ? Math.min((roi / roiTarget) * 100, 100) : 0;
+
+    return '<div class="monthly-target' + (allHit ? ' all-targets-hit' : '') + '">' +
+      '<div class="monthly-target-header">' +
+        '<div class="monthly-target-title">' + monthName + ' Performance</div>' +
+        '<div class="monthly-target-days">' + dayCount + ' day' + (dayCount !== 1 ? 's' : '') + ' tracked so far this month</div>' +
+      '</div>' +
+      '<div class="monthly-target-row">' +
+        '<div class="monthly-target-row-header">' +
+          '<span class="monthly-target-metric">Strike Rate</span>' +
+          '<span class="monthly-target-values">' + strikeRate.toFixed(1) + '% / ' + srTarget + '%</span>' +
+        '</div>' +
+        '<div class="monthly-target-bar">' +
+          '<div class="monthly-target-fill ' + srStatus.fillCls + '" style="width:' + srFill + '%"></div>' +
+          '<span class="monthly-target-label">' + wins.length + '/' + totalSettled + '</span>' +
+        '</div>' +
+        '<div class="monthly-target-status ' + srStatus.cls + '">' + srStatus.label + '</div>' +
+      '</div>' +
+      '<div class="monthly-target-row">' +
+        '<div class="monthly-target-row-header">' +
+          '<span class="monthly-target-metric">Profit / Loss</span>' +
+          '<span class="monthly-target-values">' + (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' / +' + plTarget + ' units</span>' +
+        '</div>' +
+        '<div class="monthly-target-bar">' +
+          '<div class="monthly-target-fill ' + plStatus.fillCls + '" style="width:' + plFill + '%"></div>' +
+        '</div>' +
+        '<div class="monthly-target-status ' + plStatus.cls + '">' + plStatus.label + '</div>' +
+      '</div>' +
+      '<div class="monthly-target-row">' +
+        '<div class="monthly-target-row-header">' +
+          '<span class="monthly-target-metric">ROI</span>' +
+          '<span class="monthly-target-values">' + (roi >= 0 ? '+' : '') + roi.toFixed(1) + '% / +' + roiTarget + '%</span>' +
+        '</div>' +
+        '<div class="monthly-target-bar">' +
+          '<div class="monthly-target-fill ' + roiStatus.fillCls + '" style="width:' + roiFill + '%"></div>' +
+        '</div>' +
+        '<div class="monthly-target-status ' + roiStatus.cls + '">' + roiStatus.label + '</div>' +
+      '</div>' +
+      (allHit ? '<div class="monthly-target-all-hit">&#127942; ALL TARGETS HIT &#127942;</div>' : '') +
+    '</div>';
+  },
+
+  // -----------------------------------------------------------------------
   // DASHBOARD
   // -----------------------------------------------------------------------
   async renderDashboard() {
@@ -1877,6 +2070,7 @@ const App = {
     var morningBriefHtml = this.buildMorningBrief(tips, allResults, perf);
     var wouldHaveWonHtml = this.buildWouldHaveWon(allResults);
     var streakBadgesHtml = await this.renderStreakBadges();
+    var monthlyTargetHtml = this.renderMonthlyTarget(allResults, allTips);
     var bankrollHtml = this.renderBankroll();
     var recoveryHtml = this.renderRecoveryPick(allResults, tips);
 
@@ -1947,6 +2141,9 @@ const App = {
 
         <!-- Streak Badges -->
         ${streakBadgesHtml}
+
+        <!-- Monthly Target Tracker -->
+        ${monthlyTargetHtml}
 
         <!-- Breaking News & Team Updates -->
         <div id="dashboard-news-section"></div>
@@ -2203,6 +2400,9 @@ const App = {
     // Render bankroll chart after DOM update
     var self = this;
     setTimeout(function() { try { self.renderBankrollChart(); } catch (e) {} }, 50);
+
+    // Check for new wins and show celebrations
+    setTimeout(function() { try { self.checkForNewWins(); } catch (e) {} }, 500);
 
     // Fetch and render breaking news section
     this._fetchDashboardNews();
@@ -2587,6 +2787,80 @@ const App = {
   _selectedRace: null,
   _racingLiveData: null,
   _racingIntelData: null,
+  _goingForecastCache: {},
+
+  // -----------------------------------------------------------------------
+  // GOING FORECAST WIDGET (Feature #5)
+  // -----------------------------------------------------------------------
+  async fetchGoingForecast(meetingName) {
+    if (this._goingForecastCache[meetingName]) return this._goingForecastCache[meetingName];
+    try {
+      var data = await this.api('/weather/test?course=' + encodeURIComponent(meetingName));
+      if (data && data.processedWeather) {
+        this._goingForecastCache[meetingName] = data.processedWeather;
+        return data.processedWeather;
+      }
+      if (data && !data.error) {
+        this._goingForecastCache[meetingName] = data;
+        return data;
+      }
+    } catch (e) { /* weather not available */ }
+    return null;
+  },
+
+  predictGoing(currentGoing, weather) {
+    if (!weather || !currentGoing) return { text: '', cls: '' };
+    var desc = (weather.description || '').toLowerCase();
+    var rainfall = weather.rainfall || 0;
+    var hasRain = rainfall > 0 || desc.indexOf('rain') !== -1 || desc.indexOf('drizzle') !== -1 || desc.indexOf('shower') !== -1;
+    var heavyRain = rainfall > 5 || desc.indexOf('heavy') !== -1;
+    var going = currentGoing.toLowerCase();
+
+    if (heavyRain) {
+      return { text: 'Heavy going expected', cls: 'easing' };
+    }
+    if (hasRain) {
+      if (going.indexOf('good to soft') !== -1 || going === 'good to soft') {
+        return { text: 'Likely to turn Soft', cls: 'easing' };
+      }
+      if (going === 'good' || going.indexOf('good') !== -1 && going.indexOf('soft') === -1) {
+        return { text: 'Likely to ease \u2192 Good to Soft', cls: 'easing' };
+      }
+      if (going.indexOf('soft') !== -1) {
+        return { text: 'Likely to remain Soft or ease further', cls: 'easing' };
+      }
+      return { text: 'Going may ease with rain', cls: 'easing' };
+    }
+    // Dry conditions
+    if (going.indexOf('soft') !== -1 && going.indexOf('good') === -1) {
+      return { text: 'May dry out \u2192 Good to Soft', cls: 'drying' };
+    }
+    if (going.indexOf('good to soft') !== -1) {
+      return { text: 'May dry out \u2192 Good', cls: 'drying' };
+    }
+    if (going === 'good' || going.indexOf('good') !== -1) {
+      return { text: 'Likely to remain Good', cls: 'drying' };
+    }
+    if (going.indexOf('firm') !== -1 || going.indexOf('hard') !== -1) {
+      return { text: 'Likely to remain ' + currentGoing, cls: 'drying' };
+    }
+    return { text: 'No significant change expected', cls: '' };
+  },
+
+  renderGoingForecastWidget(weather, currentGoing) {
+    if (!weather) return '';
+    var temp = weather.temp !== undefined ? Math.round(weather.temp) + '\u00B0C' : '';
+    var desc = weather.description || '';
+    // Capitalise first letter
+    if (desc) desc = desc.charAt(0).toUpperCase() + desc.slice(1);
+    var prediction = this.predictGoing(currentGoing, weather);
+
+    return '<div class="going-forecast">' +
+      (temp ? '<span class="going-temp">' + temp + '</span>' : '') +
+      (desc ? '<span class="going-weather">' + desc + '</span>' : '') +
+      (prediction.text ? '<span class="going-prediction ' + prediction.cls + '">\u2192 ' + prediction.text + '</span>' : '') +
+    '</div>';
+  },
 
   async renderRacing() {
     var app = document.getElementById('app');
@@ -2657,6 +2931,7 @@ const App = {
       (meetingKeys.length > 0 ? '<div class="meeting-grid">' +
         meetingKeys.map(function(key) {
           var m = liveMeetings[key];
+          var safeKey = key.replace(/[^a-zA-Z0-9]/g, '_');
           return '<button class="meeting-card-btn" onclick="App._selectedMeeting=\'' + key.replace(/'/g, "\\'") + '\';App._racingView=\'races\';App.renderRacing()">' +
             '<div class="meeting-card-name">' + m.name + '</div>' +
             '<div class="meeting-card-meta">' + m.races.length + ' race' + (m.races.length !== 1 ? 's' : '') + '</div>' +
@@ -2664,6 +2939,7 @@ const App = {
               '<span>First race: ' + (m.firstTime || '-') + '</span>' +
               (m.going ? '<span>Going: ' + m.going + '</span>' : '') +
             '</div>' +
+            '<div class="going-forecast-placeholder" id="going-forecast-' + safeKey + '" data-meeting="' + key.replace(/"/g, '&quot;') + '" data-going="' + (m.going || '').replace(/"/g, '&quot;') + '"></div>' +
           '</button>';
         }).join('') +
       '</div>' : '<div class="card text-center" style="padding:48px 24px;">' +
@@ -2673,6 +2949,22 @@ const App = {
       // Tips section below
       self._renderRacingTipsSection() +
     '</div>';
+
+    // Load going forecasts asynchronously for each meeting
+    if (meetingKeys.length > 0) {
+      meetingKeys.forEach(function(key) {
+        var safeKey = key.replace(/[^a-zA-Z0-9]/g, '_');
+        var placeholder = document.getElementById('going-forecast-' + safeKey);
+        if (!placeholder) return;
+        var meetingName = placeholder.getAttribute('data-meeting');
+        var currentGoing = placeholder.getAttribute('data-going');
+        self.fetchGoingForecast(meetingName).then(function(weather) {
+          if (weather && placeholder) {
+            placeholder.innerHTML = self.renderGoingForecastWidget(weather, currentGoing);
+          }
+        });
+      });
+    }
   },
 
   _renderMeetingRaces() {
@@ -4629,6 +4921,9 @@ const App = {
           All results verified via live API data &mdash; settled automatically every 5 minutes
         </div>
 
+        <!-- Profit Calendar (GitHub-style heatmap) -->
+        <div class="profit-calendar" id="profit-calendar-container"></div>
+
         <!-- Advanced Chart Filters -->
         <div class="section">
           <div class="section-title"><span class="icon">&#128200;</span> Performance Dashboard</div>
@@ -4733,6 +5028,9 @@ const App = {
     this.renderPerformanceChart(perf);
     this.renderMonthlyChart(results);
     this.renderSRChart(results);
+
+    // Render profit calendar after DOM is ready
+    this.renderProfitCalendar(results);
   },
 
   updateCharts() {
@@ -7976,6 +8274,256 @@ const App = {
       }
     }, 30000);
     self._liveIntervals.push(refreshInterval);
+  },
+
+  // =========================================================================
+  // PROFIT CALENDAR — GitHub-style heatmap for daily P/L
+  // =========================================================================
+  renderProfitCalendar(results) {
+    var container = document.getElementById('profit-calendar-container');
+    if (!container) return;
+
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var todayStr = this._getToday();
+
+    // Build a map of date -> { pnl, wins, losses }
+    var dayMap = {};
+    (results || []).forEach(function(r) {
+      if (!r.date) return;
+      var d = r.date.substring(0, 10);
+      if (!dayMap[d]) dayMap[d] = { pnl: 0, wins: 0, losses: 0 };
+      dayMap[d].pnl += (r.pnl || 0);
+      if (r.result === 'won') dayMap[d].wins++;
+      else if (r.result === 'lost') dayMap[d].losses++;
+    });
+
+    // Generate last 90 days
+    var days = [];
+    for (var i = 89; i >= 0; i--) {
+      var d = new Date(today);
+      d.setDate(d.getDate() - i);
+      var dateStr = d.toISOString().split('T')[0];
+      var dayOfWeek = d.getDay(); // 0=Sun, 1=Mon...
+      days.push({
+        date: dateStr,
+        dayOfWeek: dayOfWeek,
+        data: dayMap[dateStr] || null
+      });
+    }
+
+    // Build grid: 7 columns (Mon-Sun). We need to pad the first row.
+    // Convert Sun=0 to Mon-based: Mon=0, Tue=1, ... Sun=6
+    var firstDayCol = (days[0].dayOfWeek + 6) % 7; // Mon-based index
+
+    var squaresHtml = '';
+    // Add empty cells for padding the first row
+    for (var p = 0; p < firstDayCol; p++) {
+      squaresHtml += '<div class="profit-cal-day no-data" style="visibility:hidden;"></div>';
+    }
+
+    var self = this;
+    days.forEach(function(day) {
+      var cls = 'profit-cal-day';
+      if (day.date === todayStr) cls += ' today';
+
+      if (!day.data) {
+        cls += ' no-data';
+      } else {
+        var pnl = day.data.pnl;
+        var absPnl = Math.abs(pnl);
+        if (pnl > 0) {
+          if (absPnl >= 3) cls += ' profit-high';
+          else if (absPnl >= 1) cls += ' profit-med';
+          else cls += ' profit-low';
+        } else if (pnl < 0) {
+          if (absPnl >= 3) cls += ' loss-high';
+          else if (absPnl >= 1) cls += ' loss-med';
+          else cls += ' loss-low';
+        } else {
+          cls += ' no-data';
+        }
+      }
+
+      var tooltipText = '';
+      var dateLabel = new Date(day.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      if (day.data) {
+        var pnlStr = (day.data.pnl >= 0 ? '+' : '') + day.data.pnl.toFixed(2) + 'u';
+        tooltipText = dateLabel + ': ' + pnlStr + ' (' + day.data.wins + 'W ' + day.data.losses + 'L)';
+      } else {
+        tooltipText = dateLabel + ': No tips';
+      }
+
+      squaresHtml += '<div class="' + cls + '" data-tooltip="' + tooltipText + '" data-date="' + day.date + '"></div>';
+    });
+
+    // Month labels
+    var monthLabels = '';
+    var seenMonths = {};
+    days.forEach(function(day) {
+      var m = day.date.substring(0, 7);
+      if (!seenMonths[m]) {
+        seenMonths[m] = true;
+        var label = new Date(day.date).toLocaleDateString('en-GB', { month: 'short' });
+        monthLabels += '<span class="profit-cal-month-label">' + label + '</span>';
+      }
+    });
+
+    // Summary stats
+    var activeDays = Object.keys(dayMap).filter(function(d) {
+      var dDate = new Date(d);
+      var cutoff = new Date(today);
+      cutoff.setDate(cutoff.getDate() - 89);
+      return dDate >= cutoff && dDate <= today;
+    });
+    var profitableDays = activeDays.filter(function(d) { return dayMap[d].pnl > 0; });
+    var pct = activeDays.length > 0 ? Math.round((profitableDays.length / activeDays.length) * 100) : 0;
+
+    container.innerHTML =
+      '<div class="section">' +
+        '<div class="section-title"><span class="icon">&#128197;</span> Profit Calendar — Last 90 Days</div>' +
+        '<div class="card" style="padding:20px;">' +
+          '<div class="profit-calendar-day-labels">' +
+            '<span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>' +
+          '</div>' +
+          '<div class="profit-calendar-grid">' + squaresHtml + '</div>' +
+          '<div class="profit-calendar-months">' + monthLabels + '</div>' +
+          '<div class="profit-calendar-legend">' +
+            '<span class="profit-cal-legend-label">Loss</span>' +
+            '<div class="profit-cal-day loss-high" style="width:14px;height:14px;"></div>' +
+            '<div class="profit-cal-day loss-med" style="width:14px;height:14px;"></div>' +
+            '<div class="profit-cal-day loss-low" style="width:14px;height:14px;"></div>' +
+            '<div class="profit-cal-day no-data" style="width:14px;height:14px;"></div>' +
+            '<div class="profit-cal-day profit-low" style="width:14px;height:14px;"></div>' +
+            '<div class="profit-cal-day profit-med" style="width:14px;height:14px;"></div>' +
+            '<div class="profit-cal-day profit-high" style="width:14px;height:14px;"></div>' +
+            '<span class="profit-cal-legend-label">Profit</span>' +
+          '</div>' +
+          '<div class="profit-calendar-summary">' +
+            '<span class="positive">' + profitableDays.length + '</span> profitable days out of ' +
+            '<span>' + activeDays.length + '</span> active days ' +
+            '(<span class="' + (pct >= 50 ? 'positive' : 'negative') + '">' + pct + '%</span>)' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    // Attach tooltip listeners
+    container.querySelectorAll('.profit-cal-day[data-tooltip]').forEach(function(el) {
+      el.addEventListener('mouseenter', function(e) {
+        var existing = container.querySelector('.profit-cal-tooltip');
+        if (existing) existing.remove();
+        var tip = document.createElement('div');
+        tip.className = 'profit-cal-tooltip';
+        tip.textContent = el.getAttribute('data-tooltip');
+        el.style.position = 'relative';
+        el.appendChild(tip);
+      });
+      el.addEventListener('mouseleave', function() {
+        var tip = el.querySelector('.profit-cal-tooltip');
+        if (tip) tip.remove();
+      });
+    });
+  },
+
+  // =========================================================================
+  // WIN CELEBRATIONS — Gold confetti animation for new wins
+  // =========================================================================
+  showWinCelebration(tipData) {
+    var self = this;
+    // Create overlay
+    var overlay = document.createElement('div');
+    overlay.className = 'win-celebration-overlay';
+
+    // Create confetti particles
+    var confettiColors = ['#d4a843', '#22c55e', '#ffffff', '#f5d77a', '#4ade80'];
+    for (var i = 0; i < 30; i++) {
+      var particle = document.createElement('div');
+      particle.className = 'confetti-particle';
+      particle.style.left = (Math.random() * 100) + 'vw';
+      particle.style.backgroundColor = confettiColors[Math.floor(Math.random() * confettiColors.length)];
+      particle.style.animationDelay = (Math.random() * 1.5) + 's';
+      particle.style.width = (6 + Math.random() * 6) + 'px';
+      particle.style.height = (6 + Math.random() * 6) + 'px';
+      particle.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+      overlay.appendChild(particle);
+    }
+
+    // Create card
+    var oddsStr = this.formatOdds(tipData.odds);
+    var pnlStr = (tipData.pnl > 0 ? '+' : '') + tipData.pnl.toFixed(2);
+    var card = document.createElement('div');
+    card.className = 'win-celebration-card';
+    card.innerHTML =
+      '<div class="win-celebration-trophy">&#127942;</div>' +
+      '<div class="win-celebration-title">WINNER!</div>' +
+      '<div class="win-celebration-selection">' + (tipData.selection || '') + '</div>' +
+      '<div class="win-celebration-odds">at ' + oddsStr + '</div>' +
+      '<div class="win-celebration-pnl">' + pnlStr + ' units</div>';
+    overlay.appendChild(card);
+
+    document.body.appendChild(overlay);
+
+    // Pulse the daily stats P/L if visible
+    var pnlEls = document.querySelectorAll('.pnl-positive, .stat-value.positive');
+    pnlEls.forEach(function(el) { el.classList.add('win-pulse'); });
+
+    // Dismiss on click or after 3 seconds
+    var dismiss = function() {
+      overlay.classList.add('win-celebration-out');
+      pnlEls.forEach(function(el) { el.classList.remove('win-pulse'); });
+      setTimeout(function() {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }, 400);
+    };
+    overlay.addEventListener('click', dismiss);
+    setTimeout(dismiss, 3000);
+  },
+
+  checkForNewWins() {
+    var self = this;
+    var today = this._getToday();
+    var yesterday = this._getYesterday();
+
+    this.api('/results').then(function(results) {
+      if (!results || !results.length) return;
+
+      // Filter to won results from today or yesterday
+      var recentWins = results.filter(function(r) {
+        return r.result === 'won' && (r.date === today || r.date === yesterday);
+      });
+
+      if (!recentWins.length) return;
+
+      // Get stored seen win IDs
+      var storedStr = localStorage.getItem('ee_last_seen_wins');
+      var seenWins = [];
+      try { seenWins = JSON.parse(storedStr) || []; } catch(e) { seenWins = []; }
+
+      // Find unseen wins
+      var unseenWins = recentWins.filter(function(w) {
+        var winId = w.id || (w.selection + '_' + w.date + '_' + w.odds);
+        return seenWins.indexOf(winId) === -1;
+      });
+
+      if (!unseenWins.length) return;
+
+      // Mark all as seen
+      var allIds = seenWins.slice();
+      unseenWins.forEach(function(w) {
+        var winId = w.id || (w.selection + '_' + w.date + '_' + w.odds);
+        allIds.push(winId);
+      });
+      // Keep only last 100 IDs to avoid localStorage bloat
+      if (allIds.length > 100) allIds = allIds.slice(-100);
+      localStorage.setItem('ee_last_seen_wins', JSON.stringify(allIds));
+
+      // Queue celebrations sequentially
+      unseenWins.forEach(function(win, index) {
+        setTimeout(function() {
+          self.showWinCelebration(win);
+        }, index * 4000); // 3s display + 1s gap
+      });
+    }).catch(function() {});
   },
 
   getFAQs() {
