@@ -229,6 +229,10 @@ module.exports = function(deps) {
   router.get('/results/streaks', async (req, res) => {
     try {
       const results = await db.getResults();
+      // Normalise dates to strings (PostgreSQL returns Date objects)
+      results.forEach(function(r) {
+        if (r.date && typeof r.date !== 'string') r.date = new Date(r.date).toISOString().split('T')[0];
+      });
       const sorted = [...results].sort((a, b) => new Date(a.date) - new Date(b.date));
       const counted = sorted.filter(r => r.result !== 'void');
 

@@ -4,7 +4,7 @@ module.exports = function(deps) {
   const { db, racingSource, footballSource, oddsSource, racingOddsSource, movementTracker, dataIngestion, aiReports, newsService } = deps;
 
   // GET /api/status — API connection status overview
-  router.get('/status', async (req, res) => {
+  router.get('/api/status', async (req, res) => {
     try {
       var movementStatus = movementTracker ? {
         eventsTracked: Object.keys(movementTracker.snapshots).length,
@@ -31,7 +31,7 @@ module.exports = function(deps) {
   });
 
   // GET /api/blog/weekly-reviews — Auto-generated weekly performance reviews
-  router.get('/blog/weekly-reviews', async (req, res) => {
+  router.get('/api/blog/weekly-reviews', async (req, res) => {
     try {
       var reviews = await db.getBlogReviews() || [];
       res.json(reviews);
