@@ -5990,14 +5990,15 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
    ========================================================================= */
 .profit-calendar {
   margin-bottom: 24px;
+  max-width: 500px;
 }
 .profit-calendar-day-labels {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
-  margin-bottom: 4px;
+  gap: 2px;
+  margin-bottom: 2px;
   text-align: center;
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-muted);
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -6005,18 +6006,18 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
 .profit-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
+  gap: 2px;
 }
 .profit-cal-day {
   width: 100%;
-  aspect-ratio: 1;
-  border-radius: 3px;
+  height: 14px;
+  border-radius: 2px;
   cursor: pointer;
   position: relative;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .profit-cal-day:hover {
-  transform: scale(1.3);
+  transform: scale(1.4);
   z-index: 2;
 }
 .profit-cal-day.profit-high {
