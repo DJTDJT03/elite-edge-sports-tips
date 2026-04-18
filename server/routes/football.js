@@ -539,96 +539,95 @@ module.exports = function(deps) {
       if (!aiReports || !aiReports.isAvailable()) {
         return res.status(503).json({ error: 'AI reports not available. ANTHROPIC_API_KEY not configured.' });
       }
-      if (!footballSource || !process.env.API_FOOTBALL_KEY) {
-        return res.status(503).json({ error: 'API-Football not configured.' });
-      }
 
       var fixtureId = req.params.fixtureId;
+      var previewData = { homeTeam: 'Home', awayTeam: 'Away', league: '', kickoff: '', venue: '' };
 
-      // Fetch fixture details (reuse match-intelligence logic)
-      var fixtureData = await footballSource._apiGet('/fixtures?id=' + fixtureId);
-      if (!fixtureData.response || !fixtureData.response.length) {
-        return res.status(404).json({ error: 'Fixture not found.' });
+      // Try to get fixture details from API-Football
+      if (footballSource && process.env.API_FOOTBALL_KEY) {
+        try {
+          var fixtureData = await footballSource._apiGet('/fixtures?id=' + fixtureId);
+          if (fixtureData && fixtureData.response && fixtureData.response.length > 0) {
+            var fixture = fixtureData.response[0];
+            previewData.homeTeam = fixture.teams && fixture.teams.home ? fixture.teams.home.name : 'Home';
+            previewData.awayTeam = fixture.teams && fixture.teams.away ? fixture.teams.away.name : 'Away';
+            previewData.league = fixture.league ? fixture.league.name : '';
+            previewData.kickoff = fixture.fixture ? fixture.fixture.date : '';
+            previewData.venue = fixture.fixture && fixture.fixture.venue ? fixture.fixture.venue.name : '';
+
+            // Try to get supporting data — all optional, failures are fine
+            try {
+              var homeTeamId = fixture.teams.home.id;
+              var awayTeamId = fixture.teams.away.id;
+              var parallel = await Promise.allSettled([
+                footballSource._apiGet('/fixtures?team=' + homeTeamId + '&last=5&status=FT'),
+                footballSource._apiGet('/fixtures?team=' + awayTeamId + '&last=5&status=FT'),
+                footballSource._apiGet('/fixtures/headtohead?h2h=' + homeTeamId + '-' + awayTeamId + '&last=5'),
+              ]);
+
+              var homeFixtures = (parallel[0].status === 'fulfilled' && parallel[0].value && parallel[0].value.response) ? parallel[0].value.response : [];
+              var awayFixtures = (parallel[1].status === 'fulfilled' && parallel[1].value && parallel[1].value.response) ? parallel[1].value.response : [];
+              var h2hMatches = (parallel[2].status === 'fulfilled' && parallel[2].value && parallel[2].value.response) ? parallel[2].value.response : [];
+
+              // Safe form extraction
+              function safeForm(fixtures, teamId) {
+                try {
+                  return fixtures.slice(0, 5).map(function(f) {
+                    if (!f.teams || !f.goals) return '?';
+                    var isHome = f.teams.home && f.teams.home.id === teamId;
+                    var gf = isHome ? (f.goals.home || 0) : (f.goals.away || 0);
+                    var ga = isHome ? (f.goals.away || 0) : (f.goals.home || 0);
+                    return gf > ga ? 'W' : gf < ga ? 'L' : 'D';
+                  });
+                } catch(e) { return []; }
+              }
+
+              function safeAvgGoals(fixtures, teamId) {
+                try {
+                  if (!fixtures.length) return 0;
+                  var total = 0;
+                  fixtures.forEach(function(f) {
+                    if (!f.teams || !f.goals) return;
+                    var isHome = f.teams.home && f.teams.home.id === teamId;
+                    total += isHome ? (f.goals.home || 0) : (f.goals.away || 0);
+                  });
+                  return +(total / fixtures.length).toFixed(2);
+                } catch(e) { return 0; }
+              }
+
+              previewData.homeForm = safeForm(homeFixtures, homeTeamId);
+              previewData.awayForm = safeForm(awayFixtures, awayTeamId);
+              previewData.homeGoals = safeAvgGoals(homeFixtures, homeTeamId);
+              previewData.awayGoals = safeAvgGoals(awayFixtures, awayTeamId);
+
+              // Safe H2H
+              if (h2hMatches.length > 0) {
+                var h2hHomeWins = 0, h2hAwayWins = 0, h2hDraws = 0;
+                var h2hLast = [];
+                try {
+                  h2hLast = h2hMatches.slice(0, 5).map(function(f) {
+                    if (!f.goals || !f.teams) return null;
+                    var hg = f.goals.home || 0; var ag = f.goals.away || 0;
+                    var isHH = f.teams.home && f.teams.home.id === homeTeamId;
+                    if (hg > ag) { if (isHH) h2hHomeWins++; else h2hAwayWins++; }
+                    else if (ag > hg) { if (isHH) h2hAwayWins++; else h2hHomeWins++; }
+                    else h2hDraws++;
+                    return { home: f.teams.home.name, away: f.teams.away.name, homeGoals: hg, awayGoals: ag };
+                  }).filter(Boolean);
+                } catch(e) {}
+                previewData.h2hRecord = { homeWins: h2hHomeWins, draws: h2hDraws, awayWins: h2hAwayWins, lastMeetings: h2hLast };
+              }
+            } catch(e) {
+              // Supporting data fetch failed — continue with basic data
+              console.log('[AI Preview] Supporting data fetch failed (non-fatal):', e.message);
+            }
+          }
+        } catch(e) {
+          console.log('[AI Preview] Fixture fetch failed (non-fatal):', e.message);
+        }
       }
-      var fixture = fixtureData.response[0];
-      var homeTeam = fixture.teams.home;
-      var awayTeam = fixture.teams.away;
-      var league = fixture.league;
-      var venue = fixture.fixture.venue;
-      var kickoff = fixture.fixture.date;
 
-      // Fetch supporting data in parallel
-      var parallelResults = await Promise.allSettled([
-        footballSource._apiGet('/fixtures?team=' + homeTeam.id + '&last=5&status=FT'),
-        footballSource._apiGet('/fixtures?team=' + awayTeam.id + '&last=5&status=FT'),
-        footballSource._apiGet('/fixtures/headtohead?h2h=' + homeTeam.id + '-' + awayTeam.id + '&last=5'),
-        footballSource.fetchInjuries(parseInt(fixtureId)),
-      ]);
-
-      var homeFixtures = (parallelResults[0].status === 'fulfilled' ? parallelResults[0].value : { response: [] }).response || [];
-      var awayFixtures = (parallelResults[1].status === 'fulfilled' ? parallelResults[1].value : { response: [] }).response || [];
-      var h2hMatches = (parallelResults[2].status === 'fulfilled' ? parallelResults[2].value : { response: [] }).response || [];
-      var injuriesList = (parallelResults[3].status === 'fulfilled' ? parallelResults[3].value : { response: [] }).response || [];
-
-      // Build form arrays
-      function getFormArray(fixtures, teamId) {
-        return fixtures.slice(0, 5).map(function(f) {
-          var isHome = f.teams.home.id === teamId;
-          var gf = isHome ? (f.goals.home || 0) : (f.goals.away || 0);
-          var ga = isHome ? (f.goals.away || 0) : (f.goals.home || 0);
-          return gf > ga ? 'W' : gf < ga ? 'L' : 'D';
-        });
-      }
-
-      // Build goals stats
-      function avgGoals(fixtures, teamId) {
-        if (!fixtures.length) return 0;
-        var total = 0;
-        fixtures.forEach(function(f) {
-          var isHome = f.teams.home.id === teamId;
-          total += isHome ? (f.goals.home || 0) : (f.goals.away || 0);
-        });
-        return +(total / fixtures.length).toFixed(2);
-      }
-
-      // H2H record
-      var h2hHomeWins = 0, h2hAwayWins = 0, h2hDraws = 0;
-      var h2hLastMeetings = h2hMatches.slice(0, 5).map(function(f) {
-        var hg = f.goals.home || 0;
-        var ag = f.goals.away || 0;
-        var isHomeTeamHome = f.teams.home.id === homeTeam.id;
-        if (hg > ag) { if (isHomeTeamHome) h2hHomeWins++; else h2hAwayWins++; }
-        else if (ag > hg) { if (isHomeTeamHome) h2hAwayWins++; else h2hHomeWins++; }
-        else { h2hDraws++; }
-        return { home: f.teams.home.name, away: f.teams.away.name, homeGoals: hg, awayGoals: ag };
-      });
-
-      // Injuries
-      var homeInjuries = injuriesList.filter(function(inj) { return inj.team && inj.team.id === homeTeam.id; }).map(function(inj) { return inj.player ? inj.player.name : 'Unknown'; });
-      var awayInjuries = injuriesList.filter(function(inj) { return inj.team && inj.team.id === awayTeam.id; }).map(function(inj) { return inj.player ? inj.player.name : 'Unknown'; });
-
-      var previewData = {
-        homeTeam: homeTeam.name,
-        awayTeam: awayTeam.name,
-        league: league.name,
-        kickoff: kickoff,
-        venue: venue ? venue.name : '',
-        homeForm: getFormArray(homeFixtures, homeTeam.id),
-        awayForm: getFormArray(awayFixtures, awayTeam.id),
-        homeGoals: avgGoals(homeFixtures, homeTeam.id),
-        awayGoals: avgGoals(awayFixtures, awayTeam.id),
-        h2hRecord: {
-          homeWins: h2hHomeWins,
-          draws: h2hDraws,
-          awayWins: h2hAwayWins,
-          lastMeetings: h2hLastMeetings,
-        },
-        injuries: {
-          home: homeInjuries,
-          away: awayInjuries,
-        },
-      };
-
+      // Generate preview with whatever data we have
       var result = await aiReports.generateFootballPreview(previewData);
       if (!result) {
         return res.status(500).json({ error: 'Failed to generate AI preview. Please try again.' });
