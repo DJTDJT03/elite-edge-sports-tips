@@ -21,6 +21,25 @@ module.exports = function(deps) {
     }
   }
 
+  // DEBUG: test access level (temporary)
+  router.get('/tips/debug-access', async (req, res) => {
+    var access = await getUserAccess(req);
+    var authHeader = req.headers.authorization;
+    var decoded = null;
+    var dbUser = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
+        dbUser = await db.getUserById(decoded.id);
+      } catch(e) { decoded = { error: e.message }; }
+    }
+    res.json({
+      access: access,
+      jwtClaims: decoded ? { role: decoded.role, subscription: decoded.subscription, id: decoded.id } : null,
+      dbUser: dbUser ? { id: dbUser.id, subscription: dbUser.subscription, trialActive: dbUser.trialActive, role: dbUser.role, trialEnd: dbUser.trialEnd } : null,
+    });
+  });
+
   // GET /api/tips
   router.get('/tips', async (req, res) => {
     try {
