@@ -679,15 +679,18 @@ class RacingCardsSource extends DataSource {
   }
 
   async fetch() {
-    if (!this.config.apiKey || !this.config.apiSecret) {
+    // Read credentials fresh every time (handles Railway env var updates without restart)
+    var apiKey = process.env.RACING_API_KEY || this.config.apiKey || '';
+    var apiSecret = process.env.RACING_API_SECRET || this.config.apiSecret || '';
+    if (!apiKey || !apiSecret) {
       console.log(`[${this.name}] No API credentials — set RACING_API_KEY and RACING_API_SECRET`);
       return { racecards: [] };
     }
 
     try {
-      const auth = Buffer.from(`${this.config.apiKey}:${this.config.apiSecret}`).toString('base64');
-      // Tier-aware: try pro → standard → basic → free until one returns data
-      const endpoints = ['/racecards/pro', '/racecards/standard', '/racecards/basic', '/racecards/free'];
+      const auth = Buffer.from(apiKey + ':' + apiSecret).toString('base64');
+      // Standard plan first (most common), then fallback
+      const endpoints = ['/racecards/standard', '/racecards/free'];
       for (const endpoint of endpoints) {
         try {
           const racecards = await this._apiGet(endpoint, auth);
@@ -709,10 +712,10 @@ class RacingCardsSource extends DataSource {
             return racecards;
           }
         } catch (e) {
-          // Try next endpoint
+          console.log(`[${this.name}] Endpoint ${endpoint} failed: ${e.message} — trying next`);
         }
       }
-      console.log(`[${this.name}] All endpoints returned empty`);
+      console.log(`[${this.name}] All endpoints returned empty — key prefix: ${apiKey.substring(0, 6)}...`);
       return { racecards: [] };
     } catch (err) {
       console.error(`[${this.name}] API Error: ${err.message}`);
@@ -725,7 +728,7 @@ class RacingCardsSource extends DataSource {
   async fetchResults(date) {
     if (!this.config.apiKey || !this.config.apiSecret) return { results: [] };
     try {
-      const auth = Buffer.from(`${this.config.apiKey}:${this.config.apiSecret}`).toString('base64');
+      const auth = Buffer.from((process.env.RACING_API_KEY || this.config.apiKey) + ':' + (process.env.RACING_API_SECRET || this.config.apiSecret)).toString('base64');
       // Standard plan supports /results/today and /results for recent results
       const endpoints = ['/results/today', '/results'];
       for (const endpoint of endpoints) {
@@ -748,7 +751,7 @@ class RacingCardsSource extends DataSource {
   async fetchHorseForm(horseId) {
     if (!this.config.apiKey || !this.config.apiSecret) return {};
     try {
-      const auth = Buffer.from(`${this.config.apiKey}:${this.config.apiSecret}`).toString('base64');
+      const auth = Buffer.from((process.env.RACING_API_KEY || this.config.apiKey) + ':' + (process.env.RACING_API_SECRET || this.config.apiSecret)).toString('base64');
       return await this._apiGet(`/horses/${horseId}/form`, auth);
     } catch (err) {
       return {};
