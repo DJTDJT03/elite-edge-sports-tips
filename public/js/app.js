@@ -2346,7 +2346,10 @@ const App = {
           </div>
         </div>` : ''}
 
-        <!-- Yesterday's Best Winner Showcase (replaces free acca) -->
+        <!-- Premium Weekend Accumulator (premium users only) -->
+        ${this.isPremium() ? '<div id="premium-acca-container"></div>' : ''}
+
+        <!-- Yesterday's Best Winner Showcase (all users) -->
         <div id="yesterday-winner-showcase"></div>
 
         <!-- How It Works — Educational Section -->
@@ -2483,7 +2486,10 @@ const App = {
     // Render dynamic big winner banner
     this.renderBigWinnerBanner();
 
-    // Render yesterday's winner showcase (replaces free acca)
+    // Render premium weekend acca (premium users only)
+    this.renderPremiumAcca();
+
+    // Render yesterday's winner showcase (all users)
     this.renderYesterdayShowcase();
 
     // Fetch and render breaking news section
@@ -6228,6 +6234,64 @@ const App = {
   // -----------------------------------------------------------------------
   // FREE WEEKLY ACCA
   // -----------------------------------------------------------------------
+  async renderPremiumAcca() {
+    var container = document.getElementById('premium-acca-container');
+    if (!container || !this.isPremium()) return;
+    try {
+      var tips = await this.api('/tips');
+      var acca = tips.find(function(t) { return t.isWeeklyAcca && !t.locked; });
+      if (!acca || !acca.accaSelections || !acca.accaSelections.length) return;
+
+      var self = this;
+      var dayOfWeek = new Date().getDay();
+      var isWeekend = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0;
+
+      container.innerHTML =
+        '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.1),rgba(212,168,67,0.03));border:2px solid rgba(212,168,67,0.4);border-radius:14px;padding:24px;margin-bottom:24px;">' +
+          '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">' +
+            '<div style="font-size:28px;">&#9917;</div>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:16px;font-weight:800;color:#d4a843;">Premium Weekend Value Accumulator</div>' +
+              '<div style="font-size:12px;color:#8a8fa0;">Analyst-driven selections — no short prices, only value</div>' +
+            '</div>' +
+            '<div style="text-align:right;">' +
+              '<div style="font-size:20px;font-weight:800;color:#d4a843;">' + self.formatOdds(acca.odds) + '</div>' +
+              '<div style="font-size:10px;color:#8a8fa0;">COMBINED ODDS</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:grid;gap:8px;margin-bottom:16px;">' +
+          acca.accaSelections.map(function(s, idx) {
+            return '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(255,255,255,0.03);border-radius:8px;border-left:3px solid ' + (idx % 3 === 0 ? '#a855f7' : idx % 3 === 1 ? '#22c55e' : '#d4a843') + ';">' +
+              '<div style="font-size:18px;font-weight:800;color:#d4a843;min-width:24px;">' + (idx + 1) + '</div>' +
+              '<div style="flex:1;">' +
+                '<div style="font-weight:700;font-size:14px;color:#e8e6e3;">' + (s.match || '') + '</div>' +
+                '<div style="font-size:12px;color:#8a8fa0;margin-bottom:4px;">' + (s.league || '') + '</div>' +
+                '<div style="font-size:13px;font-weight:600;color:#d4a843;">' + (s.selection || '') + '</div>' +
+                '<div style="font-size:11px;color:#94a3b8;margin-top:4px;font-style:italic;">' + (s.reasoning || '') + '</div>' +
+              '</div>' +
+              '<div style="text-align:right;min-width:50px;">' +
+                '<div style="font-size:16px;font-weight:800;color:#e8e6e3;">' + self.formatOdds(s.odds) + '</div>' +
+              '</div>' +
+            '</div>';
+          }).join('') +
+          '</div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(212,168,67,0.1);border-radius:8px;">' +
+            '<div>' +
+              '<div style="font-size:12px;color:#8a8fa0;">£10 Stake Returns</div>' +
+              '<div style="font-size:22px;font-weight:800;color:#22c55e;">£' + (acca.odds * 10).toFixed(2) + '</div>' +
+            '</div>' +
+            '<div style="text-align:right;">' +
+              '<div style="font-size:12px;color:#8a8fa0;">Selections</div>' +
+              '<div style="font-size:22px;font-weight:800;color:#d4a843;">' + acca.accaSelections.length + '-fold</div>' +
+            '</div>' +
+          '</div>' +
+          '<p style="font-size:11px;color:#64748b;text-align:center;margin-top:12px;">Premium analyst selections. Min odds per leg: 1.6. Entertainment purposes only. Please gamble responsibly. 18+.</p>' +
+        '</div>';
+    } catch(e) {
+      // Non-fatal
+    }
+  },
+
   async renderYesterdayShowcase() {
     var container = document.getElementById('yesterday-winner-showcase');
     if (!container) return;
