@@ -2607,7 +2607,8 @@ const App = {
   // TIP CARD (reusable) — includes odds comparison, movement, form, acca, backed
   // -----------------------------------------------------------------------
   renderTipCard(tip) {
-    const isLocked = tip.locked;
+    // Override server lock if client knows user is premium (handles stale JWT edge case)
+    const isLocked = this.isPremium() ? false : tip.locked;
     const edgeClass = tip.valueRating === 'Elite' ? 'edge-elite' : tip.valueRating === 'High' ? 'edge-high' : tip.valueRating === 'Medium' ? 'edge-medium' : 'edge-low';
     const edgePct = Math.min((tip.edge || 0) * 100 / 0.2 * 100, 100);
     const myBets = this.getMyBets();

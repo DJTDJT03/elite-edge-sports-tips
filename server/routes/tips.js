@@ -2,32 +2,52 @@ module.exports = function(deps) {
   const router = require('express').Router();
   const { db, jwt, JWT_SECRET } = deps;
 
-  // Determine user's actual access level from the database (not JWT claims)
+  // Determine user's actual access level — checks DB, not just JWT
   async function getUserAccess(req) {
     var authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) return 'free';
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[Tips] No auth header — access: free');
+      return 'free';
+    }
+    var token = authHeader.split(' ')[1];
+    if (!token || token === 'null' || token === 'undefined') {
+      console.log('[Tips] Empty/null token — access: free');
+      return 'free';
+    }
     try {
-      var decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
+      var decoded = jwt.verify(token, JWT_SECRET);
+      if (!decoded || !decoded.id) {
+        console.log('[Tips] JWT decoded but no id — access: free');
+        return 'free';
+      }
+      // Admin in JWT = admin
       if (decoded.role === 'admin') return 'admin';
-      // Always check database for current subscription — JWT may be stale
+      // ALWAYS check database for current subscription
       var user = await db.getUserById(decoded.id);
-      if (!user) return 'free';
+      if (!user) {
+        console.log('[Tips] User not found in DB for id:', decoded.id, '— access: free');
+        return 'free';
+      }
       if (user.role === 'admin') return 'admin';
       if (user.subscription === 'premium') return 'premium';
-      if (user.trialActive) return 'premium';
+      if (user.trialActive === true) return 'premium';
+      console.log('[Tips] User', user.email, 'sub:', user.subscription, 'trial:', user.trialActive, '— access: free');
       return 'free';
     } catch (e) {
+      console.error('[Tips] JWT verify error:', e.message);
       return 'free';
     }
   }
 
-  // DEBUG: test access level (temporary)
+  // DEBUG: test access level
   router.get('/tips/debug-access', async (req, res) => {
     var access = await getUserAccess(req);
     var authHeader = req.headers.authorization;
+    var tokenPresent = !!(authHeader && authHeader.startsWith('Bearer '));
+    var tokenValue = tokenPresent ? authHeader.split(' ')[1].substring(0, 20) + '...' : 'none';
     var decoded = null;
     var dbUser = null;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    if (tokenPresent) {
       try {
         decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
         dbUser = await db.getUserById(decoded.id);
@@ -35,8 +55,10 @@ module.exports = function(deps) {
     }
     res.json({
       access: access,
+      tokenPresent: tokenPresent,
+      tokenPreview: tokenValue,
       jwtClaims: decoded ? { role: decoded.role, subscription: decoded.subscription, id: decoded.id } : null,
-      dbUser: dbUser ? { id: dbUser.id, subscription: dbUser.subscription, trialActive: dbUser.trialActive, role: dbUser.role, trialEnd: dbUser.trialEnd } : null,
+      dbUser: dbUser ? { id: dbUser.id, email: dbUser.email, subscription: dbUser.subscription, trialActive: dbUser.trialActive, role: dbUser.role } : null,
     });
   });
 
@@ -66,7 +88,7 @@ module.exports = function(deps) {
           return {
             ...tip,
             selection: 'Premium Pick — Upgrade to View',
-            analysis: { summary: 'Full analysis available to Premium subscribers. Start your 7-day free trial to access all tips, detailed analysis, and our complete edge calculations.' },
+            analysis: { summary: 'Full analysis available to Premium subscribers. Start your 7-day free trial to access all tips.' },
             locked: true,
           };
         }
