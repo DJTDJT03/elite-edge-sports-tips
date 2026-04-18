@@ -52,6 +52,16 @@ const App = {
     this.loadTheme();
     this.loadOddsFormat();
     this.checkTokenExpiry();
+    // Refresh user data from server on every page load (catches trial/subscription changes)
+    if (this.token && this.user) {
+      this.api('/auth/me').then(function(data) {
+        if (data && data.user) {
+          App.user = data.user;
+          localStorage.setItem('ee_user', JSON.stringify(data.user));
+          App.updateAuthUI();
+        }
+      }).catch(function() {});
+    }
     this.updateAuthUI();
     this.bindNav();
     window.addEventListener('hashchange', () => {

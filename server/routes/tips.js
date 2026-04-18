@@ -2,6 +2,25 @@ module.exports = function(deps) {
   const router = require('express').Router();
   const { db, jwt, JWT_SECRET } = deps;
 
+  // Determine user's actual access level from the database (not JWT claims)
+  async function getUserAccess(req) {
+    var authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return 'free';
+    try {
+      var decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
+      if (decoded.role === 'admin') return 'admin';
+      // Always check database for current subscription — JWT may be stale
+      var user = await db.getUserById(decoded.id);
+      if (!user) return 'free';
+      if (user.role === 'admin') return 'admin';
+      if (user.subscription === 'premium') return 'premium';
+      if (user.trialActive) return 'premium';
+      return 'free';
+    } catch (e) {
+      return 'free';
+    }
+  }
+
   // GET /api/tips
   router.get('/tips', async (req, res) => {
     try {
@@ -9,7 +28,6 @@ module.exports = function(deps) {
       const { sport, date, premium } = req.query;
       var todayStr = new Date().toISOString().split('T')[0];
 
-      // Only return active tips from today onwards (plus weekly acca)
       let filtered = tips.filter(function(t) {
         if (t.isWeeklyAcca) return true;
         if (t.status && t.status !== 'active') return false;
@@ -22,33 +40,14 @@ module.exports = function(deps) {
       if (premium === 'true') filtered = filtered.filter(t => t.isPremium);
       if (premium === 'false') filtered = filtered.filter(t => !t.isPremium);
 
-      // For unauthenticated / free users, redact premium content
-      const authHeader = req.headers.authorization;
-      let userRole = 'free';
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        try {
-          const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
-          userRole = decoded.role === 'admin' ? 'admin' : decoded.subscription;
-        } catch {}
-      }
-
-      // Also check if user is on active trial — they get premium access
-      if (userRole === 'free' && authHeader) {
-        try {
-          var decoded2 = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
-          var dbUser = await db.getUserById(decoded2.id);
-          if (dbUser && (dbUser.subscription === 'premium' || dbUser.trialActive)) {
-            userRole = 'premium';
-          }
-        } catch {}
-      }
+      var access = await getUserAccess(req);
 
       const result = filtered.map(tip => {
-        if (tip.isPremium && userRole !== 'premium' && userRole !== 'admin') {
+        if (tip.isPremium && access !== 'premium' && access !== 'admin') {
           return {
             ...tip,
             selection: 'Premium Pick — Upgrade to View',
-            analysis: { summary: 'Full analysis available to Premium subscribers. Upgrade now to access all tips, detailed analysis, and our complete edge calculations.' },
+            analysis: { summary: 'Full analysis available to Premium subscribers. Start your 7-day free trial to access all tips, detailed analysis, and our complete edge calculations.' },
             locked: true,
           };
         }
@@ -68,16 +67,9 @@ module.exports = function(deps) {
       const tip = await db.getTipById(req.params.id);
       if (!tip) return res.status(404).json({ error: 'Tip not found' });
 
-      const authHeader = req.headers.authorization;
-      let userRole = 'free';
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        try {
-          const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
-          userRole = decoded.role === 'admin' ? 'admin' : decoded.subscription;
-        } catch {}
-      }
+      var access = await getUserAccess(req);
 
-      if (tip.isPremium && userRole !== 'premium' && userRole !== 'admin') {
+      if (tip.isPremium && access !== 'premium' && access !== 'admin') {
         return res.json({
           ...tip,
           selection: 'Premium Pick — Upgrade to View',
