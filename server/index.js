@@ -388,7 +388,7 @@ app.use('/', require('./routes/public')(deps));
 // Startup: remove incorrect selections from tips and results
 // ---------------------------------------------------------------------------
 (async function cleanupBadSelections() {
-  var removeSelections = ["Commander's Intent", "Caballo Grande", "Lavender Hill Mob", "Calico", "Catching The Moon"];
+  var removeSelections = ["Commander's Intent", "Caballo Grande", "Lavender Hill Mob", "Calico", "Catching The Moon", "Spinning Lizzie", "Aqpan", "Ardisia", "Title Role"];
   try {
     // Clean from database
     if (db.isAvailable()) {
