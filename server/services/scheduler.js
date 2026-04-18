@@ -1075,8 +1075,19 @@ module.exports = function startScheduler(deps) {
                 return name.toLowerCase().replace(/\s*\([a-z]{2,4}\)\s*$/i, '').trim();
               };
               var tipName = normHorse(tip.selection);
+              var tipMeeting = (tip.meeting || tip.event || '').toLowerCase().split(' ')[0]; // e.g. "Newbury" from "Newbury 2:00 - ..."
+              var tipTime = tip.raceTime || '';
 
               var match = (raceResults.results || []).find(function(r) {
+                // Must match BOTH the horse name AND the meeting/course
+                var raceCourse = (r.course || r.meeting || '').toLowerCase();
+                var courseMatch = !tipMeeting || raceCourse.indexOf(tipMeeting) !== -1 || tipMeeting.indexOf(raceCourse) !== -1;
+                if (!courseMatch) return false;
+                // Optionally match race time if available
+                if (tipTime && r.off_time) {
+                  var rTime = r.off_time.split(' ').pop(); // extract HH:MM
+                  if (rTime !== tipTime && tipTime.indexOf(rTime) === -1) return false;
+                }
                 return r.runners && r.runners.some(function(runner) {
                   return normHorse(runner.horse) === tipName;
                 });
