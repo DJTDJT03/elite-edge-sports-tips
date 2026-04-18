@@ -388,7 +388,7 @@ app.use('/', require('./routes/public')(deps));
 // Startup: remove incorrect selections from tips and results
 // ---------------------------------------------------------------------------
 (async function cleanupBadSelections() {
-  var removeSelections = ["Commander's Intent", "Caballo Grande", "Lavender Hill Mob", "Calico"];
+  var removeSelections = ["Commander's Intent", "Caballo Grande", "Lavender Hill Mob", "Calico", "Catching The Moon"];
   try {
     // Clean from database
     if (db.isAvailable()) {
@@ -423,6 +423,23 @@ app.use('/', require('./routes/public')(deps));
     });
   } catch(e) {
     console.log('[Startup] Cleanup skipped:', e.message);
+  }
+})();
+
+// ---------------------------------------------------------------------------
+// Startup: deduplicate results — keep only the first result per tip_id
+// ---------------------------------------------------------------------------
+(async function deduplicateResults() {
+  try {
+    if (!db.isAvailable()) return;
+    var dupeResult = await db.query(
+      "DELETE FROM results WHERE id NOT IN (SELECT MIN(id) FROM results GROUP BY tip_id)"
+    );
+    if (dupeResult.rowCount > 0) {
+      console.log('[Startup] Removed ' + dupeResult.rowCount + ' duplicate results');
+    }
+  } catch(e) {
+    // Table might not have data yet
   }
 })();
 
