@@ -46,6 +46,21 @@ const App = {
   _liveCache: {},
 
   // -----------------------------------------------------------------------
+  // Premium access check — single source of truth for the entire frontend.
+  // A user has premium access if:
+  //   1. subscription === 'premium', OR
+  //   2. trialActive === true (and trial hasn't expired), OR
+  //   3. role === 'admin'
+  // -----------------------------------------------------------------------
+  isPremium() {
+    if (!this.user) return false;
+    if (this.user.role === 'admin') return true;
+    if (this.user.subscription === 'premium') return true;
+    if (this.user.trialActive) return true;
+    return false;
+  },
+
+  // -----------------------------------------------------------------------
   // INIT
   // -----------------------------------------------------------------------
   init() {
@@ -677,7 +692,8 @@ const App = {
         subBar.style.display = 'block';
         subBar.style.background = 'linear-gradient(135deg, rgba(212,168,67,0.15), rgba(212,168,67,0.05))';
         subBar.style.borderBottom = '2px solid var(--gold)';
-        subBar.innerHTML = '<strong style="color:var(--gold);">FREE TRIAL</strong> — ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' remaining. <a href="#/pricing" style="color:var(--gold);font-weight:700;text-decoration:underline;">Upgrade to Premium &rarr;</a>';
+        subBar.style.color = '#e8e6e3';
+        subBar.innerHTML = '<strong style="color:#d4a843;">FREE TRIAL</strong> <span style="color:#e8e6e3;">&mdash; ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' remaining</span> &nbsp; <a href="#/pricing" style="color:#d4a843;font-weight:700;text-decoration:underline;">Upgrade to Premium &rarr;</a>';
       } else if (this.user.subscription === 'free') {
         subBar.style.display = 'block';
         subBar.style.background = '';
@@ -1055,7 +1071,7 @@ const App = {
   // WOULD HAVE WON — Tease for non-premium users
   // -----------------------------------------------------------------------
   buildWouldHaveWon(allResults) {
-    if (this.user && this.user.subscription === 'premium') return '';
+    if (this.isPremium()) return '';
     var yesterday = this._getYesterday();
     var yesterdayPremium = allResults.filter(function(r) { return r.date === yesterday && r.isPremium; });
     if (yesterdayPremium.length === 0) return '';
@@ -1615,7 +1631,7 @@ const App = {
   // -----------------------------------------------------------------------
   renderRecoveryPick(recentResults, todayTips) {
     // Premium only
-    if (!this.user || this.user.subscription !== 'premium') return '';
+    if (!this.isPremium()) return '';
     if (!Array.isArray(recentResults) || !Array.isArray(todayTips)) return '';
 
     // Take last 5 settled results (newest first)
@@ -2148,7 +2164,7 @@ const App = {
         ${morningBriefHtml}
 
         <!-- AI Morning Briefing (premium users only) -->
-        ${this.user && this.user.subscription === 'premium' ? `
+        ${this.isPremium() ? `
         <div class="card" id="ai-briefing-card" style="margin-bottom:20px;padding:20px;border:1px solid rgba(212,168,67,0.2);background:linear-gradient(135deg,rgba(212,168,67,0.06),rgba(212,168,67,0.01));">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
             <div style="font-size:24px;">&#129302;</div>
@@ -2248,7 +2264,7 @@ const App = {
         </div>` : ''}
 
         <!-- NAP OF THE DAY — Premium Only -->
-        ${napTip ? (this.user && this.user.subscription === 'premium' ? `
+        ${napTip ? (this.isPremium() ? `
         <div class="nap-card-wrapper">
           <div class="nap-label"><span class="star">\u2605</span> NAP OF THE DAY — Our Strongest Selection <span class="star">\u2605</span></div>
           <div class="nap-card" onclick="window.location.hash='#/tip/${napTip.id}'">
@@ -2293,7 +2309,7 @@ const App = {
         </div>`) : ''}
 
         <!-- Market Intelligence Briefing (Free Users) -->
-        ${!this.user || this.user.subscription !== 'premium' ? `
+        ${!this.isPremium() ? `
         <div style="background:linear-gradient(135deg,#141828,#1a1f35);border:1px solid rgba(212,168,67,0.2);border-radius:14px;padding:24px;margin-bottom:24px;">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
             <div style="font-size:28px;">&#128200;</div>
@@ -2430,7 +2446,7 @@ const App = {
         </div>
 
         <!-- CTA -->
-        ${!this.user || this.user.subscription === 'free' ? `
+        ${!this.isPremium() ? `
         <div class="card card-premium text-center" style="padding:40px;">
           <h2 style="margin-bottom:8px;">Unlock Premium Tips</h2>
           <p class="text-muted mb-24">Join thousands of winning bettors. Get full access to all selections, deep analysis, and priority alerts.</p>
@@ -2830,7 +2846,7 @@ const App = {
           <!-- Discussion / Comments -->
           ${this.renderCommentSection(tipId)}
 
-          ${!this.user || this.user.subscription === 'free' ? `
+          ${!this.isPremium() ? `
           <div class="card card-premium text-center mt-32" style="padding:32px;">
             <h3 class="mb-8">Get More Tips Like This</h3>
             <p class="text-muted mb-16">Upgrade to Premium for all daily selections with full analysis.</p>
@@ -3099,7 +3115,7 @@ const App = {
     var intel = intelRaces.find(function(ir) {
       return ir.meeting === race.meeting && ir.time === race.time;
     });
-    var isPremium = this.user && this.user.subscription === 'premium';
+    var isPremium = this.isPremium();
     var runners = race.runners || [];
 
     // Find best odds per runner from allOdds
@@ -3384,7 +3400,7 @@ const App = {
     } catch (e) { /* use cached */ }
 
     var today = this._getToday();
-    var isPremium = this.user && this.user.subscription === 'premium';
+    var isPremium = this.isPremium();
 
     // Filter to today's active tips
     var todayTips = this.tips.filter(function(t) {
@@ -3510,7 +3526,7 @@ const App = {
     if (this._valueBetsInterval) { clearInterval(this._valueBetsInterval); this._valueBetsInterval = null; }
 
     var app = document.getElementById('app');
-    var isPremium = this.user && this.user.subscription === 'premium';
+    var isPremium = this.isPremium();
     var self = this;
 
     app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Scanning for value bets...</div></div>';
@@ -3707,7 +3723,7 @@ const App = {
   async renderCompare() {
     const app = document.getElementById('app');
     const self = this;
-    const isPremium = this.user && this.user.subscription === 'premium';
+    const isPremium = this.isPremium();
     this._compareSport = this._compareSport || 'football';
 
     app.innerHTML = `
@@ -3745,7 +3761,7 @@ const App = {
 
   async _renderCompareFootball() {
     const self = this;
-    const isPremium = this.user && this.user.subscription === 'premium';
+    const isPremium = this.isPremium();
     const body = document.getElementById('compare-body');
     if (!body) return;
 
@@ -3863,7 +3879,7 @@ const App = {
     result.innerHTML = '<div class="text-center pulse" style="padding:40px;">Analysing matchup...</div>';
 
     var self = this;
-    var isPremium = this.user && this.user.subscription === 'premium';
+    var isPremium = this.isPremium();
     var blurClass = isPremium ? '' : 'compare-blurred';
 
     // Find matching fixture
@@ -4045,7 +4061,7 @@ const App = {
 
   async _renderCompareRacing() {
     var self = this;
-    var isPremium = this.user && this.user.subscription === 'premium';
+    var isPremium = this.isPremium();
     var blurClass = isPremium ? '' : 'compare-blurred';
     var body = document.getElementById('compare-body');
     if (!body) return;
@@ -4138,7 +4154,7 @@ const App = {
     result.innerHTML = '<div class="text-center pulse" style="padding:40px;">Analysing runners...</div>';
 
     var self = this;
-    var isPremium = this.user && this.user.subscription === 'premium';
+    var isPremium = this.isPremium();
     var blurClass = isPremium ? '' : 'compare-blurred';
     var hData = self._compareHorseData || {};
     var dataA = hData[horseA] || {};
@@ -4454,7 +4470,7 @@ const App = {
           </div>
         </div>
 
-        ${!this.user || this.user.subscription === 'free' ? `
+        ${!this.isPremium() ? `
         <div class="card card-premium text-center" style="padding:32px;">
           <h3 class="mb-8">Unlock All Football Tips</h3>
           <p class="text-muted mb-16">Premium members get xG analysis, Asian Handicap selections, and match-by-match deep dives.</p>
@@ -4529,7 +4545,7 @@ const App = {
     var container = document.querySelector('.match-intel-container');
     if (!container) return;
 
-    var isPremium = this.user && this.user.subscription === 'premium';
+    var isPremium = this.isPremium();
     var m = data.match;
     var v = data.verdict;
     var h = data.h2h;
@@ -4773,7 +4789,7 @@ const App = {
 
     var self = this;
     var allTips = this.tips || [];
-    var isPremium = this.user && this.user.subscription === 'premium';
+    var isPremium = this.isPremium();
     var tab = this._festivalTab || 'thursday';
 
     // Festival race schedule
@@ -5281,7 +5297,7 @@ const App = {
   renderPricing() {
     const app = document.getElementById('app');
     const isLoggedIn = !!this.user;
-    const isPremium = this.user && this.user.subscription === 'premium';
+    const isPremium = this.isPremium();
     const isOnTrial = this.user && this.user.trialActive && this.user.trialEnd;
     const trialDaysLeft = isOnTrial ? Math.max(0, Math.ceil((new Date(this.user.trialEnd).getTime() - Date.now()) / (24 * 60 * 60 * 1000))) : 0;
     app.innerHTML = `
@@ -5342,7 +5358,8 @@ const App = {
               <li>Priority email support</li>
               <li>Exclusive Telegram group</li>
             </ul>
-            ${isPremium ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
+            ${isPremium && !this.user.trialActive ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
+              isPremium && this.user.trialActive ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'monthly\')">Subscribe — &pound;19.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'annual\')">Annual — &pound;199.99/year (Save &pound;40)</button><p class="text-xs text-gold mt-8">Lock in your subscription before your trial ends.</p>' :
               isLoggedIn ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'monthly\')">Subscribe — &pound;19.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'annual\')">Annual — &pound;199.99/year (Save &pound;40)</button>' :
               '<button class="btn btn-outline btn-full" onclick="App.showModal(\'register\')">Sign Up Free First</button><p class="text-xs text-muted mt-8">Create your free account first, then upgrade to Premium from inside your account.</p>'}
           </div>
@@ -6063,7 +6080,7 @@ const App = {
       if (messages && !messages.dataset.personalised) {
         messages.dataset.personalised = 'true';
         const isGuest = !this.user;
-        const isFree = this.user && this.user.subscription === 'free';
+        const isFree = !this.isPremium();
         if (isGuest) {
           messages.innerHTML = '<div class="chat-msg bot">Hi! 👋 Welcome to <strong>Elite Edge Sports Tips</strong>.</div>' +
             '<div class="chat-msg bot">We\'re running at <strong>76.8% strike rate</strong> and <strong>+225% ROI</strong> this season — fully verified.</div>' +
@@ -6233,7 +6250,7 @@ const App = {
       var totalPnl = dayResults.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
       var strikeRate = dayResults.length > 0 ? Math.round((wins.length / dayResults.length) * 100) : 0;
       var bestWin = wins.sort(function(a, b) { return (b.pnl || 0) - (a.pnl || 0); })[0];
-      var isPremium = this.user && this.user.subscription === 'premium';
+      var isPremium = this.isPremium();
       var self = this;
 
       var dateObj = new Date(showDate + 'T12:00:00');
@@ -8293,7 +8310,7 @@ const App = {
   async renderLiveHub() {
     var self = this;
     var app = document.getElementById('app');
-    var isPremium = this.user && this.user.subscription === 'premium';
+    var isPremium = this.isPremium();
     var today = new Date();
     var todayStr = today.toISOString().split('T')[0];
     var todayDisplay = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -8863,7 +8880,7 @@ const App = {
       console.error('PL Preview fetch error:', e);
     }
 
-    var isPremium = this.user && this.user.subscription === 'premium';
+    var isPremium = this.isPremium();
     var isLoggedIn = !!this.user;
 
     // Count edge opportunities (fixtures where we have tips)
