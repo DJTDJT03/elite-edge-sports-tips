@@ -133,6 +133,21 @@ app.use('/', require('./routes/public')(deps));
       await db.query('SELECT 1 FROM users LIMIT 1');
       console.log('[Startup] Database tables exist');
 
+      // Add any missing columns from newer migrations
+      var alterCols = [
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_active BOOLEAN DEFAULT FALSE',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_start TIMESTAMPTZ',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_end TIMESTAMPTZ',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_warned BOOLEAN DEFAULT FALSE',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS alert_prefs JSONB DEFAULT \'{}\'',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT',
+      ];
+      for (var ci = 0; ci < alterCols.length; ci++) {
+        try { await db.query(alterCols[ci]); } catch(e) {}
+      }
+      console.log('[Startup] Schema up to date');
+
       // One-time re-seed: import persistent volume data into DB if DB has fewer tips
       // This fixes the case where DB was seeded from bundled (old) data instead of live data
       try {
@@ -263,6 +278,20 @@ app.use('/', require('./routes/public')(deps));
       ];
       for (var i = 0; i < migrationSQL.length; i++) {
         await migrationPool.query(migrationSQL[i]);
+      }
+
+      // Add columns that may be missing from earlier migrations
+      var alterSQL = [
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_active BOOLEAN DEFAULT FALSE',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_start TIMESTAMPTZ',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_end TIMESTAMPTZ',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_warned BOOLEAN DEFAULT FALSE',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS alert_prefs JSONB DEFAULT \'{}\'',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT',
+      ];
+      for (var ai = 0; ai < alterSQL.length; ai++) {
+        try { await migrationPool.query(alterSQL[ai]); } catch(e) { /* column may already exist */ }
       }
       await migrationPool.end();
       console.log('[Startup] Auto-migration complete — all tables created');
