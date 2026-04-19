@@ -97,10 +97,10 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
 .nav-dropdown > .nav-link { cursor: pointer; }
 .nav-dropdown > .nav-link::after { display: none; } /* no underline on dropdown triggers */
 .nav-dropdown-menu {
-  display: none; position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-  min-width: 180px;
+  display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  min-width: 180px; padding-top: 4px;
   background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.5); z-index: 100; padding: 4px 0;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
 }
 .nav-dropdown:hover .nav-dropdown-menu { display: block; }
 .nav-dropdown-menu a {
