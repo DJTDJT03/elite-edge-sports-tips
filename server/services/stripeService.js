@@ -23,69 +23,111 @@ class StripeService {
   }
 
   /**
-   * Lazily creates or retrieves the Elite Edge product and price IDs.
+   * Lazily creates or retrieves the Elite Edge products and price IDs.
    * Caches result after first call.
+   * Returns: { premiumMonthlyId, premiumAnnualId, vipMonthlyId, vipAnnualId, premiumProductId, vipProductId }
    */
   async ensureProducts() {
     if (this._priceIds) return this._priceIds;
     if (!stripe) throw new Error('Stripe not configured');
 
-    // Find or create the product
-    let productId;
     const existingProducts = await stripe.products.list({ limit: 100 });
-    const found = existingProducts.data.find(p => p.name === 'Elite Edge Premium');
-    if (found) {
-      productId = found.id;
-      console.log('[Stripe] Found existing product:', productId);
+
+    // --- Premium product (£19.99/month, £199.99/year) ---
+    let premiumProductId;
+    const foundPremium = existingProducts.data.find(p => p.name === 'Elite Edge Premium');
+    if (foundPremium) {
+      premiumProductId = foundPremium.id;
+      console.log('[Stripe] Found existing Premium product:', premiumProductId);
     } else {
       const product = await stripe.products.create({
         name: 'Elite Edge Premium',
         description: 'Full access to all premium tips, analysis, and features',
       });
-      productId = product.id;
-      console.log('[Stripe] Created product:', productId);
+      premiumProductId = product.id;
+      console.log('[Stripe] Created Premium product:', premiumProductId);
     }
 
-    // Find or create monthly price (£19.99/month)
-    let monthlyPriceId;
-    const existingPrices = await stripe.prices.list({ product: productId, limit: 100 });
-    const monthlyPrice = existingPrices.data.find(
+    const premiumPrices = await stripe.prices.list({ product: premiumProductId, limit: 100 });
+
+    let premiumMonthlyId;
+    const pmPrice = premiumPrices.data.find(
       p => p.active && p.recurring && p.recurring.interval === 'month' && p.unit_amount === 1999 && p.currency === 'gbp'
     );
-    if (monthlyPrice) {
-      monthlyPriceId = monthlyPrice.id;
-      console.log('[Stripe] Found existing monthly price:', monthlyPriceId);
+    if (pmPrice) {
+      premiumMonthlyId = pmPrice.id;
+      console.log('[Stripe] Found existing Premium monthly price:', premiumMonthlyId);
     } else {
       const mp = await stripe.prices.create({
-        product: productId,
-        unit_amount: 1999,
-        currency: 'gbp',
-        recurring: { interval: 'month' },
+        product: premiumProductId, unit_amount: 1999, currency: 'gbp', recurring: { interval: 'month' },
       });
-      monthlyPriceId = mp.id;
-      console.log('[Stripe] Created monthly price:', monthlyPriceId);
+      premiumMonthlyId = mp.id;
+      console.log('[Stripe] Created Premium monthly price:', premiumMonthlyId);
     }
 
-    // Find or create annual price (£199.99/year)
-    let annualPriceId;
-    const annualPrice = existingPrices.data.find(
+    let premiumAnnualId;
+    const paPrice = premiumPrices.data.find(
       p => p.active && p.recurring && p.recurring.interval === 'year' && p.unit_amount === 19999 && p.currency === 'gbp'
     );
-    if (annualPrice) {
-      annualPriceId = annualPrice.id;
-      console.log('[Stripe] Found existing annual price:', annualPriceId);
+    if (paPrice) {
+      premiumAnnualId = paPrice.id;
+      console.log('[Stripe] Found existing Premium annual price:', premiumAnnualId);
     } else {
       const ap = await stripe.prices.create({
-        product: productId,
-        unit_amount: 19999,
-        currency: 'gbp',
-        recurring: { interval: 'year' },
+        product: premiumProductId, unit_amount: 19999, currency: 'gbp', recurring: { interval: 'year' },
       });
-      annualPriceId = ap.id;
-      console.log('[Stripe] Created annual price:', annualPriceId);
+      premiumAnnualId = ap.id;
+      console.log('[Stripe] Created Premium annual price:', premiumAnnualId);
     }
 
-    this._priceIds = { monthlyPriceId, annualPriceId, productId };
+    // --- VIP product (£39.99/month, £399.99/year) ---
+    let vipProductId;
+    const foundVip = existingProducts.data.find(p => p.name === 'Elite Edge VIP');
+    if (foundVip) {
+      vipProductId = foundVip.id;
+      console.log('[Stripe] Found existing VIP product:', vipProductId);
+    } else {
+      const product = await stripe.products.create({
+        name: 'Elite Edge VIP',
+        description: 'Elite VIP access with early tips, AI replay analysis, and priority support',
+      });
+      vipProductId = product.id;
+      console.log('[Stripe] Created VIP product:', vipProductId);
+    }
+
+    const vipPrices = await stripe.prices.list({ product: vipProductId, limit: 100 });
+
+    let vipMonthlyId;
+    const vmPrice = vipPrices.data.find(
+      p => p.active && p.recurring && p.recurring.interval === 'month' && p.unit_amount === 3999 && p.currency === 'gbp'
+    );
+    if (vmPrice) {
+      vipMonthlyId = vmPrice.id;
+      console.log('[Stripe] Found existing VIP monthly price:', vipMonthlyId);
+    } else {
+      const mp = await stripe.prices.create({
+        product: vipProductId, unit_amount: 3999, currency: 'gbp', recurring: { interval: 'month' },
+      });
+      vipMonthlyId = mp.id;
+      console.log('[Stripe] Created VIP monthly price:', vipMonthlyId);
+    }
+
+    let vipAnnualId;
+    const vaPrice = vipPrices.data.find(
+      p => p.active && p.recurring && p.recurring.interval === 'year' && p.unit_amount === 39999 && p.currency === 'gbp'
+    );
+    if (vaPrice) {
+      vipAnnualId = vaPrice.id;
+      console.log('[Stripe] Found existing VIP annual price:', vipAnnualId);
+    } else {
+      const ap = await stripe.prices.create({
+        product: vipProductId, unit_amount: 39999, currency: 'gbp', recurring: { interval: 'year' },
+      });
+      vipAnnualId = ap.id;
+      console.log('[Stripe] Created VIP annual price:', vipAnnualId);
+    }
+
+    this._priceIds = { premiumMonthlyId, premiumAnnualId, vipMonthlyId, vipAnnualId, premiumProductId, vipProductId };
     return this._priceIds;
   }
 
@@ -93,7 +135,7 @@ class StripeService {
    * Creates a Stripe Checkout session for a subscription.
    * @param {string} userId - Internal user ID
    * @param {string} userEmail - User email
-   * @param {string} plan - 'monthly' or 'annual'
+   * @param {string} plan - 'premium-monthly', 'premium-annual', 'vip-monthly', or 'vip-annual'
    * @param {string} successUrl - URL to redirect on success
    * @param {string} cancelUrl - URL to redirect on cancel
    */
@@ -101,12 +143,21 @@ class StripeService {
     if (!stripe) throw new Error('Stripe not configured');
 
     const prices = await this.ensureProducts();
-    const priceId = plan === 'annual' ? prices.annualPriceId : prices.monthlyPriceId;
+    const priceMap = {
+      'premium-monthly': prices.premiumMonthlyId,
+      'premium-annual': prices.premiumAnnualId,
+      'vip-monthly': prices.vipMonthlyId,
+      'vip-annual': prices.vipAnnualId,
+    };
+    const priceId = priceMap[plan];
+    if (!priceId) throw new Error('Invalid plan: ' + plan);
+
+    const tier = plan.startsWith('vip') ? 'vip' : 'premium';
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer_email: userEmail,
-      metadata: { userId: userId },
+      metadata: { userId: userId, tier: tier },
       subscription_data: { trial_period_days: 0 },
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl + '?session_id={CHECKOUT_SESSION_ID}',

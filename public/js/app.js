@@ -47,17 +47,26 @@ const App = {
 
   // -----------------------------------------------------------------------
   // Premium access check — single source of truth for the entire frontend.
-  // A user has premium access if:
-  //   1. subscription === 'premium', OR
-  //   2. trialActive === true (and trial hasn't expired), OR
-  //   3. role === 'admin'
+  // Returns 'free', 'premium', or 'vip' based on user state
+  // -----------------------------------------------------------------------
+  getAccessLevel() {
+    if (!this.user) return 'free';
+    if (this.user.role === 'admin') return 'vip'; // admin gets everything
+    if (this.user.subscription === 'vip') return 'vip';
+    if (this.user.subscription === 'premium') return 'premium';
+    if (this.user.trialActive) return 'premium'; // trial = premium level
+    return 'free';
+  },
+
+  // A user has premium access if premium or vip tier
   // -----------------------------------------------------------------------
   isPremium() {
-    if (!this.user) return false;
-    if (this.user.role === 'admin') return true;
-    if (this.user.subscription === 'premium') return true;
-    if (this.user.trialActive) return true;
-    return false;
+    var level = this.getAccessLevel();
+    return level === 'premium' || level === 'vip';
+  },
+
+  isVIP() {
+    return this.getAccessLevel() === 'vip';
   },
 
   // -----------------------------------------------------------------------
@@ -674,13 +683,13 @@ const App = {
     if (this.user) {
       guest.style.display = 'none';
       userEl.style.display = 'flex';
-      badge.textContent = this.user.name;
+      badge.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">VIP</span>' : '');
       badge.style.cursor = 'pointer';
       badge.onclick = () => { window.location.hash = '#/account'; };
       // Mobile auth
       if (guestMobile) guestMobile.style.display = 'none';
       if (userMobile) userMobile.style.display = '';
-      if (badgeMobile) { badgeMobile.textContent = this.user.name; badgeMobile.style.cursor = 'pointer'; badgeMobile.onclick = () => { window.location.hash = '#/account'; }; }
+      if (badgeMobile) { badgeMobile.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">VIP</span>' : ''); badgeMobile.style.cursor = 'pointer'; badgeMobile.onclick = () => { window.location.hash = '#/account'; }; }
       adminLink.style.display = this.user.role === 'admin' ? 'inline-block' : 'none';
       if (myBetsLink) myBetsLink.style.display = 'inline-block';
       if (this.user.trialActive && this.user.trialEnd) {
@@ -689,17 +698,25 @@ const App = {
         subBar.style.background = 'linear-gradient(135deg, rgba(212,168,67,0.15), rgba(212,168,67,0.05))';
         subBar.style.borderBottom = '2px solid var(--gold)';
         subBar.style.color = '#e8e6e3';
-        subBar.innerHTML = '<strong style="color:#d4a843;">FREE TRIAL</strong> <span style="color:#e8e6e3;">&mdash; ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' remaining</span> &nbsp; <a href="#/pricing" style="color:#d4a843;font-weight:700;text-decoration:underline;">Upgrade to Premium &rarr;</a>';
-      } else if (this.user.subscription === 'free') {
+        subBar.innerHTML = '<strong style="color:#d4a843;">FREE TRIAL</strong> <span style="color:#e8e6e3;">&mdash; ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' remaining</span> &nbsp; <a href="#/pricing" style="color:#d4a843;font-weight:700;text-decoration:underline;">Choose a Plan &rarr;</a>';
+      } else if (this.user.subscription === 'vip') {
         subBar.style.display = 'block';
+        subBar.className = 'sub-bar sub-bar-vip';
         subBar.style.background = '';
         subBar.style.borderBottom = '';
-        subBar.innerHTML = '<strong>Free</strong> member — You have access to daily NAP, race cards, results, and weekly blog. <a href="#/pricing">View Premium features</a>';
+        subBar.innerHTML = '\uD83D\uDC51 <strong style="color:#d4a843;">VIP MEMBER</strong> — Elite access enabled. Priority support active.';
       } else if (this.user.subscription === 'premium') {
         subBar.style.display = 'block';
+        subBar.className = 'sub-bar';
         subBar.style.background = '';
         subBar.style.borderBottom = '';
         subBar.innerHTML = '<strong>Premium</strong> member — Full access enabled. Thank you for your subscription.';
+      } else if (this.user.subscription === 'free') {
+        subBar.style.display = 'block';
+        subBar.className = 'sub-bar';
+        subBar.style.background = '';
+        subBar.style.borderBottom = '';
+        subBar.innerHTML = '<strong>Free</strong> member — You have access to daily NAP, race cards, results, and weekly blog. <a href="#/pricing">View Premium features</a>';
       } else {
         subBar.style.display = 'none';
       }
@@ -5786,6 +5803,8 @@ const App = {
     const app = document.getElementById('app');
     const isLoggedIn = !!this.user;
     const isPremium = this.isPremium();
+    const isVIP = this.isVIP();
+    const accessLevel = this.getAccessLevel();
     const isOnTrial = this.user && this.user.trialActive && this.user.trialEnd;
     const trialDaysLeft = isOnTrial ? Math.max(0, Math.ceil((new Date(this.user.trialEnd).getTime() - Date.now()) / (24 * 60 * 60 * 1000))) : 0;
     app.innerHTML = `
@@ -5801,55 +5820,72 @@ const App = {
         <!-- Confidence Tier Leaderboard (social proof before plans) -->
         <div id="pricing-confidence-leaderboard"></div>
 
-        <div class="pricing-grid mb-32">
-          <div class="pricing-card${!isPremium ? ' featured' : ''}">
-            ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">RECOMMENDED — START HERE</div>' : ''}
+        <div class="pricing-grid mb-32" style="grid-template-columns: repeat(3, 1fr);">
+          <!-- FREE CARD -->
+          <div class="pricing-card">
+            ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">START HERE</div>' : ''}
             <h3>Free Access</h3>
-            <p class="text-muted">Everything you need to get started</p>
+            <p class="text-muted">Get started with the basics</p>
             <div class="pricing-price">&pound;<span style="font-size:42px;">0</span><span class="period">/forever</span></div>
-            <p class="text-xs text-gold mb-8">No credit card. No bank details. No commitment.</p>
+            <p class="text-xs text-gold mb-8">No credit card required.</p>
             <ul class="pricing-features">
-              <li>Daily NAP of the day selection</li>
-              <li>Live race cards with full runner lists</li>
-              <li>Live football fixtures and scores</li>
-              <li>Full results page and performance stats</li>
-              <li>Weekly blog reviews and insights</li>
-              <li>Free weekly accumulator</li>
-              <li>Odds comparison across bookmakers</li>
+              <li>1 free daily tip (after race)</li>
+              <li>Full results page</li>
+              <li>Weekly blog</li>
               <li>Staking calculator</li>
-              <li class="disabled">2-4 premium edge selections daily</li>
-              <li class="disabled">Full deep-dive analysis per selection</li>
-              <li class="disabled">Race Intelligence on every race card</li>
-              <li class="disabled">Daily email bulletins</li>
             </ul>
             <button class="btn ${!isLoggedIn ? 'btn-gold' : 'btn-outline'} btn-full" onclick="${isLoggedIn ? '' : "App.showModal('register')"}">
               ${isLoggedIn ? (isPremium ? 'Free Features Included' : 'Your Current Plan') : 'Sign Up Free — 30 Seconds'}
             </button>
           </div>
 
-          <div class="pricing-card${isPremium ? ' featured' : ''}">
-            <div style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">PREMIUM — FULL ACCESS</div>
+          <!-- PREMIUM CARD -->
+          <div class="pricing-card${accessLevel === 'premium' ? ' featured' : ''}">
+            <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">MOST POPULAR</div>
             <h3>Premium</h3>
-            <p class="text-muted">Every edge play, every day — quality not quantity</p>
+            <p class="text-muted">Every edge play, every day</p>
             <div class="pricing-price"><span class="currency">&pound;</span>19<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
             <p class="text-xs text-gold mb-8">&pound;199.99/year (save &pound;40) | Cancel anytime</p>
             <ul class="pricing-features">
               <li><strong>Everything in Free, plus:</strong></li>
-              <li>2-4 premium selections daily (quality over quantity)</li>
-              <li>Full deep-dive analysis per selection</li>
-              <li>Race Intelligence on every race card</li>
-              <li>Probability and edge calculations</li>
-              <li>Staking recommendations</li>
-              <li>Early morning access (before 9am)</li>
-              <li>Daily email bulletins</li>
-              <li>Big win alerts</li>
-              <li>Priority email support</li>
-              <li>Exclusive Telegram group</li>
+              <li>All tips before kick-off</li>
+              <li>Full AI analysis</li>
+              <li>Value bet scanner</li>
+              <li>Live hub</li>
+              <li>H2H compare</li>
+              <li>5 alert types</li>
+              <li>Daily email bulletin</li>
+              <li>Weekend acca</li>
+              <li>PL preview</li>
             </ul>
-            ${isPremium && !this.user.trialActive ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
-              isPremium && this.user.trialActive ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'monthly\')">Subscribe — &pound;19.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'annual\')">Annual — &pound;199.99/year (Save &pound;40)</button><p class="text-xs text-gold mt-8">Lock in your subscription before your trial ends.</p>' :
-              isLoggedIn ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'monthly\')">Subscribe — &pound;19.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'annual\')">Annual — &pound;199.99/year (Save &pound;40)</button>' :
-              '<button class="btn btn-outline btn-full" onclick="App.showModal(\'register\')">Sign Up Free First</button><p class="text-xs text-muted mt-8">Create your free account first, then upgrade to Premium from inside your account.</p>'}
+            ${accessLevel === 'premium' && !this.user.trialActive ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
+              isOnTrial ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'premium-monthly\')">Subscribe — &pound;19.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'premium-annual\')">Annual — &pound;199.99/year (Save &pound;40)</button><p class="text-xs text-gold mt-8">Lock in before your trial ends.</p>' :
+              isVIP ? '<button class="btn btn-outline btn-full" disabled>Included in VIP</button>' :
+              isLoggedIn ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'premium-monthly\')">Subscribe — &pound;19.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'premium-annual\')">Annual — &pound;199.99/year (Save &pound;40)</button>' :
+              '<button class="btn btn-outline btn-full" onclick="App.showModal(\'register\')">Sign Up Free First</button><p class="text-xs text-muted mt-8">Create your free account, then upgrade.</p>'}
+          </div>
+
+          <!-- VIP CARD -->
+          <div class="pricing-card vip${isVIP ? ' featured' : ''}">
+            <div style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">ELITE</div>
+            <h3>VIP</h3>
+            <p class="text-muted">The ultimate edge — priority everything</p>
+            <div class="pricing-price"><span class="currency">&pound;</span>39<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
+            <p class="text-xs text-gold mb-8">&pound;399.99/year (save &pound;80) | Cancel anytime</p>
+            <ul class="pricing-features">
+              <li><strong>Everything in Premium, plus:</strong></li>
+              <li>Early access tips (6:30am)</li>
+              <li>AI race replay analysis</li>
+              <li>Personalised AI bulletin</li>
+              <li>Priority email support</li>
+              <li>VIP-only midweek acca</li>
+              <li>Custom edge threshold alerts</li>
+              <li>Enhanced odds movement alerts</li>
+            </ul>
+            ${isVIP && !this.user.trialActive ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
+              isOnTrial ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'vip-monthly\')">Subscribe — &pound;39.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'vip-annual\')">Annual — &pound;399.99/year (Save &pound;80)</button><p class="text-xs text-gold mt-8">Lock in before your trial ends.</p>' :
+              isLoggedIn ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'vip-monthly\')">Subscribe — &pound;39.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'vip-annual\')">Annual — &pound;399.99/year (Save &pound;80)</button>' :
+              '<button class="btn btn-outline btn-full" onclick="App.showModal(\'register\')">Sign Up Free First</button><p class="text-xs text-muted mt-8">Create your free account, then upgrade.</p>'}
           </div>
         </div>
 
@@ -6128,7 +6164,7 @@ const App = {
                     <td>${u.name} ${isFlagged ? '<span title="Suspicious: 3+ IPs in 24h" style="color:#f59e0b;cursor:help;">&#9888;</span>' : ''}</td>
                     <td class="text-xs">${u.email}</td>
                     <td>${u.role}</td>
-                    <td>${u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : 'Free'}</td>
+                    <td>${u.subscription === 'vip' ? '<span style="color:#d4a843;font-weight:700;">VIP</span>' : u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : 'Free'}</td>
                     <td>${statusBadge}</td>
                     <td class="text-xs">${lastTime}</td>
                     <td class="text-xs">${lastIP}</td>
@@ -6528,10 +6564,11 @@ const App = {
   },
 
   async adminChangeSubscription(userId, currentSub) {
-    var newSub = currentSub === 'premium' ? 'free' : 'premium';
+    var options = { 'free': 'premium', 'premium': 'vip', 'vip': 'free' };
+    var newSub = options[currentSub] || 'premium';
     if (!confirm('Change subscription to ' + newSub + '?')) return;
     var expiry = null;
-    if (newSub === 'premium') {
+    if (newSub === 'premium' || newSub === 'vip') {
       expiry = prompt('Subscription expiry date (YYYY-MM-DD):', new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
       if (!expiry) return;
     }
@@ -7759,7 +7796,7 @@ const App = {
     const u = accountData.user || {};
     const loginHistory = u.loginHistory || [];
     const lastLogin = u.lastLogin || {};
-    const subLabel = u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : 'Free';
+    const subLabel = u.subscription === 'vip' ? '<span style="color:#d4a843;font-weight:700;">VIP</span>' : u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : 'Free';
     const expiryLabel = u.subscriptionExpiry ? formatDateUK(u.subscriptionExpiry) : 'N/A';
 
     function parseUA(ua) {
@@ -7800,18 +7837,32 @@ const App = {
         <!-- Subscription Management -->
         <div class="card mb-16" id="subscription-management">
           <h3 class="mb-16">Subscription</h3>
-          ${u.subscription === 'premium' ? `
+          ${u.subscription === 'vip' ? `
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+              <span style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;padding:4px 12px;border-radius:20px;font-weight:700;font-size:13px;">\uD83D\uDC51 VIP Active</span>
+            </div>
+            <p class="text-sm text-muted mb-8">Next billing date: <strong>${expiryLabel}</strong></p>
+            <div id="stripe-sub-details"></div>
+            <button class="btn btn-outline btn-sm" onclick="App.openBillingPortal()">Manage Billing</button>
+          ` : u.subscription === 'premium' ? `
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
               <span style="background:var(--gold);color:#0a0e1a;padding:4px 12px;border-radius:20px;font-weight:700;font-size:13px;">Premium Active</span>
             </div>
             <p class="text-sm text-muted mb-8">Next billing date: <strong>${expiryLabel}</strong></p>
             <div id="stripe-sub-details"></div>
-            <button class="btn btn-outline btn-sm" onclick="App.openBillingPortal()">Manage Billing</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+              <button class="btn btn-gold btn-sm" onclick="App.startCheckout('vip-monthly')">Upgrade to VIP — &pound;39.99/month</button>
+              <button class="btn btn-outline btn-sm" onclick="App.openBillingPortal()">Manage Billing</button>
+            </div>
           ` : `
-            <p class="text-muted text-sm mb-12">You are on the Free plan. Upgrade to Premium for full access to all tips, analysis, and features.</p>
+            <p class="text-muted text-sm mb-12">You are on the Free plan. Upgrade for full access to all tips, analysis, and features.</p>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn btn-gold btn-sm" onclick="App.startCheckout('monthly')">Subscribe — &pound;19.99/month</button>
-              <button class="btn btn-outline btn-sm" onclick="App.startCheckout('annual')">Annual — &pound;199.99/year</button>
+              <button class="btn btn-gold btn-sm" onclick="App.startCheckout('premium-monthly')">Premium — &pound;19.99/month</button>
+              <button class="btn btn-outline btn-sm" onclick="App.startCheckout('premium-annual')">Premium Annual — &pound;199.99/year</button>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+              <button class="btn btn-gold btn-sm" onclick="App.startCheckout('vip-monthly')">VIP — &pound;39.99/month</button>
+              <button class="btn btn-outline btn-sm" onclick="App.startCheckout('vip-annual')">VIP Annual — &pound;399.99/year</button>
             </div>
           `}
         </div>
@@ -7978,8 +8029,8 @@ const App = {
       });
     });
 
-    // Load Stripe subscription details for premium users
-    if (u.subscription === 'premium') {
+    // Load Stripe subscription details for premium/vip users
+    if (u.subscription === 'premium' || u.subscription === 'vip') {
       this.api('/stripe/status').then(function(status) {
         var el = document.getElementById('stripe-sub-details');
         if (!el) return;
@@ -8290,7 +8341,7 @@ const App = {
 
   showTrialOffer() {
     // Don't show if already premium or already had trial
-    if (!this.user || this.user.subscription === 'premium' || this.user.trialStart) return;
+    if (!this.user || this.user.subscription === 'premium' || this.user.subscription === 'vip' || this.user.trialStart) return;
 
     var overlay = document.createElement('div');
     overlay.id = 'trial-offer-overlay';

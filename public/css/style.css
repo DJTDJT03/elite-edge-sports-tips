@@ -6314,3 +6314,8 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   border-left: 3px solid var(--blue);
   border-radius: 4px;
 }
+
+/* VIP tier styling */
+.pricing-card.vip { border: 2px solid #d4a843; box-shadow: 0 0 30px rgba(212,168,67,0.15); }
+.vip-badge { background: linear-gradient(135deg, #d4a843, #b8902f); color: #0a0e1a; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-left: 6px; }
+.sub-bar-vip { background: linear-gradient(135deg, rgba(212,168,67,0.2), rgba(212,168,67,0.08)) !important; border-bottom: 2px solid #d4a843 !important; }

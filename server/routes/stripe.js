@@ -20,8 +20,8 @@ module.exports = function(deps) {
       }
 
       const { plan } = req.body;
-      if (!plan || !['monthly', 'annual'].includes(plan)) {
-        return res.status(400).json({ error: 'Invalid plan. Choose monthly or annual.' });
+      if (!plan || !['premium-monthly', 'premium-annual', 'vip-monthly', 'vip-annual'].includes(plan)) {
+        return res.status(400).json({ error: 'Invalid plan. Choose premium-monthly, premium-annual, vip-monthly, or vip-annual.' });
       }
 
       const user = await db.getUserById(req.user.id);
@@ -96,7 +96,10 @@ module.exports = function(deps) {
         }
       }
 
-      // Update user to premium
+      // Determine tier from session metadata (defaults to 'premium' for backward compat)
+      const tier = (session.metadata && session.metadata.tier === 'vip') ? 'vip' : 'premium';
+
+      // Update user subscription
       const stripeCustomerId = typeof session.customer === 'string'
         ? session.customer
         : (session.customer && session.customer.id) || null;
@@ -105,14 +108,14 @@ module.exports = function(deps) {
         : (session.subscription && session.subscription.id) || null;
 
       await db.updateUser(user.id, {
-        subscription: 'premium',
+        subscription: tier,
         subscriptionExpiry: expiryDate.toISOString(),
         trialActive: false,
         stripeCustomerId: stripeCustomerId,
         stripeSubscriptionId: stripeSubscriptionId,
       });
 
-      console.log('[Stripe] User upgraded to premium:', user.email, '— expires:', expiryDate.toISOString());
+      console.log('[Stripe] User upgraded to ' + tier + ':', user.email, '— expires:', expiryDate.toISOString());
       res.redirect('/#/account?upgraded=true');
     } catch (err) {
       console.error('[Stripe] Success handler error:', err.message);
@@ -150,8 +153,9 @@ module.exports = function(deps) {
           // This is handled by the success redirect, but also handle async payments
           const session = event.data.object;
           if (session.payment_status === 'paid' && session.metadata && session.metadata.userId) {
+            const tier = (session.metadata.tier === 'vip') ? 'vip' : 'premium';
             const user = await db.getUserById(session.metadata.userId);
-            if (user && user.subscription !== 'premium') {
+            if (user && user.subscription !== tier) {
               const sub = session.subscription
                 ? await stripeService.getSubscription(
                     typeof session.subscription === 'string' ? session.subscription : session.subscription.id
@@ -164,13 +168,13 @@ module.exports = function(deps) {
                 expiry.setMonth(expiry.getMonth() + 1);
               }
               await db.updateUser(user.id, {
-                subscription: 'premium',
+                subscription: tier,
                 subscriptionExpiry: expiry.toISOString(),
                 trialActive: false,
                 stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
                 stripeSubscriptionId: typeof session.subscription === 'string' ? session.subscription : null,
               });
-              console.log('[Stripe] Webhook: activated premium for', user.email);
+              console.log('[Stripe] Webhook: activated ' + tier + ' for', user.email);
             }
           }
           break;
@@ -189,11 +193,13 @@ module.exports = function(deps) {
             const user = users.find(u => u.stripeSubscriptionId === invoice.subscription);
             if (user && sub) {
               const expiry = new Date(sub.current_period_end * 1000);
+              // Preserve the user's current tier on renewal (premium or vip)
+              const currentTier = (user.subscription === 'vip') ? 'vip' : 'premium';
               await db.updateUser(user.id, {
-                subscription: 'premium',
+                subscription: currentTier,
                 subscriptionExpiry: expiry.toISOString(),
               });
-              console.log('[Stripe] Webhook: renewal success for', user.email, '— new expiry:', expiry.toISOString());
+              console.log('[Stripe] Webhook: renewal success for', user.email, '(' + currentTier + ') — new expiry:', expiry.toISOString());
             }
           }
           break;
@@ -221,7 +227,9 @@ module.exports = function(deps) {
           const user = users.find(u => u.stripeSubscriptionId === sub.id);
           if (user && sub.current_period_end) {
             const expiry = new Date(sub.current_period_end * 1000);
-            const status = sub.cancel_at_period_end ? user.subscription : 'premium';
+            // Preserve the user's current tier on update (premium or vip)
+            const currentTier = (user.subscription === 'vip') ? 'vip' : 'premium';
+            const status = sub.cancel_at_period_end ? user.subscription : currentTier;
             await db.updateUser(user.id, {
               subscription: status,
               subscriptionExpiry: expiry.toISOString(),
