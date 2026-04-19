@@ -135,7 +135,19 @@ class AIReportGenerator {
       if (text.startsWith('```')) {
         text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
       }
-      var result = JSON.parse(text);
+      var result;
+      try {
+        result = JSON.parse(text);
+      } catch (parseErr) {
+        // If JSON parsing fails, build a structured response from the raw text
+        console.log('[AI Reports] JSON parse failed, using raw text as preview');
+        result = {
+          preview: text,
+          headline: text.split('\n')[0].substring(0, 80) || 'Match Preview',
+          keyStats: [],
+          verdict: text.split('\n').pop() || ''
+        };
+      }
 
       this._setCache(cacheKey, result);
       return result;
@@ -225,7 +237,10 @@ class AIReportGenerator {
       if (text.startsWith('```')) {
         text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
       }
-      var result = JSON.parse(text);
+      var result;
+      try { result = JSON.parse(text); } catch(pe) {
+        result = { preview: text, headline: text.split('\n')[0].substring(0, 80) || 'Race Preview', keyFactors: [], verdict: '' };
+      }
 
       this._setCache(cacheKey, result);
       return result;
@@ -296,7 +311,10 @@ class AIReportGenerator {
       if (text.startsWith('```')) {
         text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
       }
-      var result = JSON.parse(text);
+      var result;
+      try { result = JSON.parse(text); } catch(pe) {
+        result = { subject: 'Elite Edge Daily', greeting: text.split('\n')[0] || '', resultsReview: '', todaysPicks: text, signOff: '' };
+      }
 
       this._setCache(cacheKey, result);
       return result;
@@ -366,7 +384,10 @@ class AIReportGenerator {
       if (text.startsWith('```')) {
         text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
       }
-      var result = JSON.parse(text);
+      var result;
+      try { result = JSON.parse(text); } catch(pe) {
+        result = { briefing: text, headline: text.split('\n')[0].substring(0, 80) || 'Morning Briefing' };
+      }
 
       this._setCache(cacheKey, result);
       return result;
