@@ -2548,8 +2548,244 @@ module.exports = function startScheduler(deps) {
   setInterval(safeRun('OddsAlerts', checkOddsMovementAlerts), 5 * 60 * 1000);
   setTimeout(safeRun('OddsAlerts', checkOddsMovementAlerts), 120000); // 2min after startup
 
+  // =========================================================================
+  // DAILY HEALTH CHECK — runs at 4:30am UK time
+  // Audits all systems, fixes issues, sends admin report
+  // =========================================================================
+  var lastHealthCheckDate = '';
+
+  async function dailyHealthCheck() {
+    var now = new Date();
+    var ukTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/London' }));
+    var hour = ukTime.getHours();
+    var minute = ukTime.getMinutes();
+    var dateStr = ukTime.toISOString().split('T')[0];
+
+    // Only run at 4:30am UK, once per day
+    if (hour !== 4 || minute < 25 || minute > 35 || lastHealthCheckDate === dateStr) return;
+    lastHealthCheckDate = dateStr;
+
+    console.log('[HealthCheck] ========================================');
+    console.log('[HealthCheck] Daily system audit — ' + dateStr);
+    console.log('[HealthCheck] ========================================');
+
+    var issues = [];
+    var fixes = [];
+
+    // --- 1. DATABASE CHECK ---
+    try {
+      if (db.isAvailable()) {
+        await db.query('SELECT 1');
+        console.log('[HealthCheck] ✅ Database: connected');
+      } else {
+        console.log('[HealthCheck] ⚠️ Database: using JSON fallback');
+        issues.push('Database not connected — running on JSON files');
+      }
+    } catch(e) {
+      console.log('[HealthCheck] ❌ Database: ' + e.message);
+      issues.push('Database error: ' + e.message);
+    }
+
+    // --- 2. DUPLICATE CHECK & FIX ---
+    try {
+      if (db.isAvailable()) {
+        // Deduplicate results by selection+date
+        var dupeResults = await db.query(
+          "DELETE FROM results WHERE id NOT IN (SELECT MIN(id) FROM results GROUP BY selection, date)"
+        );
+        if (dupeResults.rowCount > 0) {
+          fixes.push('Removed ' + dupeResults.rowCount + ' duplicate results');
+          console.log('[HealthCheck] 🔧 Fixed: removed ' + dupeResults.rowCount + ' duplicate results');
+        }
+        // Deduplicate tips by selection+date
+        var dupeTips = await db.query(
+          "DELETE FROM tips WHERE id NOT IN (SELECT MIN(id) FROM tips GROUP BY selection, date)"
+        );
+        if (dupeTips.rowCount > 0) {
+          fixes.push('Removed ' + dupeTips.rowCount + ' duplicate tips');
+          console.log('[HealthCheck] 🔧 Fixed: removed ' + dupeTips.rowCount + ' duplicate tips');
+        }
+        if (dupeResults.rowCount === 0 && dupeTips.rowCount === 0) {
+          console.log('[HealthCheck] ✅ Duplicates: none found');
+        }
+      }
+    } catch(e) {
+      console.log('[HealthCheck] ⚠️ Duplicate check skipped: ' + e.message);
+    }
+
+    // --- 3. STALE TIPS CLEANUP ---
+    try {
+      var threeDaysAgo = new Date(ukTime.getTime() - 3 * 86400000).toISOString().split('T')[0];
+      var tips = await db.getTips();
+      var staleCount = 0;
+      for (var i = 0; i < tips.length; i++) {
+        var t = tips[i];
+        if (t.isWeeklyAcca) continue;
+        var tipDate = (t.date || '').split('T')[0];
+        if (tipDate < threeDaysAgo && t.status === 'active') {
+          await db.updateTip(t.id, { status: 'expired', result: 'void' });
+          staleCount++;
+        }
+      }
+      if (staleCount > 0) {
+        fixes.push('Expired ' + staleCount + ' stale tips (3+ days old)');
+        console.log('[HealthCheck] 🔧 Fixed: expired ' + staleCount + ' stale tips');
+      } else {
+        console.log('[HealthCheck] ✅ Stale tips: none');
+      }
+    } catch(e) {
+      console.log('[HealthCheck] ⚠️ Stale tips check failed: ' + e.message);
+    }
+
+    // --- 4. RACING API CHECK ---
+    try {
+      var racingKey = process.env.RACING_API_KEY;
+      var racingSecret = process.env.RACING_API_SECRET;
+      if (racingKey && racingSecret && racingSource) {
+        var raceData = await racingSource.fetch();
+        var raceCount = raceData && raceData.racecards ? raceData.racecards.length : 0;
+        console.log('[HealthCheck] ✅ Racing API: ' + raceCount + ' races');
+        if (raceCount === 0) {
+          issues.push('Racing API returned 0 races — may need credential check');
+        }
+      } else {
+        issues.push('Racing API not configured');
+        console.log('[HealthCheck] ❌ Racing API: not configured');
+      }
+    } catch(e) {
+      issues.push('Racing API error: ' + e.message);
+      console.log('[HealthCheck] ❌ Racing API: ' + e.message);
+    }
+
+    // --- 5. FOOTBALL API CHECK ---
+    try {
+      if (footballSource && process.env.API_FOOTBALL_KEY) {
+        var today = ukTime.toISOString().split('T')[0];
+        var fbData = await footballSource.fetchFixturesByDate(today);
+        var fbCount = fbData && fbData.response ? fbData.response.length : 0;
+        console.log('[HealthCheck] ✅ Football API: ' + fbCount + ' fixtures');
+      } else {
+        issues.push('Football API not configured');
+        console.log('[HealthCheck] ❌ Football API: not configured');
+      }
+    } catch(e) {
+      issues.push('Football API error: ' + e.message);
+      console.log('[HealthCheck] ❌ Football API: ' + e.message);
+    }
+
+    // --- 6. ODDS API CHECK ---
+    try {
+      if (oddsSource && process.env.ODDS_API_KEY) {
+        console.log('[HealthCheck] ✅ Odds API: configured');
+      } else {
+        issues.push('Odds API not configured');
+        console.log('[HealthCheck] ❌ Odds API: not configured');
+      }
+    } catch(e) {
+      console.log('[HealthCheck] ⚠️ Odds API check: ' + e.message);
+    }
+
+    // --- 7. AI CHECK ---
+    try {
+      if (aiReports && aiReports.isAvailable()) {
+        console.log('[HealthCheck] ✅ AI (Claude): available');
+      } else {
+        issues.push('AI reports not available — ANTHROPIC_API_KEY may not be set');
+        console.log('[HealthCheck] ❌ AI: not available');
+      }
+    } catch(e) {
+      console.log('[HealthCheck] ⚠️ AI check: ' + e.message);
+    }
+
+    // --- 8. RESULTS INTEGRITY ---
+    try {
+      var results = await db.getResults();
+      var wins = results.filter(function(r) { return r.result === 'won'; }).length;
+      var losses = results.filter(function(r) { return r.result === 'lost'; }).length;
+      var totalPnl = results.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+      var sr = results.length > 0 ? Math.round((wins / results.length) * 100) : 0;
+      console.log('[HealthCheck] ✅ Results: ' + results.length + ' total, ' + wins + 'W/' + losses + 'L, SR: ' + sr + '%, P/L: ' + totalPnl.toFixed(2) + 'u');
+    } catch(e) {
+      console.log('[HealthCheck] ⚠️ Results check: ' + e.message);
+    }
+
+    // --- 9. USER COUNT ---
+    try {
+      var users = await db.getUsers();
+      var premiumCount = users.filter(function(u) { return u.subscription === 'premium'; }).length;
+      var trialCount = users.filter(function(u) { return u.trialActive; }).length;
+      var freeCount = users.filter(function(u) { return u.subscription === 'free' && !u.trialActive; }).length;
+      console.log('[HealthCheck] ✅ Users: ' + users.length + ' total (' + premiumCount + ' premium, ' + trialCount + ' trial, ' + freeCount + ' free)');
+    } catch(e) {
+      console.log('[HealthCheck] ⚠️ User check: ' + e.message);
+    }
+
+    // --- 10. STRIPE CHECK ---
+    try {
+      if (process.env.STRIPE_SECRET_KEY) {
+        console.log('[HealthCheck] ✅ Stripe: configured');
+      } else {
+        issues.push('Stripe not configured — cannot process payments');
+        console.log('[HealthCheck] ❌ Stripe: not configured');
+      }
+    } catch(e) {
+      console.log('[HealthCheck] ⚠️ Stripe check: ' + e.message);
+    }
+
+    // --- SUMMARY ---
+    console.log('[HealthCheck] ========================================');
+    console.log('[HealthCheck] Issues: ' + issues.length + ' | Fixes applied: ' + fixes.length);
+    if (issues.length > 0) console.log('[HealthCheck] Issues: ' + issues.join('; '));
+    if (fixes.length > 0) console.log('[HealthCheck] Fixes: ' + fixes.join('; '));
+    console.log('[HealthCheck] Audit complete at ' + new Date().toISOString());
+    console.log('[HealthCheck] ========================================');
+
+    // --- SEND ADMIN REPORT EMAIL ---
+    try {
+      var adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || 'darren@ecocleaningsystems.co.uk';
+      var statusEmoji = issues.length === 0 ? '✅' : '⚠️';
+      var subject = statusEmoji + ' Elite Edge Daily Health Check — ' + dateStr;
+      var body = '<div style="font-family:Inter,sans-serif;background:#0a0e1a;color:#e8e6e3;padding:32px;border-radius:12px;">' +
+        '<h1 style="color:#d4a843;margin-bottom:16px;">Daily Health Check Report</h1>' +
+        '<p style="color:#8a8fa0;">' + dateStr + ' at 4:30am UK</p>' +
+        '<div style="margin:20px 0;">' +
+          '<h3 style="color:' + (issues.length === 0 ? '#22c55e' : '#ef4444') + ';">' +
+            (issues.length === 0 ? '✅ ALL SYSTEMS OPERATIONAL' : '⚠️ ' + issues.length + ' ISSUE(S) DETECTED') +
+          '</h3>' +
+        '</div>';
+
+      if (fixes.length > 0) {
+        body += '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:14px;margin-bottom:16px;">' +
+          '<h4 style="color:#22c55e;margin-bottom:8px;">Auto-Fixed</h4>' +
+          '<ul style="margin:0;padding-left:20px;">' + fixes.map(function(f) { return '<li>' + f + '</li>'; }).join('') + '</ul>' +
+        '</div>';
+      }
+
+      if (issues.length > 0) {
+        body += '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:14px;margin-bottom:16px;">' +
+          '<h4 style="color:#ef4444;margin-bottom:8px;">Requires Attention</h4>' +
+          '<ul style="margin:0;padding-left:20px;">' + issues.map(function(f) { return '<li>' + f + '</li>'; }).join('') + '</ul>' +
+        '</div>';
+      }
+
+      body += '<p style="font-size:12px;color:#64748b;margin-top:20px;">This report is generated automatically. Check Railway logs for full details.</p></div>';
+
+      emailService._sendEmail({
+        to: adminEmail,
+        subject: subject,
+        html: body
+      }).catch(function(e) { console.log('[HealthCheck] Admin email failed:', e.message); });
+    } catch(e) {
+      console.log('[HealthCheck] Admin report email skipped:', e.message);
+    }
+  }
+
+  // Health check: run every 10 minutes (only executes at 4:30am UK)
+  setInterval(safeRun('HealthCheck', dailyHealthCheck), 10 * 60 * 1000);
+  setTimeout(safeRun('HealthCheck', dailyHealthCheck), 30000); // Check on startup too
+
   console.log('[Scheduler] All scheduled tasks registered');
 
   // Return functions that admin routes may need to trigger manually
-  return { autoSettleResults, autoGenerateDailyTips, checkTrialExpiries, checkOddsMovementAlerts };
+  return { autoSettleResults, autoGenerateDailyTips, checkTrialExpiries, checkOddsMovementAlerts, dailyHealthCheck };
 };
