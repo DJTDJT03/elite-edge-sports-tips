@@ -523,8 +523,13 @@
 
   <!-- Cookie Consent Banner -->
   <div class="cookie-banner" id="cookie-banner" style="display:none;">
-    <p>We use cookies to improve your experience. By continuing to use this site, you consent to our use of cookies. <a href="#/privacy">Learn More</a></p>
-    <button class="btn btn-gold btn-sm" onclick="App.acceptCookies()">Accept</button>
+    <div class="cookie-banner-inner">
+      <p>We use essential cookies to run this site and optional analytics cookies to improve your experience. <a href="#/privacy">Privacy Policy</a></p>
+      <div class="cookie-banner-buttons">
+        <button class="btn btn-gold btn-sm" onclick="App.acceptCookies()">Accept All</button>
+        <button class="btn btn-outline btn-sm" onclick="App.rejectCookies()">Essential Only</button>
+      </div>
+    </div>
   </div>
 
   <!-- Onboarding Overlay (injected by JS) -->

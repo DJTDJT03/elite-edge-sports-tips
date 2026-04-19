@@ -99,6 +99,7 @@ const App = {
     this.initOddsTicker();
     this.checkReferralParam();
     this.initCookieConsent();
+    this.loadAnalytics();
     this.initChatTease();
     this.initInstallPrompt();
   },
@@ -884,6 +885,55 @@ const App = {
       case 'reset-password': this.handleResetPasswordRoute(); break;
       default: this.render404();
     }
+
+    this.updatePageMeta(page);
+  },
+
+  updatePageMeta(page) {
+    var titles = {
+      'dashboard': 'Elite Edge Sports Tips — Premium UK Betting Intelligence',
+      'racing': 'Racing Tips — Live Race Cards & Expert Analysis | Elite Edge',
+      'football': 'Football Tips — Data-Driven Selections & xG Analysis | Elite Edge',
+      'live': 'LIVE Race Day Hub — Real-Time Tips & Results | Elite Edge',
+      'selections': 'Today\'s Selections — All Racing & Football Tips | Elite Edge',
+      'value-bets': 'Value Bet Scanner — Find Bookmaker Price Edges | Elite Edge',
+      'compare': 'H2H Comparison Tool — Teams & Horses Side by Side | Elite Edge',
+      'premier-league': 'Premier League Weekend Preview — Analyst Verdicts | Elite Edge',
+      'results': 'Verified Results & Performance Track Record | Elite Edge',
+      'pricing': 'Pricing — Premium & VIP Subscription Plans | Elite Edge',
+      'analysts': 'Our Analysts — The Professor, The Scout, The Edge | Elite Edge',
+      'support': 'Help & Support — FAQ & Contact | Elite Edge',
+      'blog': 'Blog — Weekly Reviews & Betting Insights | Elite Edge',
+      'how-it-works': 'How It Works — Our Scoring Model Explained | Elite Edge',
+      'account': 'My Account — Settings & Preferences | Elite Edge',
+      'terms': 'Terms & Conditions | Elite Edge Sports Tips',
+      'privacy': 'Privacy Policy | Elite Edge Sports Tips',
+      'disclaimer': 'Disclaimer | Elite Edge Sports Tips',
+      'responsible-gambling': 'Responsible Gambling | Elite Edge Sports Tips',
+      'festivals': 'Festival Racing Hub — Major Meetings | Elite Edge',
+      'admin': 'Admin Panel | Elite Edge Sports Tips',
+    };
+
+    var descriptions = {
+      'dashboard': 'Premium UK horse racing and football betting intelligence. Data-driven tips with proven ROI.',
+      'racing': 'Live UK race cards with form, going forecasts, and AI-powered analysis. Expert selections daily.',
+      'football': 'Football tips across Europe\'s top leagues with xG analysis, injury reports, and odds comparison.',
+      'live': 'Real-time race day dashboard with countdown, live results, and instant P/L updates.',
+      'value-bets': 'Scanner comparing 40+ UK bookmakers to find where odds disagree — genuine value opportunities.',
+      'results': 'Fully transparent, verified results page. Every tip, every outcome. Track record you can trust.',
+      'pricing': 'Start free, upgrade to Premium (£19.99/mo) or VIP (£39.99/mo). 7-day free trial available.',
+    };
+
+    var title = titles[page] || 'Elite Edge Sports Tips — Premium UK Betting Intelligence';
+    var desc = descriptions[page] || 'Premium UK horse racing and football betting intelligence. Data-driven tips with proven ROI.';
+
+    document.title = title;
+    var metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) metaDesc.setAttribute('content', desc);
+    var ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute('content', title);
+    var ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc) ogDesc.setAttribute('content', desc);
   },
 
   handleResetPasswordRoute() {
@@ -2186,14 +2236,30 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // SKELETON LOADERS & API ERROR FALLBACK
+  // -----------------------------------------------------------------------
+  renderSkeleton(type) {
+    if (type === 'dashboard') return '<div class="container"><div class="skeleton skeleton-title"></div><div class="grid grid-4" style="margin-bottom:20px;"><div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div><div class="skeleton skeleton-stat"></div></div><div class="grid grid-2"><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div></div></div>';
+    if (type === 'tips') return '<div class="container"><div class="skeleton skeleton-title"></div><div class="grid grid-2"><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div></div></div>';
+    if (type === 'results') return '<div class="container"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-card" style="height:300px;"></div></div>';
+    return '<div class="container"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-card"></div></div>';
+  },
+
+  renderApiError(section, message) {
+    return '<div style="text-align:center;padding:40px 20px;background:var(--bg-card);border-radius:12px;border:1px solid var(--border);">' +
+      '<div style="font-size:36px;margin-bottom:12px;opacity:0.4;">\u26A0\uFE0F</div>' +
+      '<h3 style="margin-bottom:8px;">Unable to Load ' + section + '</h3>' +
+      '<p style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">' + (message || 'Please check your connection and try again.') + '</p>' +
+      '<button class="btn btn-outline btn-sm" onclick="App.route()">Retry</button>' +
+    '</div>';
+  },
+
+  // -----------------------------------------------------------------------
   // DASHBOARD
   // -----------------------------------------------------------------------
   async renderDashboard() {
     const app = document.getElementById('app');
-    app.innerHTML = `<div class="container">
-      <div class="page-header"><h1>Welcome to <span class="accent">Elite Edge</span></h1><p>Loading today's selections...</p></div>
-      <div class="grid grid-2">${'<div class="skeleton skeleton-card"></div>'.repeat(4)}</div>
-    </div>`;
+    app.innerHTML = this.renderSkeleton('dashboard');
 
     try {
       const [tips, perf] = await Promise.all([
@@ -2933,7 +2999,7 @@ const App = {
   // -----------------------------------------------------------------------
   async renderTipDetail(tipId) {
     const app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading tip...</div></div>';
+    app.innerHTML = this.renderSkeleton('tips');
 
     try {
       const tip = await this.api(`/tips/${tipId}`);
@@ -3185,7 +3251,7 @@ const App = {
 
   async renderRacing() {
     var app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading racing data...</div></div>';
+    app.innerHTML = this.renderSkeleton('tips');
 
     // Fetch all data on first load
     if (!this._racingLiveData || !this._racingIntelData) {
@@ -3632,7 +3698,7 @@ const App = {
   // -----------------------------------------------------------------------
   async renderSelections() {
     var app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading selections...</div></div>';
+    app.innerHTML = this.renderSkeleton('tips');
 
     try {
       this.tips = await this.api('/tips');
@@ -3768,7 +3834,7 @@ const App = {
     var isPremium = this.isPremium();
     var self = this;
 
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Scanning for value bets...</div></div>';
+    app.innerHTML = this.renderSkeleton('tips');
 
     async function fetchAndRender(minEdge) {
       try {
@@ -4504,7 +4570,7 @@ const App = {
   // -----------------------------------------------------------------------
   async renderFootball() {
     const app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading football tips...</div></div>';
+    app.innerHTML = this.renderSkeleton('tips');
 
     var liveData = null;
     var weekendFixtures = null;
@@ -5019,7 +5085,7 @@ const App = {
 
   async renderFestival() {
     var app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading Festival Guide...</div></div>';
+    app.innerHTML = this.renderSkeleton('tips');
 
     try {
       var tips = await this.api('/tips');
@@ -5196,7 +5262,7 @@ const App = {
   // -----------------------------------------------------------------------
   async renderFestivalHub() {
     var app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Scanning for Festival Meetings...</div></div>';
+    app.innerHTML = this.renderSkeleton('tips');
 
     var self = this;
     var isPremium = this.isPremium();
@@ -5448,7 +5514,7 @@ const App = {
   // -----------------------------------------------------------------------
   async renderResults() {
     const app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading results...</div></div>';
+    app.innerHTML = this.renderSkeleton('results');
 
     try {
       const [results, perf, tiers] = await Promise.all([
@@ -6073,7 +6139,7 @@ const App = {
     }
 
     const app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading admin panel...</div></div>';
+    app.innerHTML = this.renderSkeleton('dashboard');
 
     let users = [], tips = [], support = [], chatLogs = [];
     try {
@@ -7608,7 +7674,7 @@ const App = {
   // -----------------------------------------------------------------------
   async renderAnalysts() {
     const app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading analysts...</div></div>';
+    app.innerHTML = this.renderSkeleton('tips');
 
     let results = [];
     try { results = await this.api('/results'); } catch {}
@@ -7830,7 +7896,7 @@ const App = {
     }
 
     const app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading account...</div></div>';
+    app.innerHTML = this.renderSkeleton('dashboard');
 
     let accountData = {};
     try {
@@ -8288,17 +8354,43 @@ const App = {
   // COOKIE CONSENT (Feature #1)
   // -----------------------------------------------------------------------
   initCookieConsent() {
-    if (localStorage.getItem('cookieConsent') !== 'true') {
-      const banner = document.getElementById('cookie-banner');
-      if (banner) banner.style.display = 'flex';
-    }
+    if (localStorage.getItem('ee_cookie_consent')) return;
+    var banner = document.getElementById('cookie-banner');
+    if (banner) banner.style.display = 'block';
   },
 
   acceptCookies() {
-    localStorage.setItem('cookieConsent', 'true');
-    const banner = document.getElementById('cookie-banner');
+    localStorage.setItem('ee_cookie_consent', 'accepted');
+    localStorage.setItem('ee_cookie_consent_date', new Date().toISOString());
+    var banner = document.getElementById('cookie-banner');
     if (banner) banner.style.display = 'none';
-    trackEvent('consent', 'cookies_accepted', '');
+    // Now load analytics (GA4 would be loaded here when configured)
+    this.loadAnalytics();
+  },
+
+  rejectCookies() {
+    localStorage.setItem('ee_cookie_consent', 'rejected');
+    localStorage.setItem('ee_cookie_consent_date', new Date().toISOString());
+    var banner = document.getElementById('cookie-banner');
+    if (banner) banner.style.display = 'none';
+    // Don't load analytics
+  },
+
+  loadAnalytics() {
+    // Only load if consent was given
+    if (localStorage.getItem('ee_cookie_consent') !== 'accepted') return;
+    // GA4 would be loaded here dynamically when measurement ID is configured
+    // var gaId = 'G-XXXXXXXXXX'; // Replace with actual GA4 ID
+    // if (gaId && gaId !== 'G-XXXXXXXXXX') {
+    //   var script = document.createElement('script');
+    //   script.src = 'https://www.googletagmanager.com/gtag/js?id=' + gaId;
+    //   script.async = true;
+    //   document.head.appendChild(script);
+    //   window.dataLayer = window.dataLayer || [];
+    //   function gtag(){dataLayer.push(arguments);}
+    //   gtag('js', new Date());
+    //   gtag('config', gaId, { anonymize_ip: true });
+    // }
   },
 
   // -----------------------------------------------------------------------
@@ -8639,19 +8731,14 @@ const App = {
   },
 
   render404() {
-    const app = document.getElementById('app');
-    app.innerHTML = `
-      <div class="container">
-        <div class="page-404">
-          <svg class="logo-404" width="80" height="80" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-            <defs><linearGradient id="logo-404" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#d4a843"/><stop offset="100%" stop-color="#b8902f"/></linearGradient></defs>
-            <path d="M32 4L4 32l28 28 28-28L32 4z" fill="none" stroke="url(#logo-404)" stroke-width="3"/>
-            <text x="16" y="40" font-family="Inter,sans-serif" font-weight="900" font-size="24" fill="#d4a843">EE</text>
-          </svg>
-          <h1>404</h1>
-          <h2>Page Not Found</h2>
-          <p>The page you are looking for does not exist or has been moved. Let us get you back on track.</p>
-          <a href="#/" class="btn btn-gold btn-lg">Back to Dashboard</a>
+    document.getElementById('app').innerHTML = `
+      <div class="container" style="text-align:center;padding:80px 20px;">
+        <div style="font-size:72px;margin-bottom:16px;opacity:0.3;">404</div>
+        <h1 style="font-size:28px;margin-bottom:12px;">Page Not Found</h1>
+        <p style="color:var(--text-muted);margin-bottom:32px;max-width:400px;margin-left:auto;margin-right:auto;">The page you're looking for doesn't exist or has been moved.</p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+          <a href="#/" class="btn btn-gold">Back to Dashboard</a>
+          <a href="#/support" class="btn btn-outline">Contact Support</a>
         </div>
       </div>
     `;
@@ -8849,7 +8936,7 @@ const App = {
 
   async renderBlogListing() {
     const app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading blog...</div></div>';
+    app.innerHTML = this.renderSkeleton('tips');
 
     // Fetch auto-generated weekly reviews
     var weeklyReviews = [];
@@ -8988,7 +9075,7 @@ const App = {
     var todayStr = today.toISOString().split('T')[0];
     var todayDisplay = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-    app.innerHTML = '<div class="live-hub"><div class="text-center pulse" style="padding:60px;color:var(--text-secondary);">Loading Live Hub...</div></div>';
+    app.innerHTML = this.renderSkeleton('dashboard');
 
     // Fetch all data sources
     var tips = [], liveCards = [], liveResults = [], settledResults = [];
@@ -9508,7 +9595,7 @@ const App = {
   // ── Premier League Weekend Preview ──────────────────────────────────
   async renderPremierLeague() {
     var app = document.getElementById('app');
-    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Loading Premier League preview...</div></div>';
+    app.innerHTML = this.renderSkeleton('tips');
 
     // Calculate upcoming Saturday & Sunday
     var now = new Date();
