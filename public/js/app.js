@@ -844,6 +844,7 @@ const App = {
       case 'value-bets': this.renderValueBets(); break;
       case 'compare': this.renderCompare(); break;
       case 'festival': this.renderFestival(); break;
+      case 'festivals': this.renderFestivalHub(); break;
       case 'results': this.renderResults(); break;
       case 'pricing': this.renderPricing(); break;
       case 'analysts': this.renderAnalysts(); break;
@@ -1833,6 +1834,12 @@ const App = {
   // -----------------------------------------------------------------------
   // SOCIAL SHARING (Enhancement #8)
   // -----------------------------------------------------------------------
+  toggleReplay(id) {
+    var row = document.getElementById(id);
+    if (!row) return;
+    row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+  },
+
   shareWin(selection, odds) {
     const text = `Another winner from @EliteEdgeTips! ${selection} @ ${odds} \u2705 Join us: https://eliteedgesports.co.uk #EliteEdgeTips #Winner`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
@@ -1917,7 +1924,65 @@ const App = {
         const pos = parseInt(f);
         return `<span class="form-badge form-pos ${pos === 1 ? 'form-pos-1' : ''}">${f}</span>`;
       }).join('')}
+      ${this.renderSparkline(recentForm, sport)}
     </div>`;
+  },
+
+  renderSparkline(formArray, sport) {
+    if (!formArray || formArray.length < 2) return '';
+    var width = 60;
+    var height = 20;
+    var padding = 2;
+    var values = [];
+
+    if (sport === 'racing') {
+      // Racing: positions — lower is better, so invert (1st = top)
+      for (var i = 0; i < formArray.length; i++) {
+        var pos = parseInt(formArray[i]);
+        if (isNaN(pos)) continue;
+        values.push(pos);
+      }
+      if (values.length < 2) return '';
+      var maxPos = Math.max.apply(null, values);
+      var minPos = Math.min.apply(null, values);
+      var range = maxPos - minPos || 1;
+      // Invert: position 1 maps to top (y=padding), worst maps to bottom
+      values = values.map(function(v) { return 1 - ((v - minPos) / range); });
+    } else {
+      // Football: W=1, D=0.5, L=0
+      for (var j = 0; j < formArray.length; j++) {
+        var f = (formArray[j] + '').toUpperCase();
+        if (f === 'W') values.push(1);
+        else if (f === 'D') values.push(0.5);
+        else if (f === 'L') values.push(0);
+      }
+      if (values.length < 2) return '';
+    }
+
+    // Determine trend colour
+    var firstHalf = values.slice(0, Math.floor(values.length / 2));
+    var secondHalf = values.slice(Math.floor(values.length / 2));
+    var avgFirst = firstHalf.reduce(function(s, v) { return s + v; }, 0) / firstHalf.length;
+    var avgSecond = secondHalf.reduce(function(s, v) { return s + v; }, 0) / secondHalf.length;
+    var diff = avgSecond - avgFirst;
+    var colour = diff > 0.1 ? '#22c55e' : diff < -0.1 ? '#ef4444' : '#d4a843';
+
+    // Generate SVG points
+    var usableW = width - padding * 2;
+    var usableH = height - padding * 2;
+    var points = [];
+    var circles = [];
+    for (var k = 0; k < values.length; k++) {
+      var x = padding + (k / (values.length - 1)) * usableW;
+      var y = padding + (1 - values[k]) * usableH;
+      points.push(x.toFixed(1) + ',' + y.toFixed(1));
+      circles.push('<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="1.5" fill="' + colour + '"/>');
+    }
+
+    return '<svg class="sparkline" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '">' +
+      '<polyline points="' + points.join(' ') + '" fill="none" stroke="' + colour + '" stroke-width="1.5"/>' +
+      circles.join('') +
+      '</svg>';
   },
 
   // -----------------------------------------------------------------------
@@ -2158,6 +2223,9 @@ const App = {
       <div class="container">
         <!-- Morning Brief (logged-in users only) -->
         ${morningBriefHtml}
+
+        <!-- Your Elite Edge Stats (premium users only) -->
+        <div id="personal-stats-container"></div>
 
         <!-- AI Morning Briefing (premium users only) -->
         ${this.isPremium() ? `
@@ -2490,6 +2558,157 @@ const App = {
 
     // Fetch and render breaking news section
     this._fetchDashboardNews();
+
+    // Render personalised stats for premium users
+    this.renderPersonalStats();
+  },
+
+  // -----------------------------------------------------------------------
+  // PERSONAL STATS — "Your Elite Edge Stats" card for premium users
+  // -----------------------------------------------------------------------
+  async renderPersonalStats() {
+    var container = document.getElementById('personal-stats-container');
+    if (!container) return;
+    if (!this.user || !this.isPremium()) return;
+
+    var bets = this.getMyBets();
+
+    if (!bets || bets.length === 0) {
+      container.innerHTML =
+        '<div style="border:2px solid rgba(212,168,67,0.4);border-radius:14px;padding:24px;margin-bottom:20px;background:linear-gradient(135deg,rgba(212,168,67,0.08),rgba(212,168,67,0.02));">' +
+          '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
+            '<div style="font-size:24px;">&#9733;</div>' +
+            '<div style="font-weight:800;font-size:16px;color:#d4a843;">Your Elite Edge Stats</div>' +
+          '</div>' +
+          '<div style="font-size:14px;color:var(--text-secondary);line-height:1.6;">' +
+            'Start tracking your bets to see personalised stats. Click <strong style="color:#d4a843;">\'Back This Tip\'</strong> on any selection.' +
+          '</div>' +
+        '</div>';
+      return;
+    }
+
+    // Fetch results to match against tracked bets
+    var allResults = [];
+    try {
+      allResults = await this.api('/results');
+      if (!Array.isArray(allResults)) allResults = [];
+    } catch (e) { allResults = []; }
+
+    // Build a results lookup by tipId
+    var resultsMap = {};
+    allResults.forEach(function(r) { if (r.tipId) resultsMap[r.tipId] = r; });
+
+    // Calculate personal stats
+    var totalPL = 0;
+    var wins = 0;
+    var losses = 0;
+    var settled = 0;
+    var bestWinner = null;
+    var bestWinnerPL = 0;
+    var analystStats = {};
+
+    bets.forEach(function(bet) {
+      var result = resultsMap[bet.tipId] || {};
+      var betResult = result.result || bet.result;
+      var odds = parseFloat(bet.odds) || 0;
+
+      if (betResult === 'won') {
+        var pnl = odds > 0 ? (odds - 1) : 0;
+        totalPL += pnl;
+        wins++;
+        settled++;
+        if (pnl > bestWinnerPL) {
+          bestWinnerPL = pnl;
+          bestWinner = bet.selection;
+        }
+      } else if (betResult === 'lost') {
+        totalPL -= 1;
+        losses++;
+        settled++;
+      } else if (betResult === 'placed') {
+        var ewReturn = parseFloat(result.eachWayReturn || result.pnl || 0);
+        totalPL += ewReturn;
+        settled++;
+      }
+
+      // Track analyst performance
+      var analyst = result.tipsterProfile || bet.tipsterProfile || 'Unknown';
+      if (!analystStats[analyst]) {
+        analystStats[analyst] = { staked: 0, returns: 0, count: 0 };
+      }
+      if (betResult === 'won' || betResult === 'lost' || betResult === 'placed') {
+        analystStats[analyst].staked += 1;
+        analystStats[analyst].count++;
+        if (betResult === 'won') {
+          analystStats[analyst].returns += odds > 0 ? odds : 1;
+        } else if (betResult === 'placed') {
+          analystStats[analyst].returns += parseFloat(result.eachWayReturn || result.pnl || 0) + 1;
+        }
+      }
+    });
+
+    var strikeRate = settled > 0 ? Math.round((wins / settled) * 100) : 0;
+    var plSign = totalPL >= 0 ? '+' : '';
+    var plColor = totalPL >= 0 ? '#22c55e' : '#ef4444';
+
+    // Find best analyst by ROI
+    var bestAnalyst = '';
+    var bestAnalystROI = -Infinity;
+    var analystKeys = Object.keys(analystStats);
+    for (var i = 0; i < analystKeys.length; i++) {
+      var a = analystStats[analystKeys[i]];
+      if (a.staked > 0 && a.count >= 2) {
+        var roi = ((a.returns - a.staked) / a.staked) * 100;
+        if (roi > bestAnalystROI) {
+          bestAnalystROI = roi;
+          bestAnalyst = analystKeys[i];
+        }
+      }
+    }
+
+    // Calculate membership duration
+    var memberDays = 0;
+    if (this.user.createdAt) {
+      memberDays = Math.floor((Date.now() - new Date(this.user.createdAt).getTime()) / 86400000);
+    }
+
+    container.innerHTML =
+      '<div style="border:2px solid rgba(212,168,67,0.4);border-radius:14px;padding:24px;margin-bottom:20px;background:linear-gradient(135deg,rgba(212,168,67,0.08),rgba(212,168,67,0.02));box-shadow:0 0 24px rgba(212,168,67,0.06);">' +
+        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">' +
+          '<div style="font-size:24px;">&#9733;</div>' +
+          '<div>' +
+            '<div style="font-weight:800;font-size:16px;color:#d4a843;">Your Elite Edge Stats</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);">Personalised performance based on your tracked bets</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;">' +
+          '<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;text-align:center;">' +
+            '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Your P/L Following Elite Edge</div>' +
+            '<div style="font-size:26px;font-weight:900;color:' + plColor + ';">' + plSign + '\u00A3' + Math.abs(totalPL).toFixed(2) + '</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);">(' + bets.length + ' bet' + (bets.length !== 1 ? 's' : '') + ' tracked)</div>' +
+          '</div>' +
+          '<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;text-align:center;">' +
+            '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Personal Strike Rate</div>' +
+            '<div style="font-size:26px;font-weight:900;color:' + (strikeRate >= 50 ? '#22c55e' : '#f59e0b') + ';">' + strikeRate + '%</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);">' + wins + 'W - ' + losses + 'L' + (settled - wins - losses > 0 ? ' - ' + (settled - wins - losses) + 'P' : '') + '</div>' +
+          '</div>' +
+          (bestWinner ? '<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;text-align:center;">' +
+            '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Best Winner You Backed</div>' +
+            '<div style="font-size:16px;font-weight:800;color:#22c55e;word-break:break-word;">' + bestWinner + '</div>' +
+            '<div style="font-size:12px;color:#22c55e;font-weight:600;">+' + bestWinnerPL.toFixed(2) + ' units</div>' +
+          '</div>' : '') +
+          (bestAnalyst && bestAnalyst !== 'Unknown' ? '<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;text-align:center;">' +
+            '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Your Best Analyst</div>' +
+            '<div style="font-size:16px;font-weight:800;color:#d4a843;">' + bestAnalyst + '</div>' +
+            '<div style="font-size:12px;color:var(--text-secondary);">ROI: ' + (bestAnalystROI >= 0 ? '+' : '') + bestAnalystROI.toFixed(1) + '%</div>' +
+          '</div>' : '') +
+          (memberDays > 0 ? '<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;text-align:center;">' +
+            '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Member For</div>' +
+            '<div style="font-size:26px;font-weight:900;color:#d4a843;">' + memberDays + '</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);">days</div>' +
+          '</div>' : '') +
+        '</div>' +
+      '</div>';
   },
 
   async _fetchDashboardNews() {
@@ -4956,6 +5175,258 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // FESTIVAL HUB — Dynamic festival detection from live racing cards
+  // -----------------------------------------------------------------------
+  async renderFestivalHub() {
+    var app = document.getElementById('app');
+    app.innerHTML = '<div class="container"><div class="text-center pulse" style="padding:60px;">Scanning for Festival Meetings...</div></div>';
+
+    var self = this;
+    var isPremium = this.isPremium();
+    var festivalMeetings = ['cheltenham', 'aintree', 'ascot', 'goodwood', 'york', 'newmarket', 'epsom'];
+
+    // Fetch live racing cards and tips in parallel
+    var racecards = [];
+    var allTips = [];
+    try {
+      var responses = await Promise.allSettled([
+        fetch('/api/racing/live-cards').then(function(r) { return r.ok ? r.json() : { racecards: [] }; }),
+        this.api('/tips')
+      ]);
+      var cardsData = responses[0].status === 'fulfilled' ? responses[0].value : { racecards: [] };
+      racecards = cardsData.racecards || cardsData.meetings || [];
+      if (!Array.isArray(racecards)) racecards = [];
+      allTips = responses[1].status === 'fulfilled' ? responses[1].value : [];
+      if (!Array.isArray(allTips)) allTips = [];
+      this.tips = allTips;
+    } catch (e) { /* use cached */ }
+
+    // Group racecards into meetings
+    var meetingsMap = {};
+    racecards.forEach(function(race) {
+      // Handle both flat racecard arrays and meeting-grouped data
+      var meetingName = race.meeting || race.course || race.name || '';
+      if (!meetingName) return;
+      if (!meetingsMap[meetingName]) {
+        meetingsMap[meetingName] = { name: meetingName, races: [] };
+      }
+      // If it's a meeting object with races array, add its races
+      if (race.races && Array.isArray(race.races)) {
+        race.races.forEach(function(r) {
+          r._meetingName = meetingName;
+          meetingsMap[meetingName].races.push(r);
+        });
+      } else {
+        // It's a flat race object
+        race._meetingName = meetingName;
+        meetingsMap[meetingName].races.push(race);
+      }
+    });
+
+    // Detect festival meetings
+    var festivals = [];
+    var meetingKeys = Object.keys(meetingsMap);
+    for (var mk = 0; mk < meetingKeys.length; mk++) {
+      var meeting = meetingsMap[meetingKeys[mk]];
+      var nameLower = meeting.name.toLowerCase();
+      var isFestival = false;
+
+      // Check meeting name against known festivals
+      for (var fi = 0; fi < festivalMeetings.length; fi++) {
+        if (nameLower.indexOf(festivalMeetings[fi]) !== -1) {
+          isFestival = true;
+          break;
+        }
+      }
+
+      // Check for Grade 1 / Group 1 races or high prize money
+      if (!isFestival) {
+        for (var ri = 0; ri < meeting.races.length; ri++) {
+          var race = meeting.races[ri];
+          var raceClass = (race.raceClass || race.grade || race.class || '').toLowerCase();
+          var prizeMoney = race.prizeMoney || race.prize || '';
+          var prizeNum = 0;
+          if (typeof prizeMoney === 'string') {
+            prizeNum = parseInt(prizeMoney.replace(/[^0-9]/g, '')) || 0;
+          } else if (typeof prizeMoney === 'number') {
+            prizeNum = prizeMoney;
+          }
+
+          if (raceClass.indexOf('grade 1') !== -1 || raceClass.indexOf('group 1') !== -1 || prizeNum > 50000) {
+            isFestival = true;
+            break;
+          }
+        }
+      }
+
+      if (isFestival) {
+        festivals.push(meeting);
+      }
+    }
+
+    if (festivals.length === 0) {
+      // No festivals detected — show calendar
+      app.innerHTML =
+        '<div class="container">' +
+          '<div class="page-header" style="text-align:center;">' +
+            '<h1 style="font-size:28px;">&#127942; Festival Hub</h1>' +
+            '<p style="font-size:15px;color:var(--text-secondary);">Major Racing Festivals &mdash; Elite Analysis For Every Big Race</p>' +
+          '</div>' +
+          '<div style="border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:32px;margin-bottom:24px;background:linear-gradient(135deg,rgba(212,168,67,0.08),rgba(212,168,67,0.02));text-align:center;">' +
+            '<div style="font-size:48px;margin-bottom:16px;opacity:0.6;">&#127943;</div>' +
+            '<div style="font-size:18px;font-weight:800;color:#d4a843;margin-bottom:12px;">No Major Festivals This Week</div>' +
+            '<div style="font-size:14px;color:var(--text-secondary);line-height:1.8;max-width:500px;margin:0 auto;">' +
+              'Check back for the big meetings:<br>' +
+              '<strong style="color:#d4a843;">Cheltenham</strong> (March) &bull; ' +
+              '<strong style="color:#d4a843;">Grand National</strong> (April) &bull; ' +
+              '<strong style="color:#d4a843;">Royal Ascot</strong> (June) &bull; ' +
+              '<strong style="color:#d4a843;">Glorious Goodwood</strong> (July)' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:24px;text-align:center;">' +
+              '<div class="festival-cal-item" style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(212,168,67,0.15);">' +
+                '<div style="font-size:28px;margin-bottom:6px;">&#127793;</div>' +
+                '<div style="font-weight:700;font-size:14px;color:#fff;">Cheltenham Festival</div>' +
+                '<div style="font-size:12px;color:var(--text-muted);">March &bull; 4 days &bull; 28 races</div>' +
+              '</div>' +
+              '<div class="festival-cal-item" style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(212,168,67,0.15);">' +
+                '<div style="font-size:28px;margin-bottom:6px;">&#127943;</div>' +
+                '<div style="font-weight:700;font-size:14px;color:#fff;">Grand National</div>' +
+                '<div style="font-size:12px;color:var(--text-muted);">April &bull; 3 days &bull; 18 races</div>' +
+              '</div>' +
+              '<div class="festival-cal-item" style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(212,168,67,0.15);">' +
+                '<div style="font-size:28px;margin-bottom:6px;">&#128081;</div>' +
+                '<div style="font-weight:700;font-size:14px;color:#fff;">Royal Ascot</div>' +
+                '<div style="font-size:12px;color:var(--text-muted);">June &bull; 5 days &bull; 35 races</div>' +
+              '</div>' +
+              '<div class="festival-cal-item" style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(212,168,67,0.15);">' +
+                '<div style="font-size:28px;margin-bottom:6px;">&#9728;&#65039;</div>' +
+                '<div style="font-weight:700;font-size:14px;color:#fff;">Glorious Goodwood</div>' +
+                '<div style="font-size:12px;color:var(--text-muted);">July/August &bull; 5 days &bull; 35 races</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="text-align:center;">' +
+            '<a href="#/racing" style="color:#d4a843;font-size:14px;font-weight:600;text-decoration:none;">View Today\'s Racing Cards &rarr;</a>' +
+          '</div>' +
+        '</div>';
+      return;
+    }
+
+    // Festival detected — build the hub
+    var festivalHtml = '';
+    for (var fIdx = 0; fIdx < festivals.length; fIdx++) {
+      var fest = festivals[fIdx];
+      var festTips = allTips.filter(function(t) {
+        return (t.meeting || '').toLowerCase() === fest.name.toLowerCase() ||
+               (t.event || '').toLowerCase().indexOf(fest.name.toLowerCase()) !== -1;
+      });
+
+      // Sort races by time
+      fest.races.sort(function(a, b) {
+        var ta = a.time || a.offTime || a.raceTime || '';
+        var tb = b.time || b.offTime || b.raceTime || '';
+        return ta.localeCompare(tb);
+      });
+
+      var raceCardsHtml = '';
+      for (var rIdx = 0; rIdx < fest.races.length; rIdx++) {
+        var race = fest.races[rIdx];
+        var raceTime = race.time || race.offTime || race.raceTime || '';
+        var raceName = race.raceName || race.name || race.raceClass || 'Race';
+        var raceClass = race.raceClass || race.grade || race.class || '';
+        var prizeMoney = race.prizeMoney || race.prize || '';
+        var isGrade1 = raceClass.toLowerCase().indexOf('grade 1') !== -1 || raceClass.toLowerCase().indexOf('group 1') !== -1;
+
+        // Find our tip for this race
+        var raceTips = festTips.filter(function(t) {
+          return t.raceTime === raceTime || t.time === raceTime;
+        });
+
+        var tipsHtml = '';
+        if (raceTips.length > 0) {
+          for (var tIdx = 0; tIdx < raceTips.length; tIdx++) {
+            var tip = raceTips[tIdx];
+            if (isPremium) {
+              tipsHtml +=
+                '<div class="festival-hub-tip" style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:14px 18px;margin-top:10px;">' +
+                  '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+                    '<div>' +
+                      '<div style="font-weight:800;font-size:16px;color:#fff;">' + tip.selection + (tip.isNap ? ' <span style="background:#d4a843;color:#0a0e1a;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;vertical-align:middle;">NAP</span>' : '') + '</div>' +
+                      '<div style="font-size:12px;color:var(--text-secondary);">' + (tip.market || 'Win') + ' &bull; Confidence: ' + tip.confidence + '/10 &bull; Stake: ' + (tip.staking || '-') + '</div>' +
+                    '</div>' +
+                    '<div style="font-weight:900;font-size:22px;color:#d4a843;">' + self.formatOdds(tip.odds) + '</div>' +
+                  '</div>' +
+                  (tip.analysis && tip.analysis.summary ? '<div style="margin-top:8px;font-size:13px;color:var(--text-secondary);line-height:1.6;">' + tip.analysis.summary + '</div>' : '') +
+                '</div>';
+            } else {
+              tipsHtml +=
+                '<div style="background:rgba(212,168,67,0.04);border:1px solid rgba(212,168,67,0.15);border-radius:10px;padding:14px 18px;margin-top:10px;position:relative;overflow:hidden;">' +
+                  '<div style="filter:blur(8px);pointer-events:none;">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                      '<div><div style="font-weight:800;font-size:16px;color:#fff;">Premium Selection</div>' +
+                      '<div style="font-size:12px;color:var(--text-secondary);">Win &bull; Confidence: 8/10</div></div>' +
+                      '<div style="font-weight:900;font-size:22px;color:#d4a843;">3/1</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,14,26,0.7);backdrop-filter:blur(2px);">' +
+                    '<div style="font-size:28px;margin-bottom:6px;">&#128274;</div>' +
+                    '<div style="font-weight:700;font-size:14px;color:#d4a843;margin-bottom:4px;">Premium Selection</div>' +
+                    '<a href="#/pricing" style="background:#d4a843;color:#0a0e1a;padding:8px 20px;border-radius:6px;font-weight:700;font-size:12px;text-decoration:none;">Unlock Festival Tips</a>' +
+                  '</div>' +
+                '</div>';
+            }
+          }
+        } else {
+          tipsHtml = '<div style="background:rgba(100,100,100,0.1);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px 18px;margin-top:10px;font-size:13px;color:var(--text-secondary);">Analysis pending — check back closer to race time.</div>';
+        }
+
+        var gradeColor = isGrade1 ? '#d4a843' : (raceClass.toLowerCase().indexOf('grade') !== -1 || raceClass.toLowerCase().indexOf('group') !== -1 ? '#a0a0a0' : '#6b7280');
+
+        raceCardsHtml +=
+          '<div class="festival-hub-race" style="background:var(--card-bg);border:1px solid ' + (isGrade1 ? 'rgba(212,168,67,0.4)' : 'var(--border)') + ';border-radius:12px;padding:18px 20px;margin-bottom:14px;' + (isGrade1 ? 'box-shadow:0 0 20px rgba(212,168,67,0.1);' : '') + '">' +
+            '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+              '<div style="background:rgba(212,168,67,0.15);color:#d4a843;font-weight:800;font-size:15px;padding:6px 14px;border-radius:8px;min-width:60px;text-align:center;">' + raceTime + '</div>' +
+              '<div style="flex:1;min-width:200px;">' +
+                '<div style="font-weight:700;font-size:15px;color:#fff;">' + raceName + '</div>' +
+                '<div style="font-size:12px;color:' + gradeColor + ';font-weight:600;">' + raceClass + (prizeMoney ? ' &bull; ' + prizeMoney : '') + '</div>' +
+              '</div>' +
+            '</div>' +
+            tipsHtml +
+          '</div>';
+      }
+
+      festivalHtml +=
+        '<div style="margin-bottom:32px;">' +
+          '<h2 style="font-size:20px;color:#d4a843;margin-bottom:4px;">&#127942; ' + fest.name + '</h2>' +
+          '<p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">' + fest.races.length + ' race' + (fest.races.length !== 1 ? 's' : '') + ' &bull; ' + festTips.length + ' selection' + (festTips.length !== 1 ? 's' : '') + ' published</p>' +
+          raceCardsHtml +
+        '</div>';
+    }
+
+    app.innerHTML =
+      '<div class="container">' +
+        '<div class="page-header" style="text-align:center;margin-bottom:8px;">' +
+          '<h1 style="font-size:28px;">&#127942; Festival Hub</h1>' +
+          '<p style="font-size:15px;color:var(--text-secondary);">Live Festival Racing &mdash; Elite Analysis For Every Big Race</p>' +
+        '</div>' +
+        '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(184,144,47,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:20px;margin-bottom:24px;text-align:center;">' +
+          '<div style="display:flex;justify-content:center;gap:32px;flex-wrap:wrap;">' +
+            '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">' + festivals.length + '</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Festival' + (festivals.length !== 1 ? 's' : '') + ' Detected</div></div>' +
+            '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">' + festivals.reduce(function(s, f) { return s + f.races.length; }, 0) + '</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Races</div></div>' +
+            '<div><div style="font-size:28px;font-weight:900;color:#22c55e;">LIVE</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Auto-Detected</div></div>' +
+          '</div>' +
+        '</div>' +
+        festivalHtml +
+        (!isPremium ? '<div style="text-align:center;margin-top:24px;margin-bottom:24px;">' +
+          '<div style="font-size:18px;font-weight:800;color:#d4a843;margin-bottom:8px;">Unlock All Festival Selections</div>' +
+          '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Full analysis, staking plans, and live updates for every festival race.</div>' +
+          '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:14px 36px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">Subscribe Now &mdash; First Month FREE</a>' +
+          '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;19.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>' +
+        '</div>' : '') +
+      '</div>';
+  },
+
+  // -----------------------------------------------------------------------
   // RESULTS PAGE
   // -----------------------------------------------------------------------
   async renderResults() {
@@ -5089,7 +5560,7 @@ const App = {
                 </tr>
               </thead>
               <tbody>
-                ${results.sort((a,b) => new Date(b.date) - new Date(a.date)).map(r => `
+                ${results.sort((a,b) => new Date(b.date) - new Date(a.date)).map((r, idx) => `
                   <tr>
                     <td data-label="Date">${formatDateUK(r.date)}</td>
                     <td data-label="Sport">${r.sport === 'racing' ? 'Racing' : 'Football'}</td>
@@ -5100,8 +5571,22 @@ const App = {
                     <td data-label="Stake">${r.stake}u</td>
                     <td data-label="Result" class="result-${r.result}">${r.result.toUpperCase()}</td>
                     <td data-label="P/L" class="${r.pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${r.pnl > 0 ? '+' : ''}${r.pnl.toFixed(2)}u</td>
-                    <td data-label="" class="results-actions">${r.result === 'won' ? `<button class="share-btn" onclick="App.shareWin('${r.selection.replace(/'/g, "\\'")}',${r.odds})">Share</button> <button class="share-btn" onclick="App.copyShareText('${r.selection.replace(/'/g, "\\'")}',${r.odds})">Copy</button>` : ''}</td>
+                    <td data-label="" class="results-actions">
+                      ${r.result === 'won' ? `<button class="share-btn" onclick="App.shareWin('${r.selection.replace(/'/g, "\\'")}',${r.odds})">Share</button> <button class="share-btn" onclick="App.copyShareText('${r.selection.replace(/'/g, "\\'")}',${r.odds})">Copy</button>` : ''}
+                      ${r.replayAnalysis ? `<button class="share-btn replay-btn" onclick="App.toggleReplay('replay-${idx}')">AI Analysis</button>` : ''}
+                    </td>
                   </tr>
+                  ${r.replayAnalysis ? `
+                  <tr class="replay-row" id="replay-${idx}" style="display:none;">
+                    <td colspan="10">
+                      <div class="replay-card">
+                        <div class="replay-header">Race Replay Analysis</div>
+                        <div class="replay-analysis">${typeof r.replayAnalysis === 'object' ? (r.replayAnalysis.analysis || '') : r.replayAnalysis}</div>
+                        ${r.replayAnalysis.keyFactor ? `<div class="replay-factor"><strong>Key Factor:</strong> ${r.replayAnalysis.keyFactor}</div>` : ''}
+                        ${r.replayAnalysis.lessonLearned ? `<div class="replay-lesson"><strong>Lesson:</strong> ${r.replayAnalysis.lessonLearned}</div>` : ''}
+                      </div>
+                    </td>
+                  </tr>` : ''}
                 `).join('')}
               </tbody>
             </table>
@@ -6159,11 +6644,42 @@ const App = {
     messages.scrollTop = messages.scrollHeight;
 
     try {
-      const { response, suggestions } = await this.api('/chat', {
-        method: 'POST',
-        body: JSON.stringify({ message })
-      });
-      messages.innerHTML += `<div class="chat-msg bot">${response}</div>`;
+      // Try AI-powered chat first, fall back to rule-based
+      let botReply = '';
+      let suggestions = [];
+      try {
+        const aiRes = await this.api('/chat/ai', {
+          method: 'POST',
+          body: JSON.stringify({ message })
+        });
+        botReply = aiRes.reply || '';
+      } catch (aiErr) {
+        // AI unavailable — fall back to rule-based chat
+        botReply = '';
+      }
+
+      if (botReply) {
+        messages.innerHTML += `<div class="chat-msg bot">${this.escapeHtml(botReply)}</div>`;
+        // Add contextual suggestions after AI response
+        const lower = message.toLowerCase();
+        if (lower.includes('tip') || lower.includes('pick')) {
+          suggestions = ['Show racing tips', 'Show football tips', 'How do I upgrade?'];
+        } else if (lower.includes('price') || lower.includes('premium') || lower.includes('upgrade')) {
+          suggestions = ["Today's best tips?", 'What do I get with Premium?', 'Show my results'];
+        } else {
+          suggestions = ["Today's best tips?", 'How does it work?', 'How do I upgrade?'];
+        }
+      } else {
+        // Fall back to rule-based
+        const fallback = await this.api('/chat', {
+          method: 'POST',
+          body: JSON.stringify({ message })
+        });
+        botReply = fallback.response;
+        suggestions = fallback.suggestions || [];
+        messages.innerHTML += `<div class="chat-msg bot">${botReply}</div>`;
+      }
+
       if (suggestions && suggestions.length) {
         document.getElementById('chat-suggestions')?.remove();
         messages.innerHTML += `<div class="chat-suggestions" id="chat-suggestions">

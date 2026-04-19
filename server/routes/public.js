@@ -142,6 +142,35 @@ module.exports = function(deps) {
     }
   });
 
+  // POST /api/chat/ai — AI-powered chatbot using Claude
+  router.post('/api/chat/ai', async (req, res) => {
+    try {
+      var message = (req.body && req.body.message) || '';
+      if (!message.trim()) {
+        return res.status(400).json({ reply: 'Please send a message.' });
+      }
+
+      if (!aiReports || !aiReports.isAvailable() || !aiReports.client) {
+        return res.status(503).json({ reply: 'AI chat is temporarily unavailable. Please try again later.' });
+      }
+
+      var systemPrompt = 'You are the Elite Edge assistant — the helpful chatbot for Elite Edge Sports Tips, the UK\'s premium sports betting analysis service. Answer questions about tips, results, how the service works, subscription plans, and general sports queries. Be helpful, concise, and use British English. Never give financial advice or guarantee outcomes. If asked about specific tips, reference our published selections. Keep responses under 150 words. Premium costs £19.99/month (first month free). We cover horse racing and football with AI-powered analysis.';
+
+      var response = await aiReports.client.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 256,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: message }],
+      });
+
+      var reply = response.content[0].text;
+      res.json({ reply: reply });
+    } catch (err) {
+      console.error('[AI Chat] Error:', err.message);
+      res.json({ reply: 'Sorry, I couldn\'t process that right now. Please try again or contact support.' });
+    }
+  });
+
   // SPA fallback — serve index.html for client-side routing
   router.get('*', (req, res) => {
     if (req.path.startsWith('/admin')) return res.sendFile(path.join(__dirname, '..', '..', 'admin', 'index.html'));

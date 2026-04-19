@@ -34,7 +34,8 @@ class AIReportGenerator {
   _getCached(key) {
     var entry = this._cache.get(key);
     if (!entry) return null;
-    if (Date.now() - entry.timestamp > this._cacheTTL) {
+    var ttl = entry._ttl || this._cacheTTL;
+    if (Date.now() - entry.timestamp > ttl) {
       this._cache.delete(key);
       return null;
     }
@@ -320,6 +321,68 @@ class AIReportGenerator {
       return result;
     } catch (err) {
       console.error('[AI Reports] Email bulletin error:', err.message);
+      if (err.status) console.error('[AI Reports] Status:', err.status, 'Type:', err.error?.type);
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // RACE REPLAY ANALYSIS (post-race)
+  // ---------------------------------------------------------------------------
+  async generateRaceReplay(data) {
+    if (!this.client) return null;
+
+    var cacheKey = 'replay:' + (data.selection || '') + ':' + (data.meeting || '') + ':' + (data.raceTime || '');
+    var cached = this._getCached(cacheKey);
+    if (cached) return cached;
+
+    // Use 24-hour TTL for race replays (races don't change)
+    var REPLAY_TTL = 24 * 60 * 60 * 1000;
+
+    try {
+      var userPrompt = 'Provide post-race analysis for the following result.\n\n';
+      userPrompt += 'SELECTION: ' + (data.selection || 'Unknown') + '\n';
+      userPrompt += 'MEETING: ' + (data.meeting || 'Unknown') + '\n';
+      userPrompt += 'RACE TIME: ' + (data.raceTime || 'N/A') + '\n';
+      userPrompt += 'RESULT: ' + (data.result || 'N/A') + '\n';
+      userPrompt += 'POSITION: ' + (data.position || 'N/A') + '\n';
+      userPrompt += 'ODDS: ' + (data.odds || 'N/A') + '\n';
+      userPrompt += 'GOING: ' + (data.going || 'N/A') + '\n';
+      userPrompt += 'DISTANCE: ' + (data.distance || 'N/A') + '\n';
+      userPrompt += 'RUNNERS: ' + (data.runners || 'N/A') + '\n';
+      if (data.winnerName) userPrompt += 'WINNER: ' + data.winnerName + ' @ ' + (data.winnerOdds || 'N/A') + '\n';
+      if (data.raceComment) userPrompt += 'RACE COMMENT: ' + data.raceComment + '\n';
+      userPrompt += '\n';
+
+      userPrompt += 'Return your response as JSON with these fields:\n';
+      userPrompt += '- analysis: the full post-race analysis (100-150 words)\n';
+      userPrompt += '- keyFactor: the single most important factor that decided this result\n';
+      userPrompt += '- lessonLearned: one actionable takeaway for future betting\n';
+
+      var response = await this.client.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 512,
+        system: 'You are an elite UK racing analyst providing post-race analysis. Explain WHY the result happened — pace, going, draw, tactics. Be honest about what went wrong (or right). British English. 100-150 words. Always respond with valid JSON only — no markdown, no code fences. JSON fields: analysis, keyFactor, lessonLearned.',
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+
+      var text = response.content[0].text.trim();
+      if (text.startsWith('```')) {
+        text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
+      }
+      var result;
+      try { result = JSON.parse(text); } catch(pe) {
+        result = { analysis: text, keyFactor: '', lessonLearned: '' };
+      }
+
+      // Cache with 24-hour TTL
+      this._cache.set(cacheKey, { data: result, timestamp: Date.now() });
+      // Override TTL for this entry by storing it with a custom expiry marker
+      this._cache.get(cacheKey)._ttl = REPLAY_TTL;
+
+      return result;
+    } catch (err) {
+      console.error('[AI Reports] Race replay error:', err.message);
       if (err.status) console.error('[AI Reports] Status:', err.status, 'Type:', err.error?.type);
       return null;
     }

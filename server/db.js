@@ -192,6 +192,7 @@ function dbUserToApp(row) {
     trialWarned: row.trial_warned || false,
     stripeCustomerId: row.stripe_customer_id || null,
     stripeSubscriptionId: row.stripe_subscription_id || null,
+    dripsSent: row.drips_sent || [],
   };
 }
 
@@ -225,6 +226,7 @@ function appUserToDb(data) {
   if (data.trialWarned !== undefined) result.trial_warned = data.trialWarned;
   if (data.stripeCustomerId !== undefined) result.stripe_customer_id = data.stripeCustomerId;
   if (data.stripeSubscriptionId !== undefined) result.stripe_subscription_id = data.stripeSubscriptionId;
+  if (data.dripsSent !== undefined) result.drips_sent = JSON.stringify(data.dripsSent);
   return result;
 }
 

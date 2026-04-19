@@ -142,6 +142,7 @@ app.use('/', require('./routes/public')(deps));
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS alert_prefs JSONB DEFAULT \'{}\'',
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT',
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS drips_sent JSONB DEFAULT \'[]\'',
       ];
       for (var ci = 0; ci < alterCols.length; ci++) {
         try { await db.query(alterCols[ci]); } catch(e) {}
@@ -289,6 +290,7 @@ app.use('/', require('./routes/public')(deps));
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS alert_prefs JSONB DEFAULT \'{}\'',
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT',
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS drips_sent JSONB DEFAULT \'[]\'',
       ];
       for (var ai = 0; ai < alterSQL.length; ai++) {
         try { await migrationPool.query(alterSQL[ai]); } catch(e) { /* column may already exist */ }

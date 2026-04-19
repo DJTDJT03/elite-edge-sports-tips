@@ -6259,3 +6259,58 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
 @media (max-width: 768px) {
   .pl-verdicts { grid-template-columns: 1fr; }
 }
+
+/* ── Festival Hub ─────────────────────────────────────────────────── */
+.festival-hub-race { transition: border-color 0.2s, box-shadow 0.2s; }
+.festival-hub-race:hover { border-color: rgba(212,168,67,0.5) !important; box-shadow: 0 0 16px rgba(212,168,67,0.08); }
+.festival-hub-tip { transition: background 0.2s; }
+.festival-hub-tip:hover { background: rgba(212,168,67,0.1); }
+.festival-cal-item { transition: transform 0.2s, border-color 0.2s; }
+.festival-cal-item:hover { transform: translateY(-2px); border-color: rgba(212,168,67,0.4) !important; }
+
+/* --- SPARKLINE CHARTS --- */
+.sparkline { display: inline-block; vertical-align: middle; margin-left: 8px; }
+.sparkline polyline { stroke-linecap: round; stroke-linejoin: round; }
+
+/* --- RACE REPLAY ANALYSIS --- */
+.replay-btn { background: rgba(212,168,67,0.15) !important; color: var(--gold) !important; border: 1px solid rgba(212,168,67,0.3) !important; }
+.replay-btn:hover { background: rgba(212,168,67,0.25) !important; }
+.replay-row td { padding: 0 !important; border: none !important; }
+.replay-card {
+  background: linear-gradient(135deg, #141828, #1a1f35);
+  border: 1px solid rgba(212,168,67,0.2);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin: 4px 8px 12px;
+}
+.replay-header {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.replay-analysis {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+.replay-factor {
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  padding: 8px 12px;
+  background: rgba(34,197,94,0.08);
+  border-left: 3px solid var(--green);
+  border-radius: 4px;
+}
+.replay-lesson {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  background: rgba(59,130,246,0.08);
+  border-left: 3px solid var(--blue);
+  border-radius: 4px;
+}

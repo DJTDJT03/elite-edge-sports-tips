@@ -18,6 +18,7 @@ module.exports = function startScheduler(deps) {
 
   var lastDailyBulletinDate = '';
   var lastWeeklySummaryDate = '';
+  var lastWeeklyPerformanceDate = '';
   var lastReengagementDate = '';
   var lastExpiryWarningDate = '';
 
@@ -1125,14 +1126,16 @@ module.exports = function startScheduler(deps) {
                 tip.status = 'settled';
                 tip.result = resultVal;
 
+                var resultId = 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
                 await db.createResult({
-                  id: 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                  id: resultId,
                   tipId: tip.id, sport: 'racing', event: tip.event, selection: tip.selection,
                   market: tip.market, odds: tip.odds, stake: stake,
                   result: resultVal, pnl: Math.round(pnl * 100) / 100,
                   date: tip.date, isPremium: tip.isPremium, tipsterProfile: tip.tipsterProfile || 'The Edge',
                   confidence: tip.confidence,
                 });
+                tip._resultId = resultId;
                 updated++;
                 console.log('[Auto-Settle] Racing: ' + tip.selection + ' = ' + resultVal + ' (' + pnl.toFixed(2) + 'u) [' + tip.date + ']');
 
@@ -1156,6 +1159,37 @@ module.exports = function startScheduler(deps) {
                       pnl: Math.round(pnl * 100) / 100, event: tip.event,
                     });
                   } catch (tgErr) { /* non-fatal */ }
+                }
+
+                // Generate AI race replay analysis (non-blocking)
+                if (aiReports && aiReports.isAvailable() && tip.sport === 'racing') {
+                  (async function() {
+                    try {
+                      var tipRunner = match.runners.find(function(rn) { return normHorse(rn.horse) === tipName; });
+                      var winnerRunner = match.runners.find(function(rn) { return parseInt(rn.position, 10) === 1; });
+                      var replayData = {
+                        selection: tip.selection,
+                        meeting: tip.meeting || tip.event || '',
+                        raceTime: tip.raceTime || '',
+                        result: resultVal,
+                        position: tipRunner ? tipRunner.position : 'N/A',
+                        odds: tip.odds,
+                        going: match.going || '',
+                        distance: match.distance || '',
+                        winnerName: winnerRunner ? winnerRunner.horse : '',
+                        winnerOdds: winnerRunner ? winnerRunner.sp : '',
+                        raceComment: match.race_comment || '',
+                        runners: match.runners ? match.runners.length : 0,
+                      };
+                      var replay = await aiReports.generateRaceReplay(replayData);
+                      if (replay && tip._resultId) {
+                        await db.updateResult(tip._resultId, { replayAnalysis: replay });
+                        console.log('[Auto-Settle] Race replay generated for: ' + tip.selection);
+                      }
+                    } catch (replayErr) {
+                      console.error('[Auto-Settle] Race replay error:', replayErr.message);
+                    }
+                  })();
                 }
               }
             }
@@ -1820,6 +1854,171 @@ module.exports = function startScheduler(deps) {
   }
 
   // =========================================================================
+  // 8b. WEEKLY PERFORMANCE EMAIL (Sunday 7pm UK, premium users)
+  // Enhanced "Your Week in Review" with detailed breakdown
+  // =========================================================================
+  async function sendWeeklyPerformanceEmail() {
+    try {
+      var uk = getUKTime();
+      var day = uk.getDay(); // 0 = Sunday
+      var hour = uk.getHours();
+      var dateStr = uk.toISOString().split('T')[0];
+
+      // Run on Sunday at 19:00-19:29 UK time, once per week
+      if (day !== 0 || hour !== 19 || lastWeeklyPerformanceDate === dateStr) return;
+
+      // Calculate the Monday of this week
+      var monday = new Date(uk);
+      monday.setDate(monday.getDate() - (monday.getDay() === 0 ? 6 : monday.getDay() - 1));
+      var mondayStr = monday.toISOString().split('T')[0];
+
+      var allResults = await db.getResults();
+      var allTips = await db.getTips();
+
+      // This week's results (Mon-Sun)
+      var weekResults = allResults.filter(function(r) { return r.date >= mondayStr && r.date <= dateStr; });
+      var weekWon = weekResults.filter(function(r) { return r.result === 'won'; });
+      var weekLost = weekResults.filter(function(r) { return r.result === 'lost'; });
+      var weekPnl = weekResults.reduce(function(sum, r) { return sum + (r.pnl || 0); }, 0);
+      var weekStake = weekResults.reduce(function(sum, r) { return sum + (r.stake || 1); }, 0);
+      var weekStrikeRate = weekResults.length > 0 ? ((weekWon.length / weekResults.length) * 100).toFixed(1) : '0.0';
+      var weekROI = weekStake > 0 ? ((weekPnl / weekStake) * 100).toFixed(1) : '0.0';
+
+      // Best winner this week (highest P/L)
+      var bestWinner = null;
+      if (weekWon.length > 0) {
+        bestWinner = weekWon.sort(function(a, b) { return (b.pnl || 0) - (a.pnl || 0); })[0];
+      }
+
+      // This month's running P/L
+      var monthStart = new Date(uk.getFullYear(), uk.getMonth(), 1).toISOString().split('T')[0];
+      var monthResults = allResults.filter(function(r) { return r.date >= monthStart && r.date <= dateStr; });
+      var monthPnl = monthResults.reduce(function(sum, r) { return sum + (r.pnl || 0); }, 0);
+
+      // Upcoming big fixtures preview (next week's tips if any exist)
+      var nextMonday = new Date(uk);
+      nextMonday.setDate(nextMonday.getDate() + 1);
+      var nextSunday = new Date(nextMonday);
+      nextSunday.setDate(nextSunday.getDate() + 6);
+      var nextMondayStr = nextMonday.toISOString().split('T')[0];
+      var nextSundayStr = nextSunday.toISOString().split('T')[0];
+
+      // Get users
+      var users = await db.getUsers();
+      var recipients = users.filter(function(u) {
+        return (u.subscription === 'premium' || u.trialActive) &&
+               u.role !== 'admin' &&
+               (!u.emailPrefs || u.emailPrefs.weeklySummary !== false);
+      });
+
+      if (recipients.length === 0) {
+        lastWeeklyPerformanceDate = dateStr;
+        return;
+      }
+
+      // Build the email content
+      var bestWinnerHTML = '';
+      if (bestWinner) {
+        bestWinnerHTML =
+          '<div style="background:#1a2e1a;padding:16px;border-radius:8px;margin:16px 0;border-left:3px solid #22c55e;">' +
+            '<p style="color:#22c55e;font-size:12px;font-weight:700;text-transform:uppercase;margin:0 0 4px;">BEST WINNER THIS WEEK</p>' +
+            '<p style="color:#ffffff;font-size:16px;font-weight:700;margin:0 0 4px;">' + emailService._esc(bestWinner.selection) + ' at ' + (bestWinner.odds || '-') + '</p>' +
+            '<p style="color:#22c55e;font-size:14px;font-weight:700;margin:0;">+' + (bestWinner.pnl || 0).toFixed(2) + ' units</p>' +
+          '</div>';
+      }
+
+      var monthSummaryHTML =
+        '<div style="background:#1e2235;padding:16px;border-radius:8px;margin:16px 0;">' +
+          '<p style="color:#d4a843;font-size:12px;font-weight:700;text-transform:uppercase;margin:0 0 8px;">RUNNING MONTHLY P/L</p>' +
+          '<p style="color:' + (monthPnl >= 0 ? '#22c55e' : '#ef4444') + ';font-size:22px;font-weight:700;margin:0;">' + (monthPnl >= 0 ? '+' : '') + monthPnl.toFixed(2) + ' units this month</p>' +
+        '</div>';
+
+      var sentCount = 0;
+      for (var i = 0; i < recipients.length; i++) {
+        var u = recipients[i];
+
+        var html = emailService._wrapHTML(
+          '<h2 style="color:#ffffff;margin:0 0 16px;font-size:20px;">Your Week in Review</h2>' +
+          '<p style="color:#cbd5e1;font-size:14px;line-height:1.6;">Hi ' + emailService._esc(u.name) + ', here\'s your Elite Edge performance summary for this week.</p>' +
+
+          '<div style="background:#1e2235;padding:16px;border-radius:8px;margin:16px 0;">' +
+            '<p style="color:#d4a843;font-size:12px;font-weight:700;text-transform:uppercase;margin:0 0 12px;">THIS WEEK\'S RESULTS</p>' +
+            '<table cellpadding="0" cellspacing="0" width="100%">' +
+              '<tr>' +
+                '<td style="text-align:center;padding:12px;">' +
+                  '<p style="color:#22c55e;font-size:28px;font-weight:700;margin:0;">' + weekWon.length + '</p>' +
+                  '<p style="color:#94a3b8;font-size:12px;margin:4px 0 0;">Wins</p>' +
+                '</td>' +
+                '<td style="text-align:center;padding:12px;">' +
+                  '<p style="color:#ef4444;font-size:28px;font-weight:700;margin:0;">' + weekLost.length + '</p>' +
+                  '<p style="color:#94a3b8;font-size:12px;margin:4px 0 0;">Losses</p>' +
+                '</td>' +
+                '<td style="text-align:center;padding:12px;">' +
+                  '<p style="color:#ffffff;font-size:28px;font-weight:700;margin:0;">' + weekStrikeRate + '%</p>' +
+                  '<p style="color:#94a3b8;font-size:12px;margin:4px 0 0;">Strike Rate</p>' +
+                '</td>' +
+              '</tr>' +
+              '<tr>' +
+                '<td colspan="3" style="text-align:center;padding:12px 12px 0;border-top:1px solid #2a2e3d;">' +
+                  '<p style="color:' + (weekPnl >= 0 ? '#22c55e' : '#ef4444') + ';font-size:24px;font-weight:700;margin:0;">' + (weekPnl >= 0 ? '+' : '') + weekPnl.toFixed(2) + ' units</p>' +
+                  '<p style="color:#94a3b8;font-size:12px;margin:4px 0 0;">Week P/L (ROI: ' + weekROI + '%)</p>' +
+                '</td>' +
+              '</tr>' +
+            '</table>' +
+          '</div>' +
+
+          '<p style="color:#cbd5e1;font-size:14px;line-height:1.6;">' + weekWon.length + ' win' + (weekWon.length !== 1 ? 's' : '') + ' from ' + weekResults.length + ' selection' + (weekResults.length !== 1 ? 's' : '') + ' this week.</p>' +
+
+          bestWinnerHTML +
+          monthSummaryHTML +
+
+          '<div style="background:#1e2235;padding:14px;border-radius:8px;margin:16px 0;">' +
+            '<p style="color:#d4a843;font-size:12px;font-weight:700;text-transform:uppercase;margin:0 0 8px;">NEXT WEEK</p>' +
+            '<p style="color:#cbd5e1;font-size:13px;margin:0;">Fresh selections drop Monday morning by 9am. Our model is already analysing the week ahead.</p>' +
+          '</div>' +
+
+          '<div style="text-align:center;margin:24px 0;">' +
+            '<a href="https://eliteedgesports.co.uk/#/results" style="display:inline-block;padding:12px 32px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">View Full Results</a>' +
+          '</div>' +
+
+          '<p style="color:#cbd5e1;font-size:14px;">See you Monday,<br><strong style="color:#d4a843;">The Elite Edge Team</strong></p>' +
+
+          '<div style="background:#1e2235;padding:14px;border-radius:8px;margin:20px 0;">' +
+            '<p style="color:#94a3b8;font-size:12px;margin:0;">This is entertainment and statistical analysis only. We do not provide financial or betting advice. Past performance is not indicative of future results. 18+ | BeGambleAware.org</p>' +
+          '</div>',
+          weekWon.length + ' winner' + (weekWon.length !== 1 ? 's' : '') + ' this week — ' + (weekPnl >= 0 ? '+' : '') + weekPnl.toFixed(2) + ' units'
+        );
+
+        var text = 'Your Week in Review\n\n' +
+          'Hi ' + u.name + ',\n\n' +
+          'This Week: ' + weekWon.length + ' wins from ' + weekResults.length + ' selections\n' +
+          'Strike Rate: ' + weekStrikeRate + '%\n' +
+          'P/L: ' + (weekPnl >= 0 ? '+' : '') + weekPnl.toFixed(2) + ' units (ROI: ' + weekROI + '%)\n\n' +
+          (bestWinner ? 'Best Winner: ' + bestWinner.selection + ' at ' + (bestWinner.odds || '-') + ' — +' + (bestWinner.pnl || 0).toFixed(2) + ' units\n\n' : '') +
+          'Running monthly P/L: ' + (monthPnl >= 0 ? '+' : '') + monthPnl.toFixed(2) + ' units\n\n' +
+          'Fresh selections drop Monday morning.\n\n' +
+          'See you Monday,\nThe Elite Edge Team\n\n' +
+          '18+ | Entertainment only | BeGambleAware.org\nUnsubscribe: https://eliteedgesports.co.uk/#/unsubscribe';
+
+        emailService._sendEmail({
+          to: u.email,
+          subject: 'Your Week in Review — ' + weekWon.length + ' Winner' + (weekWon.length !== 1 ? 's' : '') + ', ' + (weekPnl >= 0 ? '+' : '') + weekPnl.toFixed(2) + ' Units',
+          html: html,
+          text: text,
+          emailType: 'weekly_performance',
+        }).catch(function(err) { console.error('[Email] Weekly performance failed for ' + u.email + ':', err.message); });
+
+        sentCount++;
+      }
+
+      lastWeeklyPerformanceDate = dateStr;
+      console.log('[Email] Weekly performance email sent to ' + sentCount + ' premium user(s)');
+    } catch (err) {
+      console.error('[Email] Weekly performance error:', err.message);
+    }
+  }
+
+  // =========================================================================
   // 9. INACTIVITY RE-ENGAGEMENT (daily check, 7 days no login)
   // =========================================================================
   async function scheduleReengagement() {
@@ -2115,6 +2314,115 @@ module.exports = function startScheduler(deps) {
   }
 
   // =========================================================================
+  // ODDS MOVEMENT ALERTS (every 5 minutes)
+  // Compares current best odds against opening odds for active tips.
+  // Shortening = market validation, Drifting = increased edge.
+  // =========================================================================
+  var oddsAlertsSent = new Set(); // Track alerts already sent to avoid duplicates
+
+  async function checkOddsMovementAlerts() {
+    try {
+      var tips = await db.getTips({ status: 'active' });
+      if (!tips || tips.length === 0) return;
+
+      // Only check tips from today
+      var today = new Date().toISOString().split('T')[0];
+      var todayTips = tips.filter(function(t) { return t.date === today; });
+      if (todayTips.length === 0) return;
+
+      for (var i = 0; i < todayTips.length; i++) {
+        var tip = todayTips[i];
+        if (!tip.openingOdds || !tip.odds) continue;
+
+        var openingDecimal = parseFloat(tip.openingOdds) || 0;
+        var currentDecimal = parseFloat(tip.odds) || 0;
+        if (openingDecimal <= 1 || currentDecimal <= 1) continue;
+
+        // Try to get live odds from the odds source if available
+        var liveOdds = currentDecimal;
+        if (oddsSource && tip.sport === 'football') {
+          try {
+            var eventKey = (tip.event || '').toLowerCase();
+            var movement = analyseOddsMovement(eventKey, tip.selection);
+            if (movement && movement.currentAvg > 1) {
+              liveOdds = movement.currentAvg;
+            }
+          } catch (e) { /* use tip.odds as fallback */ }
+        }
+        if (racingOddsSource && tip.sport === 'racing') {
+          try {
+            var raceKey = ((tip.meeting || '') + ' ' + (tip.raceTime || '')).toLowerCase();
+            var rMovement = analyseOddsMovement(raceKey, tip.selection);
+            if (rMovement && rMovement.currentAvg > 1) {
+              liveOdds = rMovement.currentAvg;
+            }
+          } catch (e) { /* use tip.odds as fallback */ }
+        }
+
+        // Calculate percentage change from opening to current
+        var changePercent = ((liveOdds - openingDecimal) / openingDecimal) * 100;
+
+        // Generate alert key to avoid duplicates
+        var alertDirection = '';
+        var alertMessage = '';
+
+        if (changePercent <= -10) {
+          // Odds shortened by 10%+ — market agrees
+          alertDirection = 'shortened';
+          var alertKey = 'odds_short_' + tip.id;
+          if (oddsAlertsSent.has(alertKey)) continue;
+          oddsAlertsSent.add(alertKey);
+
+          // Convert to fractional for display
+          var openFrac = helpers && helpers.decimalToFractional ? helpers.decimalToFractional(openingDecimal) : (openingDecimal - 1).toFixed(1) + '/1';
+          var currFrac = helpers && helpers.decimalToFractional ? helpers.decimalToFractional(liveOdds) : (liveOdds - 1).toFixed(1) + '/1';
+
+          alertMessage = 'Your tipped selection ' + tip.selection + ' has shortened from ' + openFrac + ' to ' + currFrac + ' \u2014 the market agrees with us';
+        } else if (changePercent >= 15) {
+          // Odds drifted by 15%+ — more value
+          alertDirection = 'drifted';
+          var driftAlertKey = 'odds_drift_' + tip.id;
+          if (oddsAlertsSent.has(driftAlertKey)) continue;
+          oddsAlertsSent.add(driftAlertKey);
+
+          var openFracD = helpers && helpers.decimalToFractional ? helpers.decimalToFractional(openingDecimal) : (openingDecimal - 1).toFixed(1) + '/1';
+          var currFracD = helpers && helpers.decimalToFractional ? helpers.decimalToFractional(liveOdds) : (liveOdds - 1).toFixed(1) + '/1';
+
+          alertMessage = 'Heads up: ' + tip.selection + ' has drifted from ' + openFracD + ' to ' + currFracD + '. Our edge has increased.';
+        }
+
+        if (!alertMessage) continue;
+
+        // Create in-app notification
+        await db.createNotification({
+          id: 'odds_move_' + tip.id + '_' + Date.now(),
+          type: 'odds_alert',
+          message: alertMessage,
+          tipId: tip.id,
+          timestamp: new Date().toISOString()
+        });
+
+        console.log('[OddsAlert] ' + alertDirection + ': ' + tip.selection + ' (' + changePercent.toFixed(1) + '%)');
+
+        // Send Telegram alert if available
+        if (telegramBot && telegramBot.sendMessage) {
+          try {
+            var emoji = alertDirection === 'shortened' ? '\uD83D\uDCC9' : '\uD83D\uDCC8';
+            telegramBot.sendMessage(emoji + ' ' + alertMessage);
+          } catch (e) { /* non-fatal */ }
+        }
+      }
+
+      // Clean up old alert keys (reset daily)
+      if (oddsAlertsSent.size > 500) {
+        oddsAlertsSent.clear();
+      }
+    } catch (err) {
+      console.error('[OddsAlert] Check error:', err.message);
+    }
+  }
+
+  // =========================================================================
   // SCHEDULE ALL INTERVALS / TIMEOUTS
   // All intervals wrapped with error handling to prevent silent crashes.
   // =========================================================================
@@ -2168,8 +2476,17 @@ module.exports = function startScheduler(deps) {
   var runEmailSchedulers = safeRun('EmailSchedulers', function() {
     scheduleDailyBulletin();
     scheduleWeeklySummary();
+    sendWeeklyPerformanceEmail();
     scheduleReengagement();
     scheduleExpiryWarning();
+
+    // Drip campaign check
+    try {
+      var dripService = new (require('./dripCampaign'))();
+      db.getUsers().then(function(users) {
+        return dripService.checkAndSend(users, db, emailService, aiReports);
+      }).catch(function(e) { console.error('[Drip] Error:', e.message); });
+    } catch(e) { console.error('[Drip] Error:', e.message); }
   });
   setInterval(runEmailSchedulers, 15 * 60 * 1000);
   setTimeout(runEmailSchedulers, 45000);
@@ -2227,8 +2544,12 @@ module.exports = function startScheduler(deps) {
   setInterval(safeRun('TrialExpiry', checkTrialExpiries), 15 * 60 * 1000);
   setTimeout(safeRun('TrialExpiry', checkTrialExpiries), 60000);
 
+  // Odds movement alerts: check every 5 minutes
+  setInterval(safeRun('OddsAlerts', checkOddsMovementAlerts), 5 * 60 * 1000);
+  setTimeout(safeRun('OddsAlerts', checkOddsMovementAlerts), 120000); // 2min after startup
+
   console.log('[Scheduler] All scheduled tasks registered');
 
   // Return functions that admin routes may need to trigger manually
-  return { autoSettleResults, autoGenerateDailyTips, checkTrialExpiries };
+  return { autoSettleResults, autoGenerateDailyTips, checkTrialExpiries, checkOddsMovementAlerts };
 };
