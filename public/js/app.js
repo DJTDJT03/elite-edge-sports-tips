@@ -2920,8 +2920,8 @@ const App = {
         ${isLocked ? `
           <div class="lock-overlay">
             <div class="lock-icon">&#128274;</div>
-            <div class="lock-text">Premium Tip — Upgrade to View</div>
-            <button class="btn btn-gold btn-sm" onclick="event.stopPropagation();window.location.hash='#/pricing'">Upgrade Now</button>
+            <div class="lock-text">Premium Tip</div>
+            <div class="lock-cta" onclick="event.stopPropagation();App.showTrialOffer()">Start Free Trial</div>
           </div>
         ` : ''}
       </div>
@@ -5577,7 +5577,13 @@ const App = {
                 </tr>
               </thead>
               <tbody>
-                ${results.sort((a,b) => new Date(b.date) - new Date(a.date)).map((r, idx) => `
+                ${(() => {
+                  var sortedResults = results.sort((a,b) => new Date(b.date) - new Date(a.date));
+                  this._displayResults = sortedResults;
+                  this._resultsPage = 1;
+                  var pageSize = 20;
+                  var pagedResults = sortedResults.slice(0, pageSize);
+                  return pagedResults.map((r, idx) => `
                   <tr>
                     <td data-label="Date">${formatDateUK(r.date)}</td>
                     <td data-label="Sport">${r.sport === 'racing' ? 'Racing' : 'Football'}</td>
@@ -5604,14 +5610,17 @@ const App = {
                       </div>
                     </td>
                   </tr>` : ''}
-                `).join('')}
+                `).join('');
+                })()}
               </tbody>
             </table>
+            <div class="results-pagination" id="results-pagination"></div>
           </div>
         </div>
       </div>
     `;
 
+    this._renderResultsPagination();
     this.renderPerformanceChart(perf);
     this.renderMonthlyChart(results);
     this.renderSRChart(results);
@@ -5725,21 +5734,56 @@ const App = {
     let filtered = this.results;
     if (value && type === 'sport') filtered = filtered.filter(r => r.sport === value);
     if (value && type === 'result') filtered = filtered.filter(r => r.result === value);
-    const tbody = document.querySelector('#results-table tbody');
-    tbody.innerHTML = filtered.sort((a,b) => new Date(b.date) - new Date(a.date)).map(r => `
-      <tr>
-        <td>${formatDateUK(r.date)}</td>
-        <td>${r.sport === 'racing' ? 'Racing' : 'Football'}</td>
-        <td>${r.event}</td>
-        <td>${r.selection}</td>
-        <td>${r.market}</td>
-        <td>${App.formatOdds(r.odds)}</td>
-        <td>${r.stake}</td>
-        <td class="result-${r.result}">${r.result.toUpperCase()}</td>
-        <td class="${r.pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${r.pnl > 0 ? '+' : ''}${r.pnl.toFixed(2)}</td>
-        <td>${r.result === 'won' ? `<button class="share-btn" onclick="App.shareWin('${r.selection.replace(/'/g, "\\'")}',${r.odds})">Share</button>` : ''}</td>
-      </tr>
-    `).join('');
+    this._displayResults = filtered.sort((a,b) => new Date(b.date) - new Date(a.date));
+    this._resultsPage = 1;
+    this._resultsShowAll = false;
+    this._renderResultsPage();
+  },
+
+  _renderResultsPage() {
+    var displayResults = this._displayResults || [];
+    var pageSize = 20;
+    var currentPage = this._resultsPage || 1;
+    var showAll = this._resultsShowAll || false;
+    var pagedResults = showAll ? displayResults : displayResults.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    var tbody = document.querySelector('#results-table tbody');
+    if (!tbody) return;
+    tbody.innerHTML = pagedResults.map(function(r) {
+      return '<tr>' +
+        '<td>' + formatDateUK(r.date) + '</td>' +
+        '<td>' + (r.sport === 'racing' ? 'Racing' : 'Football') + '</td>' +
+        '<td>' + r.event + '</td>' +
+        '<td><strong>' + r.selection + '</strong></td>' +
+        '<td>' + r.market + '</td>' +
+        '<td>' + App.formatOdds(r.odds) + '</td>' +
+        '<td>' + r.stake + 'u</td>' +
+        '<td class="result-' + r.result + '">' + r.result.toUpperCase() + '</td>' +
+        '<td class="' + (r.pnl >= 0 ? 'pnl-positive' : 'pnl-negative') + '">' + (r.pnl > 0 ? '+' : '') + r.pnl.toFixed(2) + 'u</td>' +
+        '<td>' + (r.result === 'won' ? '<button class="share-btn" onclick="App.shareWin(\'' + r.selection.replace(/'/g, "\\'") + '\',' + r.odds + ')">Share</button>' : '') + '</td>' +
+      '</tr>';
+    }).join('');
+    this._renderResultsPagination();
+  },
+
+  _renderResultsPagination() {
+    var container = document.getElementById('results-pagination');
+    if (!container) return;
+    var displayResults = this._displayResults || [];
+    var pageSize = 20;
+    var currentPage = this._resultsPage || 1;
+    var totalPages = Math.ceil(displayResults.length / pageSize);
+    var showAll = this._resultsShowAll || false;
+    if (displayResults.length <= pageSize) { container.innerHTML = ''; return; }
+    if (showAll) {
+      container.innerHTML = '<div class="pagination"><span>Showing all ' + displayResults.length + ' results</span><button onclick="App._resultsShowAll=false;App._resultsPage=1;App._renderResultsPage()">Show Pages</button></div>';
+      return;
+    }
+    container.innerHTML = '<div class="pagination">' +
+      '<button onclick="App._resultsPage=Math.max(1,App._resultsPage-1);App._renderResultsPage()"' + (currentPage === 1 ? ' disabled' : '') + '>&larr; Previous</button>' +
+      '<span>Page ' + currentPage + ' of ' + totalPages + '</span>' +
+      '<button onclick="App._resultsPage=Math.min(' + totalPages + ',App._resultsPage+1);App._renderResultsPage()"' + (currentPage === totalPages ? ' disabled' : '') + '>Next &rarr;</button>' +
+      '<button onclick="App._resultsShowAll=true;App._renderResultsPage()">Show All</button>' +
+    '</div>';
   },
 
   renderPerformanceChart(perf) {
@@ -5841,7 +5885,7 @@ const App = {
 
           <!-- PREMIUM CARD -->
           <div class="pricing-card${accessLevel === 'premium' ? ' featured' : ''}">
-            <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">MOST POPULAR</div>
+            <div class="featured-badge" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">MOST POPULAR</div>
             <h3>Premium</h3>
             <p class="text-muted">Every edge play, every day</p>
             <div class="pricing-price"><span class="currency">&pound;</span>19<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
@@ -5867,7 +5911,7 @@ const App = {
 
           <!-- VIP CARD -->
           <div class="pricing-card vip${isVIP ? ' featured' : ''}">
-            <div style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">ELITE</div>
+            <div class="featured-badge" style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">ELITE</div>
             <h3>VIP</h3>
             <p class="text-muted">The ultimate edge — priority everything</p>
             <div class="pricing-price"><span class="currency">&pound;</span>39<span style="font-size:20px;">.99</span><span class="period">/month</span></div>

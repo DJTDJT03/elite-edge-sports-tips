@@ -241,6 +241,7 @@ main { min-height: calc(100vh - 64px); }
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
   background: linear-gradient(90deg, var(--gold-dark), var(--gold-light), var(--gold-dark));
 }
+.tip-card.locked { border: 1px solid rgba(212,168,67,0.2); position: relative; overflow: hidden; }
 .tip-card.locked .tip-locked-content { filter: blur(6px); user-select: none; pointer-events: none; }
 .tip-card .tip-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
 .tip-sport-badge {
@@ -276,11 +277,19 @@ main { min-height: calc(100vh - 64px); }
 .lock-overlay {
   position: absolute; inset: 0; z-index: 5;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  background: rgba(10,14,26,.75); backdrop-filter: blur(2px);
-  border-radius: var(--radius-lg);
+  background: rgba(10,14,26,.75); backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: inherit;
 }
-.lock-icon { font-size: 36px; margin-bottom: 8px; }
-.lock-text { font-size: 14px; font-weight: 600; color: var(--gold); margin-bottom: 12px; }
+.lock-overlay .lock-icon { font-size: 32px; margin-bottom: 8px; opacity: 0.6; }
+.lock-overlay .lock-text { font-size: 14px; font-weight: 700; color: var(--gold); margin-bottom: 12px; }
+.lock-overlay .lock-cta {
+  background: linear-gradient(135deg, #d4a843, #b8902f);
+  color: #0a0e1a; padding: 8px 24px; border-radius: 8px;
+  font-weight: 700; font-size: 13px; border: none; cursor: pointer;
+  transition: transform 0.2s;
+}
+.lock-overlay .lock-cta:hover { transform: scale(1.05); }
 
 /* =========================================================================
    TIP DETAIL
@@ -324,6 +333,13 @@ main { min-height: calc(100vh - 64px); }
 .result-void { color: var(--text-muted) !important; }
 .pnl-positive { color: var(--green) !important; font-weight: 700; }
 .pnl-negative { color: var(--red) !important; font-weight: 700; }
+
+/* Results pagination */
+.results-pagination .pagination { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 20px; }
+.results-pagination .pagination button { background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-primary); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all var(--transition); }
+.results-pagination .pagination button:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+.results-pagination .pagination button:disabled { opacity: 0.3; cursor: not-allowed; }
+.results-pagination .pagination span { font-size: 13px; color: var(--text-muted); }
 
 /* =========================================================================
    FORMS
@@ -400,12 +416,20 @@ main { min-height: calc(100vh - 64px); }
 .pricing-card {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-xl); padding: 32px; text-align: center;
-  transition: all var(--transition);
+  transition: transform 0.3s, box-shadow 0.3s, border-color var(--transition);
 }
+.pricing-card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+@keyframes pricingFadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.pricing-grid .pricing-card:nth-child(1) { animation: pricingFadeIn 0.5s ease-out 0.1s both; }
+.pricing-grid .pricing-card:nth-child(2) { animation: pricingFadeIn 0.5s ease-out 0.25s both; }
+.pricing-grid .pricing-card:nth-child(3) { animation: pricingFadeIn 0.5s ease-out 0.4s both; }
+@keyframes badgePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.8; } }
+.pricing-card .featured-badge { animation: badgePulse 2s infinite; }
 .pricing-card.featured {
   border-color: var(--gold); box-shadow: var(--shadow-gold);
   position: relative; transform: scale(1.02);
 }
+.pricing-card.featured:hover { transform: scale(1.02) translateY(-4px); }
 .pricing-card.featured::before {
   content: 'MOST POPULAR'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
   background: var(--gold); color: var(--bg-deep); padding: 4px 16px; border-radius: 20px;
@@ -743,6 +767,14 @@ main { min-height: calc(100vh - 64px); }
 /* =========================================================================
    RESPONSIVE
    ========================================================================= */
+@media (max-width: 1400px) {
+  .nav-link { padding: 6px 10px; font-size: 12px; }
+  .nav-dropdown-menu a { font-size: 12px; }
+  .nav-right { gap: 4px; }
+  .user-badge { font-size: 10px; padding: 3px 8px; }
+  .nav-link.nav-link-mybets .nav-link-text { display: none; }
+  .nav-link.nav-link-mybets .nav-link-icon { display: inline; }
+}
 @media (max-width: 1024px) {
   .grid-4 { grid-template-columns: repeat(2, 1fr); }
   .grid-3 { grid-template-columns: repeat(2, 1fr); }
@@ -767,17 +799,21 @@ main { min-height: calc(100vh - 64px); }
     flex-direction: column; padding: 12px; z-index: 999;
     box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     max-height: calc(100vh - 64px); overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
+  /* Hide My Bets icon override on mobile — show text */
+  .nav-link.nav-link-mybets .nav-link-icon { display: none !important; }
+  .nav-link.nav-link-mybets .nav-link-text { display: inline !important; }
   .nav-links.open { display: flex; }
-  .nav-links .nav-link { padding: 12px 16px; font-size: 15px; border-bottom: 1px solid var(--border); }
+  .nav-links .nav-link { padding: 14px 20px; font-size: 15px; border-bottom: 1px solid var(--border); }
   .nav-links .nav-link:last-child { border-bottom: none; }
   /* Mobile: dropdowns expand inline instead of hover popups */
   .nav-dropdown-menu {
     display: block !important; position: static; box-shadow: none;
     border: none; margin: 0; padding: 0; background: transparent;
   }
-  .nav-dropdown-menu a { padding: 10px 16px 10px 32px; border-bottom: 1px solid var(--border); font-size: 14px; }
-  .nav-dropdown > .nav-link { border-bottom: none; padding-bottom: 4px; }
+  .nav-dropdown-menu a { padding: 12px 20px 12px 36px; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .nav-dropdown > .nav-link { border-bottom: none; padding-bottom: 8px; }
 
   /* Hamburger: always visible, fixed size, never shrinks */
   .nav-toggle {
@@ -821,13 +857,13 @@ main { min-height: calc(100vh - 64px); }
   .nav-links.open #nav-auth-user-mobile {
     display: flex !important;
     flex-direction: column;
-    gap: 8px;
-    padding: 12px 0;
+    gap: 10px;
+    padding: 16px 12px;
     margin-top: 8px;
-    border-top: 1px solid var(--border);
+    border-top: 2px solid var(--border-light);
   }
   .nav-links.open #nav-auth-guest-mobile .btn,
-  .nav-links.open #nav-auth-user-mobile .btn { width: 100%; }
+  .nav-links.open #nav-auth-user-mobile .btn { width: 100%; padding: 12px 20px; font-size: 15px; }
 
   /* Show odds/theme toggles inside open dropdown menu */
   .nav-links.open .mobile-menu-tools {

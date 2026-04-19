@@ -965,3 +965,45 @@ textarea { resize: vertical; min-height: 80px; }
 
   .btn-group { flex-direction: column; }
 }
+
+/* ============================================================
+   ADMIN POLISH
+   ============================================================ */
+.sidebar-header {
+  padding: 20px 1.25rem 1rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.sidebar-header .logo {
+  font-size: 16px;
+  color: var(--gold);
+}
+.sidebar-header .logo-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.sidebar-nav a.active {
+  border-left: 3px solid var(--gold);
+  padding-left: 17px;
+}
+.stat-card {
+  background: linear-gradient(135deg, var(--bg-card), rgba(255,255,255,0.02));
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+tbody tr {
+  transition: background 0.15s;
+}
+tbody tr:hover {
+  background: rgba(212,168,67,0.05);
+}
+.form-group {
+  margin-bottom: 1.25rem;
+}
+.form-group label {
+  margin-bottom: 0.5rem;
+}
