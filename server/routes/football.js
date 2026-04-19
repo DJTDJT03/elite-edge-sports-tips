@@ -563,11 +563,32 @@ module.exports = function(deps) {
                 footballSource._apiGet('/fixtures?team=' + homeTeamId + '&last=5&status=FT'),
                 footballSource._apiGet('/fixtures?team=' + awayTeamId + '&last=5&status=FT'),
                 footballSource._apiGet('/fixtures/headtohead?h2h=' + homeTeamId + '-' + awayTeamId + '&last=5'),
+                footballSource._apiGet('/coachs?team=' + homeTeamId),
+                footballSource._apiGet('/coachs?team=' + awayTeamId),
               ]);
 
               var homeFixtures = (parallel[0].status === 'fulfilled' && parallel[0].value && parallel[0].value.response) ? parallel[0].value.response : [];
               var awayFixtures = (parallel[1].status === 'fulfilled' && parallel[1].value && parallel[1].value.response) ? parallel[1].value.response : [];
               var h2hMatches = (parallel[2].status === 'fulfilled' && parallel[2].value && parallel[2].value.response) ? parallel[2].value.response : [];
+
+              // Extract current manager names
+              try {
+                var homeCoaches = (parallel[3].status === 'fulfilled' && parallel[3].value && parallel[3].value.response) ? parallel[3].value.response : [];
+                var awayCoaches = (parallel[4].status === 'fulfilled' && parallel[4].value && parallel[4].value.response) ? parallel[4].value.response : [];
+                // Current coach is the one without an end date in their career
+                var findCurrentCoach = function(coaches) {
+                  for (var ci = 0; ci < coaches.length; ci++) {
+                    var c = coaches[ci];
+                    if (c.career && Array.isArray(c.career)) {
+                      var current = c.career.find(function(cr) { return !cr.end; });
+                      if (current) return c.name;
+                    }
+                  }
+                  return coaches.length > 0 ? coaches[0].name : null;
+                };
+                previewData.homeManager = findCurrentCoach(homeCoaches);
+                previewData.awayManager = findCurrentCoach(awayCoaches);
+              } catch(e) { /* coach data optional */ }
 
               // Safe form extraction
               function safeForm(fixtures, teamId) {

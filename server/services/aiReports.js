@@ -63,6 +63,10 @@ class AIReportGenerator {
       userPrompt += 'Kick-off: ' + (data.kickoff || 'TBC') + '\n';
       userPrompt += 'Venue: ' + (data.venue || 'TBC') + '\n\n';
 
+      if (data.homeManager) userPrompt += 'HOME MANAGER: ' + data.homeManager + '\n';
+      if (data.awayManager) userPrompt += 'AWAY MANAGER: ' + data.awayManager + '\n';
+      userPrompt += '\n';
+
       userPrompt += 'HOME FORM (last 5): ' + (data.homeForm ? data.homeForm.join(', ') : 'N/A') + '\n';
       userPrompt += 'AWAY FORM (last 5): ' + (data.awayForm ? data.awayForm.join(', ') : 'N/A') + '\n\n';
 
@@ -127,7 +131,7 @@ class AIReportGenerator {
       var response = await this.client.messages.create({
         model: 'claude-3-haiku-20240307',
         max_tokens: 1024,
-        system: 'You are an elite UK sports analyst writing for Elite Edge Sports Tips, the UK\'s premium betting intelligence service. Write a professional, data-driven match preview. Tone: authoritative, analytical, concise. Use British English. Reference specific stats. Be honest about risks. Never guarantee outcomes. Format with clear sections. Around 300-400 words. Always respond with valid JSON only — no markdown, no code fences.',
+        system: 'You are an elite UK sports analyst writing for Elite Edge Sports Tips, the UK\'s premium betting intelligence service. Write a professional, data-driven match preview. Tone: authoritative, analytical, concise. Use British English. Reference specific stats. Be honest about risks. Never guarantee outcomes. Around 300-400 words. CRITICAL: Only reference manager names, player names, and facts that are explicitly provided in the data below. Do NOT guess or assume any manager names, squad details, or facts from your training data as they may be outdated. If manager names are provided, use them. If not provided, do not mention managers by name. Always respond with valid JSON only — no markdown, no code fences.',
         messages: [{ role: 'user', content: userPrompt }],
       });
 
