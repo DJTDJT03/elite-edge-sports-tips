@@ -633,10 +633,6 @@ const App = {
         method: 'POST', body: JSON.stringify({ name, email, password, agreementTimestamp })
       });
       this.token = data.token; this.user = data.user;
-      // Email verification placeholder (Feature #3)
-      // In production: integrate SendGrid here to send verification email
-      // e.g. await sendVerificationEmail(user.email, verificationToken);
-      data.user.emailVerified = false;
       localStorage.setItem('ee_token', data.token);
       localStorage.setItem('ee_user', JSON.stringify(data.user));
       if (data.tokenExpiry) localStorage.setItem('ee_token_expiry', data.tokenExpiry.toString());
@@ -7269,9 +7265,16 @@ const App = {
         <!-- Profile Info -->
         <div class="card mb-16">
           <h3 class="mb-16">Profile</h3>
-          <div class="account-info-grid">
-            <div class="account-info-item"><span class="account-label">Name</span><span class="account-value">${u.name || '-'}</span></div>
-            <div class="account-info-item"><span class="account-label">Email</span><span class="account-value">${u.email || '-'}</span></div>
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="acc-name" value="${(u.name || '').replace(/"/g, '&quot;')}" />
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="acc-email" value="${(u.email || '').replace(/"/g, '&quot;')}" />
+          </div>
+          <button class="btn btn-gold btn-sm" onclick="App.saveProfile()">Save Changes</button>
+          <div class="account-info-grid" style="margin-top:16px;">
             <div class="account-info-item"><span class="account-label">Subscription</span><span class="account-value">${subLabel}</span></div>
             <div class="account-info-item"><span class="account-label">Expires</span><span class="account-value">${expiryLabel}</span></div>
             <div class="account-info-item"><span class="account-label">Member since</span><span class="account-value">${formatDateUK(u.joined)}</span></div>
@@ -7507,6 +7510,21 @@ const App = {
     `;
   },
 
+  async saveProfile() {
+    var name = document.getElementById('acc-name').value.trim();
+    var email = document.getElementById('acc-email').value.trim();
+    if (!name) { this.showToast('Name is required', 'error'); return; }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { this.showToast('Valid email required', 'error'); return; }
+    try {
+      await this.api('/auth/profile', { method: 'PUT', body: JSON.stringify({ name, email }) });
+      this.user.name = name;
+      this.user.email = email;
+      localStorage.setItem('ee_user', JSON.stringify(this.user));
+      this.updateAuthUI();
+      this.showToast('Profile updated', 'success');
+    } catch(err) { this.showToast(err.message, 'error'); }
+  },
+
   async changePassword(e) {
     e.preventDefault();
     const errEl = document.getElementById('acct-pw-error');
@@ -7684,13 +7702,8 @@ const App = {
       const result = await this.api('/auth/forgot-password', {
         method: 'POST', body: JSON.stringify({ email })
       });
-      if (result.demo) {
-        successEl.style.display = 'block';
-        successEl.innerHTML = result.message + '<br><strong style="color:var(--gold);">' + result.demoMessage + '</strong>';
-      } else {
-        successEl.style.display = 'block';
-        successEl.textContent = result.message;
-      }
+      successEl.style.display = 'block';
+      successEl.textContent = 'Check your email for a reset link.';
       errorEl.textContent = '';
     } catch (err) {
       errorEl.textContent = err.message;
@@ -7710,24 +7723,8 @@ const App = {
     const banner = document.createElement('div');
     banner.className = 'email-verify-banner';
     banner.id = 'email-verify-banner';
-    banner.innerHTML = 'Please check your email to verify your account. <span class="unverified-badge">Unverified</span>';
+    banner.innerHTML = 'Welcome! A verification email has been sent to your inbox.';
     app.parentNode.insertBefore(banner, app);
-
-    // Demo mode: auto-verify after 2 seconds
-    setTimeout(() => {
-      const b = document.getElementById('email-verify-banner');
-      if (b) {
-        b.innerHTML = 'Email verified successfully! Your account is now active. <span class="verified-badge">Verified</span>';
-        b.style.background = 'rgba(34,197,94,.15)';
-        b.style.borderColor = 'rgba(34,197,94,.4)';
-        if (this.user) {
-          this.user.emailVerified = true;
-          localStorage.setItem('ee_user', JSON.stringify(this.user));
-        }
-        // Remove after 3 more seconds
-        setTimeout(() => { if (b) b.remove(); }, 3000);
-      }
-    }, 2000);
   },
 
   async renderBigWinnerBanner() {

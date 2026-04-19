@@ -313,6 +313,66 @@ module.exports = function(deps) {
   });
 
   // ---------------------------------------------------------------------------
+  // UPDATE PROFILE (name and email)
+  // ---------------------------------------------------------------------------
+  router.put('/profile', authenticate, async (req, res) => {
+    try {
+      const { name, email } = req.body;
+
+      // Validate name
+      if (!name || typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ error: 'Name is required' });
+      }
+      if (name.trim().length > 100) {
+        return res.status(400).json({ error: 'Name must be 100 characters or fewer' });
+      }
+
+      // Validate email
+      if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        return res.status(400).json({ error: 'A valid email address is required' });
+      }
+
+      const user = await db.getUserById(req.user.id);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const normalizedEmail = email.trim().toLowerCase();
+      const emailChanged = normalizedEmail !== user.email;
+
+      // If email is changing, check uniqueness
+      if (emailChanged) {
+        const existing = await db.getUserByEmail(normalizedEmail);
+        if (existing) {
+          return res.status(400).json({ error: 'That email address is already in use' });
+        }
+      }
+
+      const updates = { name: name.trim(), email: normalizedEmail };
+      await db.updateUser(user.id, updates);
+
+      // Send notification if email changed
+      if (emailChanged) {
+        emailService.sendNotification({
+          to: normalizedEmail,
+          subject: 'Email Address Updated',
+          text: 'Your email has been updated to ' + normalizedEmail
+        }).catch(function(err) {
+          console.error('[Email] Email change notification failed:', err.message);
+        });
+      }
+
+      res.json({
+        user: {
+          id: user.id, email: normalizedEmail, name: name.trim(), role: user.role,
+          subscription: user.subscription, subscriptionExpiry: user.subscriptionExpiry,
+          joined: user.joined, trialActive: user.trialActive, trialEnd: user.trialEnd
+        }
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // UPDATE PREFERENCES (odds format etc.)
   // ---------------------------------------------------------------------------
   router.put('/preferences', authenticate, async (req, res) => {
@@ -446,7 +506,7 @@ module.exports = function(deps) {
           return res.status(500).json({ error: 'Email failed to send: ' + (emailResult.error || 'unknown') });
         }
 
-        return res.json({ message, debug: { sent: true, transport: emailService.transport && emailService.transport.name } });
+        return res.json({ message });
       }
 
       res.json({ message });
