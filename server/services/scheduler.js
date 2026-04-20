@@ -320,21 +320,23 @@ module.exports = function startScheduler(deps) {
     var minute = ukTime.getMinutes();
     var today = ukTime.toISOString().split('T')[0];
 
-    // Only run at 7:30am UK time (checked every 10 mins), and only once per day
-    var isScheduledWindow = (hour === 7 && minute >= 30) || (hour === 7 && minute >= 20 && minute <= 40);
-    if (!isScheduledWindow && lastAutoTipDate === today) return;
-    if (lastAutoTipDate === today) return;
+    // Run any time after 7:30am UK, once per day
+    var isPastWindow = hour > 7 || (hour === 7 && minute >= 30);
+    if (!isPastWindow) return; // Too early
+    if (lastAutoTipDate === today) return; // Already ran today
 
-    // Check if tips already exist for today
+    // Check if tips already exist for today (normalise date comparison)
     var existingTips = await db.getTips();
     var todayAutoTips = existingTips.filter(function(t) {
-      return t.date === today && t.id && t.id.toString().indexOf('auto_') === 0;
+      var tipDate = (t.date || '').toString().split('T')[0];
+      return tipDate === today && t.id && t.id.toString().indexOf('auto_') === 0;
     });
     if (todayAutoTips.length > 0) {
       lastAutoTipDate = today;
       console.log('[Auto-Tips] Tips already exist for ' + today + ' (' + todayAutoTips.length + ' auto tips) — skipping');
       return;
     }
+    console.log('[Auto-Tips] No tips for ' + today + ' — generating now (hour: ' + hour + ', minute: ' + minute + ')');
 
     console.log('[Auto-Tips] Starting daily tip generation for ' + today + '...');
 
@@ -910,7 +912,7 @@ module.exports = function startScheduler(deps) {
       var nt = newTips[nti];
       var ntDate = (nt.date || '').split('T')[0];
       var alreadyExists = existingTips.some(function(et) {
-        var etDate = (et.date || '').split('T')[0];
+        var etDate = et.date && typeof et.date !== 'string' ? new Date(et.date).toISOString().split('T')[0] : (et.date || '').split('T')[0];
         return et.selection === nt.selection && etDate === ntDate;
       });
       if (alreadyExists) {
