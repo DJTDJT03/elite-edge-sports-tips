@@ -8377,20 +8377,18 @@ const App = {
   },
 
   loadAnalytics() {
-    // Only load if consent was given
     if (localStorage.getItem('ee_cookie_consent') !== 'accepted') return;
-    // GA4 would be loaded here dynamically when measurement ID is configured
-    // var gaId = 'G-XXXXXXXXXX'; // Replace with actual GA4 ID
-    // if (gaId && gaId !== 'G-XXXXXXXXXX') {
-    //   var script = document.createElement('script');
-    //   script.src = 'https://www.googletagmanager.com/gtag/js?id=' + gaId;
-    //   script.async = true;
-    //   document.head.appendChild(script);
-    //   window.dataLayer = window.dataLayer || [];
-    //   function gtag(){dataLayer.push(arguments);}
-    //   gtag('js', new Date());
-    //   gtag('config', gaId, { anonymize_ip: true });
-    // }
+    if (window._gaLoaded) return;
+    var gaId = 'G-KNT45Z35CH';
+    var script = document.createElement('script');
+    script.src = 'https://www.googletagmanager.com/gtag/js?id=' + gaId;
+    script.async = true;
+    document.head.appendChild(script);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function(){dataLayer.push(arguments);};
+    window.gtag('js', new Date());
+    window.gtag('config', gaId, { anonymize_ip: true });
+    window._gaLoaded = true;
   },
 
   // -----------------------------------------------------------------------
