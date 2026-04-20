@@ -9,6 +9,15 @@ module.exports = function startScheduler(deps) {
           oddsHelpers, helpers, alertEngine, telegramBot, aiReports } = deps;
 
   // -------------------------------------------------------------------------
+  // Date normalisation helper — PostgreSQL returns Date objects, not strings
+  // -------------------------------------------------------------------------
+  function normDate(d) {
+    if (!d) return '';
+    if (typeof d === 'string') return d.split('T')[0];
+    try { return new Date(d).toISOString().split('T')[0]; } catch(e) { return ''; }
+  }
+
+  // -------------------------------------------------------------------------
   // In-memory state (session-scoped, resets on restart)
   // -------------------------------------------------------------------------
   var lastAccaGenDate = '';
@@ -922,6 +931,13 @@ module.exports = function startScheduler(deps) {
       await db.createTip(nt);
       savedCount++;
     }
+    // Make the lowest-confidence tip free (so free users see at least 1)
+    if (newTips.length > 0) {
+      var lowestConf = newTips.reduce(function(min, t) { return t.confidence < min.confidence ? t : min; }, newTips[0]);
+      lowestConf.isPremium = false;
+      try { await db.updateTip(lowestConf.id, { isPremium: false }); } catch(e) {}
+    }
+
     lastAutoTipDate = today;
 
     // Log summary
@@ -1003,7 +1019,7 @@ module.exports = function startScheduler(deps) {
     var losses = results
       .filter(function(r) { return r.result === 'lost'; })
       .sort(function(a, b) {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        if (normDate(a.date) !== normDate(b.date)) return normDate(a.date).localeCompare(normDate(b.date));
         return (a.stake || 0) - (b.stake || 0);
       });
 
@@ -1052,7 +1068,9 @@ module.exports = function startScheduler(deps) {
       // Collect unique dates that need settling
       var datesToSettle = [];
       activeTips.forEach(function(t) {
-        if (datesToSettle.indexOf(t.date) === -1) datesToSettle.push(t.date);
+        // Normalise date to string format YYYY-MM-DD
+        var d = t.date && typeof t.date !== 'string' ? new Date(t.date).toISOString().split('T')[0] : (t.date || '').split('T')[0];
+        if (d && datesToSettle.indexOf(d) === -1) datesToSettle.push(d);
       });
       console.log('[Auto-Settle] Processing ' + activeTips.length + ' unsettled tip(s) across dates: ' + datesToSettle.join(', '));
 
@@ -1531,7 +1549,7 @@ module.exports = function startScheduler(deps) {
 
     // Streak analysis
     var currentStreak = 0; var streakType = '';
-    var sortedByDate = weekResults.sort(function(a, b) { return b.date.localeCompare(a.date); });
+    var sortedByDate = weekResults.sort(function(a, b) { return normDate(b.date).localeCompare(normDate(a.date)); });
     for (var i = 0; i < sortedByDate.length; i++) {
       if (i === 0) { streakType = sortedByDate[i].result === 'won' ? 'winning' : 'losing'; currentStreak = 1; }
       else if (sortedByDate[i].result === (streakType === 'winning' ? 'won' : 'lost')) { currentStreak++; }
@@ -1693,7 +1711,7 @@ module.exports = function startScheduler(deps) {
       var yStrikeRate = yesterdayResults.length > 0 ? Math.round((yWins / yesterdayResults.length) * 100) : 0;
 
       // Calculate current streak
-      var allResultsSorted = allResults.slice().sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+      var allResultsSorted = allResults.slice().sort(function(a, b) { return normDate(b.date).localeCompare(normDate(a.date)); });
       var streak = 0;
       var streakType = '';
       if (allResultsSorted.length > 0) {
