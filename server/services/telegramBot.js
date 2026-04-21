@@ -133,10 +133,24 @@ class TelegramBot {
       var pnl = result.pnl || 0;
       var pnlStr = pnl >= 0 ? '+' + pnl.toFixed(2) : pnl.toFixed(2);
 
-      var text = emoji + ' <b>' + label + ':</b> ' + (result.selection || '') + ' @ ' + (result.odds || '-') + '\n' +
-        'P/L: ' + pnlStr + ' units\n' +
+      var oddsDisplay = result.odds || '-';
+      // Convert decimal to fractional for display
+      if (typeof oddsDisplay === 'number' && oddsDisplay > 1) {
+        var n = oddsDisplay - 1;
+        var fracs = [[1,1],[6,5],[5,4],[11,8],[6,4],[7,4],[2,1],[9,4],[5,2],[11,4],[3,1],[10,3],[7,2],[4,1],[9,2],[5,1],[6,1],[7,1],[8,1],[9,1],[10,1],[12,1],[14,1],[16,1],[20,1],[25,1],[33,1],[40,1],[50,1]];
+        var best = fracs[0]; var bestD = 999;
+        for (var fi = 0; fi < fracs.length; fi++) { var d = Math.abs(fracs[fi][0]/fracs[fi][1] - n); if (d < bestD) { bestD = d; best = fracs[fi]; } }
+        oddsDisplay = best[0] + '/' + best[1];
+      }
+
+      var text = '\uD83C\uDFC6 <b>WINNER!</b>\n\n' +
+        '<b>' + (result.selection || '') + '</b> @ ' + oddsDisplay + '\n' +
         (result.event ? result.event + '\n' : '') +
-        '\n\uD83D\uDCCA Elite Edge Sports Tips';
+        '\nP/L: <b>' + pnlStr + ' units</b>\n' +
+        '\n\u2705 Our members had this selection BEFORE the off.\n' +
+        '\n\uD83D\uDC49 Start your 7-day FREE trial: eliteedgesports.co.uk\n' +
+        '\n\uD83D\uDCCA Elite Edge Sports Tips\n' +
+        '18+ | Entertainment only | BeGambleAware.org';
 
       return await this.sendMessage(text);
     } catch (err) {

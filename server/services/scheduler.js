@@ -979,18 +979,12 @@ module.exports = function startScheduler(deps) {
       }
     }
 
-    // --- Telegram Bot: send daily bulletin + individual tips ---
-    if (telegramBot && telegramBot.isAvailable()) {
+    // --- Telegram Bot: WINNERS ONLY (public channel shows results, not pre-race tips) ---
+    // Pre-race tips are premium content — only posted after winning to showcase track record
+    if (false && telegramBot && telegramBot.isAvailable()) {
+      // DISABLED: tips no longer posted before the race
       try {
         await telegramBot.sendDailyBulletin(newTips);
-        for (var tgi = 0; tgi < newTips.length; tgi++) {
-          // 2-second delay between messages to avoid rate limiting
-          if (tgi > 0) {
-            await new Promise(function(resolve) { setTimeout(resolve, 2000); });
-          }
-          await telegramBot.sendTip(newTips[tgi]);
-        }
-        console.log('[Auto-Tips] Telegram: sent bulletin + ' + newTips.length + ' tip(s)');
       } catch (tgErr) {
         console.error('[Auto-Tips] Telegram error (non-fatal):', tgErr.message);
       }
