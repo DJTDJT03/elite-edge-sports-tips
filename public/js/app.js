@@ -8600,27 +8600,33 @@ const App = {
   // -----------------------------------------------------------------------
   renderWhyEliteEdge() {
     var competitors = [
-      { name: 'Racing Post', price: '£24.99', racing: true, football: 'Basic', ai: false, odds: false, value: false, acca: false, steamers: false, alerts: false, going: 'Basic', nonRunner: false, h2h: false, results: 'Partial', calendar: false, trial: false },
-      { name: 'Timeform', price: '£24.99', racing: true, football: false, ai: false, odds: false, value: false, acca: false, steamers: false, alerts: false, going: false, nonRunner: false, h2h: false, results: false, calendar: false, trial: true },
-      { name: 'Infogol', price: '£4.99', racing: false, football: true, ai: false, odds: false, value: false, acca: false, steamers: false, alerts: false, going: false, nonRunner: false, h2h: 'Basic', results: false, calendar: false, trial: true },
-      { name: 'OLBG', price: '£9.99', racing: 'Community', football: 'Community', ai: false, odds: 'Limited', value: false, acca: false, steamers: false, alerts: false, going: false, nonRunner: false, h2h: false, results: 'User-reported', calendar: false, trial: true },
+      { name: 'Racing Post', price: '£24.99', racing: true, football: 'Basic', ai: false, xg: false, apis: '2', odds: false, value: false, acca: false, steamers: false, alerts: false, going: 'Basic', nonRunner: false, h2h: false, replay: false, chatbot: false, results: 'Partial', calendar: false, drip: false, trial: false, tiers: '1' },
+      { name: 'Timeform', price: '£24.99', racing: true, football: false, ai: false, xg: false, apis: '1', odds: false, value: false, acca: false, steamers: false, alerts: false, going: false, nonRunner: false, h2h: false, replay: false, chatbot: false, results: false, calendar: false, drip: false, trial: true, tiers: '1' },
+      { name: 'Infogol', price: '£4.99', racing: false, football: true, ai: false, xg: 'Basic', apis: '1', odds: false, value: false, acca: false, steamers: false, alerts: false, going: false, nonRunner: false, h2h: 'Basic', replay: false, chatbot: false, results: false, calendar: false, drip: false, trial: true, tiers: '1' },
+      { name: 'OLBG', price: '£9.99', racing: 'Community', football: 'Community', ai: false, xg: false, apis: '0', odds: 'Limited', value: false, acca: false, steamers: false, alerts: false, going: false, nonRunner: false, h2h: false, replay: false, chatbot: false, results: 'User-reported', calendar: false, drip: false, trial: true, tiers: '1' },
     ];
 
     var features = [
       { label: 'Monthly Price', key: 'price', elite: '£19.99' },
+      { label: 'Live Data APIs', key: 'apis', elite: '10' },
       { label: 'Horse Racing Tips', key: 'racing', elite: true },
-      { label: 'Football Tips', key: 'football', elite: true },
-      { label: 'AI Match Previews', key: 'ai', elite: true },
+      { label: 'Football Tips (7 English + 2 Scottish Leagues)', key: 'football', elite: true },
+      { label: 'Real xG Data (Understat)', key: 'xg', elite: true },
+      { label: 'AI Match Previews (Claude)', key: 'ai', elite: true },
+      { label: 'AI Race Replay Analysis', key: 'replay', elite: true },
+      { label: 'AI Chatbot Assistant', key: 'chatbot', elite: true },
       { label: '40+ Bookmaker Odds Comparison', key: 'odds', elite: true },
       { label: 'Value Bet Scanner', key: 'value', elite: true },
-      { label: 'Smart Acca Generator', key: 'acca', elite: true },
+      { label: 'Smart Acca Generator (2-8 fold)', key: 'acca', elite: true },
       { label: 'Steamer/Drifter Detection', key: 'steamers', elite: true },
       { label: 'Custom Alerts (5 Types)', key: 'alerts', elite: true },
-      { label: 'Going Forecast', key: 'going', elite: true },
-      { label: 'Non-Runner Auto Detection', key: 'nonRunner', elite: true },
+      { label: 'Going Forecast (Weather + Ground)', key: 'going', elite: true },
+      { label: 'Non-Runner Auto Detection & Void', key: 'nonRunner', elite: true },
       { label: 'H2H Comparison Tool', key: 'h2h', elite: true },
       { label: 'Verified Transparent Results', key: 'results', elite: true },
       { label: 'Profit Calendar Heatmap', key: 'calendar', elite: true },
+      { label: 'Automated Email Drip Campaign', key: 'drip', elite: true },
+      { label: 'Subscription Tiers (Free/Premium/VIP)', key: 'tiers', elite: '3' },
       { label: '7-Day Free Trial', key: 'trial', elite: true },
     ];
 
@@ -8631,33 +8637,59 @@ const App = {
     }
 
     var tableRows = features.map(function(f) {
-      var eliteCell = f.key === 'price'
-        ? '<td style="background:rgba(212,168,67,0.04);font-weight:800;font-size:16px;color:#d4a843;">' + f.elite + '</td>'
-        : '<td style="background:rgba(212,168,67,0.04);">' + renderCell(f.elite) + '</td>';
+      var eliteVal = f.elite;
+      var eliteCell;
+      if (f.key === 'price') {
+        eliteCell = '<td style="background:rgba(212,168,67,0.04);font-weight:800;font-size:16px;color:#d4a843;">' + eliteVal + '</td>';
+      } else if (f.key === 'apis' || f.key === 'tiers') {
+        eliteCell = '<td style="background:rgba(212,168,67,0.04);font-weight:800;font-size:16px;color:#d4a843;">' + eliteVal + '</td>';
+      } else {
+        eliteCell = '<td style="background:rgba(212,168,67,0.04);">' + renderCell(eliteVal) + '</td>';
+      }
       var compCells = competitors.map(function(c) {
         if (f.key === 'price') return '<td style="font-weight:800;">' + c.price + '</td>';
+        if (f.key === 'apis' || f.key === 'tiers') return '<td style="font-weight:800;color:#8b8d93;">' + (c[f.key] || '0') + '</td>';
         return '<td>' + renderCell(c[f.key]) + '</td>';
       }).join('');
       return '<tr><td style="text-align:left;font-weight:600;color:#c0c4d0;">' + f.label + '</td>' + eliteCell + compCells + '</tr>';
     }).join('');
 
     var exclusives = [
-      { icon: '&#129302;', title: 'AI Match Previews', desc: 'Professional written analysis generated from live statistical data' },
-      { icon: '&#128200;', title: 'Value Bet Scanner', desc: 'Compares odds across 40+ UK bookmakers in real-time' },
-      { icon: '&#9917;', title: 'Smart Acca Generator', desc: 'Scans every fixture, builds the optimal accumulator' },
-      { icon: '&#128293;', title: 'Steamer & Drifter Alerts', desc: 'Real-time alerts when odds move on our selections' },
-      { icon: '&#127793;', title: 'Going Forecast', desc: 'Live weather data for every racecourse' },
-      { icon: '&#128202;', title: 'Profit Calendar', desc: '90-day visual heatmap showing daily P/L' },
-      { icon: '&#128276;', title: '5 Custom Alert Types', desc: 'Confidence, steamers, pre-race, big price, all tips' },
-      { icon: '&#127942;', title: 'AI Race Replay', desc: 'AI explains WHY each result happened' },
-      { icon: '&#128274;', title: 'Anti-Sharing Protection', desc: 'Single-session enforcement per subscription' },
+      { icon: '&#129302;', title: 'AI Match Previews', desc: 'Professional analysis from live data — manager names, real xG, form, H2H. No other service uses AI.' },
+      { icon: '&#128200;', title: 'Value Bet Scanner', desc: 'Compares odds across 40+ UK bookmakers in real-time. Finds where prices disagree.' },
+      { icon: '&#9917;', title: 'Smart Acca Generator', desc: 'Scans every live fixture, ranks by probability, builds 2-8 fold accas automatically.' },
+      { icon: '&#128202;', title: 'Real xG Data', desc: 'Understat xG fed directly into our model. Real expected goals, not estimates.' },
+      { icon: '&#128293;', title: 'Steamer & Drifter Alerts', desc: 'Know when the market moves on our selections. Shortening = market agrees.' },
+      { icon: '&#127793;', title: 'Going Forecast', desc: 'OpenWeather data for every racecourse. Predicted going changes before bookmakers adjust.' },
+      { icon: '&#127942;', title: 'AI Race Replay', desc: 'After every result, AI explains WHY it happened. Pace, going, tactics, draw.' },
+      { icon: '&#128276;', title: '5 Custom Alert Types', desc: 'Elite confidence, steamers, pre-race, big price, all tips. You control what you receive.' },
+      { icon: '&#128274;', title: 'Anti-Sharing Protection', desc: 'One device per account. No password sharing. Every subscription = one person.' },
+      { icon: '&#128172;', title: 'AI Chatbot', desc: 'Ask questions about tips, results, subscriptions. Powered by Claude AI.' },
+      { icon: '&#128232;', title: '14-Day Email Campaign', desc: 'Automated onboarding for new users. Welcome, FOMO, social proof, conversion.' },
+      { icon: '&#127919;', title: '10 Live Data APIs', desc: 'Racing, Football, Odds, Weather, xG, Standings, News, AI, Payments, Email. Always live.' },
     ];
 
     document.getElementById('app').innerHTML =
       '<div class="container" style="max-width:1100px;">' +
-        '<div style="text-align:center;margin-bottom:40px;">' +
+        '<div style="text-align:center;margin-bottom:20px;">' +
           '<h1 style="font-size:32px;font-weight:900;">Why <span style="color:#d4a843;">Elite Edge</span> Is Different</h1>' +
-          '<p style="color:#8b8d93;font-size:16px;">The UK\'s most advanced sports analysis platform — compared feature by feature</p>' +
+          '<p style="color:#8b8d93;font-size:16px;margin-bottom:24px;">The UK\'s most advanced sports analysis platform — 10 live APIs, AI-powered, 42+ features</p>' +
+        '</div>' +
+
+        // Stats bar
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:32px;">' +
+          '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:16px;text-align:center;">' +
+            '<div style="font-size:28px;font-weight:900;color:#d4a843;">10</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Live APIs</div>' +
+          '</div>' +
+          '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:16px;text-align:center;">' +
+            '<div style="font-size:28px;font-weight:900;color:#22c55e;">42+</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Features</div>' +
+          '</div>' +
+          '<div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:10px;padding:16px;text-align:center;">' +
+            '<div style="font-size:28px;font-weight:900;color:#60a5fa;">14</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Automated Systems</div>' +
+          '</div>' +
+          '<div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;padding:16px;text-align:center;">' +
+            '<div style="font-size:28px;font-weight:900;color:#a855f7;">5</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">AI Features</div>' +
+          '</div>' +
         '</div>' +
 
         '<div style="overflow-x:auto;margin-bottom:40px;">' +
