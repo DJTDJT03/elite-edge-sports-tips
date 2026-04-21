@@ -129,7 +129,7 @@ class AIReportGenerator {
       userPrompt += '- verdict: one-sentence final verdict\n';
 
       var response = await this.client.messages.create({
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         system: 'You are an elite UK sports analyst writing for Elite Edge Sports Tips, the UK\'s premium betting intelligence service. Write a professional, data-driven match preview. Tone: authoritative, analytical, concise. Use British English. Reference specific stats. Be honest about risks. Never guarantee outcomes. Around 300-400 words. CRITICAL: Only reference manager names, player names, and facts that are explicitly provided in the data below. Do NOT guess or assume any manager names, squad details, or facts from your training data as they may be outdated. If manager names are provided, use them. If not provided, do not mention managers by name. Always respond with valid JSON only — no markdown, no code fences.',
         messages: [{ role: 'user', content: userPrompt }],
@@ -232,7 +232,7 @@ class AIReportGenerator {
       userPrompt += '- verdict: one-sentence final verdict\n';
 
       var response = await this.client.messages.create({
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         system: 'You are an elite UK horse racing analyst writing for Elite Edge Sports Tips. Write a professional race preview focused on our selection. Reference form figures, going preference, trainer/jockey stats, draw position, and course suitability. British English. Around 200-300 words. Be analytical, not promotional. Always respond with valid JSON only — no markdown, no code fences.',
         messages: [{ role: 'user', content: userPrompt }],
@@ -306,7 +306,7 @@ class AIReportGenerator {
       userPrompt += '- signOff: warm professional sign-off\n';
 
       var response = await this.client.messages.create({
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         system: 'You are writing a premium morning email bulletin for Elite Edge Sports Tips, the UK\'s #1 sports analysis service. Write a personalised, engaging email in British English. Be confident but never guarantee outcomes. Include a brief morning greeting, yesterday\'s results summary, today\'s headline picks, and a sign-off. Keep it under 250 words. Tone: professional, warm, data-driven. The subscriber\'s name is provided — use it once in the greeting. Always respond with valid JSON only — no markdown, no code fences. JSON fields: subject, greeting, resultsReview, todaysPicks, signOff.',
         messages: [{ role: 'user', content: userPrompt }],
@@ -364,7 +364,7 @@ class AIReportGenerator {
       userPrompt += '- lessonLearned: one actionable takeaway for future betting\n';
 
       var response = await this.client.messages.create({
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 512,
         system: 'You are an elite UK racing analyst providing post-race analysis. Explain WHY the result happened — pace, going, draw, tactics. Be honest about what went wrong (or right). British English. 100-150 words. Always respond with valid JSON only — no markdown, no code fences. JSON fields: analysis, keyFactor, lessonLearned.',
         messages: [{ role: 'user', content: userPrompt }],
@@ -441,7 +441,7 @@ class AIReportGenerator {
       userPrompt += '- headline: a punchy headline for the day (max 60 chars)\n';
 
       var response = await this.client.messages.create({
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1024,
         system: 'You are writing a punchy morning briefing for Elite Edge Sports Tips subscribers. Cover the headline picks, key stats, and what to watch. 150-200 words. British English. Tone: confident, authoritative, concise. Not promotional — informative. Always respond with valid JSON only — no markdown, no code fences.',
         messages: [{ role: 'user', content: userPrompt }],

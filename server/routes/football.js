@@ -670,7 +670,7 @@ module.exports = function(deps) {
       // Test Claude API directly
       var Anthropic = require('@anthropic-ai/sdk').default;
       var testClient = new Anthropic();
-      var models = ['claude-sonnet-4-5-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-haiku-20240307'];
+      var models = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-5-20250514', 'claude-3-5-sonnet-20241022'];
       var lastError = null;
       for (var i = 0; i < models.length; i++) {
         try {
