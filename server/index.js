@@ -460,19 +460,34 @@ app.use('/', require('./routes/public')(deps));
   try {
     var adminEmail = 'darren@ecocleaningsystems.co.uk';
     var user = await db.getUserByEmail(adminEmail);
-    if (user && (user.role !== 'admin' || user.subscription !== 'premium')) {
+    if (user && (user.role !== 'admin' || user.subscription !== 'vip')) {
       await db.updateUser(user.id, {
         role: 'admin',
-        subscription: 'premium',
+        subscription: 'vip',
         subscriptionExpiry: '2027-12-31',
       });
-      console.log('[Startup] Promoted ' + adminEmail + ' to admin + premium');
+      console.log('[Startup] Promoted ' + adminEmail + ' to admin + VIP');
     } else if (user) {
-      console.log('[Startup] ' + adminEmail + ' already admin + premium');
+      console.log('[Startup] ' + adminEmail + ' already admin + VIP');
     }
   } catch (e) {
     console.log('[Startup] Admin promotion skipped:', e.message);
   }
+})();
+
+// Cleanup: remove excess tips for today (keep max 4 per day)
+(async function capDailyTips() {
+  try {
+    if (!db.isAvailable()) return;
+    var today = new Date().toISOString().split('T')[0];
+    var result = await db.query(
+      "DELETE FROM tips WHERE id IN (SELECT id FROM tips WHERE date::text LIKE $1 AND id LIKE 'auto_%' ORDER BY created_at ASC OFFSET 4)",
+      [today + '%']
+    );
+    if (result.rowCount > 0) {
+      console.log('[Startup] Removed ' + result.rowCount + ' excess tips for ' + today + ' (max 4)');
+    }
+  } catch(e) {}
 })();
 
 // Test account cleanup REMOVED — was deleting users on every deploy

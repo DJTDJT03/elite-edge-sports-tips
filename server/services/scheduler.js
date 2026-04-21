@@ -337,11 +337,10 @@ module.exports = function startScheduler(deps) {
     if (!isPastWindow) return; // Too early
     if (lastAutoTipDate === today) return; // Already ran today
 
-    // Check if tips already exist for today (normalise date comparison)
+    // Check if tips already exist for today — use normDate for reliable comparison
     var existingTips = await db.getTips();
     var todayAutoTips = existingTips.filter(function(t) {
-      var tipDate = (t.date || '').toString().split('T')[0];
-      return tipDate === today && t.id && t.id.toString().indexOf('auto_') === 0;
+      return normDate(t.date) === today && t.id && t.id.toString().indexOf('auto_') === 0;
     });
     if (todayAutoTips.length > 0) {
       lastAutoTipDate = today;
@@ -358,7 +357,7 @@ module.exports = function startScheduler(deps) {
     for (var si = 0; si < existingTips.length; si++) {
       var staleTip = existingTips[si];
       if (staleTip.isWeeklyAcca) continue;
-      if (staleTip.date && staleTip.date < archiveCutoff && staleTip.status === 'active' && !staleTip.result) {
+      if (staleTip.date && normDate(staleTip.date) < archiveCutoff && staleTip.status === 'active' && !staleTip.result) {
         await db.updateTip(staleTip.id, { status: 'expired', result: 'void' });
         staleTip.status = 'expired';
         staleTip.result = 'void';
@@ -1062,7 +1061,7 @@ module.exports = function startScheduler(deps) {
       var threeDaysAgo = new Date(new Date(today).getTime() - 3 * 86400000).toISOString().split('T')[0];
       var activeTips = tips.filter(function(t) {
         if (t.isWeeklyAcca) return false;
-        if (t.date < threeDaysAgo) return false;
+        if (normDate(t.date) < threeDaysAgo) return false;
         if (t.status === 'settled' && t.result && t.result !== 'void') return false;
         return t.status === 'active' || (t.status === 'expired' && (!t.result || t.result === 'void'));
       });
@@ -1404,7 +1403,7 @@ module.exports = function startScheduler(deps) {
       for (var ai = 0; ai < tips.length; ai++) {
         var archTip = tips[ai];
         if (archTip.isWeeklyAcca) continue;
-        if (archTip.date && archTip.date < archiveThreshold && (archTip.status === 'active' || (archTip.status !== 'settled' && !archTip.result))) {
+        if (archTip.date && normDate(archTip.date) < archiveThreshold && (archTip.status === 'active' || (archTip.status !== 'settled' && !archTip.result))) {
           await db.updateTip(archTip.id, { status: 'expired', result: 'void' });
           console.log('[Refresh] Archived expired tip: ' + archTip.selection + ' (' + archTip.date + ')');
           changed = true;
