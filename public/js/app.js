@@ -883,6 +883,7 @@ const App = {
       }
       case 'how-it-works': this.renderHowItWorks(); break;
       case 'premier-league': this.renderPremierLeague(); break;
+      case 'acca-generator': this.renderAccaGenerator(); break;
       case 'reset-password': this.handleResetPasswordRoute(); break;
       default: this.render404();
     }
@@ -9827,6 +9828,313 @@ const App = {
     ];
 
     return verdicts;
+  },
+
+  // ── Smart Acca Generator ───────────────────────────────────────────────
+  _accaFoldCount: 4,
+  _accaSportFilter: 'all',
+
+  async renderAccaGenerator() {
+    var app = document.getElementById('app');
+    var self = this;
+
+    if (!this.isPremium()) {
+      app.innerHTML =
+        '<div class="container acca-gen-page" style="padding-top:40px;">' +
+          '<div class="page-header" style="text-align:center;">' +
+            '<h1 style="color:var(--gold);">Smart Acca Generator</h1>' +
+            '<p style="color:var(--text-secondary);">Powered by Elite Edge probability model</p>' +
+          '</div>' +
+          '<div style="position:relative;margin-top:30px;">' +
+            '<div style="filter:blur(6px);pointer-events:none;opacity:0.5;">' +
+              '<div class="acca-fold-selector">' +
+                '<button class="acca-fold-btn active">4-fold</button>' +
+                '<button class="acca-fold-btn">5-fold</button>' +
+                '<button class="acca-fold-btn">6-fold</button>' +
+              '</div>' +
+              '<div class="acca-leg"><div class="acca-leg-number">1</div><div class="acca-leg-info"><div class="acca-leg-selection">Sample Selection</div><div class="acca-leg-event">3:15 Ascot</div></div><div class="acca-leg-odds">5/2</div></div>' +
+              '<div class="acca-leg"><div class="acca-leg-number">2</div><div class="acca-leg-info"><div class="acca-leg-selection">Sample Selection</div><div class="acca-leg-event">Man City vs Arsenal</div></div><div class="acca-leg-odds">6/4</div></div>' +
+              '<div class="acca-leg"><div class="acca-leg-number">3</div><div class="acca-leg-info"><div class="acca-leg-selection">Sample Selection</div><div class="acca-leg-event">2:30 Cheltenham</div></div><div class="acca-leg-odds">3/1</div></div>' +
+              '<div class="acca-leg"><div class="acca-leg-number">4</div><div class="acca-leg-info"><div class="acca-leg-selection">Sample Selection</div><div class="acca-leg-event">Liverpool vs Spurs</div></div><div class="acca-leg-odds">11/8</div></div>' +
+              '<div class="acca-summary"><p style="text-align:center;">Combined Odds: 87/1</p></div>' +
+            '</div>' +
+            '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;">' +
+              '<div style="background:var(--bg-card);border:2px solid var(--gold);border-radius:14px;padding:32px 40px;text-align:center;max-width:400px;">' +
+                '<h3 style="color:var(--gold);margin-bottom:8px;">Premium Feature</h3>' +
+                '<p style="color:var(--text-secondary);font-size:14px;margin-bottom:20px;">The Smart Acca Generator uses our probability model to build the optimal accumulator from today\'s selections. Upgrade to Premium to unlock.</p>' +
+                '<button class="btn btn-gold" onclick="App.showModal(\'stripe\')">Start Free Trial</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      return;
+    }
+
+    app.innerHTML = this.renderSkeleton('tips');
+
+    var tips = [];
+    try {
+      tips = await this.api('/tips');
+    } catch (e) {
+      app.innerHTML = '<div class="container"><p class="text-muted">Unable to load tips. Please try again.</p></div>';
+      return;
+    }
+
+    var activeTips = (tips || []).filter(function(t) { return !t.locked && t.status === 'active' && !t.isWeeklyAcca; });
+
+    this._accaAllTips = activeTips;
+    this._renderAccaPage();
+  },
+
+  _renderAccaPage() {
+    var self = this;
+    var app = document.getElementById('app');
+    var activeTips = this._accaAllTips || [];
+    var foldCount = this._accaFoldCount || 4;
+    var sportFilter = this._accaSportFilter || 'all';
+
+    var filtered = activeTips;
+    if (sportFilter === 'racing') filtered = filtered.filter(function(t) { return t.sport === 'racing'; });
+    if (sportFilter === 'football') filtered = filtered.filter(function(t) { return t.sport === 'football'; });
+
+    // Sort by modelProbability * confidence (highest combined score)
+    filtered.sort(function(a, b) {
+      var scoreA = (a.modelProbability || 0.5) * (a.confidence || 5);
+      var scoreB = (b.modelProbability || 0.5) * (b.confidence || 5);
+      return scoreB - scoreA;
+    });
+
+    var selected = filtered.slice(0, foldCount);
+    var notEnough = selected.length < foldCount;
+
+    // Build fold selector buttons
+    var folds = [2, 3, 4, 5, 6, 7, 8];
+    var foldBtns = folds.map(function(n) {
+      return '<button class="acca-fold-btn' + (n === foldCount ? ' active' : '') + '" onclick="App._accaFoldCount=' + n + ';App._renderAccaPage();">' + n + '-fold</button>';
+    }).join('');
+
+    // Build sport filter buttons
+    var sports = [{key: 'all', label: 'All'}, {key: 'racing', label: 'Racing'}, {key: 'football', label: 'Football'}];
+    var sportBtns = sports.map(function(s) {
+      return '<button class="acca-fold-btn' + (s.key === sportFilter ? ' active' : '') + '" onclick="App._accaSportFilter=\'' + s.key + '\';App._renderAccaPage();">' + s.label + '</button>';
+    }).join('');
+
+    // Build legs HTML
+    var legsHtml = '';
+    var combinedDecimalOdds = 1;
+    var combinedModelProb = 1;
+
+    for (var i = 0; i < selected.length; i++) {
+      var tip = selected[i];
+      var decOdds = parseFloat(tip.odds) || 2.0;
+      combinedDecimalOdds *= decOdds;
+      var mp = tip.modelProbability || 0.5;
+      combinedModelProb *= mp;
+      var edgePct = ((mp - (1 / decOdds)) * 100).toFixed(1);
+      var analystLabel = tip.analyst || 'Elite Edge';
+
+      legsHtml +=
+        '<div class="acca-leg">' +
+          '<div class="acca-leg-number">' + (i + 1) + '</div>' +
+          '<div class="acca-leg-info">' +
+            '<div class="acca-leg-selection">' + (tip.selection || 'Selection') + '</div>' +
+            '<div class="acca-leg-event">' + (tip.event || '') + (tip.league ? ' &bull; ' + tip.league : '') + (tip.meeting ? ' &bull; ' + tip.meeting : '') + '</div>' +
+            '<div class="acca-leg-stats">' +
+              '<span>' + (tip.market || 'Win') + '</span>' +
+              '<span>Prob: ' + (mp * 100).toFixed(0) + '%</span>' +
+              '<span>Conf: ' + (tip.confidence || 5) + '/10</span>' +
+              '<span>Edge: ' + edgePct + '%</span>' +
+              '<span>' + analystLabel + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="acca-leg-odds">' + self.formatOdds(decOdds) + '</div>' +
+        '</div>';
+    }
+
+    // Summary calculations
+    var combinedImpliedProb = 1 / combinedDecimalOdds;
+    var accaEdge = ((combinedModelProb - combinedImpliedProb) * 100).toFixed(1);
+    var stakes = [5, 10, 20, 50];
+    var returnsHtml = stakes.map(function(s) {
+      var ret = (s * combinedDecimalOdds).toFixed(2);
+      return '<div class="acca-return-card">' +
+        '<div class="acca-return-stake">&pound;' + s + ' stake</div>' +
+        '<div class="acca-return-value">&pound;' + ret + '</div>' +
+      '</div>';
+    }).join('');
+
+    var riskLabel = foldCount <= 2 ? 'Low' : foldCount <= 4 ? 'Medium' : foldCount <= 6 ? 'High' : 'Very High';
+    var riskColor = foldCount <= 2 ? 'var(--green)' : foldCount <= 4 ? 'var(--gold)' : foldCount <= 6 ? '#f97316' : '#ef4444';
+
+    var summaryHtml = '';
+    if (selected.length > 0 && !notEnough) {
+      summaryHtml =
+        '<div class="acca-summary">' +
+          '<h3 style="margin:0 0 12px;color:var(--gold);">Accumulator Summary</h3>' +
+          '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;">' +
+            '<div><span style="font-size:12px;color:var(--text-muted);">Combined Odds</span><div style="font-size:20px;font-weight:800;">' + self.formatOdds(combinedDecimalOdds) + '</div></div>' +
+            '<div><span style="font-size:12px;color:var(--text-muted);">Model Probability</span><div style="font-size:20px;font-weight:800;">' + (combinedModelProb * 100).toFixed(2) + '%</div></div>' +
+            '<div><span style="font-size:12px;color:var(--text-muted);">Implied Probability</span><div style="font-size:20px;font-weight:800;">' + (combinedImpliedProb * 100).toFixed(2) + '%</div></div>' +
+            '<div><span style="font-size:12px;color:var(--text-muted);">Edge on Acca</span><div style="font-size:20px;font-weight:800;color:' + (parseFloat(accaEdge) >= 0 ? 'var(--green)' : '#ef4444') + ';">' + (parseFloat(accaEdge) >= 0 ? '+' : '') + accaEdge + '%</div></div>' +
+          '</div>' +
+          '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-muted);">Risk Rating:</span> <strong style="color:' + riskColor + ';">' + riskLabel + '</strong></div>' +
+          '<div class="acca-returns-grid">' + returnsHtml + '</div>' +
+          '<div class="acca-actions">' +
+            '<button class="btn btn-gold" onclick="App._copyAccaToClipboard()">Copy to Bet Slip</button>' +
+            '<button class="btn btn-outline" onclick="App._addAccaToMyBets()">Add to My Bets</button>' +
+            '<button class="btn btn-ghost" onclick="App._regenerateAcca()">Regenerate</button>' +
+          '</div>' +
+        '</div>';
+    }
+
+    var notEnoughMsg = '';
+    if (notEnough) {
+      notEnoughMsg =
+        '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.25);border-radius:10px;padding:20px;text-align:center;margin-top:16px;">' +
+          '<p style="color:var(--text-secondary);margin:0;">Only <strong>' + selected.length + '</strong> selection' + (selected.length !== 1 ? 's' : '') + ' available today for a ' + foldCount + '-fold. Try a lower fold count or check back when more tips are published.</p>' +
+        '</div>';
+    }
+
+    app.innerHTML =
+      '<div class="container acca-gen-page" style="padding-top:40px;">' +
+        '<div class="page-header" style="text-align:center;">' +
+          '<h1 style="color:var(--gold);">Smart Acca Generator</h1>' +
+          '<p style="color:var(--text-secondary);">Powered by Elite Edge probability model</p>' +
+        '</div>' +
+        '<div style="margin-bottom:16px;">' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Fold Count</div>' +
+          '<div class="acca-fold-selector">' + foldBtns + '</div>' +
+        '</div>' +
+        '<div style="margin-bottom:24px;">' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Sport Filter</div>' +
+          '<div class="acca-fold-selector">' + sportBtns + '</div>' +
+        '</div>' +
+        (notEnough ? notEnoughMsg : '') +
+        legsHtml +
+        summaryHtml +
+      '</div>';
+  },
+
+  _regenerateAcca() {
+    var foldCount = this._accaFoldCount || 4;
+    var sportFilter = this._accaSportFilter || 'all';
+    var activeTips = this._accaAllTips || [];
+
+    var filtered = activeTips.slice();
+    if (sportFilter === 'racing') filtered = filtered.filter(function(t) { return t.sport === 'racing'; });
+    if (sportFilter === 'football') filtered = filtered.filter(function(t) { return t.sport === 'football'; });
+
+    // Sort by score
+    filtered.sort(function(a, b) {
+      var scoreA = (a.modelProbability || 0.5) * (a.confidence || 5);
+      var scoreB = (b.modelProbability || 0.5) * (b.confidence || 5);
+      return scoreB - scoreA;
+    });
+
+    // Take top N+2, then randomly pick N from that pool
+    var pool = filtered.slice(0, foldCount + 2);
+    // Shuffle pool
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var temp = pool[i];
+      pool[i] = pool[j];
+      pool[j] = temp;
+    }
+    // Replace _accaAllTips with a reordered version: picked ones first, then rest
+    var picked = pool.slice(0, foldCount);
+    var rest = filtered.filter(function(t) { return picked.indexOf(t) === -1; });
+    var reordered = picked.concat(rest);
+
+    // Temporarily swap the sorted order for rendering
+    var original = this._accaAllTips;
+    this._accaAllTips = reordered;
+    this._renderAccaPage();
+    this._accaAllTips = original;
+    // Actually keep the regenerated view — override the sort in _renderAccaPage
+    // We need to store the picked items so _renderAccaPage uses them
+    // Simpler approach: just re-store the shuffled filtered set
+    this._accaAllTips = reordered.concat(activeTips.filter(function(t) { return reordered.indexOf(t) === -1; }));
+    this._renderAccaPage();
+  },
+
+  _copyAccaToClipboard() {
+    var self = this;
+    var foldCount = this._accaFoldCount || 4;
+    var sportFilter = this._accaSportFilter || 'all';
+    var activeTips = this._accaAllTips || [];
+
+    var filtered = activeTips;
+    if (sportFilter === 'racing') filtered = filtered.filter(function(t) { return t.sport === 'racing'; });
+    if (sportFilter === 'football') filtered = filtered.filter(function(t) { return t.sport === 'football'; });
+
+    var selected = filtered.slice(0, foldCount);
+    if (selected.length === 0) return;
+
+    var combinedDecimalOdds = 1;
+    var lines = [];
+    for (var i = 0; i < selected.length; i++) {
+      var tip = selected[i];
+      var decOdds = parseFloat(tip.odds) || 2.0;
+      combinedDecimalOdds *= decOdds;
+      lines.push((i + 1) + '. ' + tip.selection + ' @ ' + self.formatOdds(decOdds) + ' (' + (tip.event || '') + ')');
+    }
+
+    var tenReturns = (10 * combinedDecimalOdds).toFixed(2);
+    var text = 'ELITE EDGE ACCA — ' + foldCount + '-FOLD\n' +
+      lines.join('\n') + '\n' +
+      'Combined Odds: ' + self.formatOdds(combinedDecimalOdds) + '\n' +
+      '\u00a310 returns \u00a3' + tenReturns + '\n' +
+      'eliteedgesports.co.uk';
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        self.showToast('Acca copied to clipboard!', 'success');
+      }).catch(function() {
+        self.showToast('Unable to copy. Please try again.', 'error');
+      });
+    } else {
+      // Fallback
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      self.showToast('Acca copied to clipboard!', 'success');
+    }
+  },
+
+  _addAccaToMyBets() {
+    var self = this;
+    var foldCount = this._accaFoldCount || 4;
+    var sportFilter = this._accaSportFilter || 'all';
+    var activeTips = this._accaAllTips || [];
+
+    var filtered = activeTips;
+    if (sportFilter === 'racing') filtered = filtered.filter(function(t) { return t.sport === 'racing'; });
+    if (sportFilter === 'football') filtered = filtered.filter(function(t) { return t.sport === 'football'; });
+
+    var selected = filtered.slice(0, foldCount);
+    if (selected.length === 0) return;
+
+    var combinedDecimalOdds = 1;
+    var selectionNames = [];
+    for (var i = 0; i < selected.length; i++) {
+      combinedDecimalOdds *= (parseFloat(selected[i].odds) || 2.0);
+      selectionNames.push(selected[i].selection);
+    }
+
+    var accaLabel = foldCount + '-Fold Acca: ' + selectionNames.join(' + ');
+    var bets = this.getMyBets();
+    bets.push({
+      tipId: 'acca_' + Date.now(),
+      selection: accaLabel,
+      odds: combinedDecimalOdds,
+      result: null,
+      date: new Date().toISOString()
+    });
+    this.saveMyBets(bets);
+    this.showToast('Accumulator added to My Bets!', 'success');
   },
 };
 

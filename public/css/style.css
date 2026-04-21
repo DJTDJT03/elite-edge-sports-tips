@@ -6407,3 +6407,28 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   .section-title { font-size: 15px; }
   body { overflow-x: hidden; }
 }
+
+/* --- Smart Acca Generator --- */
+.acca-gen-page { max-width: 800px; margin: 0 auto; }
+.acca-fold-selector { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.acca-fold-btn { padding: 10px 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text-secondary); cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s; }
+.acca-fold-btn.active { background: var(--gold); color: #0a0e1a; border-color: var(--gold); }
+.acca-fold-btn:hover:not(.active) { border-color: var(--gold); color: var(--gold); }
+.acca-leg { display: flex; align-items: center; gap: 14px; padding: 16px; background: var(--bg-card); border-radius: 10px; border-left: 3px solid var(--gold); margin-bottom: 8px; }
+.acca-leg-number { font-size: 20px; font-weight: 800; color: var(--gold); min-width: 30px; }
+.acca-leg-info { flex: 1; }
+.acca-leg-selection { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.acca-leg-event { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.acca-leg-stats { display: flex; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--text-secondary); }
+.acca-leg-odds { font-size: 18px; font-weight: 800; color: var(--text-primary); min-width: 60px; text-align: right; }
+.acca-summary { background: linear-gradient(135deg, rgba(212,168,67,0.12), rgba(212,168,67,0.04)); border: 2px solid rgba(212,168,67,0.3); border-radius: 14px; padding: 24px; margin-top: 20px; }
+.acca-returns-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+.acca-return-card { background: rgba(255,255,255,0.04); border-radius: 8px; padding: 12px; text-align: center; }
+.acca-return-stake { font-size: 12px; color: var(--text-muted); }
+.acca-return-value { font-size: 18px; font-weight: 800; color: var(--green); }
+.acca-actions { display: flex; gap: 12px; margin-top: 16px; }
+@media (max-width: 768px) {
+  .acca-returns-grid { grid-template-columns: repeat(2, 1fr); }
+  .acca-leg { flex-wrap: wrap; }
+  .acca-actions { flex-direction: column; }
+}
