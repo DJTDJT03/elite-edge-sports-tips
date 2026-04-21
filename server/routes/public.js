@@ -157,7 +157,7 @@ module.exports = function(deps) {
       var systemPrompt = 'You are the Elite Edge assistant — the helpful chatbot for Elite Edge Sports Tips, the UK\'s premium sports betting analysis service. Answer questions about tips, results, how the service works, subscription plans, and general sports queries. Be helpful, concise, and use British English. Never give financial advice or guarantee outcomes. If asked about specific tips, reference our published selections. Keep responses under 150 words. Premium costs £19.99/month (first month free). We cover horse racing and football with AI-powered analysis.';
 
       var response = await aiReports.client.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: process.env.AI_MODEL || 'claude-haiku-4-5-20251001',
         max_tokens: 256,
         system: systemPrompt,
         messages: [{ role: 'user', content: message }],
