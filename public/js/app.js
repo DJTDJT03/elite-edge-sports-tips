@@ -888,6 +888,7 @@ const App = {
         break;
       }
       case 'how-it-works': this.renderHowItWorks(); break;
+      case 'why-elite-edge': this.renderWhyEliteEdge(); break;
       case 'premier-league': this.renderPremierLeague(); break;
       case 'acca-generator': this.renderAccaGenerator(); break;
       case 'reset-password': this.handleResetPasswordRoute(); break;
@@ -8595,6 +8596,104 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // WHY ELITE EDGE — Competitor Comparison Page
+  // -----------------------------------------------------------------------
+  renderWhyEliteEdge() {
+    var competitors = [
+      { name: 'Racing Post', price: '£24.99', racing: true, football: 'Basic', ai: false, odds: false, value: false, acca: false, steamers: false, alerts: false, going: 'Basic', nonRunner: false, h2h: false, results: 'Partial', calendar: false, trial: false },
+      { name: 'Timeform', price: '£24.99', racing: true, football: false, ai: false, odds: false, value: false, acca: false, steamers: false, alerts: false, going: false, nonRunner: false, h2h: false, results: false, calendar: false, trial: true },
+      { name: 'Infogol', price: '£4.99', racing: false, football: true, ai: false, odds: false, value: false, acca: false, steamers: false, alerts: false, going: false, nonRunner: false, h2h: 'Basic', results: false, calendar: false, trial: true },
+      { name: 'OLBG', price: '£9.99', racing: 'Community', football: 'Community', ai: false, odds: 'Limited', value: false, acca: false, steamers: false, alerts: false, going: false, nonRunner: false, h2h: false, results: 'User-reported', calendar: false, trial: true },
+    ];
+
+    var features = [
+      { label: 'Monthly Price', key: 'price', elite: '£19.99' },
+      { label: 'Horse Racing Tips', key: 'racing', elite: true },
+      { label: 'Football Tips', key: 'football', elite: true },
+      { label: 'AI Match Previews', key: 'ai', elite: true },
+      { label: '40+ Bookmaker Odds Comparison', key: 'odds', elite: true },
+      { label: 'Value Bet Scanner', key: 'value', elite: true },
+      { label: 'Smart Acca Generator', key: 'acca', elite: true },
+      { label: 'Steamer/Drifter Detection', key: 'steamers', elite: true },
+      { label: 'Custom Alerts (5 Types)', key: 'alerts', elite: true },
+      { label: 'Going Forecast', key: 'going', elite: true },
+      { label: 'Non-Runner Auto Detection', key: 'nonRunner', elite: true },
+      { label: 'H2H Comparison Tool', key: 'h2h', elite: true },
+      { label: 'Verified Transparent Results', key: 'results', elite: true },
+      { label: 'Profit Calendar Heatmap', key: 'calendar', elite: true },
+      { label: '7-Day Free Trial', key: 'trial', elite: true },
+    ];
+
+    function renderCell(val) {
+      if (val === true) return '<span style="color:#22c55e;font-weight:800;font-size:18px;">&#10003;</span>';
+      if (val === false) return '<span style="color:#ef4444;font-weight:800;font-size:18px;">&#10007;</span>';
+      return '<span style="color:#f59e0b;font-size:12px;">' + val + '</span>';
+    }
+
+    var tableRows = features.map(function(f) {
+      var eliteCell = f.key === 'price'
+        ? '<td style="background:rgba(212,168,67,0.04);font-weight:800;font-size:16px;color:#d4a843;">' + f.elite + '</td>'
+        : '<td style="background:rgba(212,168,67,0.04);">' + renderCell(f.elite) + '</td>';
+      var compCells = competitors.map(function(c) {
+        if (f.key === 'price') return '<td style="font-weight:800;">' + c.price + '</td>';
+        return '<td>' + renderCell(c[f.key]) + '</td>';
+      }).join('');
+      return '<tr><td style="text-align:left;font-weight:600;color:#c0c4d0;">' + f.label + '</td>' + eliteCell + compCells + '</tr>';
+    }).join('');
+
+    var exclusives = [
+      { icon: '&#129302;', title: 'AI Match Previews', desc: 'Professional written analysis generated from live statistical data' },
+      { icon: '&#128200;', title: 'Value Bet Scanner', desc: 'Compares odds across 40+ UK bookmakers in real-time' },
+      { icon: '&#9917;', title: 'Smart Acca Generator', desc: 'Scans every fixture, builds the optimal accumulator' },
+      { icon: '&#128293;', title: 'Steamer & Drifter Alerts', desc: 'Real-time alerts when odds move on our selections' },
+      { icon: '&#127793;', title: 'Going Forecast', desc: 'Live weather data for every racecourse' },
+      { icon: '&#128202;', title: 'Profit Calendar', desc: '90-day visual heatmap showing daily P/L' },
+      { icon: '&#128276;', title: '5 Custom Alert Types', desc: 'Confidence, steamers, pre-race, big price, all tips' },
+      { icon: '&#127942;', title: 'AI Race Replay', desc: 'AI explains WHY each result happened' },
+      { icon: '&#128274;', title: 'Anti-Sharing Protection', desc: 'Single-session enforcement per subscription' },
+    ];
+
+    document.getElementById('app').innerHTML =
+      '<div class="container" style="max-width:1100px;">' +
+        '<div style="text-align:center;margin-bottom:40px;">' +
+          '<h1 style="font-size:32px;font-weight:900;">Why <span style="color:#d4a843;">Elite Edge</span> Is Different</h1>' +
+          '<p style="color:#8b8d93;font-size:16px;">The UK\'s most advanced sports analysis platform — compared feature by feature</p>' +
+        '</div>' +
+
+        '<div style="overflow-x:auto;margin-bottom:40px;">' +
+        '<table style="width:100%;border-collapse:collapse;min-width:700px;">' +
+          '<thead><tr>' +
+            '<th style="padding:14px 12px;text-align:left;width:220px;border-bottom:2px solid rgba(212,168,67,0.3);font-size:13px;"></th>' +
+            '<th style="padding:14px 12px;text-align:center;color:#d4a843;font-size:15px;font-weight:800;border-bottom:2px solid rgba(212,168,67,0.3);background:rgba(212,168,67,0.08);border-radius:8px 8px 0 0;">Elite Edge</th>' +
+            competitors.map(function(c) { return '<th style="padding:14px 12px;text-align:center;color:#8b8d93;font-size:13px;font-weight:700;border-bottom:2px solid rgba(212,168,67,0.3);">' + c.name + '</th>'; }).join('') +
+          '</tr></thead>' +
+          '<tbody>' + tableRows + '</tbody>' +
+        '</table>' +
+        '</div>' +
+
+        '<div style="text-align:center;margin-bottom:24px;">' +
+          '<h2 style="font-size:24px;font-weight:800;">Features <span style="color:#d4a843;">Only We</span> Offer</h2>' +
+          '<p style="color:#8b8d93;font-size:14px;">Technology that no other UK tipping service can match</p>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:40px;">' +
+          exclusives.map(function(e) {
+            return '<div style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;text-align:center;">' +
+              '<div style="font-size:28px;margin-bottom:8px;">' + e.icon + '</div>' +
+              '<h3 style="font-size:14px;font-weight:700;color:#d4a843;margin-bottom:4px;">' + e.title + '</h3>' +
+              '<p style="font-size:12px;color:#8b8d93;line-height:1.4;">' + e.desc + '</p>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+
+        '<div style="text-align:center;margin:48px 0 20px;">' +
+          '<a href="#/pricing" style="display:inline-block;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;padding:16px 48px;border-radius:10px;font-size:18px;font-weight:800;text-decoration:none;">Start Your 7-Day Free Trial</a>' +
+          '<p style="color:#8b8d93;font-size:13px;margin-top:12px;">No credit card required. Full premium access. Cancel anytime.</p>' +
+        '</div>' +
+
+        '<p style="text-align:center;font-size:10px;color:#555;margin-top:32px;line-height:1.6;">Elite Edge Sports Tips Ltd. Company No. 17138566. Registered in England & Wales. Entertainment and statistical analysis only. Not financial or betting advice. No guarantee of profit. 18+ only. Please gamble responsibly. BeGambleAware.org</p>' +
+      '</div>';
+  },
+
   // 404 PAGE (Feature #5)
   // -----------------------------------------------------------------------
   renderHowItWorks() {
