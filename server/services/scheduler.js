@@ -182,7 +182,10 @@ module.exports = function startScheduler(deps) {
       }
 
       // Target top leagues only
-      var topLeagues = [39, 140, 135, 78, 61, 2, 45, 40];
+      // England (5 tiers): PL=39, Champ=40, L1=41, L2=42, NL=43 + Cups: FA=45, EFL=48
+      // Scotland: Prem=179, Champ=180 + Europe: CL=2, EL=3, Conf=848
+      // Top European: LaLiga=140, SerieA=135, Bundesliga=78, Ligue1=61
+      var topLeagues = [39, 40, 41, 42, 43, 45, 48, 179, 180, 2, 3, 848, 140, 135, 78, 61];
       var topFixtures = allFixtures.filter(function(f) { return topLeagues.indexOf(f.leagueId) !== -1; });
       if (topFixtures.length < 4) topFixtures = allFixtures;
 
@@ -542,7 +545,7 @@ module.exports = function startScheduler(deps) {
         console.log('[Auto-Tips] Fetching football fixtures...');
         var fbRaw = await footballSource.fetchFixturesByDate(today);
         var fixtures = footballSource.normalise(fbRaw);
-        var topLeagueIds = [39, 2, 3, 140, 135, 78, 61, 40, 48, 45, 88, 94, 179];
+        var topLeagueIds = [39, 40, 41, 42, 43, 45, 48, 179, 180, 2, 3, 848, 140, 135, 78, 61, 88, 94];
         var topFixtures = fixtures.filter(function(f) { return topLeagueIds.indexOf(f.leagueId) !== -1; });
         console.log('[Auto-Tips] Found ' + topFixtures.length + ' top-league fixtures to analyse (from ' + fixtures.length + ' total)');
 

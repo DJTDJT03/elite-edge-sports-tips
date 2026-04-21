@@ -84,11 +84,13 @@ class FootballFixturesSource extends DataSource {
       apiKey: process.env.API_FOOTBALL_KEY || '',
     });
     // Top leagues (API-Football IDs):
-    // Premier League=39, Championship=40, FA Cup=45, EFL Cup=48
-    // Champions League=2, Europa League=3, Conference League=848
+    // ENGLAND: Premier League=39, Championship=40, League One=41, League Two=42, National League=43
+    // ENGLAND CUPS: FA Cup=45, EFL Cup=48
+    // SCOTLAND: Premiership=179, Championship=180
+    // EUROPE: Champions League=2, Europa League=3, Conference League=848
     // La Liga=140, Serie A=135, Bundesliga=78, Ligue 1=61
-    // Eredivisie=88, Liga Portugal=94, Scottish Prem=179
-    this.leagueIds = [39, 40, 45, 48, 2, 3, 848, 140, 135, 78, 61, 88, 94, 179];
+    // Eredivisie=88, Liga Portugal=94
+    this.leagueIds = [39, 40, 41, 42, 43, 45, 48, 179, 180, 2, 3, 848, 140, 135, 78, 61, 88, 94];
   }
 
   async fetch() {
@@ -262,10 +264,14 @@ class FootballOddsSource extends DataSource {
     });
     // Football sport keys — top European leagues
     this.footballKeys = [
-      'soccer_epl', 'soccer_uefa_champs_league', 'soccer_spain_la_liga',
-      'soccer_italy_serie_a', 'soccer_germany_bundesliga', 'soccer_france_ligue_one',
-      'soccer_fa_cup', 'soccer_efl_champ', 'soccer_league_one', 'soccer_league_two',
-      'soccer_uefa_europa_league', 'soccer_scotland_premiership'
+      // England: Top 5 tiers + cups
+      'soccer_epl', 'soccer_efl_champ', 'soccer_england_league1', 'soccer_england_league2',
+      'soccer_fa_cup',
+      // Scotland: Top 2 tiers
+      'soccer_spl', 'soccer_scotland_championship',
+      // Europe
+      'soccer_uefa_champs_league', 'soccer_uefa_europa_league', 'soccer_uefa_europa_conference_league',
+      'soccer_spain_la_liga', 'soccer_italy_serie_a', 'soccer_germany_bundesliga', 'soccer_france_ligue_one'
     ];
     // Racing sport keys — UK & IRE
     this.racingKeys = [
