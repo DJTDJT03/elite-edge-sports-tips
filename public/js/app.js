@@ -809,7 +809,8 @@ const App = {
     document.getElementById('nav-toggle').addEventListener('click', () => {
       document.getElementById('nav-links').classList.toggle('open');
     });
-    document.querySelectorAll('.nav-link').forEach(link => {
+    // Close mobile menu when any nav link OR dropdown menu link is clicked
+    document.querySelectorAll('.nav-link, .nav-dropdown-menu a').forEach(link => {
       link.addEventListener('click', () => {
         document.getElementById('nav-links').classList.remove('open');
       });
