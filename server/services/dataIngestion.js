@@ -735,20 +735,38 @@ class RacingCardsSource extends DataSource {
     if (!this.config.apiKey || !this.config.apiSecret) return { results: [] };
     try {
       const auth = Buffer.from((process.env.RACING_API_KEY || this.config.apiKey) + ':' + (process.env.RACING_API_SECRET || this.config.apiSecret)).toString('base64');
-      // Standard plan supports /results/today and /results for recent results
-      const endpoints = ['/results/today', '/results'];
+      var today = new Date().toISOString().split('T')[0];
+      var dateStr = date ? date.toString().split('T')[0] : today;
+
+      // If requesting today, use /results/today. Otherwise use /results with date filter
+      var endpoints;
+      if (dateStr === today) {
+        endpoints = ['/results/today', '/results'];
+      } else {
+        // Standard plan: /results returns recent results — filter by date client-side
+        endpoints = ['/results'];
+      }
+
       for (const endpoint of endpoints) {
         try {
           const results = await this._apiGet(endpoint, auth);
           if (results && results.results && results.results.length > 0) {
-            console.log(`[${this.name}] Fetched ${results.results.length} results via ${endpoint}`);
+            // Filter to the requested date if not today
+            if (dateStr !== today) {
+              var filtered = results.results.filter(function(r) {
+                return (r.date || '').split('T')[0] === dateStr;
+              });
+              console.log('[' + this.name + '] Fetched ' + results.results.length + ' results, ' + filtered.length + ' for ' + dateStr);
+              return { results: filtered };
+            }
+            console.log('[' + this.name + '] Fetched ' + results.results.length + ' results via ' + endpoint);
             return results;
           }
         } catch (e) { /* try next */ }
       }
       return { results: [] };
     } catch (err) {
-      console.error(`[${this.name}] Results Error: ${err.message}`);
+      console.error('[' + this.name + '] Results Error: ' + err.message);
       return { results: [] };
     }
   }
