@@ -25,6 +25,8 @@ const alertEngine = require('./services/alertEngine');
 const telegramBot = require('./services/telegramBot');
 const newsService = require('./services/newsService');
 const stripeService = require('./services/stripeService');
+const footballData = require('./services/footballData');
+const understatService = require('./services/understatService');
 
 // Utilities
 const helpers = require('./utils/helpers');
@@ -104,6 +106,8 @@ const deps = {
   telegramBot,
   newsService,
   stripeService,
+  footballData,
+  understatService,
 };
 
 // ---------------------------------------------------------------------------

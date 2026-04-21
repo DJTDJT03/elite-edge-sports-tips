@@ -1,6 +1,6 @@
 module.exports = function(deps) {
   const router = require('express').Router();
-  const { footballSource, oddsSource, betfairSource, scoringModel, authenticate, db, aiReports } = deps;
+  const { footballSource, oddsSource, betfairSource, scoringModel, authenticate, db, aiReports, footballData, understatService } = deps;
   const { storeOddsSnapshot, analyseOddsMovement } = deps.oddsHelpers;
 
   // ---------------------------------------------------------------------------
@@ -648,6 +648,30 @@ module.exports = function(deps) {
         }
       }
 
+      // Get real xG data if available
+      try {
+        var leagueMap = { 'Premier League': 'EPL', 'La Liga': 'La_Liga', 'Bundesliga': 'Bundesliga', 'Serie A': 'Serie_A', 'Ligue 1': 'Ligue_1' };
+        var xgLeague = leagueMap[previewData.league] || null;
+        if (xgLeague && understatService) {
+          var xgData = await understatService.getLeagueXG(xgLeague, '2025');
+          if (xgData) {
+            // Find home and away team xG
+            for (var tName in xgData) {
+              if (tName.toLowerCase().indexOf(previewData.homeTeam.toLowerCase()) !== -1) {
+                previewData.homeXG = xgData[tName].xGPerMatch;
+                previewData.homeXGA = xgData[tName].xGAPerMatch;
+                previewData.homeOverperformance = xgData[tName].overperformance;
+              }
+              if (tName.toLowerCase().indexOf(previewData.awayTeam.toLowerCase()) !== -1) {
+                previewData.awayXG = xgData[tName].xGPerMatch;
+                previewData.awayXGA = xgData[tName].xGAPerMatch;
+                previewData.awayOverperformance = xgData[tName].overperformance;
+              }
+            }
+          }
+        }
+      } catch(e) { /* xG data optional */ }
+
       // Generate preview with whatever data we have
       var result = await aiReports.generateFootballPreview(previewData);
       if (!result) {
@@ -720,6 +744,138 @@ module.exports = function(deps) {
       }
       res.json(results);
     } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ---------------------------------------------------------------------------
+  // FOOTBALL-DATA.ORG — League standings and top scorers
+  // ---------------------------------------------------------------------------
+
+  // GET /api/football/standings/:league — league table
+  // League codes: PL, ELC, CL, SA, BL1, PD, FL1, FL2, SPL
+  router.get('/football/standings/:league', async (req, res) => {
+    try {
+      if (!footballData) {
+        return res.status(503).json({ error: 'Football-Data.org service not available.' });
+      }
+      var leagueCode = req.params.league.toUpperCase();
+      var validCodes = ['PL', 'ELC', 'CL', 'SA', 'BL1', 'PD', 'FL1', 'FL2', 'SPL'];
+      if (validCodes.indexOf(leagueCode) === -1) {
+        return res.status(400).json({ error: 'Invalid league code. Valid codes: ' + validCodes.join(', ') });
+      }
+      var data = await footballData.getStandings(leagueCode);
+      if (!data) {
+        return res.status(404).json({ error: 'No standings data available for ' + leagueCode });
+      }
+      res.json(data);
+    } catch (err) {
+      console.error('[standings] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/football/top-scorers/:league — top scorers
+  router.get('/football/top-scorers/:league', async (req, res) => {
+    try {
+      if (!footballData) {
+        return res.status(503).json({ error: 'Football-Data.org service not available.' });
+      }
+      var leagueCode = req.params.league.toUpperCase();
+      var data = await footballData.getTopScorers(leagueCode);
+      if (!data) {
+        return res.status(404).json({ error: 'No top scorers data available for ' + leagueCode });
+      }
+      res.json(data);
+    } catch (err) {
+      console.error('[top-scorers] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/football/team-matches/:teamId — recent results for a team
+  router.get('/football/team-matches/:teamId', async (req, res) => {
+    try {
+      if (!footballData) {
+        return res.status(503).json({ error: 'Football-Data.org service not available.' });
+      }
+      var limit = parseInt(req.query.limit) || 10;
+      var data = await footballData.getTeamMatches(parseInt(req.params.teamId), limit);
+      if (!data) {
+        return res.status(404).json({ error: 'No match data available for team ' + req.params.teamId });
+      }
+      res.json({ matches: data });
+    } catch (err) {
+      console.error('[team-matches] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/football/h2h-data/:matchId — head-to-head from Football-Data.org
+  router.get('/football/h2h-data/:matchId', async (req, res) => {
+    try {
+      if (!footballData) {
+        return res.status(503).json({ error: 'Football-Data.org service not available.' });
+      }
+      var data = await footballData.getHeadToHead(parseInt(req.params.matchId));
+      if (!data) {
+        return res.status(404).json({ error: 'No H2H data available for match ' + req.params.matchId });
+      }
+      res.json(data);
+    } catch (err) {
+      console.error('[h2h-data] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // UNDERSTAT xG DATA
+  // ---------------------------------------------------------------------------
+
+  // GET /api/football/xg/:league — league xG data
+  // Leagues: EPL, La_Liga, Bundesliga, Serie_A, Ligue_1
+  router.get('/football/xg/:league', async (req, res) => {
+    try {
+      if (!understatService) {
+        return res.status(503).json({ error: 'Understat xG service not available.' });
+      }
+      var validLeagues = ['EPL', 'La_Liga', 'Bundesliga', 'Serie_A', 'Ligue_1'];
+      var league = req.params.league;
+      if (validLeagues.indexOf(league) === -1) {
+        return res.status(400).json({ error: 'Invalid league. Valid leagues: ' + validLeagues.join(', ') });
+      }
+      var season = req.query.season || '2025';
+      var data = await understatService.getLeagueXG(league, season);
+      res.json(data || {});
+    } catch (err) {
+      console.error('[xg] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/football/xg/:league/:team — team xG data
+  router.get('/football/xg/:league/:team', async (req, res) => {
+    try {
+      if (!understatService) {
+        return res.status(503).json({ error: 'Understat xG service not available.' });
+      }
+      var league = req.params.league;
+      var season = req.query.season || '2025';
+      var data = await understatService.getLeagueXG(league, season);
+      if (!data) return res.json({ error: 'No data available for ' + league });
+
+      // Find team by partial match
+      var teamName = decodeURIComponent(req.params.team).toLowerCase();
+      var found = null;
+      for (var name in data) {
+        if (name.toLowerCase().indexOf(teamName) !== -1 || teamName.indexOf(name.toLowerCase()) !== -1) {
+          found = data[name];
+          break;
+        }
+      }
+      res.json(found || { error: 'Team not found' });
+    } catch (err) {
+      console.error('[xg-team] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
   });
 
   return router;

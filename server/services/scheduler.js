@@ -6,7 +6,8 @@
 module.exports = function startScheduler(deps) {
   const { db, racingSource, footballSource, oddsSource, racingOddsSource, betfairSource,
           weatherSource, movementTracker, scoringModel, emailService, dataIngestion,
-          oddsHelpers, helpers, alertEngine, telegramBot, aiReports } = deps;
+          oddsHelpers, helpers, alertEngine, telegramBot, aiReports,
+          footballData, understatService } = deps;
 
   // -------------------------------------------------------------------------
   // Date normalisation helper — PostgreSQL returns Date objects, not strings
@@ -552,6 +553,95 @@ module.exports = function startScheduler(deps) {
           topFixtures = fixtures;
           console.log('[Auto-Tips] No top-league fixtures — using all ' + fixtures.length + ' available fixtures');
         }
+
+        // Fetch league standings for position data (Football-Data.org)
+        var leagueStandings = {};
+        if (footballData) {
+          try {
+            var standingsLeagues = ['PL', 'ELC', 'SA', 'BL1', 'PD', 'FL1'];
+            var standingsResults = await Promise.allSettled(
+              standingsLeagues.map(function(code) { return footballData.getStandings(code); })
+            );
+            standingsResults.forEach(function(sr, idx) {
+              if (sr.status === 'fulfilled' && sr.value && sr.value.standings) {
+                leagueStandings[standingsLeagues[idx]] = sr.value.standings;
+              }
+            });
+            var loadedCount = Object.keys(leagueStandings).length;
+            if (loadedCount > 0) {
+              console.log('[Auto-Tips] Loaded standings for ' + loadedCount + ' leagues from Football-Data.org');
+            }
+          } catch (standErr) {
+            console.log('[Auto-Tips] Standings fetch skipped:', standErr.message);
+          }
+        }
+
+        // Fetch xG data from Understat for supported leagues
+        var leagueXGData = {};
+        if (understatService) {
+          try {
+            var xgLeagues = ['EPL', 'La_Liga', 'Bundesliga', 'Serie_A', 'Ligue_1'];
+            var xgResults = await Promise.allSettled(
+              xgLeagues.map(function(lg) { return understatService.getLeagueXG(lg, '2025'); })
+            );
+            xgResults.forEach(function(xr, idx) {
+              if (xr.status === 'fulfilled' && xr.value) {
+                leagueXGData[xgLeagues[idx]] = xr.value;
+              }
+            });
+            var xgLoadedCount = Object.keys(leagueXGData).length;
+            if (xgLoadedCount > 0) {
+              console.log('[Auto-Tips] Loaded xG data for ' + xgLoadedCount + ' leagues from Understat');
+            }
+          } catch (xgErr) {
+            console.log('[Auto-Tips] xG data fetch skipped:', xgErr.message);
+          }
+        }
+
+        // Map API-Football league IDs to Football-Data.org codes and Understat leagues
+        var leagueIdToCode = { 39: 'PL', 40: 'ELC', 135: 'SA', 78: 'BL1', 140: 'PD', 61: 'FL1' };
+        var leagueIdToXG = { 39: 'EPL', 140: 'La_Liga', 78: 'Bundesliga', 135: 'Serie_A', 61: 'Ligue_1' };
+
+        // Attach standings position and xG data to fixtures for the scoring model
+        topFixtures.forEach(function(fixture) {
+          // Attach league standings position
+          var standingsCode = leagueIdToCode[fixture.leagueId];
+          if (standingsCode && leagueStandings[standingsCode]) {
+            var table = leagueStandings[standingsCode];
+            for (var si = 0; si < table.length; si++) {
+              var entry = table[si];
+              if (entry.team && fixture.homeTeam && entry.team.toLowerCase().indexOf(fixture.homeTeam.toLowerCase()) !== -1) {
+                fixture.homePosition = entry.position;
+                fixture.homePoints = entry.points;
+                fixture.homeForm = entry.form;
+              }
+              if (entry.team && fixture.awayTeam && entry.team.toLowerCase().indexOf(fixture.awayTeam.toLowerCase()) !== -1) {
+                fixture.awayPosition = entry.position;
+                fixture.awayPoints = entry.points;
+                fixture.awayForm = entry.form;
+              }
+            }
+          }
+
+          // Attach xG data
+          var xgKey = leagueIdToXG[fixture.leagueId];
+          if (xgKey && leagueXGData[xgKey]) {
+            var xgTeams = leagueXGData[xgKey];
+            for (var tName in xgTeams) {
+              if (!xgTeams.hasOwnProperty(tName)) continue;
+              if (fixture.homeTeam && tName.toLowerCase().indexOf(fixture.homeTeam.toLowerCase()) !== -1) {
+                fixture.homeXG = xgTeams[tName].xGPerMatch;
+                fixture.homeXGA = xgTeams[tName].xGAPerMatch;
+                fixture.homeOverperformance = xgTeams[tName].overperformance;
+              }
+              if (fixture.awayTeam && tName.toLowerCase().indexOf(fixture.awayTeam.toLowerCase()) !== -1) {
+                fixture.awayXG = xgTeams[tName].xGPerMatch;
+                fixture.awayXGA = xgTeams[tName].xGAPerMatch;
+                fixture.awayOverperformance = xgTeams[tName].overperformance;
+              }
+            }
+          }
+        });
 
         // Score all top-league fixtures — fetch enhanced data for top candidates
         var allScoredFixtures = [];
