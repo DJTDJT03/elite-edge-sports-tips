@@ -92,6 +92,10 @@ class FootballDataService {
    * Returns: team positions, points, wins, draws, losses, GF, GA, GD, form
    */
   async getStandings(leagueCode) {
+    if (!this.apiKey) {
+      console.log('[FootballData] No API key — register free at football-data.org for standings data');
+      return null;
+    }
     var cacheKey = 'standings_' + leagueCode;
     var cached = this._cache.get(cacheKey);
     if (cached && Date.now() - cached.time < this._cacheTTL) {
