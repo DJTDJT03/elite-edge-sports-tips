@@ -509,6 +509,30 @@ app.use('/', require('./routes/public')(deps));
   } catch(e) {}
 })();
 
+// One-time: add manual results for 21 April 2026
+(async function addManualResults() {
+  try {
+    if (!db.isAvailable()) return;
+    var check = await db.query("SELECT COUNT(*) FROM results WHERE selection = 'Brighton Win' AND date::text LIKE '2026-04-21%'");
+    if (parseInt(check.rows[0].count) > 0) return; // Already added
+
+    var winners = [
+      { id: 'man_' + Date.now() + '_1', tip_id: 'manual_brighton', sport: 'football', event: 'Brighton & Hove Albion', selection: 'Brighton Win', market: 'Match Result', odds: 2.25, stake: 2, result: 'won', pnl: 2.50, date: '2026-04-21', is_premium: true, tipster_profile: 'The Professor', confidence: 8 },
+      { id: 'man_' + Date.now() + '_2', tip_id: 'manual_millwall', sport: 'football', event: 'Millwall', selection: 'Millwall Win', market: 'Match Result', odds: 1.75, stake: 2, result: 'won', pnl: 1.50, date: '2026-04-21', is_premium: true, tipster_profile: 'The Scout', confidence: 7 },
+      { id: 'man_' + Date.now() + '_3', tip_id: 'manual_inter', sport: 'football', event: 'Inter Milan', selection: 'Over 2.5 Goals', market: 'Over/Under', odds: 1.91, stake: 2, result: 'won', pnl: 1.82, date: '2026-04-21', is_premium: true, tipster_profile: 'The Edge', confidence: 7 },
+      { id: 'man_' + Date.now() + '_4', tip_id: 'manual_pearl', sport: 'racing', event: 'Ludlow 13:42', selection: 'Magarets Pearl', market: 'Win', odds: 6.5, stake: 1.5, result: 'won', pnl: 8.25, date: '2026-04-21', is_premium: true, tipster_profile: 'The Professor', confidence: 8 },
+    ];
+    for (var i = 0; i < winners.length; i++) {
+      var w = winners[i];
+      await db.query(
+        "INSERT INTO results (id, tip_id, sport, event, selection, market, odds, stake, result, pnl, date, is_premium, tipster_profile, confidence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
+        [w.id, w.tip_id, w.sport, w.event, w.selection, w.market, w.odds, w.stake, w.result, w.pnl, w.date, w.is_premium, w.tipster_profile, w.confidence]
+      );
+    }
+    console.log('[Startup] Added 4 manual winners for 21 April');
+  } catch(e) { console.log('[Startup] Manual results skipped:', e.message); }
+})();
+
 // ---------------------------------------------------------------------------
 // Global error handler — catches unhandled errors in route handlers
 // ---------------------------------------------------------------------------
