@@ -147,6 +147,8 @@ app.use('/', require('./routes/public')(deps));
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT',
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT',
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS drips_sent JSONB DEFAULT \'[]\'',
+        'ALTER TABLE results ADD COLUMN IF NOT EXISTS voided_by_monitor BOOLEAN DEFAULT FALSE',
+        'ALTER TABLE results ADD COLUMN IF NOT EXISTS replay_analysis JSONB',
       ];
       for (var ci = 0; ci < alterCols.length; ci++) {
         try { await db.query(alterCols[ci]); } catch(e) {}

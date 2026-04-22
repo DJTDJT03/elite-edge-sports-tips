@@ -490,6 +490,21 @@ async function saveResults(results) {
   }
 }
 
+async function updateResult(id, fields) {
+  if (!pool) return null;
+  var sets = [];
+  var vals = [];
+  var idx = 1;
+  if (fields.result !== undefined) { sets.push('result = $' + idx); vals.push(fields.result); idx++; }
+  if (fields.pnl !== undefined) { sets.push('pnl = $' + idx); vals.push(fields.pnl); idx++; }
+  if (fields.voidedByMonitor !== undefined) { sets.push('voided_by_monitor = $' + idx); vals.push(fields.voidedByMonitor); idx++; }
+  if (fields.replayAnalysis !== undefined) { sets.push('replay_analysis = $' + idx); vals.push(JSON.stringify(fields.replayAnalysis)); idx++; }
+  if (sets.length === 0) return null;
+  vals.push(id);
+  await query('UPDATE results SET ' + sets.join(', ') + ' WHERE id = $' + idx, vals);
+  return { id: id };
+}
+
 function dbResultToApp(row) {
   if (!row) return null;
   return {
@@ -716,7 +731,7 @@ module.exports = {
   // Tips
   getTips, getTipById, createTip, updateTip, deleteTip, saveTips,
   // Results
-  getResults, createResult, saveResults,
+  getResults, createResult, updateResult, saveResults,
   // Support
   getTickets, getTicketById, createTicket, updateTicket,
   // Blog

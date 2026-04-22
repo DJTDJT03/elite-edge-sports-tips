@@ -1011,9 +1011,9 @@ module.exports = function startScheduler(deps) {
     var savedCount = 0;
     for (var nti = 0; nti < newTips.length; nti++) {
       var nt = newTips[nti];
-      var ntDate = (nt.date || '').split('T')[0];
+      var ntDate = normDate(nt.date);
       var alreadyExists = existingTips.some(function(et) {
-        var etDate = et.date && typeof et.date !== 'string' ? new Date(et.date).toISOString().split('T')[0] : (et.date || '').split('T')[0];
+        var etDate = normDate(et.date);
         return et.selection === nt.selection && etDate === ntDate;
       });
       if (alreadyExists) {
@@ -1155,7 +1155,7 @@ module.exports = function startScheduler(deps) {
       var datesToSettle = [];
       activeTips.forEach(function(t) {
         // Normalise date to string format YYYY-MM-DD
-        var d = t.date && typeof t.date !== 'string' ? new Date(t.date).toISOString().split('T')[0] : (t.date || '').split('T')[0];
+        var d = normDate(t.date);
         if (d && datesToSettle.indexOf(d) === -1) datesToSettle.push(d);
       });
       console.log('[Auto-Settle] Processing ' + activeTips.length + ' unsettled tip(s) across dates: ' + datesToSettle.join(', '));
@@ -1218,8 +1218,8 @@ module.exports = function startScheduler(deps) {
                 // Check if result already exists for this selection+date (prevent duplicates)
                 var allResults = await db.getResults();
                 var alreadySettled = allResults.some(function(r) {
-                  var rDate = r.date && typeof r.date !== 'string' ? new Date(r.date).toISOString().split('T')[0] : (r.date || '').split('T')[0];
-                  var tDate = (tip.date || '').split('T')[0];
+                  var rDate = normDate(r.date);
+                  var tDate = normDate(tip.date);
                   return r.selection === tip.selection && rDate === tDate;
                 });
                 if (alreadySettled) {
@@ -1374,8 +1374,8 @@ module.exports = function startScheduler(deps) {
               // Check if result already exists for this selection+date (prevent duplicates)
               var fAllResults = await db.getResults();
               var fAlreadySettled = fAllResults.some(function(r) {
-                var rDate = r.date && typeof r.date !== 'string' ? new Date(r.date).toISOString().split('T')[0] : (r.date || '').split('T')[0];
-                var tDate = (ftip.date || '').split('T')[0];
+                var rDate = normDate(r.date);
+                var tDate = normDate(ftip.date);
                 return r.selection === ftip.selection && rDate === tDate;
               });
               if (fAlreadySettled) {
@@ -2727,7 +2727,7 @@ module.exports = function startScheduler(deps) {
       for (var i = 0; i < tips.length; i++) {
         var t = tips[i];
         if (t.isWeeklyAcca) continue;
-        var tipDate = (t.date || '').split('T')[0];
+        var tipDate = normDate(t.date);
         if (tipDate < threeDaysAgo && t.status === 'active') {
           await db.updateTip(t.id, { status: 'expired', result: 'void' });
           staleCount++;
