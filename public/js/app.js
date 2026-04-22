@@ -1916,7 +1916,12 @@ const App = {
     row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
   },
 
-  shareWin(selection, odds) {
+  shareWin(selection, odds, pnl, sport) {
+    // If pnl is provided, show the share card instead
+    if (typeof pnl === 'number') {
+      App.generateShareCard({ selection: selection, odds: odds, pnl: pnl, sport: sport || 'racing' });
+      return;
+    }
     const text = `Another winner from @EliteEdgeTips! ${selection} @ ${odds} \u2705 Join us: https://eliteedgesports.co.uk #EliteEdgeTips #Winner`;
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
@@ -1927,6 +1932,52 @@ const App = {
     navigator.clipboard.writeText(text).then(() => {
       App.showToast('Copied to clipboard!', 'success');
     }).catch(() => {
+      prompt('Copy this text:', text);
+    });
+  },
+
+  generateShareCard(result) {
+    var oddsDisplay = App.formatOdds(result.odds);
+    var pnl = result.pnl >= 0 ? '+' + result.pnl.toFixed(2) : result.pnl.toFixed(2);
+    var sportIcon = result.sport === 'racing' ? '\uD83C\uDFC7' : '\u26BD';
+    var selectionSafe = (result.selection || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+    // Create overlay with styled card
+    var overlay = document.createElement('div');
+    overlay.id = 'share-card-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);cursor:pointer;';
+    overlay.onclick = function() { overlay.remove(); };
+
+    overlay.innerHTML =
+      '<div style="background:linear-gradient(135deg,#0a0e1a,#141828);border:2px solid #d4a843;border-radius:16px;padding:40px;max-width:400px;width:90%;text-align:center;box-shadow:0 0 60px rgba(212,168,67,0.3);" onclick="event.stopPropagation()">' +
+        '<div style="font-size:12px;text-transform:uppercase;letter-spacing:2px;color:#d4a843;margin-bottom:16px;">Elite Edge Sports Tips</div>' +
+        '<div style="font-size:48px;margin-bottom:8px;">' + sportIcon + '</div>' +
+        '<div style="font-size:13px;color:#22c55e;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">\u2705 WINNER</div>' +
+        '<div style="font-size:24px;font-weight:900;color:#fff;margin-bottom:8px;">' + (result.selection || '') + '</div>' +
+        '<div style="font-size:14px;color:#8b8d93;margin-bottom:16px;">' + (result.event || '') + '</div>' +
+        '<div style="display:flex;justify-content:center;gap:24px;margin-bottom:20px;">' +
+          '<div><div style="font-size:28px;font-weight:800;color:#d4a843;">' + oddsDisplay + '</div><div style="font-size:10px;color:#8b8d93;">ODDS</div></div>' +
+          '<div><div style="font-size:28px;font-weight:800;color:#22c55e;">' + pnl + 'u</div><div style="font-size:10px;color:#8b8d93;">PROFIT</div></div>' +
+        '</div>' +
+        '<div style="border-top:1px solid rgba(212,168,67,0.2);padding-top:16px;">' +
+          '<div style="font-size:12px;color:#8b8d93;">Our members had this BEFORE the off.</div>' +
+          '<div style="font-size:13px;color:#d4a843;font-weight:700;margin-top:8px;">eliteedgesports.co.uk</div>' +
+          '<div style="font-size:10px;color:#555;margin-top:8px;">18+ | Entertainment only | BeGambleAware.org</div>' +
+        '</div>' +
+        '<div style="margin-top:16px;display:flex;gap:8px;justify-content:center;">' +
+          '<button class="btn btn-gold btn-sm" onclick="App._copyShareCardText(\'' + selectionSafe + '\', \'' + oddsDisplay + '\', \'' + pnl + '\')">Copy Text</button>' +
+          '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'share-card-overlay\').remove()">Close</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+  },
+
+  _copyShareCardText(selection, odds, pnl) {
+    var text = '\uD83C\uDFC6 WINNER!\n\n' + selection + ' @ ' + odds + '\nProfit: ' + pnl + ' units\n\n\u2705 Called by Elite Edge Sports Tips\n\uD83C\uDF10 eliteedgesports.co.uk\n\n18+ | BeGambleAware.org';
+    navigator.clipboard.writeText(text).then(function() {
+      App.showToast('Share text copied!', 'success');
+    }).catch(function() {
       prompt('Copy this text:', text);
     });
   },
@@ -2389,7 +2440,7 @@ const App = {
                 <span>${w.selection}</span>
                 <span class="odds-tag">@ ${this.formatOdds(w.odds)}</span>
                 <span class="text-muted">(+${w.pnl > 0 ? w.pnl.toFixed(2) : '0'} units)</span>
-                <button class="share-btn" onclick="event.stopPropagation();App.shareWin('${w.selection.replace(/'/g, "\\'")}', ${w.odds})" title="Share on X/Twitter">Share</button>
+                <button class="share-btn" onclick="event.stopPropagation();App.generateShareCard({selection:'${w.selection.replace(/'/g, "\\'")}',odds:${w.odds},pnl:${w.pnl || 0},sport:'${w.sport || 'racing'}',event:'${(w.event || '').replace(/'/g, "\\'")}'})">Share</button>
               </div>
             `).join('')}
           </div>
@@ -5671,7 +5722,7 @@ const App = {
                     <td data-label="Result" class="result-${r.result}">${r.result.toUpperCase()}</td>
                     <td data-label="P/L" class="${r.pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${r.pnl > 0 ? '+' : ''}${r.pnl.toFixed(2)}u</td>
                     <td data-label="" class="results-actions">
-                      ${r.result === 'won' ? `<button class="share-btn" onclick="App.shareWin('${r.selection.replace(/'/g, "\\'")}',${r.odds})">Share</button> <button class="share-btn" onclick="App.copyShareText('${r.selection.replace(/'/g, "\\'")}',${r.odds})">Copy</button>` : ''}
+                      ${r.result === 'won' ? `<button class="share-btn" onclick="App.generateShareCard({selection:'${r.selection.replace(/'/g, "\\'")}',odds:${r.odds},pnl:${r.pnl},sport:'${r.sport || 'racing'}',event:'${(r.event || '').replace(/'/g, "\\'")}'})">Share</button> <button class="share-btn" onclick="App.copyShareText('${r.selection.replace(/'/g, "\\'")}',${r.odds})">Copy</button>` : ''}
                       ${r.replayAnalysis ? `<button class="share-btn replay-btn" onclick="App.toggleReplay('replay-${idx}')">AI Analysis</button>` : ''}
                     </td>
                   </tr>
@@ -5835,7 +5886,7 @@ const App = {
         '<td>' + r.stake + 'u</td>' +
         '<td class="result-' + r.result + '">' + r.result.toUpperCase() + '</td>' +
         '<td class="' + (r.pnl >= 0 ? 'pnl-positive' : 'pnl-negative') + '">' + (r.pnl > 0 ? '+' : '') + r.pnl.toFixed(2) + 'u</td>' +
-        '<td>' + (r.result === 'won' ? '<button class="share-btn" onclick="App.shareWin(\'' + r.selection.replace(/'/g, "\\'") + '\',' + r.odds + ')">Share</button>' : '') + '</td>' +
+        '<td>' + (r.result === 'won' ? '<button class="share-btn" onclick="App.generateShareCard({selection:\'' + r.selection.replace(/'/g, "\\'") + '\',odds:' + r.odds + ',pnl:' + r.pnl + ',sport:\'' + (r.sport || 'racing') + '\',event:\'' + (r.event || '').replace(/'/g, "\\'") + '\'})">Share</button>' : '') + '</td>' +
       '</tr>';
     }).join('');
     this._renderResultsPagination();

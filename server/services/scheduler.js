@@ -640,6 +640,22 @@ module.exports = function startScheduler(deps) {
                 fixture.awayOverperformance = xgTeams[tName].overperformance;
               }
             }
+
+            // Attach home/away records from xG standings data
+            for (var teamName in xgTeams) {
+              if (!xgTeams.hasOwnProperty(teamName)) continue;
+              var team = xgTeams[teamName];
+              if (fixture.homeTeam && teamName.toLowerCase().indexOf(fixture.homeTeam.toLowerCase()) !== -1) {
+                fixture.homePosition = fixture.homePosition || team.rank;
+                fixture.homeRecord = team.homeRecord;
+                fixture.homePoints = fixture.homePoints || team.points;
+              }
+              if (fixture.awayTeam && teamName.toLowerCase().indexOf(fixture.awayTeam.toLowerCase()) !== -1) {
+                fixture.awayPosition = fixture.awayPosition || team.rank;
+                fixture.awayRecord = team.awayRecord;
+                fixture.awayPoints = fixture.awayPoints || team.points;
+              }
+            }
           }
         });
 

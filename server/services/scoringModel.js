@@ -392,14 +392,36 @@ class ScoringModel {
       }
     }
 
-    // --- Class factor ---
+    // --- Class factor (enhanced with class movement detection) ---
     let classScore = 0.5;
     const raceClass = parseInt((race.raceClass || '').replace(/\D/g, '')) || 5;
     const or = runner.officialRating || 0;
-    if (raceClass >= 4 && or > 80) classScore = 0.8; // well-handicapped in low class
+
+    // Basic OR vs class check
+    if (raceClass >= 4 && or > 80) classScore = 0.8;
     else if (raceClass >= 5 && or > 70) classScore = 0.7;
-    else if (raceClass <= 2 && or < 90) classScore = 0.3; // outclassed
+    else if (raceClass <= 2 && or < 90) classScore = 0.3;
     else if (or > 0) classScore = Math.min(or / 120, 0.9);
+
+    // Class drop detection — horse dropping in class is a strong signal
+    if (runner.formDetails && runner.formDetails.length > 0) {
+      var lastRaceClass = null;
+      for (var ci = 0; ci < runner.formDetails.length; ci++) {
+        if (runner.formDetails[ci] && runner.formDetails[ci].raceClass) {
+          lastRaceClass = parseInt((runner.formDetails[ci].raceClass || '').replace(/\D/g, '')) || null;
+          break;
+        }
+      }
+      if (lastRaceClass && lastRaceClass < raceClass) {
+        // Dropping in class — significant advantage
+        var classDrop = raceClass - lastRaceClass;
+        classScore = Math.min(classScore + classDrop * 0.1, 0.95);
+      } else if (lastRaceClass && lastRaceClass > raceClass) {
+        // Rising in class — tougher competition
+        var classRise = lastRaceClass - raceClass;
+        classScore = Math.max(classScore - classRise * 0.08, 0.2);
+      }
+    }
 
     // --- Course & Distance factor — has the horse won at this course over this distance? ---
     let courseScore = 0.4; // neutral default
@@ -474,6 +496,31 @@ class ScoringModel {
     const weight = runner.weight || 0;
     if (weight > 0 && weight <= 130) weightScore = 0.55; // lighter = slight advantage
 
+    // --- Days Since Last Run factor ---
+    // Fresh horses (14-30 days) tend to outperform
+    // Very fresh (7-14 days) = good if form is strong
+    // Long absence (60+ days) = fitness concern
+    // Quick turnaround (<7 days) = possible fatigue
+    var freshnessScore = 0.5;
+    var lastRunDate = null;
+
+    // Try to get last run date from form details or recent form
+    if (runner.formDetails && runner.formDetails.length > 0 && runner.formDetails[0].date) {
+      lastRunDate = new Date(runner.formDetails[0].date);
+    } else if (runner.lastRun) {
+      lastRunDate = new Date(runner.lastRun);
+    }
+
+    if (lastRunDate && !isNaN(lastRunDate.getTime())) {
+      var daysSinceRun = Math.round((new Date() - lastRunDate) / (1000 * 60 * 60 * 24));
+      if (daysSinceRun >= 14 && daysSinceRun <= 30) freshnessScore = 0.7; // Optimal freshness
+      else if (daysSinceRun >= 7 && daysSinceRun < 14) freshnessScore = 0.6; // Quick but fine
+      else if (daysSinceRun > 30 && daysSinceRun <= 60) freshnessScore = 0.45; // Needs a run?
+      else if (daysSinceRun > 60 && daysSinceRun <= 120) freshnessScore = 0.35; // Long absence
+      else if (daysSinceRun > 120) freshnessScore = 0.25; // Very long absence
+      else if (daysSinceRun < 7) freshnessScore = 0.4; // Quick turnaround risk
+    }
+
     // --- Speed ratings factor ---
     let speedScore = 0.5;
     if (or > 0) {
@@ -521,12 +568,24 @@ class ScoringModel {
     const bestOdds = runnerOdds > 1 ? runnerOdds : 3.0; // fallback if no odds
     const scoreResult = this.scoreRacing(factors, bestOdds);
 
+    // Freshness modifier — adjusts total score by up to ±10%
+    var freshnessModifier = 1.0 + (freshnessScore - 0.5) * 0.2; // 0.5 = no change, 0.7 = +4%, 0.25 = -5%
+    var adjustedModelProb = Math.min(Math.max(scoreResult.modelProbability * freshnessModifier, 0.02), 0.95);
+    var adjustedEdge = adjustedModelProb - scoreResult.impliedProbability;
+    var adjustedConfidence = this.calculateConfidence(adjustedEdge, Object.values(factors).filter(function(v) { return v >= 0.6; }).length);
+
     return {
       runner: runner,
       race: race,
       factors: factors,
       odds: bestOdds,
       ...scoreResult,
+      modelProbability: Math.round(adjustedModelProb * 1000) / 1000,
+      edge: Math.round(adjustedEdge * 1000) / 1000,
+      confidence: adjustedConfidence,
+      valueRating: this.getValueRating(adjustedEdge),
+      staking: this.calculateStake(adjustedConfidence, adjustedEdge, bestOdds),
+      freshnessScore: Math.round(freshnessScore * 100) / 100,
     };
   }
 
@@ -724,9 +783,38 @@ class ScoringModel {
     // --- Injuries factor ---
     const injuriesScore = 0.5; // neutral without data
 
-    // --- Home/Away factor ---
-    // Home advantage is real — home team gets a boost
-    const homeAwayScore = 0.6; // slight home advantage assumed
+    // --- Home/Away factor (enhanced with actual home/away records) ---
+    var homeAwayScore = 0.6; // default home advantage
+
+    // If we have standings data with home/away splits, use it
+    if (fixture.homePosition && fixture.awayPosition) {
+      // Team higher in table at home = stronger home advantage
+      if (fixture.homePosition <= 6) homeAwayScore = 0.7; // Top 6 at home = strong
+      if (fixture.homePosition <= 3) homeAwayScore = 0.75;
+      if (fixture.homePosition >= 15) homeAwayScore = 0.45; // Bottom half at home = weak
+    }
+
+    // Use actual home/away records if available from standings
+    if (fixture.homeRecord) {
+      // homeRecord format: "10W 3D 2L" or similar
+      var homeWins = parseInt((fixture.homeRecord.match(/(\d+)W/) || [])[1]) || 0;
+      var homePlayed = (fixture.homeRecord.match(/\d+/g) || []).reduce(function(s, n) { return s + parseInt(n); }, 0);
+      if (homePlayed > 0) {
+        var homeWinRate = homeWins / homePlayed;
+        homeAwayScore = 0.4 + homeWinRate * 0.4; // Scale 0.4 to 0.8
+      }
+    }
+    if (fixture.awayRecord) {
+      var awayWins = parseInt((fixture.awayRecord.match(/(\d+)W/) || [])[1]) || 0;
+      var awayPlayed = (fixture.awayRecord.match(/\d+/g) || []).reduce(function(s, n) { return s + parseInt(n); }, 0);
+      if (awayPlayed > 0) {
+        var awayWinRate = awayWins / awayPlayed;
+        // Strong away form reduces home advantage
+        if (awayWinRate > 0.5) homeAwayScore -= 0.1;
+        if (awayWinRate > 0.6) homeAwayScore -= 0.05;
+      }
+    }
+    homeAwayScore = Math.max(0.3, Math.min(homeAwayScore, 0.85));
 
     // --- Motivation factor ---
     const motivationScore = 0.5; // neutral
