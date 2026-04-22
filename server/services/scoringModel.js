@@ -401,22 +401,63 @@ class ScoringModel {
     else if (raceClass <= 2 && or < 90) classScore = 0.3; // outclassed
     else if (or > 0) classScore = Math.min(or / 120, 0.9);
 
-    // --- Course factor ---
-    let courseScore = 0.4; // neutral default — no course form data easily available
-    // Boost if the runner has won recently (implies capable type)
+    // --- Course & Distance factor — has the horse won at this course over this distance? ---
+    let courseScore = 0.4; // neutral default
+    var courseName = (race.meeting || race.course || '').toLowerCase();
+    var raceDistance = (race.distance || '').toLowerCase();
+
+    // Check detailed form for course wins and course & distance wins
+    if (runner.formDetails && Array.isArray(runner.formDetails)) {
+      var courseWins = 0;
+      var cdWins = 0; // Course AND Distance wins
+      runner.formDetails.forEach(function(f) {
+        if (!f) return;
+        var fCourse = (f.course || '').toLowerCase();
+        var fDist = (f.distance || '').toLowerCase();
+        var fPos = parseInt(f.position) || 99;
+        if (fCourse.indexOf(courseName) !== -1 || courseName.indexOf(fCourse) !== -1) {
+          if (fPos === 1) courseWins++;
+          if (fPos <= 3) courseScore += 0.05;
+          if ((fDist.indexOf(raceDistance) !== -1 || raceDistance.indexOf(fDist) !== -1) && fPos === 1) {
+            cdWins++;
+          }
+        }
+      });
+      if (cdWins > 0) courseScore = Math.min(0.9, 0.6 + cdWins * 0.15); // C&D winner = strong
+      else if (courseWins > 0) courseScore = Math.min(0.8, 0.5 + courseWins * 0.1);
+    }
+
+    // If no form details available, use simple form positions
     if (formPositions.length > 0 && formPositions.includes(1)) {
-      courseScore = 0.6;
+      courseScore = Math.max(courseScore, 0.6);
     }
 
     // --- Trainer/Jockey combo factor ---
     let trainerJockeyScore = 0.5;
     const jockey = (runner.jockey || '').toLowerCase();
     const trainer = (runner.trainer || '').toLowerCase();
-    // Top-tier jockey boost
-    const topJockeys = ['moore', 'doyle', 'dettori', 'murphy', 'marquand', 'buick', 'atzeni', 'de sousa', 'havlin', 'loughnane'];
-    const topTrainers = ['appleby', 'gosden', 'o\'brien', 'stoute', 'haggas', 'varian', 'balding', 'beckett', 'johnston', 'fahey'];
-    if (topJockeys.some(j => jockey.includes(j))) trainerJockeyScore += 0.2;
-    if (topTrainers.some(t => trainer.includes(t))) trainerJockeyScore += 0.15;
+
+    // Top-tier jockeys (expanded list covering flat and jumps)
+    const topJockeys = ['moore', 'doyle', 'dettori', 'murphy', 'marquand', 'buick', 'atzeni', 'de sousa', 'havlin', 'loughnane', 'kingscote', 'turner', 'egan', 'sheehan', 'cobden', 'skelton', 'townend', 'blackmore'];
+    const topTrainers = ['appleby', 'gosden', 'o\'brien', 'stoute', 'haggas', 'varian', 'balding', 'beckett', 'johnston', 'fahey', 'mullins', 'henderson', 'nicholls', 'skelton', 'tizzard', 'hobbs', 'williams'];
+
+    // Known elite combinations (trainer-jockey pairs that consistently outperform)
+    var eliteCombos = [
+      ['appleby', 'buick'], ['gosden', 'dettori'], ['gosden', 'doyle'],
+      ['o\'brien', 'moore'], ['haggas', 'marquand'], ['varian', 'egan'],
+      ['mullins', 'townend'], ['henderson', 'cobden'], ['nicholls', 'cobden'],
+      ['skelton', 'skelton'], ['balding', 'doyle'], ['balding', 'murphy']
+    ];
+
+    if (topJockeys.some(j => jockey.includes(j))) trainerJockeyScore += 0.15;
+    if (topTrainers.some(t => trainer.includes(t))) trainerJockeyScore += 0.12;
+
+    // Elite combo bonus — these pairs win at a higher rate together
+    var isEliteCombo = eliteCombos.some(function(combo) {
+      return trainer.indexOf(combo[0]) !== -1 && jockey.indexOf(combo[1]) !== -1;
+    });
+    if (isEliteCombo) trainerJockeyScore += 0.15;
+
     trainerJockeyScore = Math.min(trainerJockeyScore, 1.0);
 
     // --- Draw factor ---
@@ -690,9 +731,6 @@ class ScoringModel {
     // --- Motivation factor ---
     const motivationScore = 0.5; // neutral
 
-    // --- Shots factor ---
-    const shotsScore = 0.5; // neutral without stats
-
     // --- Schedule congestion factor ---
     const congestionScore = 0.5; // neutral
 
@@ -701,6 +739,44 @@ class ScoringModel {
     // If odds are available from multiple bookmakers, check consistency
     const bkCount = Object.keys(bookmakerOdds).length;
     if (bkCount >= 2) marketScore = 0.6; // multiple bookmakers = more reliable pricing
+
+    // --- Market confidence — how tightly bookmakers agree ---
+    // Wide spread = uncertain market = easier to find value
+    // Tight spread = confident market = harder to beat
+    var marketConfidence = 0.5;
+    if (bookmakerOdds && Object.keys(bookmakerOdds).length >= 3) {
+      var allPrices = [];
+      for (var bk in bookmakerOdds) {
+        var homePrice = bookmakerOdds[bk][fixture.homeTeam];
+        if (homePrice) allPrices.push(homePrice);
+      }
+      if (allPrices.length >= 3) {
+        var maxPrice = Math.max.apply(null, allPrices);
+        var minPrice = Math.min.apply(null, allPrices);
+        var spread = (maxPrice - minPrice) / minPrice;
+        // Wide spread = uncertain market = potential value
+        if (spread > 0.15) marketConfidence = 0.7; // 15%+ spread = uncertain
+        if (spread > 0.25) marketConfidence = 0.8; // 25%+ spread = very uncertain
+        if (spread < 0.05) marketConfidence = 0.3; // <5% spread = very confident market, hard to beat
+      }
+    }
+
+    // --- In-play performance from recent matches — shots, possession indicate attacking intent ---
+    var shotsScore = 0.5;
+    if (fixture.homeStats && fixture.homeStats.shots) {
+      var homeShotsPerGame = fixture.homeStats.shots.on || 0;
+      var awayShotsPerGame = fixture.awayStats ? (fixture.awayStats.shots.on || 0) : 0;
+      if (homeShotsPerGame > 5) shotsScore += 0.1; // High shot count = attacking team
+      if (awayShotsPerGame > 5) shotsScore += 0.05; // Both teams attacking = goals likely
+    }
+
+    // --- Referee factor — strict refs = more goals/cards likely ---
+    var refScore = 0.5; // neutral default
+    var strictRefs = ['michael oliver', 'anthony taylor', 'paul tierney', 'stuart attwell', 'simon hooper', 'robert jones'];
+    var lenientRefs = ['chris kavanagh', 'john brooks', 'darren england'];
+    var refName = (fixture._referee || '').toLowerCase();
+    if (strictRefs.some(function(r) { return refName.indexOf(r) !== -1; })) refScore = 0.65;
+    if (lenientRefs.some(function(r) { return refName.indexOf(r) !== -1; })) refScore = 0.4;
 
     // Determine best market to bet on
     let selectedMarket, selectedSelection, selectedOdds;
@@ -758,7 +834,26 @@ class ScoringModel {
       marketMovement: Math.round(marketScore * 100) / 100,
     };
 
+    // Apply referee modifier — strict refs boost goals/BTTS markets by 5-10%
+    var isGoalsMarket = selectedMarket === 'Over 2.5 Goals' || selectedMarket === 'Both Teams to Score';
+    if (isGoalsMarket && refScore > 0.5) {
+      var refBoost = (refScore - 0.5) * 0.5; // 0.65 ref => 0.075 boost (~7.5%)
+      factors.xG = Math.min(Math.round((factors.xG + refBoost) * 100) / 100, 1.0);
+      factors.form = Math.min(Math.round((factors.form + refBoost * 0.5) * 100) / 100, 1.0);
+    } else if (isGoalsMarket && refScore < 0.5) {
+      var refDampen = (0.5 - refScore) * 0.3; // lenient ref dampens goals expectation
+      factors.xG = Math.max(Math.round((factors.xG - refDampen) * 100) / 100, 0.05);
+    }
+
     const scoreResult = this.scoreFootball(factors, selectedOdds);
+
+    // Apply market confidence to edge — wider bookmaker spread = more likely our edge is real
+    var adjustedEdge = scoreResult.edge;
+    if (marketConfidence > 0.5) {
+      adjustedEdge = scoreResult.edge * (1 + (marketConfidence - 0.5) * 0.3); // up to ~9% boost
+    } else if (marketConfidence < 0.5) {
+      adjustedEdge = scoreResult.edge * (1 - (0.5 - marketConfidence) * 0.2); // up to ~4% reduction
+    }
 
     return {
       fixture: fixture,
@@ -770,7 +865,11 @@ class ScoringModel {
       homeOdds: homeOdds,
       drawOdds: drawOdds,
       awayOdds: awayOdds,
+      referee: fixture._referee || null,
+      marketConfidence: Math.round(marketConfidence * 100) / 100,
       ...scoreResult,
+      edge: Math.round(adjustedEdge * 1000) / 1000,
+      valueRating: this.getValueRating(adjustedEdge),
     };
   }
 

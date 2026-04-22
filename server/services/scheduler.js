@@ -643,6 +643,22 @@ module.exports = function startScheduler(deps) {
           }
         });
 
+        // Fetch referee data for each fixture (API-Football provides this in fixture responses)
+        for (var refIdx = 0; refIdx < topFixtures.length; refIdx++) {
+          try {
+            var refFixture = topFixtures[refIdx];
+            if (refFixture.id) {
+              var refData = await footballSource._apiGet('/fixtures?id=' + refFixture.id);
+              if (refData && refData.response && refData.response[0]) {
+                var ref = refData.response[0].fixture.referee;
+                refFixture._referee = ref; // e.g. "Michael Oliver, England"
+              }
+            }
+          } catch(e) {
+            // Non-fatal — referee data is a bonus, not essential
+          }
+        }
+
         // Score all top-league fixtures — fetch enhanced data for top candidates
         var allScoredFixtures = [];
 
