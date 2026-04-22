@@ -530,7 +530,7 @@ app.use('/', require('./routes/public')(deps));
       try {
         await db.query(
           "INSERT INTO results (id, tip_id, sport, event, selection, market, odds, stake, result, pnl, date, is_premium, tipster_profile, confidence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
-          [rid, 'manual_' + rid, w.sport, w.event, w.sel, w.market, w.odds, w.stake, 'won', w.pnl, new Date('2026-04-21'), true, w.tp, w.conf]
+          [rid, null, w.sport, w.event, w.sel, w.market, w.odds, w.stake, 'won', w.pnl, new Date('2026-04-21'), true, w.tp, w.conf]
         );
         added++;
         console.log('[Startup] Added winner: ' + w.sel + ' @ ' + w.odds);
