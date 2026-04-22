@@ -534,6 +534,13 @@ app.use('/', require('./routes/public')(deps));
         );
         added++;
         console.log('[Startup] Added winner: ' + w.sel + ' @ ' + w.odds);
+        // Post to Telegram
+        try {
+          var tgBot = require('./services/telegramBot');
+          if (tgBot && tgBot.isAvailable()) {
+            await tgBot.sendResult({ selection: w.sel, odds: w.odds, result: 'won', pnl: w.pnl, event: w.event });
+          }
+        } catch(tgErr) {}
       } catch(e) {
         console.log('[Startup] INSERT FAILED for ' + w.sel + ': ' + e.message);
       }
