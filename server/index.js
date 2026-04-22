@@ -494,15 +494,14 @@ app.use('/', require('./routes/public')(deps));
   } catch(e) {}
 })();
 
-// Settle backlog tips as void (races already passed, no reliable result data)
+// Expire tips older than 3 days that haven't been settled
 (async function settleBacklog() {
   try {
     if (!db.isAvailable()) return;
-    // Void all unsettled tips from before today — they're too old to settle reliably
-    var today = new Date().toISOString().split('T')[0];
+    var threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0];
     var result = await db.query(
       "UPDATE tips SET status = 'expired', result = 'void' WHERE status = 'active' AND date::text < $1 AND id LIKE 'auto_%'",
-      [today + '%']
+      [threeDaysAgo + '%']
     );
     if (result.rowCount > 0) {
       console.log('[Startup] Expired ' + result.rowCount + ' old unsettled tips');

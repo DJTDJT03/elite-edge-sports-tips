@@ -1182,19 +1182,19 @@ module.exports = function startScheduler(deps) {
                 return name.toLowerCase().replace(/\s*\([a-z]{2,4}\)\s*$/i, '').trim();
               };
               var tipName = normHorse(tip.selection);
-              var tipMeeting = (tip.meeting || tip.event || '').toLowerCase().split(' ')[0]; // e.g. "Newbury" from "Newbury 2:00 - ..."
-              var tipTime = tip.raceTime || '';
+              // Extract meeting name — handle multi-word names like "Ffos Las", "Market Rasen"
+              var tipMeeting = (tip.meeting || '').toLowerCase().trim();
+              if (!tipMeeting && tip.event) {
+                // Extract meeting from event like "Newbury 2:00 - Race Name"
+                tipMeeting = (tip.event || '').toLowerCase().split(/\s+\d/)[0].trim();
+              }
 
               var match = (raceResults.results || []).find(function(r) {
-                // Must match BOTH the horse name AND the meeting/course
-                var raceCourse = (r.course || r.meeting || '').toLowerCase();
+                // Match the meeting/course name (flexible — partial match both ways)
+                var raceCourse = (r.course || r.meeting || '').toLowerCase().trim();
                 var courseMatch = !tipMeeting || raceCourse.indexOf(tipMeeting) !== -1 || tipMeeting.indexOf(raceCourse) !== -1;
                 if (!courseMatch) return false;
-                // Optionally match race time if available
-                if (tipTime && r.off_time) {
-                  var rTime = r.off_time.split(' ').pop(); // extract HH:MM
-                  if (rTime !== tipTime && tipTime.indexOf(rTime) === -1) return false;
-                }
+                // Match the horse name in the runners
                 return r.runners && r.runners.some(function(runner) {
                   return normHorse(runner.horse) === tipName;
                 });
@@ -1772,7 +1772,7 @@ module.exports = function startScheduler(deps) {
       if (hour !== 8 || minute < 45 || lastDailyBulletinDate === dateStr) return;
 
       var tips = await db.getTips();
-      var todayTips = tips.filter(function(t) { return t.date === dateStr && t.status === 'active' && !t.isWeeklyAcca; });
+      var todayTips = tips.filter(function(t) { return normDate(t.date) === dateStr && t.status === 'active' && !t.isWeeklyAcca; });
       if (todayTips.length === 0) return;
 
       var nap = todayTips.filter(function(t) { return !t.isPremium; }).sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); })[0] || null;
@@ -1783,7 +1783,7 @@ module.exports = function startScheduler(deps) {
       yesterday.setDate(yesterday.getDate() - 1);
       var yesterdayStr = yesterday.toISOString().split('T')[0];
       var allResults = await db.getResults();
-      var yesterdayResults = allResults.filter(function(r) { return r.date === yesterdayStr; });
+      var yesterdayResults = allResults.filter(function(r) { return normDate(r.date) === yesterdayStr; });
 
       var users = await db.getUsers();
       var premiumUsers = users.filter(function(u) {
