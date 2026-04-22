@@ -511,43 +511,7 @@ app.use('/', require('./routes/public')(deps));
   } catch(e) {}
 })();
 
-// One-time: add manual results for 21 April 2026
-(async function addManualResults() {
-  try {
-    if (!db.isAvailable()) return;
-    var winners = [
-      { sel: 'Brighton Win', sport: 'football', event: 'Brighton & Hove Albion', market: 'Match Result', odds: 2.25, stake: 2, pnl: 2.50, tp: 'The Professor', conf: 8 },
-      { sel: 'Millwall Win', sport: 'football', event: 'Millwall', market: 'Match Result', odds: 1.75, stake: 2, pnl: 1.50, tp: 'The Scout', conf: 7 },
-      { sel: 'Over 2.5 Goals', sport: 'football', event: 'Inter Milan', market: 'Over/Under', odds: 1.91, stake: 2, pnl: 1.82, tp: 'The Edge', conf: 7 },
-      { sel: 'Magarets Pearl', sport: 'racing', event: 'Ludlow 13:42', market: 'Win', odds: 6.5, stake: 1.5, pnl: 8.25, tp: 'The Professor', conf: 8 },
-    ];
-    var added = 0;
-    for (var i = 0; i < winners.length; i++) {
-      var w = winners[i];
-      var rid = 'manual_apr21_' + (i + 1);
-      // Delete first then insert — guarantees it goes in
-      try { await db.query("DELETE FROM results WHERE id = $1", [rid]); } catch(e) {}
-      try {
-        await db.query(
-          "INSERT INTO results (id, tip_id, sport, event, selection, market, odds, stake, result, pnl, date, is_premium, tipster_profile, confidence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
-          [rid, null, w.sport, w.event, w.sel, w.market, w.odds, w.stake, 'won', w.pnl, new Date('2026-04-21'), true, w.tp, w.conf]
-        );
-        added++;
-        console.log('[Startup] Added winner: ' + w.sel + ' @ ' + w.odds);
-        // Post to Telegram
-        try {
-          var tgBot = require('./services/telegramBot');
-          if (tgBot && tgBot.isAvailable()) {
-            await tgBot.sendResult({ selection: w.sel, odds: w.odds, result: 'won', pnl: w.pnl, event: w.event });
-          }
-        } catch(tgErr) {}
-      } catch(e) {
-        console.log('[Startup] INSERT FAILED for ' + w.sel + ': ' + e.message);
-      }
-    }
-    if (added > 0) console.log('[Startup] Added ' + added + ' manual winners for 21 April');
-  } catch(e) { console.log('[Startup] Manual results error:', e.message); }
-})();
+// Manual results for 21 April — COMPLETED, script removed
 
 // ---------------------------------------------------------------------------
 // Global error handler — catches unhandled errors in route handlers
