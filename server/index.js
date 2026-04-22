@@ -396,7 +396,7 @@ app.use('/', require('./routes/public')(deps));
 // Startup: remove incorrect selections from tips and results
 // ---------------------------------------------------------------------------
 (async function cleanupBadSelections() {
-  var removeSelections = ["Commander's Intent", "Caballo Grande", "Lavender Hill Mob", "Calico", "Catching The Moon", "Spinning Lizzie", "Aqpan", "Ardisia", "Title Role"];
+  var removeSelections = ["Commander's Intent", "Caballo Grande", "Lavender Hill Mob", "Calico", "Catching The Moon", "Spinning Lizzie", "Aqpan", "Ardisia", "Title Role", "Uptown Dandy", "Getaway King", "Rathkenny"];
   try {
     // Clean from database
     if (db.isAvailable()) {
@@ -515,24 +515,34 @@ app.use('/', require('./routes/public')(deps));
 (async function addManualResults() {
   try {
     if (!db.isAvailable()) return;
-    var check = await db.query("SELECT COUNT(*) FROM results WHERE selection = 'Brighton Win' AND date::text LIKE '2026-04-21%'");
-    if (parseInt(check.rows[0].count) > 0) return; // Already added
-
     var winners = [
-      { id: 'man_' + Date.now() + '_1', tip_id: 'manual_brighton', sport: 'football', event: 'Brighton & Hove Albion', selection: 'Brighton Win', market: 'Match Result', odds: 2.25, stake: 2, result: 'won', pnl: 2.50, date: '2026-04-21', is_premium: true, tipster_profile: 'The Professor', confidence: 8 },
-      { id: 'man_' + Date.now() + '_2', tip_id: 'manual_millwall', sport: 'football', event: 'Millwall', selection: 'Millwall Win', market: 'Match Result', odds: 1.75, stake: 2, result: 'won', pnl: 1.50, date: '2026-04-21', is_premium: true, tipster_profile: 'The Scout', confidence: 7 },
-      { id: 'man_' + Date.now() + '_3', tip_id: 'manual_inter', sport: 'football', event: 'Inter Milan', selection: 'Over 2.5 Goals', market: 'Over/Under', odds: 1.91, stake: 2, result: 'won', pnl: 1.82, date: '2026-04-21', is_premium: true, tipster_profile: 'The Edge', confidence: 7 },
-      { id: 'man_' + Date.now() + '_4', tip_id: 'manual_pearl', sport: 'racing', event: 'Ludlow 13:42', selection: 'Magarets Pearl', market: 'Win', odds: 6.5, stake: 1.5, result: 'won', pnl: 8.25, date: '2026-04-21', is_premium: true, tipster_profile: 'The Professor', confidence: 8 },
+      { sel: 'Brighton Win', sport: 'football', event: 'Brighton & Hove Albion', market: 'Match Result', odds: 2.25, stake: 2, pnl: 2.50, tp: 'The Professor', conf: 8 },
+      { sel: 'Millwall Win', sport: 'football', event: 'Millwall', market: 'Match Result', odds: 1.75, stake: 2, pnl: 1.50, tp: 'The Scout', conf: 7 },
+      { sel: 'Over 2.5 Goals', sport: 'football', event: 'Inter Milan', market: 'Over/Under', odds: 1.91, stake: 2, pnl: 1.82, tp: 'The Edge', conf: 7 },
+      { sel: 'Magarets Pearl', sport: 'racing', event: 'Ludlow 13:42', market: 'Win', odds: 6.5, stake: 1.5, pnl: 8.25, tp: 'The Professor', conf: 8 },
     ];
+    var added = 0;
     for (var i = 0; i < winners.length; i++) {
       var w = winners[i];
-      await db.query(
-        "INSERT INTO results (id, tip_id, sport, event, selection, market, odds, stake, result, pnl, date, is_premium, tipster_profile, confidence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
-        [w.id, w.tip_id, w.sport, w.event, w.selection, w.market, w.odds, w.stake, w.result, w.pnl, w.date, w.is_premium, w.tipster_profile, w.confidence]
-      );
+      // Check if already exists
+      try {
+        var exists = await db.query("SELECT id FROM results WHERE selection = $1 AND date = $2", [w.sel, '2026-04-21']);
+        if (exists.rows.length > 0) continue;
+      } catch(e) {}
+      var rid = 'manual_apr21_' + (i + 1);
+      try {
+        await db.query(
+          "INSERT INTO results (id, tip_id, sport, event, selection, market, odds, stake, result, pnl, date, is_premium, tipster_profile, confidence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
+          [rid, 'manual_' + rid, w.sport, w.event, w.sel, w.market, w.odds, w.stake, 'won', w.pnl, '2026-04-21', true, w.tp, w.conf]
+        );
+        added++;
+        console.log('[Startup] Added winner: ' + w.sel + ' @ ' + w.odds);
+      } catch(e) {
+        console.log('[Startup] Insert failed for ' + w.sel + ': ' + e.message);
+      }
     }
-    console.log('[Startup] Added 4 manual winners for 21 April');
-  } catch(e) { console.log('[Startup] Manual results skipped:', e.message); }
+    if (added > 0) console.log('[Startup] Added ' + added + ' manual winners for 21 April');
+  } catch(e) { console.log('[Startup] Manual results error:', e.message); }
 })();
 
 // ---------------------------------------------------------------------------
