@@ -159,6 +159,105 @@ class TelegramBot {
   }
 
   /**
+   * Morning teaser — tells the channel tips are live without revealing them
+   */
+  async sendMorningTeaser(tipCount, napConfidence) {
+    try {
+      if (!this.isAvailable()) return;
+      var today = new Date().toLocaleDateString('en-GB', {
+        weekday: 'long', day: 'numeric', month: 'long',
+        timeZone: 'Europe/London',
+      });
+      var text = '\u2600\uFE0F <b>Good Morning \u2014 ' + today + '</b>\n\n' +
+        '\uD83D\uDCCA <b>' + tipCount + ' selection' + (tipCount === 1 ? '' : 's') + '</b> published for today\'s racing.\n' +
+        (napConfidence ? '\u2B50 NAP rated <b>' + napConfidence + '/10</b> confidence.\n' : '') +
+        '\n\uD83D\uDD12 Full analysis available to premium members.\n' +
+        '\n\uD83D\uDC49 Start your FREE trial: eliteedgesports.co.uk\n' +
+        '\n18+ | Entertainment only | BeGambleAware.org';
+      return await this.sendMessage(text);
+    } catch (err) {
+      console.error('[Telegram] sendMorningTeaser error:', err.message);
+    }
+  }
+
+  /**
+   * Evening round-up — summarises today's results
+   */
+  async sendEveningRoundup(data) {
+    try {
+      if (!this.isAvailable()) return;
+      var text = '\uD83C\uDF19 <b>Today\'s Results Round-Up</b>\n\n';
+      if (data.tipsCount === 0) {
+        text += 'No selections today.\n';
+      } else {
+        text += '\uD83C\uDFAF Tips: <b>' + data.tipsCount + '</b>\n';
+        text += '\u2705 Winners: <b>' + data.wins + '</b>\n';
+        text += '\u274C Losses: <b>' + data.losses + '</b>\n';
+        text += '\uD83D\uDCB0 P/L: <b>' + (data.pnl >= 0 ? '+' : '') + data.pnl.toFixed(2) + ' units</b>\n';
+        if (data.strikeRate) text += '\uD83C\uDFAF Strike Rate: <b>' + data.strikeRate + '%</b>\n';
+        if (data.bestWinner) {
+          text += '\n\uD83C\uDFC6 Best Winner: <b>' + data.bestWinner.selection + '</b> @ ' + data.bestWinner.odds + '\n';
+        }
+      }
+      text += '\n\uD83D\uDCC8 Running P/L: <b>' + (data.totalPnl >= 0 ? '+' : '') + data.totalPnl.toFixed(2) + ' units</b>\n';
+      text += '\n\uD83D\uDC49 Full results: eliteedgesports.co.uk/#/results\n';
+      text += '\n18+ | Entertainment only | BeGambleAware.org';
+      return await this.sendMessage(text);
+    } catch (err) {
+      console.error('[Telegram] sendEveningRoundup error:', err.message);
+    }
+  }
+
+  /**
+   * Weekend preview — Friday afternoon
+   */
+  async sendWeekendPreview(data) {
+    try {
+      if (!this.isAvailable()) return;
+      var text = '\u26BD <b>Weekend Football Preview</b>\n\n';
+      text += '<b>' + data.fixtureCount + ' fixtures</b> across the top leagues this weekend.\n\n';
+      if (data.keyFixtures && data.keyFixtures.length > 0) {
+        text += '\uD83D\uDD25 Key Matches:\n';
+        data.keyFixtures.forEach(function(f) {
+          text += '\u2022 ' + f + '\n';
+        });
+      }
+      text += '\n\uD83D\uDCCA Our analysts have identified <b>' + (data.edgeCount || 'multiple') + ' edge opportunities</b>.\n';
+      text += '\n\uD83D\uDD12 Premium members get full analysis before kick-off.\n';
+      text += '\n\uD83D\uDC49 Start your FREE trial: eliteedgesports.co.uk\n';
+      text += '\n18+ | Entertainment only | BeGambleAware.org';
+      return await this.sendMessage(text);
+    } catch (err) {
+      console.error('[Telegram] sendWeekendPreview error:', err.message);
+    }
+  }
+
+  /**
+   * Weekly stats — Sunday evening
+   */
+  async sendWeeklyStats(data) {
+    try {
+      if (!this.isAvailable()) return;
+      var text = '\uD83D\uDCCA <b>Weekly Performance Report</b>\n\n';
+      text += 'This week\'s record:\n\n';
+      text += '\uD83C\uDFAF Tips: <b>' + data.tips + '</b>\n';
+      text += '\u2705 Winners: <b>' + data.wins + '</b>\n';
+      text += '\uD83D\uDCB0 P/L: <b>' + (data.pnl >= 0 ? '+' : '') + data.pnl.toFixed(2) + ' units</b>\n';
+      text += '\uD83C\uDFAF Strike Rate: <b>' + data.strikeRate + '%</b>\n';
+      text += '\uD83D\uDCC8 ROI: <b>' + (data.roi >= 0 ? '+' : '') + data.roi.toFixed(1) + '%</b>\n';
+      if (data.bestWinner) {
+        text += '\n\uD83C\uDFC6 Best Winner: <b>' + data.bestWinner + '</b>\n';
+      }
+      text += '\n\uD83D\uDCC8 All-time P/L: <b>' + (data.totalPnl >= 0 ? '+' : '') + data.totalPnl.toFixed(2) + ' units</b>\n';
+      text += '\n\uD83D\uDC49 Full results: eliteedgesports.co.uk/#/results\n';
+      text += '\n18+ | Entertainment only | BeGambleAware.org';
+      return await this.sendMessage(text);
+    } catch (err) {
+      console.error('[Telegram] sendWeeklyStats error:', err.message);
+    }
+  }
+
+  /**
    * Send a daily bulletin with all today's tips
    */
   async sendDailyBulletin(tips) {

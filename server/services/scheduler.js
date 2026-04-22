@@ -2598,6 +2598,121 @@ module.exports = function startScheduler(deps) {
   setTimeout(runEmailSchedulers, 45000);
 
   // =========================================================================
+  // TELEGRAM DAILY ENGAGEMENT (morning teaser, evening roundup, weekend preview, weekly stats)
+  // =========================================================================
+  var lastTgMorning = '';
+  var lastTgEvening = '';
+  var lastTgWeekend = '';
+  var lastTgWeekly = '';
+
+  async function telegramDailyContent() {
+    if (!telegramBot || !telegramBot.isAvailable()) return;
+    var uk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+    var hour = uk.getHours();
+    var minute = uk.getMinutes();
+    var day = uk.getDay(); // 0=Sun, 5=Fri
+    var dateStr = uk.toISOString().split('T')[0];
+
+    // Morning teaser: 7:45am (after tips generated at 7:30)
+    if (hour === 7 && minute >= 40 && minute <= 55 && lastTgMorning !== dateStr) {
+      lastTgMorning = dateStr;
+      try {
+        var tips = await db.getTips();
+        var todayTips = tips.filter(function(t) { return normDate(t.date) === dateStr && t.status === 'active' && !t.isWeeklyAcca; });
+        if (todayTips.length > 0) {
+          var nap = todayTips.sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); })[0];
+          await telegramBot.sendMorningTeaser(todayTips.length, nap ? nap.confidence : null);
+          console.log('[Telegram] Morning teaser sent — ' + todayTips.length + ' tips');
+        }
+      } catch(e) { console.error('[Telegram] Morning teaser error:', e.message); }
+    }
+
+    // Evening round-up: 8pm
+    if (hour === 20 && minute >= 0 && minute <= 15 && lastTgEvening !== dateStr) {
+      lastTgEvening = dateStr;
+      try {
+        var allResults = await db.getResults();
+        var todayResults = allResults.filter(function(r) { return normDate(r.date) === dateStr; });
+        var wins = todayResults.filter(function(r) { return r.result === 'won' || r.result === 'placed'; });
+        var losses = todayResults.filter(function(r) { return r.result === 'lost'; });
+        var pnl = todayResults.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+        var totalPnl = allResults.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+        var bestWin = wins.sort(function(a, b) { return (b.pnl || 0) - (a.pnl || 0); })[0];
+        var sr = todayResults.length > 0 ? Math.round((wins.length / todayResults.length) * 100) : 0;
+
+        await telegramBot.sendEveningRoundup({
+          tipsCount: todayResults.length,
+          wins: wins.length,
+          losses: losses.length,
+          pnl: pnl,
+          totalPnl: totalPnl,
+          strikeRate: sr,
+          bestWinner: bestWin ? { selection: bestWin.selection, odds: bestWin.odds } : null,
+        });
+        console.log('[Telegram] Evening round-up sent');
+      } catch(e) { console.error('[Telegram] Evening roundup error:', e.message); }
+    }
+
+    // Weekend preview: Friday 2pm
+    if (day === 5 && hour === 14 && minute >= 0 && minute <= 15 && lastTgWeekend !== dateStr) {
+      lastTgWeekend = dateStr;
+      try {
+        if (footballSource && process.env.API_FOOTBALL_KEY) {
+          var sat = new Date(uk); sat.setDate(uk.getDate() + 1);
+          var sun = new Date(uk); sun.setDate(uk.getDate() + 2);
+          var satRaw = await footballSource.fetchFixturesByDate(sat.toISOString().split('T')[0]);
+          var sunRaw = await footballSource.fetchFixturesByDate(sun.toISOString().split('T')[0]);
+          var satF = footballSource.normalise(satRaw);
+          var sunF = footballSource.normalise(sunRaw);
+          var allF = satF.concat(sunF);
+          var topLeagues = [39, 40, 41, 42, 179, 180, 140, 135, 78, 61];
+          var topF = allF.filter(function(f) { return topLeagues.indexOf(f.leagueId) !== -1; });
+          var keyFixtures = topF.slice(0, 5).map(function(f) { return f.homeTeam + ' vs ' + f.awayTeam; });
+
+          await telegramBot.sendWeekendPreview({
+            fixtureCount: topF.length,
+            keyFixtures: keyFixtures,
+            edgeCount: Math.min(topF.length, 8),
+          });
+          console.log('[Telegram] Weekend preview sent — ' + topF.length + ' fixtures');
+        }
+      } catch(e) { console.error('[Telegram] Weekend preview error:', e.message); }
+    }
+
+    // Weekly stats: Sunday 8pm
+    if (day === 0 && hour === 20 && minute >= 15 && minute <= 30 && lastTgWeekly !== dateStr) {
+      lastTgWeekly = dateStr;
+      try {
+        var weekResults = await db.getResults();
+        var weekAgo = new Date(uk.getTime() - 7 * 86400000).toISOString().split('T')[0];
+        var thisWeek = weekResults.filter(function(r) { return normDate(r.date) >= weekAgo; });
+        var wWins = thisWeek.filter(function(r) { return r.result === 'won' || r.result === 'placed'; });
+        var wPnl = thisWeek.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+        var wStaked = thisWeek.reduce(function(s, r) { return s + (r.stake || 0); }, 0);
+        var wSr = thisWeek.length > 0 ? Math.round((wWins.length / thisWeek.length) * 100) : 0;
+        var wRoi = wStaked > 0 ? Math.round((wPnl / wStaked) * 100) : 0;
+        var allPnl = weekResults.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+        var bestW = wWins.sort(function(a, b) { return (b.pnl || 0) - (a.pnl || 0); })[0];
+
+        await telegramBot.sendWeeklyStats({
+          tips: thisWeek.length,
+          wins: wWins.length,
+          pnl: wPnl,
+          strikeRate: wSr,
+          roi: wRoi,
+          totalPnl: allPnl,
+          bestWinner: bestW ? bestW.selection + ' @ ' + bestW.odds : null,
+        });
+        console.log('[Telegram] Weekly stats sent');
+      } catch(e) { console.error('[Telegram] Weekly stats error:', e.message); }
+    }
+  }
+
+  // Telegram content: check every 10 minutes
+  setInterval(safeRun('TelegramContent', telegramDailyContent), 10 * 60 * 1000);
+  setTimeout(safeRun('TelegramContent', telegramDailyContent), 60000);
+
+  // =========================================================================
   // PRE-RACE ALERT CHECK (every 1 minute)
   // Checks if any tipped races start in the next 30-35 minutes
   // =========================================================================
