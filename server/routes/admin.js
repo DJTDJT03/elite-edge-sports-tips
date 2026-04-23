@@ -560,5 +560,253 @@ module.exports = function(deps) {
     res.json(chatLogs);
   });
 
+  // ---------------------------------------------------------------------------
+  // ADMIN: Selection Performance Analytics
+  // ---------------------------------------------------------------------------
+  router.get('/admin/selection-analytics', authenticate, requireAdmin, async (req, res) => {
+    try {
+      const results = await db.getResults();
+      const tips = await db.getTips();
+
+      // Build a lookup from tipId to tip for joining extra fields
+      var tipMap = {};
+      tips.forEach(function(t) { tipMap[t.id] = t; });
+
+      // Normalise date helper
+      function normD(d) {
+        if (!d) return '';
+        if (typeof d === 'string') return d.split('T')[0];
+        try { return new Date(d).toISOString().split('T')[0]; } catch(e) { return ''; }
+      }
+
+      // Enrich each result with tip-level fields
+      var enriched = results.map(function(r) {
+        var tip = tipMap[r.tipId] || {};
+        return {
+          id: r.id,
+          tipId: r.tipId,
+          sport: (r.sport || tip.sport || '').toLowerCase(),
+          event: r.event || tip.event || '',
+          selection: r.selection || tip.selection || '',
+          market: r.market || tip.market || '',
+          odds: parseFloat(r.odds) || parseFloat(tip.odds) || 0,
+          stake: parseFloat(r.stake) || parseFloat(tip.staking) || 1,
+          result: (r.result || '').toLowerCase(),
+          pnl: parseFloat(r.pnl) || 0,
+          date: normD(r.date || tip.date),
+          confidence: parseInt(tip.confidence, 10) || 0,
+          tipster: tip.tipsterProfile || tip.tipster || 'Unknown',
+          isPremium: r.isPremium || tip.isPremium || false,
+        };
+      });
+
+      // ---- By Sport ----
+      var sportGroups = {};
+      enriched.forEach(function(r) {
+        var key = r.sport === 'racing' ? 'Racing' : (r.sport === 'football' ? 'Football' : (r.sport || 'Other'));
+        if (!sportGroups[key]) sportGroups[key] = { tips: 0, won: 0, lost: 0, placed: 0, pnl: 0, staked: 0 };
+        var g = sportGroups[key];
+        g.tips++;
+        if (r.result === 'won') g.won++;
+        else if (r.result === 'lost') g.lost++;
+        else if (r.result === 'placed') g.placed++;
+        g.pnl += r.pnl;
+        g.staked += r.stake;
+      });
+      var bySport = Object.keys(sportGroups).map(function(k) {
+        var g = sportGroups[k];
+        var sr = g.tips > 0 ? Math.round((g.won / g.tips) * 10000) / 100 : 0;
+        var roi = g.staked > 0 ? Math.round((g.pnl / g.staked) * 10000) / 100 : 0;
+        return [k, g.tips, g.won, g.lost, g.placed, sr, roi, Math.round(g.pnl * 100) / 100];
+      });
+
+      // ---- By Market Type ----
+      var marketGroups = {};
+      enriched.forEach(function(r) {
+        var m = r.market || 'Unknown';
+        if (!marketGroups[m]) marketGroups[m] = { tips: 0, won: 0, lost: 0, pnl: 0, staked: 0 };
+        var g = marketGroups[m];
+        g.tips++;
+        if (r.result === 'won') g.won++;
+        else if (r.result === 'lost') g.lost++;
+        g.pnl += r.pnl;
+        g.staked += r.stake;
+      });
+      var byMarket = Object.keys(marketGroups).map(function(k) {
+        var g = marketGroups[k];
+        var sr = g.tips > 0 ? Math.round((g.won / g.tips) * 10000) / 100 : 0;
+        var roi = g.staked > 0 ? Math.round((g.pnl / g.staked) * 10000) / 100 : 0;
+        return [k, g.tips, g.won, g.lost, sr, roi, Math.round(g.pnl * 100) / 100];
+      });
+
+      // ---- By Odds Range ----
+      var oddsRanges = [
+        { label: '1.0 - 2.0 (Short)', min: 1.0, max: 2.0 },
+        { label: '2.0 - 4.0 (Medium)', min: 2.0, max: 4.0 },
+        { label: '4.0 - 8.0 (Bigger)', min: 4.0, max: 8.0 },
+        { label: '8.0+ (Outsiders)', min: 8.0, max: 9999 },
+      ];
+      var oddsGroups = {};
+      oddsRanges.forEach(function(rng) { oddsGroups[rng.label] = { tips: 0, won: 0, lost: 0, pnl: 0, staked: 0 }; });
+      enriched.forEach(function(r) {
+        for (var i = 0; i < oddsRanges.length; i++) {
+          if (r.odds >= oddsRanges[i].min && r.odds < oddsRanges[i].max) {
+            var g = oddsGroups[oddsRanges[i].label];
+            g.tips++;
+            if (r.result === 'won') g.won++;
+            else if (r.result === 'lost') g.lost++;
+            g.pnl += r.pnl;
+            g.staked += r.stake;
+            break;
+          }
+        }
+      });
+      var byOddsRange = oddsRanges.map(function(rng) {
+        var g = oddsGroups[rng.label];
+        var sr = g.tips > 0 ? Math.round((g.won / g.tips) * 10000) / 100 : 0;
+        var roi = g.staked > 0 ? Math.round((g.pnl / g.staked) * 10000) / 100 : 0;
+        return [rng.label, g.tips, g.won, g.lost, sr, roi, Math.round(g.pnl * 100) / 100];
+      });
+
+      // ---- By Tipster/Analyst ----
+      var tipsterGroups = {};
+      enriched.forEach(function(r) {
+        var t = r.tipster || 'Unknown';
+        if (!tipsterGroups[t]) tipsterGroups[t] = { tips: 0, won: 0, lost: 0, pnl: 0, staked: 0, bestPnl: 0, bestSelection: '' };
+        var g = tipsterGroups[t];
+        g.tips++;
+        if (r.result === 'won') g.won++;
+        else if (r.result === 'lost') g.lost++;
+        g.pnl += r.pnl;
+        g.staked += r.stake;
+        if (r.pnl > g.bestPnl) { g.bestPnl = r.pnl; g.bestSelection = r.selection + ' @ ' + r.odds; }
+      });
+      var byTipster = Object.keys(tipsterGroups).map(function(k) {
+        var g = tipsterGroups[k];
+        var sr = g.tips > 0 ? Math.round((g.won / g.tips) * 10000) / 100 : 0;
+        var roi = g.staked > 0 ? Math.round((g.pnl / g.staked) * 10000) / 100 : 0;
+        return [k, g.tips, g.won, g.lost, sr, roi, Math.round(g.pnl * 100) / 100, g.bestSelection || '-'];
+      });
+
+      // ---- By Confidence Level ----
+      var confGroups = {};
+      enriched.forEach(function(r) {
+        if (r.confidence < 6) return; // skip low/unset confidence
+        var key = r.confidence + '/10';
+        if (!confGroups[key]) confGroups[key] = { tips: 0, won: 0, lost: 0, pnl: 0, staked: 0, conf: r.confidence };
+        var g = confGroups[key];
+        g.tips++;
+        if (r.result === 'won') g.won++;
+        else if (r.result === 'lost') g.lost++;
+        g.pnl += r.pnl;
+        g.staked += r.stake;
+      });
+      var byConfidence = Object.keys(confGroups).sort(function(a, b) { return confGroups[a].conf - confGroups[b].conf; }).map(function(k) {
+        var g = confGroups[k];
+        var sr = g.tips > 0 ? Math.round((g.won / g.tips) * 10000) / 100 : 0;
+        var roi = g.staked > 0 ? Math.round((g.pnl / g.staked) * 10000) / 100 : 0;
+        return [k, g.tips, g.won, g.lost, sr, roi, Math.round(g.pnl * 100) / 100];
+      });
+
+      // ---- By Day of Week ----
+      var dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      var dayGroups = {};
+      dayNames.forEach(function(d) { dayGroups[d] = { tips: 0, won: 0, lost: 0, pnl: 0 }; });
+      enriched.forEach(function(r) {
+        if (!r.date) return;
+        try {
+          var d = new Date(r.date + 'T12:00:00Z');
+          var dayName = dayNames[d.getUTCDay()];
+          var g = dayGroups[dayName];
+          g.tips++;
+          if (r.result === 'won') g.won++;
+          else if (r.result === 'lost') g.lost++;
+          g.pnl += r.pnl;
+        } catch(e) {}
+      });
+      var byDay = dayNames.filter(function(d) { return dayGroups[d].tips > 0; }).map(function(d) {
+        var g = dayGroups[d];
+        var sr = g.tips > 0 ? Math.round((g.won / g.tips) * 10000) / 100 : 0;
+        return [d, g.tips, g.won, g.lost, sr, Math.round(g.pnl * 100) / 100];
+      });
+
+      // ---- By Month ----
+      var monthGroups = {};
+      enriched.forEach(function(r) {
+        if (!r.date) return;
+        var month = r.date.substring(0, 7); // YYYY-MM
+        if (!monthGroups[month]) monthGroups[month] = { tips: 0, won: 0, lost: 0, pnl: 0, staked: 0 };
+        var g = monthGroups[month];
+        g.tips++;
+        if (r.result === 'won') g.won++;
+        else if (r.result === 'lost') g.lost++;
+        g.pnl += r.pnl;
+        g.staked += r.stake;
+      });
+      var byMonth = Object.keys(monthGroups).sort().map(function(k) {
+        var g = monthGroups[k];
+        var sr = g.tips > 0 ? Math.round((g.won / g.tips) * 10000) / 100 : 0;
+        var roi = g.staked > 0 ? Math.round((g.pnl / g.staked) * 10000) / 100 : 0;
+        return [k, g.tips, g.won, g.lost, sr, roi, Math.round(g.pnl * 100) / 100];
+      });
+
+      // ---- Top 5 Most Profitable ----
+      var topWinners = enriched.filter(function(r) { return r.pnl > 0; })
+        .sort(function(a, b) { return b.pnl - a.pnl; })
+        .slice(0, 5)
+        .map(function(r) { return { selection: r.selection, odds: r.odds, pnl: r.pnl }; });
+
+      // ---- Top 5 Biggest Losses ----
+      var topLosses = enriched.filter(function(r) { return r.pnl < 0; })
+        .sort(function(a, b) { return a.pnl - b.pnl; })
+        .slice(0, 5)
+        .map(function(r) { return { selection: r.selection, odds: r.odds, pnl: r.pnl }; });
+
+      // ---- Last 10 Results ----
+      var sorted = enriched.slice().sort(function(a, b) {
+        if (a.date > b.date) return -1;
+        if (a.date < b.date) return 1;
+        return 0;
+      });
+      var lastTen = sorted.slice(0, 10).map(function(r) {
+        return { selection: r.selection, result: r.result, pnl: r.pnl };
+      });
+
+      // ---- Longest Winning Streak ----
+      var longestStreak = 0;
+      var currentStreak = 0;
+      sorted.reverse().forEach(function(r) {
+        if (r.result === 'won') { currentStreak++; if (currentStreak > longestStreak) longestStreak = currentStreak; }
+        else { currentStreak = 0; }
+      });
+
+      // ---- Average Odds of Winners vs Losers ----
+      var winners = enriched.filter(function(r) { return r.result === 'won'; });
+      var losers = enriched.filter(function(r) { return r.result === 'lost'; });
+      var avgWinnerOdds = winners.length > 0 ? winners.reduce(function(s, r) { return s + r.odds; }, 0) / winners.length : 0;
+      var avgLoserOdds = losers.length > 0 ? losers.reduce(function(s, r) { return s + r.odds; }, 0) / losers.length : 0;
+
+      res.json({
+        bySport: bySport,
+        byMarket: byMarket,
+        byOddsRange: byOddsRange,
+        byTipster: byTipster,
+        byConfidence: byConfidence,
+        byDay: byDay,
+        byMonth: byMonth,
+        topWinners: topWinners,
+        topLosses: topLosses,
+        lastTen: lastTen,
+        longestStreak: longestStreak,
+        avgWinnerOdds: Math.round(avgWinnerOdds * 100) / 100,
+        avgLoserOdds: Math.round(avgLoserOdds * 100) / 100,
+        totalResults: enriched.length,
+      });
+    } catch (err) {
+      console.error('[Analytics] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return router;
 };

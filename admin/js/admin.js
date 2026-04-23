@@ -87,7 +87,8 @@
     '#/email':     function () { if (window.EmailPage) EmailPage.render(); },
     '#/support':   function () { if (window.SupportPage) SupportPage.render(); },
     '#/livedata':  function () { if (window.LiveDataPage) LiveDataPage.render(); },
-    '#/audit':     function () { if (window.AuditPage) AuditPage.render(); }
+    '#/audit':     function () { if (window.AuditPage) AuditPage.render(); },
+    '#/analytics': function () { if (window.AnalyticsPage) AnalyticsPage.render(); }
   };
 
   // =========================================================================
