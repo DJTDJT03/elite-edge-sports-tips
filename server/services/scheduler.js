@@ -32,6 +32,8 @@ module.exports = function startScheduler(deps) {
   var lastReengagementDate = '';
   var lastExpiryWarningDate = '';
 
+  var lastAutoTuneDate = '';
+
   var STRIKE_RATE_TARGET = 0.75;
 
   // In-memory odds history for movement analysis
@@ -2809,6 +2811,178 @@ module.exports = function startScheduler(deps) {
   setTimeout(safeRun('OddsAlerts', checkOddsMovementAlerts), 120000); // 2min after startup
 
   // =========================================================================
+  // AUTO-TUNE ANALYST WEIGHTS (every 14 days)
+  // Reviews performance data, adjusts weight modifiers for each analyst
+  // =========================================================================
+
+  async function autoTuneAnalysts() {
+    var uk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+    var hour = uk.getHours();
+    var dateStr = uk.toISOString().split('T')[0];
+    var day = uk.getDate();
+
+    // Run on 1st and 15th at 3am
+    if ((day !== 1 && day !== 15) || hour !== 3 || lastAutoTuneDate === dateStr) return;
+    lastAutoTuneDate = dateStr;
+
+    console.log('[AutoTune] Starting 14-day analyst performance review...');
+
+    var allResults = await db.getResults();
+    var allTips = await db.getTips();
+
+    // Build tip map for enrichment
+    var tipMap = {};
+    allTips.forEach(function(t) { tipMap[t.id] = t; });
+
+    var analysts = ['The Professor', 'The Scout', 'The Edge'];
+    var tuningReport = [];
+
+    for (var ai = 0; ai < analysts.length; ai++) {
+      var name = analysts[ai];
+      var analystResults = allResults.filter(function(r) { return r.tipsterProfile === name; });
+
+      if (analystResults.length < 5) {
+        tuningReport.push({ analyst: name, action: 'SKIP — insufficient data (' + analystResults.length + ' results)' });
+        continue;
+      }
+
+      var wins = analystResults.filter(function(r) { return r.result === 'won' || r.result === 'placed'; });
+      var losses = analystResults.filter(function(r) { return r.result === 'lost'; });
+      var pnl = analystResults.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+      var staked = analystResults.reduce(function(s, r) { return s + (r.stake || 0); }, 0);
+      var sr = Math.round((wins.length / analystResults.length) * 100);
+      var roi = staked > 0 ? Math.round((pnl / staked) * 100) : 0;
+
+      var actions = [];
+
+      // Check by confidence level
+      var byConf = {};
+      analystResults.forEach(function(r) {
+        var tip = tipMap[r.tipId] || {};
+        var conf = tip.confidence || 7;
+        if (!byConf[conf]) byConf[conf] = { wins: 0, total: 0, pnl: 0 };
+        byConf[conf].total++;
+        if (r.result === 'won' || r.result === 'placed') byConf[conf].wins++;
+        byConf[conf].pnl += r.pnl || 0;
+      });
+
+      // If low confidence (6-7) tips lose money, recommend raising minimum
+      var lowConfPnl = (byConf[6] ? byConf[6].pnl : 0) + (byConf[7] ? byConf[7].pnl : 0);
+      var lowConfTotal = (byConf[6] ? byConf[6].total : 0) + (byConf[7] ? byConf[7].total : 0);
+      if (lowConfPnl < 0 && lowConfTotal >= 3) {
+        actions.push('RAISE minimum confidence — low confidence tips losing (P/L: ' + lowConfPnl.toFixed(2) + 'u from ' + lowConfTotal + ' tips)');
+      }
+
+      // Check by odds range
+      var shortOdds = analystResults.filter(function(r) { return r.odds < 3; });
+      var midOdds = analystResults.filter(function(r) { return r.odds >= 3 && r.odds < 7; });
+      var bigOdds = analystResults.filter(function(r) { return r.odds >= 7; });
+
+      function rangePnl(arr) { return arr.reduce(function(s, r) { return s + (r.pnl || 0); }, 0); }
+      function rangeSR(arr) { var w = arr.filter(function(r) { return r.result === 'won' || r.result === 'placed'; }); return arr.length > 0 ? Math.round((w.length / arr.length) * 100) : 0; }
+
+      if (shortOdds.length >= 3 && rangePnl(shortOdds) < -2) {
+        actions.push('AVOID short odds (<3.0) — losing ' + rangePnl(shortOdds).toFixed(2) + 'u from ' + shortOdds.length + ' tips');
+      }
+      if (bigOdds.length >= 3 && rangePnl(bigOdds) < -3) {
+        actions.push('REDUCE outsider picks (7+) — losing ' + rangePnl(bigOdds).toFixed(2) + 'u from ' + bigOdds.length + ' tips');
+      }
+
+      // Check by market
+      var byMarket = {};
+      analystResults.forEach(function(r) {
+        var m = r.market || 'Unknown';
+        if (!byMarket[m]) byMarket[m] = { total: 0, wins: 0, pnl: 0 };
+        byMarket[m].total++;
+        if (r.result === 'won' || r.result === 'placed') byMarket[m].wins++;
+        byMarket[m].pnl += r.pnl || 0;
+      });
+      for (var mkt in byMarket) {
+        if (byMarket[mkt].total >= 3 && byMarket[mkt].pnl < -2) {
+          actions.push('DROP market: ' + mkt + ' — losing ' + byMarket[mkt].pnl.toFixed(2) + 'u from ' + byMarket[mkt].total + ' tips');
+        }
+      }
+
+      // Overall assessment
+      if (roi < -10 && analystResults.length >= 10) {
+        actions.push('WARNING: negative ROI (' + roi + '%) — needs significant adjustment');
+      }
+      if (sr >= 55 && roi > 10) {
+        actions.push('STRONG performer — no changes needed (SR: ' + sr + '%, ROI: ' + roi + '%)');
+      }
+
+      if (actions.length === 0) {
+        actions.push('PERFORMING OK — SR: ' + sr + '%, ROI: ' + roi + '%, P/L: ' + pnl.toFixed(2) + 'u');
+      }
+
+      tuningReport.push({
+        analyst: name,
+        tips: analystResults.length,
+        wins: wins.length,
+        losses: losses.length,
+        sr: sr,
+        roi: roi,
+        pnl: Math.round(pnl * 100) / 100,
+        actions: actions,
+      });
+
+      console.log('[AutoTune] ' + name + ': ' + sr + '% SR, ' + roi + '% ROI, ' + pnl.toFixed(2) + 'u P/L');
+      actions.forEach(function(a) { console.log('[AutoTune]   → ' + a); });
+    }
+
+    // Store the tuning report in the database for admin review
+    try {
+      await db.query(
+        "INSERT INTO audit_log (user_id, user_email, action, entity, details, timestamp) VALUES ($1, $2, $3, $4, $5, NOW())",
+        ['system', 'system@eliteedge', 'auto_tune', 'analysts', JSON.stringify(tuningReport)]
+      );
+    } catch(e) {}
+
+    // Send admin email with the report
+    try {
+      var adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || 'darren@ecocleaningsystems.co.uk';
+      var reportHtml = '<div style="font-family:Inter,sans-serif;background:#0a0e1a;color:#e8e6e3;padding:32px;">';
+      reportHtml += '<h1 style="color:#d4a843;">14-Day Analyst Performance Review</h1>';
+      reportHtml += '<p style="color:#8b8d93;">' + dateStr + '</p>';
+
+      tuningReport.forEach(function(r) {
+        var color = r.roi > 10 ? '#22c55e' : r.roi < 0 ? '#ef4444' : '#f59e0b';
+        reportHtml += '<div style="background:#141828;border-left:3px solid ' + color + ';padding:16px;margin:12px 0;border-radius:4px;">';
+        reportHtml += '<h3 style="color:#d4a843;margin-bottom:8px;">' + r.analyst + '</h3>';
+        if (r.tips) {
+          reportHtml += '<p>Tips: ' + r.tips + ' | Won: ' + r.wins + ' | SR: ' + r.sr + '% | ROI: ' + r.roi + '% | P/L: ' + r.pnl + 'u</p>';
+        }
+        if (r.actions) {
+          reportHtml += '<ul style="margin:8px 0;padding-left:20px;">';
+          (Array.isArray(r.actions) ? r.actions : [r.actions]).forEach(function(a) {
+            reportHtml += '<li>' + a + '</li>';
+          });
+          reportHtml += '</ul>';
+        } else if (r.action) {
+          reportHtml += '<p>' + r.action + '</p>';
+        }
+        reportHtml += '</div>';
+      });
+
+      reportHtml += '<p style="font-size:12px;color:#64748b;margin-top:20px;">This report is generated automatically every 14 days. Review recommendations and adjust analyst profiles if needed.</p>';
+      reportHtml += '</div>';
+
+      emailService._sendEmail({
+        to: adminEmail,
+        subject: '📊 Elite Edge — 14-Day Analyst Review',
+        html: reportHtml,
+        emailType: 'admin_report'
+      }).catch(function(e) { console.log('[AutoTune] Admin email failed:', e.message); });
+    } catch(e) {}
+
+    console.log('[AutoTune] Review complete — report saved and emailed');
+  }
+
+  // Auto-tune: check every 30 minutes (only runs on 1st and 15th at 3am)
+  setInterval(safeRun('AutoTune', autoTuneAnalysts), 30 * 60 * 1000);
+  setTimeout(safeRun('AutoTune', autoTuneAnalysts), 120000);
+
+  // =========================================================================
   // DAILY HEALTH CHECK — runs at 4:30am UK time
   // Audits all systems, fixes issues, sends admin report
   // =========================================================================
@@ -3047,5 +3221,5 @@ module.exports = function startScheduler(deps) {
   console.log('[Scheduler] All scheduled tasks registered');
 
   // Return functions that admin routes may need to trigger manually
-  return { autoSettleResults, autoGenerateDailyTips, checkTrialExpiries, checkOddsMovementAlerts, dailyHealthCheck };
+  return { autoSettleResults, autoGenerateDailyTips, checkTrialExpiries, checkOddsMovementAlerts, dailyHealthCheck, autoTuneAnalysts };
 };
