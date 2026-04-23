@@ -1900,10 +1900,11 @@ module.exports = function startScheduler(deps) {
           htmlBody += '<p style="font-size:11px;color:#64748b;margin-top:32px;">18+ | Entertainment & statistical analysis only | BeGambleAware.org</p>';
           htmlBody += '</div>';
 
-          emailService.sendRawEmail({
+          emailService._sendEmail({
             to: u.email,
             subject: aiContent.subject || 'Elite Edge — Your Daily Bulletin',
-            html: htmlBody
+            html: htmlBody,
+            emailType: 'daily_bulletin'
           }).catch(function(err) { console.error('[Email] AI bulletin failed:', err.message); });
 
           console.log('[Bulletin] AI-enhanced bulletin sent to ' + u.email);
