@@ -133,10 +133,15 @@ class AIReportGenerator {
       userPrompt += '- keyStats: array of 3-5 key statistical talking points (short strings)\n';
       userPrompt += '- verdict: one-sentence final verdict\n';
 
+      var systemPrompt = 'You are an elite UK sports analyst writing for Elite Edge Sports Tips, the UK\'s premium betting intelligence service. Write a professional, data-driven match preview. Tone: authoritative, analytical, concise. Use British English. Reference specific stats. Be honest about risks. Never guarantee outcomes. Around 300-400 words. CRITICAL: Only reference manager names, player names, and facts that are explicitly provided in the data below. Do NOT guess or assume any manager names, squad details, or facts from your training data as they may be outdated. If manager names are provided, use them. If not provided, do not mention managers by name. Always respond with valid JSON only — no markdown, no code fences.';
+      if (data.analystStyle) {
+        systemPrompt += ' Additional style guidance: ' + data.analystStyle;
+      }
+
       var response = await this.client.messages.create({
         model: this.model,
         max_tokens: 1024,
-        system: 'You are an elite UK sports analyst writing for Elite Edge Sports Tips, the UK\'s premium betting intelligence service. Write a professional, data-driven match preview. Tone: authoritative, analytical, concise. Use British English. Reference specific stats. Be honest about risks. Never guarantee outcomes. Around 300-400 words. CRITICAL: Only reference manager names, player names, and facts that are explicitly provided in the data below. Do NOT guess or assume any manager names, squad details, or facts from your training data as they may be outdated. If manager names are provided, use them. If not provided, do not mention managers by name. Always respond with valid JSON only — no markdown, no code fences.',
+        system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       });
 
@@ -236,10 +241,15 @@ class AIReportGenerator {
       userPrompt += '- keyFactors: array of 3-5 key factors in favour of the selection (short strings)\n';
       userPrompt += '- verdict: one-sentence final verdict\n';
 
+      var racingSystemPrompt = 'You are an elite UK horse racing analyst writing for Elite Edge Sports Tips. Write a professional race preview focused on our selection. Reference form figures, going preference, trainer/jockey stats, draw position, and course suitability. British English. Around 200-300 words. Be analytical, not promotional. Always respond with valid JSON only — no markdown, no code fences.';
+      if (data.analystStyle) {
+        racingSystemPrompt += ' Additional style guidance: ' + data.analystStyle;
+      }
+
       var response = await this.client.messages.create({
         model: this.model,
         max_tokens: 1024,
-        system: 'You are an elite UK horse racing analyst writing for Elite Edge Sports Tips. Write a professional race preview focused on our selection. Reference form figures, going preference, trainer/jockey stats, draw position, and course suitability. British English. Around 200-300 words. Be analytical, not promotional. Always respond with valid JSON only — no markdown, no code fences.',
+        system: racingSystemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       });
 

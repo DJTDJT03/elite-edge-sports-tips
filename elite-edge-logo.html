@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head><title>Logo Export</title>
+<style>
+body { margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; background: #fff; }
+canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="512" height="512"></canvas>
+<script>
+var c = document.getElementById('c');
+var ctx = c.getContext('2d');
+
+// Background circle
+ctx.beginPath();
+ctx.arc(256, 256, 250, 0, Math.PI * 2);
+var bg = ctx.createLinearGradient(0, 0, 512, 512);
+bg.addColorStop(0, '#141828');
+bg.addColorStop(1, '#0a0e1a');
+ctx.fillStyle = bg;
+ctx.fill();
+
+// Gold border
+ctx.beginPath();
+ctx.arc(256, 256, 245, 0, Math.PI * 2);
+var gold = ctx.createLinearGradient(0, 0, 512, 512);
+gold.addColorStop(0, '#e8c555');
+gold.addColorStop(0.5, '#d4a843');
+gold.addColorStop(1, '#b8902f');
+ctx.strokeStyle = '#d4a843';
+ctx.lineWidth = 4;
+ctx.stroke();
+
+// Diamond shape (subtle)
+ctx.beginPath();
+ctx.moveTo(256, 80);
+ctx.lineTo(420, 256);
+ctx.lineTo(256, 432);
+ctx.lineTo(92, 256);
+ctx.closePath();
+ctx.strokeStyle = 'rgba(212,168,67,0.2)';
+ctx.lineWidth = 3;
+ctx.stroke();
+
+// EE text
+ctx.font = '900 180px Inter, Helvetica, Arial, sans-serif';
+ctx.textAlign = 'center';
+ctx.textBaseline = 'middle';
+var tg = ctx.createLinearGradient(0, 0, 512, 512);
+tg.addColorStop(0, '#e8c555');
+tg.addColorStop(0.5, '#d4a843');
+tg.addColorStop(1, '#b8902f');
+ctx.fillStyle = tg;
+ctx.fillText('EE', 256, 270);
+
+// Download link
+setTimeout(function() {
+  var link = document.createElement('a');
+  link.download = 'elite-edge-logo-512.png';
+  link.href = c.toDataURL('image/png');
+  link.click();
+  document.title = 'Logo downloaded!';
+}, 500);
+</script>
+</body>
+</html>

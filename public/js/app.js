@@ -7745,22 +7745,22 @@ const App = {
         name: 'The Professor',
         key: 'professor',
         initials: 'TP',
-        specialty: 'Model-Driven Analysis',
-        desc: 'The Professor relies on pure data and statistical modelling to identify high-probability selections. Specialising in short-priced favourites with strong form profiles, this analyst targets consistent strike rates over flashy prices. Every pick is backed by rigorous quantitative analysis.',
+        specialty: 'Data-Driven Analysis',
+        desc: 'Statistics-first. Trusts the numbers over narrative. Weights xG, form, and speed ratings 30-40% higher than other factors. Prefers shorter prices (1/1 to 4/1) where data is most reliable. Contrarian on market sentiment.',
       },
       {
         name: 'The Scout',
         key: 'scout',
         initials: 'TS',
         specialty: 'Value Hunter',
-        desc: 'The Scout searches for overlooked runners and undervalued prices that the market has missed. Specialising in bigger-priced selections with strong each-way value, this analyst accepts a lower strike rate in exchange for significantly higher ROI when selections land.',
+        desc: 'Value hunter. Finds prices the market has wrong. Weights course form, class drops, and motivation 30-40% higher. Actively goes against the crowd. Prefers bigger prices (3/1 to 20/1) where edges are largest.',
       },
       {
         name: 'The Edge',
         key: 'edge',
         initials: 'TE',
         specialty: 'Balanced Analysis',
-        desc: 'The Edge combines statistical modelling with contextual analysis to find the sweet spot between probability and value. Covering both racing and football markets, this analyst blends data with situational awareness for well-rounded selections.',
+        desc: 'Balanced assessment. Weighs all factors equally. Looks for the clearest overall edge across all metrics. Covers the middle ground (2/1 to 10/1). Practical, measured, no bias.',
       },
     ];
 

@@ -936,12 +936,13 @@ module.exports = function startScheduler(deps) {
       var sport = candidate.type;
       var tipId = 'auto_' + Date.now() + '_' + idx;
 
-      // Determine tipsterProfile
-      var tipOdds = sport === 'racing' ? scored.odds : scored.selectedOdds;
-      var tipsterProfile = 'The Edge';
-      if (isOutsider) tipsterProfile = 'The Scout';
-      else if (tipOdds < 3.0) tipsterProfile = 'The Professor';
-      else if (tipOdds > 6.0) tipsterProfile = 'The Scout';
+      // Determine tipsterProfile using analyst profiles
+      var analystProfiles = require('./analystProfiles');
+      var analystKey = analystProfiles.assignAnalyst(scored, c.type);
+      var tipsterProfile = analystProfiles.profiles[analystKey].name;
+
+      // Apply analyst-specific weight modifiers to factors for deeper analysis
+      var adjustedFactors = analystProfiles.applyAnalystWeights(scored.factors || {}, analystKey, c.type);
 
       // Generate analysis
       var analysis = scoringModel.generateAnalysis(scored, sport);
