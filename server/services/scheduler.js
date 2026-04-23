@@ -1471,7 +1471,7 @@ module.exports = function startScheduler(deps) {
           var allUsers = await db.getUsers();
           bigWins.forEach(function(bw) {
             var recipients = bw.isPremium
-              ? allUsers.filter(function(u) { return u.subscription === 'premium' && (!u.emailPrefs || u.emailPrefs.bigWins !== false); })
+              ? allUsers.filter(function(u) { return (u.subscription === 'premium' || u.subscription === 'vip') && (!u.emailPrefs || u.emailPrefs.bigWins !== false); })
               : allUsers.filter(function(u) { return !u.emailPrefs || u.emailPrefs.bigWins !== false; });
 
             recipients.forEach(function(u) {
@@ -1800,14 +1800,18 @@ module.exports = function startScheduler(deps) {
       var minute = uk.getMinutes();
       var dateStr = uk.toISOString().split('T')[0];
 
-      // Run between 8:45-8:59 UK time, once per day
-      if (hour !== 8 || minute < 45 || lastDailyBulletinDate === dateStr) return;
+      // Run any time after 8:45am UK, once per day
+      var isPastBulletinTime = hour > 8 || (hour === 8 && minute >= 45);
+      if (!isPastBulletinTime || lastDailyBulletinDate === dateStr) return;
 
       var tips = await db.getTips();
       var todayTips = tips.filter(function(t) { return normDate(t.date) === dateStr && t.status === 'active' && !t.isWeeklyAcca; });
-      if (todayTips.length === 0) return;
+      if (todayTips.length === 0) {
+        console.log('[Bulletin] No tips for ' + dateStr + ' — skipping');
+        return;
+      }
 
-      var nap = todayTips.filter(function(t) { return !t.isPremium; }).sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); })[0] || null;
+      var nap = todayTips.sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); })[0] || null;
       var premiumTips = todayTips.filter(function(t) { return t.isPremium; });
 
       // Get yesterday's results
@@ -1819,8 +1823,9 @@ module.exports = function startScheduler(deps) {
 
       var users = await db.getUsers();
       var premiumUsers = users.filter(function(u) {
-        return u.subscription === 'premium' && (!u.emailPrefs || u.emailPrefs.dailyBulletin !== false);
+        return (u.subscription === 'premium' || u.subscription === 'vip') && (!u.emailPrefs || u.emailPrefs.dailyBulletin !== false);
       });
+      console.log('[Bulletin] Sending to ' + premiumUsers.length + ' premium/VIP user(s) with ' + todayTips.length + ' tip(s)');
 
       // Compute yesterday's stats for AI bulletin
       var yWins = yesterdayResults.filter(function(r) { return r.result === 'won'; }).length;
@@ -2044,7 +2049,7 @@ module.exports = function startScheduler(deps) {
       // Get users
       var users = await db.getUsers();
       var recipients = users.filter(function(u) {
-        return (u.subscription === 'premium' || u.trialActive) &&
+        return (u.subscription === 'premium' || u.subscription === 'vip' || u.trialActive) &&
                u.role !== 'admin' &&
                (!u.emailPrefs || u.emailPrefs.weeklySummary !== false);
       });
@@ -2965,7 +2970,7 @@ module.exports = function startScheduler(deps) {
     // --- 9. USER COUNT ---
     try {
       var users = await db.getUsers();
-      var premiumCount = users.filter(function(u) { return u.subscription === 'premium'; }).length;
+      var premiumCount = users.filter(function(u) { return u.subscription === 'premium' || u.subscription === 'vip'; }).length;
       var trialCount = users.filter(function(u) { return u.trialActive; }).length;
       var freeCount = users.filter(function(u) { return u.subscription === 'free' && !u.trialActive; }).length;
       console.log('[HealthCheck] ✅ Users: ' + users.length + ' total (' + premiumCount + ' premium, ' + trialCount + ' trial, ' + freeCount + ' free)');
