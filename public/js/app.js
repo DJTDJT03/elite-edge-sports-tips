@@ -835,6 +835,11 @@ const App = {
       this._liveIntervals.forEach(function(id) { clearInterval(id); });
       this._liveIntervals = null;
     }
+    // Clear Live Race Tracker interval
+    if (this._liveRaceInterval) {
+      clearInterval(this._liveRaceInterval);
+      this._liveRaceInterval = null;
+    }
 
     // Update active nav
     document.querySelectorAll('.nav-link').forEach(link => {
@@ -891,6 +896,7 @@ const App = {
       case 'why-elite-edge': this.renderWhyEliteEdge(); break;
       case 'premier-league': this.renderPremierLeague(); break;
       case 'acca-generator': this.renderAccaGenerator(); break;
+      case 'challenge': this.renderChallenge(); break;
       case 'reset-password': this.handleResetPasswordRoute(); break;
       default: this.render404();
     }
@@ -921,6 +927,7 @@ const App = {
       'responsible-gambling': 'Responsible Gambling | Elite Edge Sports Tips',
       'festivals': 'Festival Racing Hub — Major Meetings | Elite Edge',
       'admin': 'Admin Panel | Elite Edge Sports Tips',
+      'challenge': '30-Day Bankroll Challenge — Track Your Growth | Elite Edge',
     };
 
     var descriptions = {
@@ -1293,6 +1300,30 @@ const App = {
     if (kellyEl) kellyEl.textContent = '\u00a3' + kellyStake.toFixed(2);
     if (flatEl) flatEl.textContent = '\u00a3' + flatStake.toFixed(2);
     if (propEl) propEl.textContent = '\u00a3' + Math.max(0, propStake).toFixed(2);
+  },
+
+  switchCalcTab(tab) {
+    var stakingSection = document.getElementById('calc-staking-section');
+    var cashoutSection = document.getElementById('calc-cashout-section');
+    var stakingTab = document.getElementById('calc-tab-staking');
+    var cashoutTab = document.getElementById('calc-tab-cashout');
+    if (tab === 'cashout') {
+      if (stakingSection) stakingSection.style.display = 'none';
+      if (cashoutSection) {
+        cashoutSection.style.display = 'block';
+        if (!cashoutSection.innerHTML) {
+          cashoutSection.innerHTML = '<h2>Cashout Calculator</h2>' + this.renderCashoutCalculator();
+          this.calculateCashout();
+        }
+      }
+      if (stakingTab) stakingTab.classList.remove('active');
+      if (cashoutTab) cashoutTab.classList.add('active');
+    } else {
+      if (stakingSection) stakingSection.style.display = 'block';
+      if (cashoutSection) cashoutSection.style.display = 'none';
+      if (stakingTab) stakingTab.classList.add('active');
+      if (cashoutTab) cashoutTab.classList.remove('active');
+    }
   },
 
   // -----------------------------------------------------------------------
@@ -2364,6 +2395,12 @@ const App = {
 
     app.innerHTML = `
       <div class="container">
+        <!-- Live Race Tracker -->
+        <div id="live-race-tracker"></div>
+
+        <!-- Streak Rewards -->
+        <div id="streak-rewards"></div>
+
         <!-- Morning Brief (logged-in users only) -->
         ${morningBriefHtml}
 
@@ -2704,6 +2741,12 @@ const App = {
 
     // Render personalised stats for premium users
     this.renderPersonalStats();
+
+    // Render Live Race Tracker (Feature 1)
+    this.renderLiveRaceTracker();
+
+    // Render Streak Rewards (Feature 4)
+    this.renderStreakRewards();
   },
 
   // -----------------------------------------------------------------------
@@ -3362,11 +3405,15 @@ const App = {
       return (liveMeetings[a].firstTime || '').localeCompare(liveMeetings[b].firstTime || '');
     });
 
+    // Build confidence heatmap from tips
+    var heatmapHtml = self.renderConfidenceHeatmap(self.tips || []);
+
     app.innerHTML = '<div class="container">' +
       '<div class="page-header">' +
         '<h1><span class="accent">Horse Racing</span> -- UK Meetings</h1>' +
         '<p>Live race cards from UK courses. Select a meeting to view all races.</p>' +
       '</div>' +
+      heatmapHtml +
       '<div class="race-breadcrumb"><span class="breadcrumb-active">Meetings</span></div>' +
       (hasLiveCards ? '<div class="live-data-header" style="margin-bottom:16px;">' +
         '<span class="live-badge">Live Race Cards</span>' +
@@ -10415,6 +10462,474 @@ const App = {
     });
     this.saveMyBets(bets);
     this.showToast('Accumulator added to My Bets!', 'success');
+  },
+
+  // =========================================================================
+  // FEATURE 1: Live Race Tracker
+  // =========================================================================
+  _liveRaceInterval: null,
+
+  renderLiveRaceTracker() {
+    var container = document.getElementById('live-race-tracker');
+    if (!container) return;
+
+    var self = this;
+    var today = this._getToday();
+    var allTips = this.tips || [];
+    var racingTips = allTips.filter(function(t) {
+      return t.sport === 'racing' && t.status === 'active' && (!t.date || App._normDate(t.date) === today);
+    });
+
+    if (racingTips.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+
+    var now = new Date();
+    var items = [];
+
+    racingTips.forEach(function(tip) {
+      if (!tip.raceTime) return;
+      var timeParts = tip.raceTime.match(/(\d{1,2}):(\d{2})/);
+      if (!timeParts) return;
+
+      var raceDate = new Date();
+      raceDate.setHours(parseInt(timeParts[1], 10), parseInt(timeParts[2], 10), 0, 0);
+
+      var diffMs = raceDate.getTime() - now.getTime();
+      var diffMins = Math.round(diffMs / 60000);
+      var finishedThreshold = -15;
+
+      var status, statusText, dotClass, itemClass;
+
+      if (diffMins > 30) {
+        return; // Too far away, skip
+      } else if (diffMins > 0 && diffMins <= 30) {
+        status = 'upcoming';
+        statusText = '\uD83C\uDFC7 NEXT RACE: ' + tip.selection + ' at ' + (tip.event || 'Unknown') + ' \u2014 starts in ' + diffMins + ' min' + (diffMins !== 1 ? 's' : '');
+        dotClass = 'upcoming-dot';
+        itemClass = 'upcoming';
+      } else if (diffMins <= 0 && diffMins > finishedThreshold) {
+        status = 'live';
+        statusText = '\uD83C\uDFC7 RUNNING NOW: ' + tip.selection + ' at ' + (tip.event || 'Unknown');
+        dotClass = '';
+        itemClass = 'live-now';
+      } else {
+        status = 'finished';
+        var resultText = tip.result ? (tip.result === 'won' ? 'WON' : tip.result === 'lost' ? 'LOST' : tip.result.toUpperCase()) : 'Awaiting result...';
+        statusText = '\uD83C\uDFC7 ' + tip.selection + ' at ' + (tip.event || 'Unknown') + ' \u2014 ' + resultText;
+        dotClass = 'finished-dot';
+        itemClass = 'finished';
+      }
+
+      items.push({
+        diffMins: diffMins,
+        status: status,
+        html: '<div class="live-race-item ' + itemClass + '">' +
+          '<div class="live-dot ' + dotClass + '"></div>' +
+          '<div class="live-race-info">' +
+            '<div class="live-race-status">' + statusText + '</div>' +
+            '<div class="live-race-meta">' + tip.raceTime + ' \u2022 ' + self.formatOdds(tip.odds) + '</div>' +
+          '</div>' +
+        '</div>'
+      });
+    });
+
+    if (items.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+
+    // Sort: live first, then upcoming, then finished
+    var statusOrder = { live: 0, upcoming: 1, finished: 2 };
+    items.sort(function(a, b) {
+      if (statusOrder[a.status] !== statusOrder[b.status]) return statusOrder[a.status] - statusOrder[b.status];
+      return a.diffMins - b.diffMins;
+    });
+
+    container.innerHTML = '<div class="live-race-tracker">' +
+      '<div class="live-race-tracker-title"><span class="live-dot"></span> Live Race Tracker</div>' +
+      items.map(function(i) { return i.html; }).join('') +
+    '</div>';
+
+    // Set up auto-refresh every 30 seconds (clean up on page change)
+    if (this._liveRaceInterval) clearInterval(this._liveRaceInterval);
+    this._liveRaceInterval = setInterval(function() {
+      if (App.currentPage !== 'dashboard') {
+        clearInterval(App._liveRaceInterval);
+        App._liveRaceInterval = null;
+        return;
+      }
+      App.renderLiveRaceTracker();
+    }, 30000);
+  },
+
+  // =========================================================================
+  // FEATURE 2: Bankroll Challenge Mode
+  // =========================================================================
+  async renderChallenge() {
+    var app = document.getElementById('app');
+
+    if (!this.isPremium()) {
+      app.innerHTML = '<div class="container">' +
+        '<div class="page-header"><h1><span class="accent">30-Day Bankroll Challenge</span></h1><p>Premium feature</p></div>' +
+        '<div class="challenge-cta-card">' +
+          '<div style="font-size:48px;margin-bottom:16px;">&#128176;</div>' +
+          '<h2>Premium Feature</h2>' +
+          '<p>The 30-Day Bankroll Challenge is available exclusively to Premium members. Upgrade to track your virtual bankroll growth.</p>' +
+          '<a href="#/pricing" class="btn btn-gold btn-lg">Upgrade to Premium</a>' +
+        '</div>' +
+      '</div>';
+      return;
+    }
+
+    var challengeStart = localStorage.getItem('ee_challenge_start');
+
+    if (!challengeStart) {
+      app.innerHTML = '<div class="container challenge-page">' +
+        '<div class="page-header"><h1><span class="accent">30-Day Bankroll Challenge</span></h1><p>Can you grow a \u00a3100 bank following our tips?</p></div>' +
+        '<div class="challenge-cta-card">' +
+          '<div style="font-size:64px;margin-bottom:20px;">&#127942;</div>' +
+          '<h2>The 30-Day Challenge</h2>' +
+          '<p>Start with a virtual \u00a3100 bankroll and follow our tips for 30 days. Track your daily P/L, see your growth, and share your progress. No real money needed \u2014 just skill and strategy.</p>' +
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:400px;margin:0 auto 24px;">' +
+            '<div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#d4a843;">\u00a3100</div><div style="font-size:11px;color:var(--text-muted);">Starting Bank</div></div>' +
+            '<div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#d4a843;">30</div><div style="font-size:11px;color:var(--text-muted);">Days</div></div>' +
+            '<div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#22c55e;">Free</div><div style="font-size:11px;color:var(--text-muted);">To Join</div></div>' +
+          '</div>' +
+          '<button class="btn btn-gold btn-lg" onclick="App.startChallenge()">Start Challenge</button>' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-top:12px;">Uses actual results from our selections. Virtual tracking only.</div>' +
+        '</div>' +
+      '</div>';
+      return;
+    }
+
+    app.innerHTML = this.renderSkeleton('dashboard');
+
+    var allResults = [];
+    try { allResults = await this.api('/results'); if (!Array.isArray(allResults)) allResults = []; } catch (e) { allResults = []; }
+
+    var startDate = new Date(challengeStart);
+    var now = new Date();
+    var daysPassed = Math.floor((now.getTime() - startDate.getTime()) / 86400000) + 1;
+    if (daysPassed > 30) daysPassed = 30;
+
+    // Calculate daily P/L from results since challenge started
+    var startStr = challengeStart;
+    var challengeResults = allResults.filter(function(r) {
+      if (!r.date) return false;
+      return App._normDate(r.date) >= startStr;
+    }).sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+
+    // Group by day
+    var dailyPL = {};
+    challengeResults.forEach(function(r) {
+      var dayStr = App._normDate(r.date);
+      if (!dailyPL[dayStr]) dailyPL[dayStr] = 0;
+      dailyPL[dayStr] += (r.pnl || 0);
+    });
+
+    // Build 30-day log
+    var bankroll = 100;
+    var dailyLog = [];
+    for (var d = 0; d < daysPassed; d++) {
+      var dayDate = new Date(startDate);
+      dayDate.setDate(dayDate.getDate() + d);
+      var dayStr = dayDate.toISOString().split('T')[0];
+      var pl = dailyPL[dayStr] || 0;
+      // Scale P/L assuming 1 unit = 2% of starting bank = 2
+      var scaledPL = pl * 2;
+      bankroll += scaledPL;
+      dailyLog.push({ day: d + 1, date: dayStr, pl: scaledPL, bank: bankroll });
+    }
+
+    var growth = ((bankroll - 100) / 100 * 100).toFixed(1);
+    var growthSign = bankroll >= 100 ? '+' : '';
+    var growthColor = bankroll >= 100 ? '#22c55e' : '#ef4444';
+
+    var dailyLogHtml = dailyLog.map(function(dl) {
+      var plStr = dl.pl >= 0 ? '+\u00a3' + dl.pl.toFixed(2) : '-\u00a3' + Math.abs(dl.pl).toFixed(2);
+      var plClass = dl.pl > 0 ? 'positive' : (dl.pl < 0 ? 'negative' : 'neutral');
+      return '<div class="challenge-day-item">' +
+        '<div class="day-num">Day ' + dl.day + '</div>' +
+        '<div class="day-pl ' + plClass + '">' + plStr + '</div>' +
+      '</div>';
+    }).join('');
+
+    var shareText = encodeURIComponent("I'm on Day " + daysPassed + " of the Elite Edge 30-Day Challenge \u2014 " + growthSign + growth + "% growth! Join free: eliteedgesports.co.uk #EliteEdge");
+
+    app.innerHTML = '<div class="container challenge-page">' +
+      '<div class="page-header"><h1><span class="accent">30-Day Bankroll Challenge</span></h1><p>Track your virtual bankroll growth following our tips</p></div>' +
+      '<div class="challenge-header">' +
+        '<h2>Your Challenge Progress</h2>' +
+        '<p style="color:var(--text-secondary);font-size:13px;">Started ' + formatDateUK(challengeStart) + '</p>' +
+        '<div class="challenge-stats-grid">' +
+          '<div class="challenge-stat"><div class="challenge-stat-value">Day ' + daysPassed + '</div><div class="challenge-stat-label">of 30</div></div>' +
+          '<div class="challenge-stat"><div class="challenge-stat-value">\u00a3100</div><div class="challenge-stat-label">Starting Bank</div></div>' +
+          '<div class="challenge-stat"><div class="challenge-stat-value" style="color:' + growthColor + ';">\u00a3' + bankroll.toFixed(2) + '</div><div class="challenge-stat-label">Current Bank</div></div>' +
+          '<div class="challenge-stat"><div class="challenge-stat-value" style="color:' + growthColor + ';">' + growthSign + growth + '%</div><div class="challenge-stat-label">Growth</div></div>' +
+        '</div>' +
+        '<div class="challenge-progress-bar"><div class="challenge-progress-fill" style="width:' + ((daysPassed / 30) * 100).toFixed(1) + '%;"></div></div>' +
+        '<div style="font-size:12px;color:var(--text-muted);">' + daysPassed + ' of 30 days completed</div>' +
+        '<div style="margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
+          '<button class="btn btn-gold btn-sm" onclick="window.open(\'https://twitter.com/intent/tweet?text=' + shareText + '\',\'_blank\')">Share Progress</button>' +
+          '<button class="btn btn-outline btn-sm" onclick="if(confirm(\'Reset your challenge? This cannot be undone.\')){localStorage.removeItem(\'ee_challenge_start\');App.renderChallenge();}">Reset Challenge</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="card" style="padding:20px;">' +
+        '<h3 style="font-size:16px;font-weight:700;margin-bottom:14px;">Daily P/L Log</h3>' +
+        (dailyLog.length > 0 ? '<div class="challenge-daily-log">' + dailyLogHtml + '</div>' : '<p class="text-muted">No data yet. Results will appear as tips settle.</p>') +
+      '</div>' +
+      (daysPassed >= 30 ? '<div class="card text-center" style="padding:32px;margin-top:20px;border-color:rgba(212,168,67,0.3);">' +
+        '<div style="font-size:48px;margin-bottom:12px;">&#127942;</div>' +
+        '<h2 style="color:var(--gold);margin-bottom:8px;">Challenge Complete!</h2>' +
+        '<p style="color:var(--text-secondary);font-size:15px;">You finished with \u00a3' + bankroll.toFixed(2) + ' (' + growthSign + growth + '% growth)</p>' +
+        '<button class="btn btn-gold" style="margin-top:16px;" onclick="localStorage.removeItem(\'ee_challenge_start\');App.renderChallenge();">Start New Challenge</button>' +
+      '</div>' : '') +
+    '</div>';
+  },
+
+  startChallenge() {
+    var today = this._getToday();
+    localStorage.setItem('ee_challenge_start', today);
+    this.showToast('Challenge started! Good luck!', 'success');
+    this.renderChallenge();
+  },
+
+  // =========================================================================
+  // FEATURE 3: Cashout Calculator
+  // =========================================================================
+  renderCashoutCalculator() {
+    return '<div class="cashout-section">' +
+      '<h3>Cashout Calculator</h3>' +
+      '<div class="form-group">' +
+        '<label>Original Odds (decimal)</label>' +
+        '<input type="number" id="co-original-odds" value="3.00" min="1.01" step="0.01" oninput="App.calculateCashout()">' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Original Stake (\u00a3)</label>' +
+        '<input type="number" id="co-stake" value="10" min="0.5" step="0.5" oninput="App.calculateCashout()">' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Current Live Odds (decimal)</label>' +
+        '<input type="number" id="co-current-odds" value="2.50" min="1.01" step="0.01" oninput="App.calculateCashout()">' +
+      '</div>' +
+      '<div class="cashout-results" id="cashout-results">' +
+        '<div class="cashout-result-item"><div class="co-label">Original Return</div><div class="co-value" id="co-original-return">-</div></div>' +
+        '<div class="cashout-result-item"><div class="co-label">Cashout Value</div><div class="co-value" id="co-cashout-value" style="color:var(--gold);">-</div></div>' +
+        '<div class="cashout-result-item"><div class="co-label">Profit if Cash Out</div><div class="co-value" id="co-cashout-profit">-</div></div>' +
+        '<div class="cashout-result-item"><div class="co-label">Profit if Wins</div><div class="co-value" id="co-win-profit">-</div></div>' +
+      '</div>' +
+      '<div class="cashout-bar-container" id="co-bar-container">' +
+        '<div class="cashout-bar-fill" id="co-bar-cashout" style="background:var(--gold);width:0%;"></div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:-10px;margin-bottom:10px;">' +
+        '<span>Cashout</span><span>Full Win</span>' +
+      '</div>' +
+      '<div class="cashout-verdict neutral" id="co-verdict">Enter your odds to see recommendation</div>' +
+    '</div>';
+  },
+
+  calculateCashout() {
+    var origOdds = parseFloat(document.getElementById('co-original-odds')?.value) || 3.0;
+    var stake = parseFloat(document.getElementById('co-stake')?.value) || 10;
+    var currOdds = parseFloat(document.getElementById('co-current-odds')?.value) || 2.5;
+
+    var originalReturn = stake * origOdds;
+    var cashoutValue = stake * (origOdds / currOdds);
+    var cashoutProfit = cashoutValue - stake;
+    var winProfit = (origOdds - 1) * stake;
+
+    var orEl = document.getElementById('co-original-return');
+    var cvEl = document.getElementById('co-cashout-value');
+    var cpEl = document.getElementById('co-cashout-profit');
+    var wpEl = document.getElementById('co-win-profit');
+    var barEl = document.getElementById('co-bar-cashout');
+    var verdictEl = document.getElementById('co-verdict');
+
+    if (orEl) orEl.textContent = '\u00a3' + originalReturn.toFixed(2);
+    if (cvEl) cvEl.textContent = '\u00a3' + cashoutValue.toFixed(2);
+    if (cpEl) {
+      cpEl.textContent = (cashoutProfit >= 0 ? '+' : '') + '\u00a3' + cashoutProfit.toFixed(2);
+      cpEl.style.color = cashoutProfit >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+    if (wpEl) {
+      wpEl.textContent = '+\u00a3' + winProfit.toFixed(2);
+      wpEl.style.color = 'var(--green)';
+    }
+
+    // Bar showing cashout vs full win
+    if (barEl) {
+      var pct = originalReturn > 0 ? Math.min(100, (cashoutValue / originalReturn) * 100) : 0;
+      barEl.style.width = pct.toFixed(1) + '%';
+    }
+
+    // Verdict
+    if (verdictEl) {
+      if (currOdds > origOdds) {
+        // Current odds are longer = bet is winning
+        verdictEl.className = 'cashout-verdict winning';
+        verdictEl.innerHTML = '<strong>Your bet is winning!</strong> The market has drifted. Cashout locks in \u00a3' + cashoutProfit.toFixed(2) + ' profit. Consider cashing out to secure gains.';
+      } else if (currOdds < origOdds) {
+        // Current odds are shorter = market moved against
+        verdictEl.className = 'cashout-verdict losing';
+        verdictEl.innerHTML = '<strong>Market has moved against you.</strong> Current odds are shorter than your original. Cashout value (\u00a3' + cashoutValue.toFixed(2) + ') is above your stake. Let it ride if you believe it will win.';
+      } else {
+        verdictEl.className = 'cashout-verdict neutral';
+        verdictEl.innerHTML = '<strong>Odds unchanged.</strong> No advantage to cashing out right now. Hold your position or wait for movement.';
+      }
+    }
+  },
+
+  // =========================================================================
+  // FEATURE 4: Streak Rewards
+  // =========================================================================
+  async renderStreakRewards() {
+    var container = document.getElementById('streak-rewards');
+    if (!container) return;
+
+    var streakData;
+    try {
+      streakData = await this.api('/results/streaks');
+    } catch (e) {
+      streakData = null;
+    }
+
+    var currentStreak = 0;
+    if (streakData && typeof streakData.currentStreak === 'number') {
+      currentStreak = streakData.currentStreak;
+    } else {
+      // Fallback: calculate from results
+      var allResults = [];
+      try { allResults = await this.api('/results'); if (!Array.isArray(allResults)) allResults = []; } catch (e) {}
+      currentStreak = this.calculateStreak(allResults);
+    }
+
+    var milestones = [
+      { wins: 3, icon: '\uD83D\uDD25', name: 'Hot Streak', desc: '3 consecutive winners', reward: 'Badge unlocked' },
+      { wins: 5, icon: '\u2B50', name: 'On Fire', desc: '5 consecutive winners', reward: 'Early tip preview \u2014 tomorrow\'s NAP confidence level' },
+      { wins: 7, icon: '\uD83D\uDC8E', name: 'Diamond Run', desc: '7 consecutive winners', reward: 'Bonus AI analysis for any fixture' },
+      { wins: 10, icon: '\uD83D\uDC51', name: 'Legendary', desc: '10 consecutive winners', reward: '1 month added to subscription' }
+    ];
+
+    // Find next milestone
+    var nextMilestone = milestones.find(function(m) { return currentStreak < m.wins; });
+    var nextTarget = nextMilestone ? nextMilestone.wins : milestones[milestones.length - 1].wins;
+    var progressPct = nextMilestone ? Math.min(100, (currentStreak / nextMilestone.wins) * 100) : 100;
+
+    if (currentStreak === 0) {
+      container.innerHTML = '<div class="streak-rewards">' +
+        '<div class="streak-rewards-title"><span>\uD83C\uDFC6</span> Streak Rewards</div>' +
+        '<div style="text-align:center;padding:16px;">' +
+          '<div style="font-size:32px;margin-bottom:12px;">\uD83C\uDFAF</div>' +
+          '<div style="font-size:15px;font-weight:700;color:var(--text-primary);margin-bottom:6px;">Start your streak!</div>' +
+          '<div style="font-size:13px;color:var(--text-secondary);">Back today\'s NAP and begin your run. Win 3+ in a row to unlock rewards.</div>' +
+        '</div>' +
+      '</div>';
+      return;
+    }
+
+    var milestonesHtml = milestones.map(function(m) {
+      var unlocked = currentStreak >= m.wins;
+      var active = !unlocked && nextMilestone && nextMilestone.wins === m.wins;
+      var cls = unlocked ? 'streak-milestone unlocked' : (active ? 'streak-milestone active' : 'streak-milestone');
+      var statusCls = unlocked ? 'streak-milestone-status earned' : 'streak-milestone-status locked';
+      var statusText = unlocked ? 'Unlocked' : (m.wins - currentStreak) + ' more';
+
+      return '<div class="' + cls + '">' +
+        '<div class="streak-milestone-icon">' + m.icon + '</div>' +
+        '<div class="streak-milestone-info">' +
+          '<div class="streak-milestone-name">' + m.name + '</div>' +
+          '<div class="streak-milestone-desc">' + m.desc + '</div>' +
+          '<div class="streak-milestone-reward">Reward: ' + m.reward + '</div>' +
+        '</div>' +
+        '<div class="' + statusCls + '">' + statusText + '</div>' +
+      '</div>';
+    }).join('');
+
+    container.innerHTML = '<div class="streak-rewards">' +
+      '<div class="streak-rewards-title"><span>\uD83C\uDFC6</span> Streak Rewards \u2014 ' + currentStreak + ' Win Streak</div>' +
+      '<div class="streak-progress-mini"><div class="streak-progress-mini-fill" style="width:' + progressPct.toFixed(1) + '%;"></div></div>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-bottom:14px;text-align:right;">' + currentStreak + ' / ' + nextTarget + ' wins to next reward</div>' +
+      milestonesHtml +
+    '</div>';
+  },
+
+  // =========================================================================
+  // FEATURE 5: Tip Confidence Heatmap
+  // =========================================================================
+  renderConfidenceHeatmap(tips) {
+    if (!tips || tips.length === 0) return '';
+
+    var today = this._getToday();
+    var todayTips = tips.filter(function(t) {
+      return t.sport === 'racing' && t.status === 'active' && (!t.date || App._normDate(t.date) === today);
+    });
+
+    if (todayTips.length === 0) return '';
+
+    // Group by meeting (event field)
+    var meetings = {};
+    todayTips.forEach(function(t) {
+      var meeting = t.event || 'Unknown';
+      if (!meetings[meeting]) meetings[meeting] = [];
+      meetings[meeting].push(t);
+    });
+
+    // Sort tips within each meeting by race time
+    var meetingKeys = Object.keys(meetings).sort();
+    meetingKeys.forEach(function(k) {
+      meetings[k].sort(function(a, b) {
+        return (a.raceTime || '').localeCompare(b.raceTime || '');
+      });
+    });
+
+    var rowsHtml = meetingKeys.map(function(meeting) {
+      var meetingTips = meetings[meeting];
+      var blocksHtml = meetingTips.map(function(t) {
+        var conf = t.confidence || 0;
+        var cls, label;
+        if (conf >= 9) { cls = 'elite'; label = 'Elite'; }
+        else if (conf >= 7) { cls = 'strong'; label = 'Strong'; }
+        else if (conf >= 5) { cls = 'watching'; label = 'Watch'; }
+        else { cls = 'none'; label = '-'; }
+
+        var time = t.raceTime || '--:--';
+        var tooltip = t.selection + ' (' + conf + '/10)';
+        return '<div class="heatmap-block ' + cls + '" title="' + tooltip.replace(/"/g, '&quot;') + '" onclick="App._scrollToRaceTip(\'' + (t.id || '').replace(/'/g, "\\'") + '\')">' + time + '</div>';
+      }).join('');
+
+      // Truncate meeting name for display
+      var displayName = meeting.length > 14 ? meeting.substring(0, 12) + '..' : meeting;
+      return '<div class="heatmap-row">' +
+        '<div class="heatmap-label" title="' + meeting.replace(/"/g, '&quot;') + '">' + displayName + '</div>' +
+        blocksHtml +
+      '</div>';
+    }).join('');
+
+    return '<div class="confidence-heatmap">' +
+      '<div class="confidence-heatmap-title"><span>\uD83D\uDCCA</span> Today\'s Confidence Heatmap</div>' +
+      rowsHtml +
+      '<div class="heatmap-legend">' +
+        '<div class="heatmap-legend-item"><div class="heatmap-legend-dot" style="background:#ef4444;"></div> Elite (9-10)</div>' +
+        '<div class="heatmap-legend-item"><div class="heatmap-legend-dot" style="background:#f59e0b;"></div> Strong (7-8)</div>' +
+        '<div class="heatmap-legend-item"><div class="heatmap-legend-dot" style="background:#3b82f6;"></div> Watching (5-6)</div>' +
+        '<div class="heatmap-legend-item"><div class="heatmap-legend-dot" style="background:#1e293b;"></div> No Edge (&lt;5)</div>' +
+      '</div>' +
+    '</div>';
+  },
+
+  _scrollToRaceTip(tipId) {
+    if (!tipId) return;
+    var el = document.querySelector('[data-tip-id="' + tipId + '"]');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.outline = '2px solid var(--gold)';
+      setTimeout(function() { el.style.outline = ''; }, 2000);
+    } else {
+      // Navigate to tip detail page
+      window.location.hash = '#/tip/' + tipId;
+    }
   },
 };
 

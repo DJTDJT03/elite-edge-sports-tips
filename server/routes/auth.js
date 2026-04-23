@@ -62,9 +62,9 @@ module.exports = function(deps) {
 
       const token = jwt.sign(
         { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, sessionId },
-        JWT_SECRET, { expiresIn: '24h' }
+        JWT_SECRET, { expiresIn: '30d' }
       );
-      const tokenExpiry = Date.now() + 24 * 60 * 60 * 1000;
+      const tokenExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
 
       // Send welcome email (async, non-blocking)
       emailService.sendWelcome({ name: user.name, email: user.email }).catch(function(err) {
@@ -188,9 +188,9 @@ module.exports = function(deps) {
 
       const token = jwt.sign(
         { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, sessionId },
-        JWT_SECRET, { expiresIn: '24h' }
+        JWT_SECRET, { expiresIn: '30d' }
       );
-      const tokenExpiry = Date.now() + 24 * 60 * 60 * 1000;
+      const tokenExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
       res.json({
         token,
         tokenExpiry,

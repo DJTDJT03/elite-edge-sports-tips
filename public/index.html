@@ -93,6 +93,7 @@
             <a href="#/compare" data-page="compare">H2H Compare</a>
             <a href="#/premier-league" data-page="premier-league">PL Weekend Preview</a>
             <a href="#/acca-generator" data-page="acca-generator">Acca Generator</a>
+            <a href="#/challenge" data-page="challenge">30-Day Challenge</a>
             <a href="#" onclick="App.showModal('calculator');return false;">Staking Calc</a>
           </div>
         </div>
@@ -345,24 +346,31 @@
   <!-- Staking Calculator Modal -->
   <div class="modal calc-modal" id="modal-calculator" style="display:none;">
     <button class="modal-close" onclick="App.closeModal()">&times;</button>
-    <h2>Staking Calculator</h2>
-    <div class="form-group">
-      <label>Bankroll (&pound;)</label>
-      <input type="number" id="calc-bankroll" value="1000" min="1" oninput="App.calculateStakes()">
+    <div style="display:flex;gap:8px;margin-bottom:20px;">
+      <button class="tab active" id="calc-tab-staking" onclick="App.switchCalcTab('staking')">Staking Calculator</button>
+      <button class="tab" id="calc-tab-cashout" onclick="App.switchCalcTab('cashout')">Cashout Calculator</button>
     </div>
-    <div class="form-group">
-      <label>Odds (decimal)</label>
-      <input type="number" id="calc-odds" value="2.00" min="1.01" step="0.01" oninput="App.calculateStakes()">
+    <div id="calc-staking-section">
+      <h2>Staking Calculator</h2>
+      <div class="form-group">
+        <label>Bankroll (&pound;)</label>
+        <input type="number" id="calc-bankroll" value="1000" min="1" oninput="App.calculateStakes()">
+      </div>
+      <div class="form-group">
+        <label>Odds (decimal)</label>
+        <input type="number" id="calc-odds" value="2.00" min="1.01" step="0.01" oninput="App.calculateStakes()">
+      </div>
+      <div class="form-group">
+        <label>Estimated Edge (%)</label>
+        <input type="number" id="calc-edge" value="8" min="0" step="0.5" oninput="App.calculateStakes()">
+      </div>
+      <div class="calc-result-grid" id="calc-results">
+        <div class="calc-result-item"><div class="calc-label">Kelly Criterion</div><div class="calc-value" id="calc-kelly">-</div></div>
+        <div class="calc-result-item"><div class="calc-label">Flat Stake (2%)</div><div class="calc-value" id="calc-flat">-</div></div>
+        <div class="calc-result-item"><div class="calc-label">Proportional</div><div class="calc-value" id="calc-prop">-</div></div>
+      </div>
     </div>
-    <div class="form-group">
-      <label>Estimated Edge (%)</label>
-      <input type="number" id="calc-edge" value="8" min="0" step="0.5" oninput="App.calculateStakes()">
-    </div>
-    <div class="calc-result-grid" id="calc-results">
-      <div class="calc-result-item"><div class="calc-label">Kelly Criterion</div><div class="calc-value" id="calc-kelly">-</div></div>
-      <div class="calc-result-item"><div class="calc-label">Flat Stake (2%)</div><div class="calc-value" id="calc-flat">-</div></div>
-      <div class="calc-result-item"><div class="calc-label">Proportional</div><div class="calc-value" id="calc-prop">-</div></div>
-    </div>
+    <div id="calc-cashout-section" style="display:none;"></div>
   </div>
 
   <!-- My Bets Modal -->

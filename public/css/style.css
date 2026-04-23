@@ -6432,3 +6432,211 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   .acca-leg { flex-wrap: wrap; }
   .acca-actions { flex-direction: column; }
 }
+
+/* =========================================================================
+   FEATURE: Live Race Tracker
+   ========================================================================= */
+.live-race-tracker {
+  background: linear-gradient(135deg, #0d1117, #141828);
+  border: 2px solid var(--gold-dark);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 0 24px rgba(212,168,67,0.08);
+}
+.live-race-tracker-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 14px; font-weight: 800; color: var(--gold);
+  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px;
+}
+.live-race-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px; border-radius: var(--radius);
+  background: rgba(255,255,255,0.03); margin-bottom: 8px;
+  border-left: 3px solid var(--gold-dark);
+  transition: background 0.2s;
+}
+.live-race-item:last-child { margin-bottom: 0; }
+.live-race-item.live-now { border-left-color: #ef4444; background: rgba(239,68,68,0.06); }
+.live-race-item.upcoming { border-left-color: var(--gold); }
+.live-race-item.finished { border-left-color: var(--green); opacity: 0.7; }
+.live-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #ef4444; flex-shrink: 0;
+  animation: livePulse 1.5s ease-in-out infinite;
+}
+.live-dot.upcoming-dot { background: var(--gold); animation: none; }
+.live-dot.finished-dot { background: var(--green); animation: none; }
+@keyframes livePulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
+  50% { opacity: 0.6; box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+}
+.live-race-info { flex: 1; }
+.live-race-status { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.live-race-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* =========================================================================
+   FEATURE: Bankroll Challenge Mode
+   ========================================================================= */
+.challenge-page { max-width: 800px; margin: 0 auto; }
+.challenge-header {
+  background: linear-gradient(135deg, rgba(212,168,67,0.12), rgba(212,168,67,0.03));
+  border: 2px solid rgba(212,168,67,0.3);
+  border-radius: var(--radius-lg); padding: 32px; margin-bottom: 24px; text-align: center;
+}
+.challenge-header h2 { font-size: 24px; font-weight: 900; color: var(--gold); margin-bottom: 8px; }
+.challenge-stats-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px; margin: 20px 0;
+}
+.challenge-stat {
+  background: rgba(255,255,255,0.04); border-radius: var(--radius); padding: 16px; text-align: center;
+}
+.challenge-stat-value { font-size: 22px; font-weight: 800; color: var(--text-primary); }
+.challenge-stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+.challenge-progress-bar {
+  width: 100%; height: 12px; background: rgba(255,255,255,0.06);
+  border-radius: 6px; overflow: hidden; margin: 16px 0;
+}
+.challenge-progress-fill {
+  height: 100%; border-radius: 6px;
+  background: linear-gradient(90deg, var(--gold-dark), var(--gold));
+  transition: width 0.6s ease;
+}
+.challenge-daily-log {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px; margin-top: 16px;
+}
+.challenge-day-item {
+  background: rgba(255,255,255,0.03); border-radius: var(--radius-sm);
+  padding: 10px; text-align: center; font-size: 12px;
+}
+.challenge-day-item .day-num { font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; }
+.challenge-day-item .day-pl { font-weight: 800; font-size: 14px; }
+.challenge-day-item .day-pl.positive { color: var(--green); }
+.challenge-day-item .day-pl.negative { color: var(--red); }
+.challenge-day-item .day-pl.neutral { color: var(--text-muted); }
+.challenge-cta-card {
+  background: linear-gradient(135deg, #141828, #1a1f35);
+  border: 2px solid rgba(212,168,67,0.3); border-radius: var(--radius-lg);
+  padding: 48px 32px; text-align: center;
+}
+.challenge-cta-card h2 { font-size: 28px; font-weight: 900; color: var(--gold); margin-bottom: 12px; }
+.challenge-cta-card p { font-size: 15px; color: var(--text-secondary); margin-bottom: 24px; max-width: 500px; margin-left: auto; margin-right: auto; line-height: 1.7; }
+
+/* =========================================================================
+   FEATURE: Cashout Calculator
+   ========================================================================= */
+.cashout-section { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 20px; }
+.cashout-section h3 { font-size: 16px; font-weight: 700; color: var(--gold); margin-bottom: 16px; }
+.cashout-results {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0;
+}
+.cashout-result-item {
+  background: rgba(255,255,255,0.03); border-radius: var(--radius-sm);
+  padding: 12px; text-align: center;
+}
+.cashout-result-item .co-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.cashout-result-item .co-value { font-size: 18px; font-weight: 800; margin-top: 4px; }
+.cashout-bar-container {
+  position: relative; height: 32px; background: rgba(255,255,255,0.06);
+  border-radius: 6px; overflow: hidden; margin: 16px 0;
+}
+.cashout-bar-fill {
+  height: 100%; border-radius: 6px; transition: width 0.4s ease;
+}
+.cashout-bar-label {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 11px; font-weight: 700; padding: 0 8px;
+}
+.cashout-verdict {
+  padding: 14px; border-radius: var(--radius); font-size: 13px; font-weight: 600;
+  text-align: center; margin-top: 12px;
+}
+.cashout-verdict.winning { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); color: var(--green); }
+.cashout-verdict.losing { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: var(--red); }
+.cashout-verdict.neutral { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); color: var(--blue); }
+@media (max-width: 480px) {
+  .cashout-results { grid-template-columns: 1fr; }
+}
+
+/* =========================================================================
+   FEATURE: Streak Rewards
+   ========================================================================= */
+.streak-rewards {
+  background: linear-gradient(135deg, rgba(212,168,67,0.06), rgba(212,168,67,0.01));
+  border: 1px solid rgba(212,168,67,0.2); border-radius: var(--radius-lg);
+  padding: 20px; margin-bottom: 20px;
+}
+.streak-rewards-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; font-weight: 800; color: var(--gold); margin-bottom: 16px;
+}
+.streak-milestone {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px; border-radius: var(--radius); margin-bottom: 8px;
+  background: rgba(255,255,255,0.03); border: 1px solid transparent;
+  transition: all 0.2s;
+}
+.streak-milestone:last-child { margin-bottom: 0; }
+.streak-milestone.unlocked { border-color: rgba(212,168,67,0.3); background: rgba(212,168,67,0.06); }
+.streak-milestone.active { border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.06); }
+.streak-milestone-icon { font-size: 28px; flex-shrink: 0; width: 42px; text-align: center; }
+.streak-milestone-info { flex: 1; }
+.streak-milestone-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.streak-milestone-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.streak-milestone-reward { font-size: 11px; color: var(--gold); font-weight: 600; margin-top: 4px; }
+.streak-milestone-status { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; flex-shrink: 0; }
+.streak-milestone-status.earned { background: rgba(34,197,94,0.15); color: var(--green); }
+.streak-milestone-status.locked { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+.streak-progress-mini {
+  width: 100%; height: 6px; background: rgba(255,255,255,0.06);
+  border-radius: 3px; overflow: hidden; margin-top: 10px;
+}
+.streak-progress-mini-fill {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, var(--gold-dark), var(--gold));
+  transition: width 0.4s ease;
+}
+
+/* =========================================================================
+   FEATURE: Tip Confidence Heatmap
+   ========================================================================= */
+.confidence-heatmap {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 20px; margin-bottom: 20px;
+}
+.confidence-heatmap-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; font-weight: 800; color: var(--gold); margin-bottom: 16px;
+}
+.heatmap-row { display: flex; gap: 4px; margin-bottom: 8px; align-items: center; }
+.heatmap-label { min-width: 100px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.heatmap-block {
+  width: 48px; height: 32px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: #fff;
+  cursor: pointer; transition: transform 0.2s;
+}
+.heatmap-block:hover { transform: scale(1.15); }
+.heatmap-block.elite { background: #ef4444; }
+.heatmap-block.strong { background: #f59e0b; }
+.heatmap-block.watching { background: #3b82f6; }
+.heatmap-block.none { background: #1e293b; color: #555; }
+.heatmap-legend {
+  display: flex; gap: 16px; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border); flex-wrap: wrap;
+}
+.heatmap-legend-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text-secondary);
+}
+.heatmap-legend-dot {
+  width: 10px; height: 10px; border-radius: 2px;
+}
+@media (max-width: 600px) {
+  .heatmap-label { min-width: 70px; font-size: 10px; }
+  .heatmap-block { width: 36px; height: 26px; font-size: 8px; }
+  .challenge-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .challenge-daily-log { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
+}
