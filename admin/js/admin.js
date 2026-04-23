@@ -212,14 +212,27 @@
       var handler = routes[hash];
 
       // Update sidebar active state
-      var links = document.querySelectorAll('.admin-sidebar a[data-route]');
+      var links = document.querySelectorAll('.admin-sidebar a[data-route], .admin-sidebar a[data-section]');
       for (var i = 0; i < links.length; i++) {
         var link = links[i];
-        if (link.getAttribute('data-route') === hash) {
+        var routeMatch = link.getAttribute('data-route') === hash;
+        var sectionMatch = link.getAttribute('data-section') && ('#' + link.getAttribute('data-section') === hash || '#/' + link.getAttribute('data-section') === hash);
+        if (routeMatch || sectionMatch) {
           link.classList.add('active');
         } else {
           link.classList.remove('active');
         }
+      }
+
+      // Show/hide sections
+      var sectionName = hash.replace('#/', '').replace('#', '') || 'dashboard';
+      var sections = document.querySelectorAll('.section');
+      for (var s = 0; s < sections.length; s++) {
+        sections[s].style.display = 'none';
+      }
+      var activeSection = document.getElementById('sec-' + sectionName);
+      if (activeSection) {
+        activeSection.style.display = 'block';
       }
 
       if (handler) {
