@@ -132,7 +132,7 @@
     // -----------------------------------------------------------------------
     login: function (email, password) {
       var self = this;
-      return fetch('/api/login', {
+      return fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email, password: password })
