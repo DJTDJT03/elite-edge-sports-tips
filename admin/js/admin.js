@@ -179,14 +179,14 @@
       var loginScreen = document.getElementById('loginGate');
       var adminApp = document.getElementById('adminApp');
       if (loginScreen) loginScreen.style.display = '';
-      if (adminApp) adminApp.style.display = 'none';
+      if (adminApp) { adminApp.style.display = 'none'; adminApp.classList.add('hidden'); }
     },
 
     _showApp: function () {
       var loginScreen = document.getElementById('loginGate');
       var adminApp = document.getElementById('adminApp');
       if (loginScreen) loginScreen.style.display = 'none';
-      if (adminApp) adminApp.style.display = '';
+      if (adminApp) { adminApp.style.display = ''; adminApp.classList.remove('hidden'); }
 
       // Populate user badge if present
       var badge = document.getElementById('adminName');
