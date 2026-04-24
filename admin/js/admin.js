@@ -224,15 +224,19 @@
         }
       }
 
-      // Show/hide sections
-      var sectionName = hash.replace('#/', '').replace('#', '') || 'dashboard';
-      var sections = document.querySelectorAll('.section');
-      for (var s = 0; s < sections.length; s++) {
-        sections[s].style.display = 'none';
-      }
-      var activeSection = document.getElementById('sec-' + sectionName);
-      if (activeSection) {
-        activeSection.style.display = 'block';
+      // Show/hide sections — only manage analytics section, leave others to original system
+      var analyticsSection = document.getElementById('sec-analytics');
+      if (hash === '#/analytics') {
+        // Hide all other sections, show analytics
+        var sections = document.querySelectorAll('.section');
+        for (var s = 0; s < sections.length; s++) {
+          sections[s].classList.remove('active');
+          sections[s].style.display = 'none';
+        }
+        if (analyticsSection) analyticsSection.style.display = 'block';
+      } else {
+        // Hide analytics, let original system handle other sections
+        if (analyticsSection) analyticsSection.style.display = 'none';
       }
 
       if (handler) {

@@ -76,6 +76,7 @@ const App = {
     this.loadTheme();
     this.loadOddsFormat();
     this.checkTokenExpiry();
+    this.initInactivityTimer();
     // Refresh user data from server on every page load (catches trial/subscription changes)
     if (this.token && this.user) {
       this.api('/auth/me').then(function(data) {
@@ -471,6 +472,38 @@ const App = {
         </div>
       `;
     }, 100);
+  },
+
+  // Inactivity timeout — logs out after 1 hour of no interaction
+  // ONLY clears the local session token — never touches user data, account, or server-side records
+  initInactivityTimer() {
+    var TIMEOUT = 60 * 60 * 1000; // 1 hour
+    var self = this;
+    var timer = null;
+
+    function resetTimer() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function() {
+        if (self.token && self.user) {
+          // Clear local session only — account and data remain intact
+          self.token = null;
+          self.user = null;
+          localStorage.removeItem('ee_token');
+          localStorage.removeItem('ee_user');
+          localStorage.removeItem('ee_token_expiry');
+          self.updateAuthUI();
+          self.showToast('Logged out due to inactivity. Your account is safe — please log in again.', 'info');
+          window.location.hash = '#/';
+        }
+      }, TIMEOUT);
+    }
+
+    // Reset on any user interaction
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'].forEach(function(evt) {
+      document.addEventListener(evt, resetTimer, { passive: true });
+    });
+
+    resetTimer();
   },
 
   checkTokenExpiry() {
