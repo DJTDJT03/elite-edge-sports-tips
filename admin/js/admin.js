@@ -430,13 +430,13 @@
   // =========================================================================
   document.addEventListener('DOMContentLoaded', function () {
     // Wire up login form if present
-    var loginForm = document.getElementById('admin-login-form');
+    var loginForm = document.getElementById('loginForm');
     if (loginForm) {
       loginForm.addEventListener('submit', function (e) {
         e.preventDefault();
-        var email = document.getElementById('admin-login-email').value;
-        var password = document.getElementById('admin-login-password').value;
-        var errorEl = document.getElementById('admin-login-error');
+        var email = document.getElementById('loginEmail').value;
+        var password = document.getElementById('loginPassword').value;
+        var errorEl = document.getElementById('loginError');
 
         if (errorEl) errorEl.textContent = '';
 
@@ -456,6 +456,8 @@
     }
 
     AdminApp.init();
+    // Remove FOUC prevention — show the page
+    document.body.classList.add('ready');
   });
 
 })();
