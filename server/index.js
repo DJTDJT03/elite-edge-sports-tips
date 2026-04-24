@@ -396,7 +396,7 @@ app.use('/', require('./routes/public')(deps));
 // Startup: remove incorrect selections from tips and results
 // ---------------------------------------------------------------------------
 (async function cleanupBadSelections() {
-  var removeSelections = ["Commander's Intent", "Caballo Grande", "Lavender Hill Mob", "Calico", "Catching The Moon", "Spinning Lizzie", "Aqpan", "Ardisia", "Title Role", "Uptown Dandy", "Getaway King", "Rathkenny"];
+  var removeSelections = ["Commander's Intent", "Caballo Grande", "Lavender Hill Mob", "Calico", "Catching The Moon", "Spinning Lizzie", "Aqpan", "Ardisia", "Title Role", "Uptown Dandy", "Getaway King", "Rathkenny", "Sogna In Grande"];
   try {
     // Clean from database
     if (db.isAvailable()) {
@@ -511,7 +511,38 @@ app.use('/', require('./routes/public')(deps));
   } catch(e) {}
 })();
 
-// Manual results for 21 April — COMPLETED, script removed
+// Manual results for 23 April
+(async function addManualResults0423() {
+  try {
+    if (!db.isAvailable()) return;
+    var winners = [
+      { id: 'man_apr23_1', sel: 'Salford Win', sport: 'football', event: 'Salford City', market: 'Match Result', odds: 1.91, stake: 2, pnl: 1.82, tp: 'The Edge', conf: 7 },
+      { id: 'man_apr23_2', sel: 'Stuttgart BTTS', sport: 'football', event: 'Stuttgart', market: 'BTTS', odds: 1.57, stake: 2, pnl: 1.14, tp: 'The Scout', conf: 7 },
+      { id: 'man_apr23_3', sel: 'Levante Win', sport: 'football', event: 'Levante', market: 'Match Result', odds: 2.5, stake: 2, pnl: 3.00, tp: 'The Professor', conf: 8 },
+      { id: 'man_apr23_4', sel: 'Braga Win', sport: 'football', event: 'SC Braga', market: 'Match Result', odds: 1.55, stake: 2, pnl: 1.10, tp: 'The Edge', conf: 7 },
+    ];
+    var added = 0;
+    for (var i = 0; i < winners.length; i++) {
+      var w = winners[i];
+      try { await db.query("DELETE FROM results WHERE id = $1", [w.id]); } catch(e) {}
+      try {
+        await db.query(
+          "INSERT INTO results (id, tip_id, sport, event, selection, market, odds, stake, result, pnl, date, is_premium, tipster_profile, confidence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
+          [w.id, null, w.sport, w.event, w.sel, w.market, w.odds, w.stake, 'won', w.pnl, new Date('2026-04-23'), true, w.tp, w.conf]
+        );
+        added++;
+        // Post to Telegram
+        try {
+          var tgBot = require('./services/telegramBot');
+          if (tgBot && tgBot.isAvailable()) {
+            await tgBot.sendResult({ selection: w.sel, odds: w.odds, result: 'won', pnl: w.pnl, event: w.event });
+          }
+        } catch(tgErr) {}
+      } catch(e) { console.log('[Startup] Insert failed ' + w.sel + ': ' + e.message); }
+    }
+    if (added > 0) console.log('[Startup] Added ' + added + ' winners for 23 April');
+  } catch(e) {}
+})();
 
 // ---------------------------------------------------------------------------
 // Global error handler — catches unhandled errors in route handlers
