@@ -176,20 +176,20 @@
     // UI switching
     // -----------------------------------------------------------------------
     _showLogin: function () {
-      var loginScreen = document.getElementById('login-screen');
-      var adminApp = document.getElementById('admin-app');
+      var loginScreen = document.getElementById('loginGate');
+      var adminApp = document.getElementById('adminApp');
       if (loginScreen) loginScreen.style.display = '';
       if (adminApp) adminApp.style.display = 'none';
     },
 
     _showApp: function () {
-      var loginScreen = document.getElementById('login-screen');
-      var adminApp = document.getElementById('admin-app');
+      var loginScreen = document.getElementById('loginGate');
+      var adminApp = document.getElementById('adminApp');
       if (loginScreen) loginScreen.style.display = 'none';
       if (adminApp) adminApp.style.display = '';
 
       // Populate user badge if present
-      var badge = document.getElementById('admin-user-name');
+      var badge = document.getElementById('adminName');
       if (badge && this.user) badge.textContent = this.user.name || this.user.email;
     },
 
@@ -447,7 +447,7 @@
     }
 
     // Wire up logout button if present
-    var logoutBtn = document.getElementById('admin-logout-btn');
+    var logoutBtn = document.getElementById('btnLogout');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', function (e) {
         e.preventDefault();

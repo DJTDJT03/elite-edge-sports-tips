@@ -2641,10 +2641,14 @@ module.exports = function startScheduler(deps) {
   // =========================================================================
   // TELEGRAM DAILY ENGAGEMENT (morning teaser, evening roundup, weekend preview, weekly stats)
   // =========================================================================
-  var lastTgMorning = '';
-  var lastTgEvening = '';
-  var lastTgWeekend = '';
-  var lastTgWeekly = '';
+  // Persist Telegram send dates to survive deploys
+  var _tgFile = require('path').join(process.env.PERSISTENT_DATA_DIR || '/data', 'tg-dates.json');
+  var _tgDates = {};
+  try { _tgDates = JSON.parse(require('fs').readFileSync(_tgFile, 'utf8')); } catch(e) {}
+  var lastTgMorning = _tgDates.m || '';
+  var lastTgEvening = _tgDates.e || '';
+  var lastTgWeekend = _tgDates.w || '';
+  var lastTgWeekly = _tgDates.s || '';
 
   async function telegramDailyContent() {
     if (!telegramBot || !telegramBot.isAvailable()) return;
@@ -2656,7 +2660,7 @@ module.exports = function startScheduler(deps) {
 
     // Morning teaser: 7:45am (after tips generated at 7:30)
     if (hour === 7 && minute >= 40 && minute <= 55 && lastTgMorning !== dateStr) {
-      lastTgMorning = dateStr;
+      lastTgMorning = dateStr; _tgDates.m = dateStr; try { require('fs').writeFileSync(_tgFile, JSON.stringify(_tgDates)); } catch(e) {}
       try {
         var tips = await db.getTips();
         var todayTips = tips.filter(function(t) { return normDate(t.date) === dateStr && t.status === 'active' && !t.isWeeklyAcca; });
@@ -2670,7 +2674,7 @@ module.exports = function startScheduler(deps) {
 
     // Evening round-up: 8pm
     if (hour === 20 && minute >= 0 && minute <= 15 && lastTgEvening !== dateStr) {
-      lastTgEvening = dateStr;
+      lastTgEvening = dateStr; _tgDates.e = dateStr; try { require('fs').writeFileSync(_tgFile, JSON.stringify(_tgDates)); } catch(e) {}
       try {
         var allResults = await db.getResults();
         var todayResults = allResults.filter(function(r) { return normDate(r.date) === dateStr; });
@@ -2696,7 +2700,7 @@ module.exports = function startScheduler(deps) {
 
     // Weekend preview: Friday 2pm
     if (day === 5 && hour === 14 && minute >= 0 && minute <= 15 && lastTgWeekend !== dateStr) {
-      lastTgWeekend = dateStr;
+      lastTgWeekend = dateStr; _tgDates.w = dateStr; try { require('fs').writeFileSync(_tgFile, JSON.stringify(_tgDates)); } catch(e) {}
       try {
         if (footballSource && process.env.API_FOOTBALL_KEY) {
           var sat = new Date(uk); sat.setDate(uk.getDate() + 1);
@@ -2722,7 +2726,7 @@ module.exports = function startScheduler(deps) {
 
     // Weekly stats: Sunday 8pm
     if (day === 0 && hour === 20 && minute >= 15 && minute <= 30 && lastTgWeekly !== dateStr) {
-      lastTgWeekly = dateStr;
+      lastTgWeekly = dateStr; _tgDates.s = dateStr; try { require('fs').writeFileSync(_tgFile, JSON.stringify(_tgDates)); } catch(e) {}
       try {
         var weekResults = await db.getResults();
         var weekAgo = new Date(uk.getTime() - 7 * 86400000).toISOString().split('T')[0];
