@@ -192,6 +192,43 @@ module.exports = function(deps) {
   });
 
   // ---------------------------------------------------------------------------
+  // ADMIN: Add manual result (no tip required) + optional Telegram post
+  // ---------------------------------------------------------------------------
+  router.post('/admin/manual-result', authenticate, requireAdmin, async (req, res) => {
+    try {
+      var { selection, sport, event, market, odds, stake, result, date, tipsterProfile, confidence, postToTelegram } = req.body;
+      if (!selection || !odds || !result) return res.status(400).json({ error: 'selection, odds, and result are required' });
+
+      var numOdds = parseFloat(odds) || 2;
+      var numStake = parseFloat(stake) || 2;
+      var pnl = 0;
+      if (result === 'won') pnl = (numOdds - 1) * numStake;
+      else if (result === 'placed') pnl = ((numOdds - 1) / 4) * numStake;
+      else if (result === 'lost') pnl = -numStake;
+
+      var rid = 'manual_' + Date.now();
+      await db.query(
+        "INSERT INTO results (id, tip_id, sport, event, selection, market, odds, stake, result, pnl, date, is_premium, tipster_profile, confidence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
+        [rid, null, sport || 'football', event || selection, selection, market || 'Match Result', numOdds, numStake, result, Math.round(pnl * 100) / 100, date ? new Date(date) : new Date(), true, tipsterProfile || 'The Edge', confidence || 7]
+      );
+
+      // Post to Telegram if requested and result is a win
+      if (postToTelegram && (result === 'won' || result === 'placed')) {
+        try {
+          var tgBot = require('../services/telegramBot');
+          if (tgBot && tgBot.isAvailable()) {
+            await tgBot.sendResult({ selection: selection, odds: numOdds, result: result, pnl: Math.round(pnl * 100) / 100, event: event || selection });
+          }
+        } catch(tgErr) {}
+      }
+
+      res.json({ id: rid, selection: selection, odds: numOdds, result: result, pnl: Math.round(pnl * 100) / 100, posted: postToTelegram ? true : false });
+    } catch(err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // ADMIN: Bulk result marking (NEW)
   // ---------------------------------------------------------------------------
   router.post('/admin/results/bulk', authenticate, requireAdmin, async (req, res) => {
