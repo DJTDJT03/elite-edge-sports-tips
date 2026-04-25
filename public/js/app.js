@@ -10351,19 +10351,41 @@ const App = {
     if (selected.length > 0 && !notEnough) {
       summaryHtml =
         '<div class="acca-summary">' +
-          '<h3 style="margin:0 0 12px;color:var(--gold);">Accumulator Summary</h3>' +
-          '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;">' +
-            '<div><span style="font-size:12px;color:var(--text-muted);">Combined Odds</span><div style="font-size:20px;font-weight:800;">' + self.formatOdds(combinedDecimalOdds) + '</div></div>' +
-            '<div><span style="font-size:12px;color:var(--text-muted);">Model Probability</span><div style="font-size:20px;font-weight:800;">' + (combinedModelProb * 100).toFixed(2) + '%</div></div>' +
-            '<div><span style="font-size:12px;color:var(--text-muted);">Implied Probability</span><div style="font-size:20px;font-weight:800;">' + (combinedImpliedProb * 100).toFixed(2) + '%</div></div>' +
-            '<div><span style="font-size:12px;color:var(--text-muted);">Edge on Acca</span><div style="font-size:20px;font-weight:800;color:' + (parseFloat(accaEdge) >= 0 ? 'var(--green)' : '#ef4444') + ';">' + (parseFloat(accaEdge) >= 0 ? '+' : '') + accaEdge + '%</div></div>' +
+          '<h3 style="margin:0 0 20px;color:var(--gold);font-size:18px;text-align:center;">Accumulator Summary</h3>' +
+
+          // Main stats row
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">' +
+            '<div style="text-align:center;padding:16px;background:rgba(212,168,67,0.08);border-radius:10px;">' +
+              '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;">Combined Odds</div>' +
+              '<div style="font-size:28px;font-weight:900;color:var(--gold);">' + self.formatOdds(combinedDecimalOdds) + '</div>' +
+            '</div>' +
+            '<div style="text-align:center;padding:16px;background:rgba(34,197,94,0.08);border-radius:10px;">' +
+              '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;">Edge</div>' +
+              '<div style="font-size:28px;font-weight:900;color:' + (parseFloat(accaEdge) >= 0 ? 'var(--green)' : '#ef4444') + ';">' + (parseFloat(accaEdge) >= 0 ? '+' : '') + accaEdge + '%</div>' +
+            '</div>' +
+            '<div style="text-align:center;padding:16px;background:rgba(255,255,255,0.03);border-radius:10px;">' +
+              '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;">Risk</div>' +
+              '<div style="font-size:28px;font-weight:900;color:' + riskColor + ';">' + riskLabel + '</div>' +
+            '</div>' +
           '</div>' +
-          '<div style="margin-bottom:10px;"><span style="font-size:12px;color:var(--text-muted);">Risk Rating:</span> <strong style="color:' + riskColor + ';">' + riskLabel + '</strong></div>' +
-          '<div class="acca-returns-grid">' + returnsHtml + '</div>' +
-          '<div class="acca-actions">' +
+
+          // Probability detail
+          '<div style="display:flex;justify-content:center;gap:24px;margin-bottom:20px;font-size:13px;">' +
+            '<div style="color:var(--text-muted);">Model Prob: <strong style="color:var(--text-primary);">' + (combinedModelProb * 100).toFixed(1) + '%</strong></div>' +
+            '<div style="color:var(--text-muted);">Implied Prob: <strong style="color:var(--text-primary);">' + (combinedImpliedProb * 100).toFixed(1) + '%</strong></div>' +
+          '</div>' +
+
+          // Returns grid
+          '<div style="margin-bottom:20px;">' +
+            '<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);text-align:center;margin-bottom:10px;">Potential Returns</div>' +
+            '<div class="acca-returns-grid">' + returnsHtml + '</div>' +
+          '</div>' +
+
+          // Action buttons
+          '<div class="acca-actions" style="display:flex;gap:10px;justify-content:center;">' +
             '<button class="btn btn-gold" onclick="App._copyAccaToClipboard()">Copy to Bet Slip</button>' +
             '<button class="btn btn-outline" onclick="App._addAccaToMyBets()">Add to My Bets</button>' +
-            '<button class="btn btn-ghost" onclick="App._regenerateAcca()">Regenerate</button>' +
+            '<button class="btn btn-outline" onclick="App._regenerateAcca()">&#8635; Regenerate</button>' +
           '</div>' +
         '</div>';
     }
