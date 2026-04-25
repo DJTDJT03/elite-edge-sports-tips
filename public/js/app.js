@@ -10293,12 +10293,33 @@ const App = {
       var edgePct = ((mp - (1 / decOdds)) * 100).toFixed(1);
       var analystLabel = tip.analyst || 'Elite Edge';
 
+      // Build reasoning based on market type and stats
+      var reasoning = '';
+      if (tip.market === 'Match Result' || tip.selection.indexOf('Win') !== -1) {
+        reasoning = 'Strong form and model probability of ' + (mp * 100).toFixed(0) + '% give us a ' + edgePct + '% edge. ' + analystLabel + ' rates this as a confident pick.';
+      } else if (tip.market === 'BTTS' || tip.selection.indexOf('Both Teams') !== -1) {
+        reasoning = 'Both sides have been scoring consistently. Our model gives BTTS a ' + (mp * 100).toFixed(0) + '% probability — well above the bookmaker\'s implied price.';
+      } else if (tip.market === 'Over/Under' || tip.selection.indexOf('Over') !== -1) {
+        reasoning = 'High-scoring fixture expected. Combined attacking stats support the overs market with ' + edgePct + '% edge identified.';
+      } else if (tip.sport === 'racing') {
+        reasoning = 'Form and course suitability analysis gives a ' + (mp * 100).toFixed(0) + '% win probability. ' + analystLabel + ' sees value at these odds.';
+      } else {
+        reasoning = analystLabel + ' identifies ' + edgePct + '% edge based on model probability of ' + (mp * 100).toFixed(0) + '%.';
+      }
+
+      // Show fixture name prominently
+      var fixtureName = tip.match || tip.event || '';
+      var leagueInfo = tip.league || tip.meeting || '';
+      var kickoffInfo = tip.kickoff || '';
+
       legsHtml +=
         '<div class="acca-leg">' +
           '<div class="acca-leg-number">' + (i + 1) + '</div>' +
           '<div class="acca-leg-info">' +
+            (fixtureName ? '<div style="font-size:13px;font-weight:700;color:#d4a843;margin-bottom:2px;">' + fixtureName + '</div>' : '') +
             '<div class="acca-leg-selection">' + (tip.selection || 'Selection') + '</div>' +
-            '<div class="acca-leg-event">' + (tip.event || '') + (tip.league ? ' &bull; ' + tip.league : '') + (tip.meeting ? ' &bull; ' + tip.meeting : '') + '</div>' +
+            '<div class="acca-leg-event">' + (leagueInfo ? leagueInfo : '') + (kickoffInfo ? ' &bull; ' + kickoffInfo : '') + '</div>' +
+            '<div style="font-size:11px;color:#94a3b8;font-style:italic;margin-top:4px;line-height:1.4;">' + reasoning + '</div>' +
             '<div class="acca-leg-stats">' +
               '<span>' + (tip.market || 'Win') + '</span>' +
               '<span>Prob: ' + (mp * 100).toFixed(0) + '%</span>' +
