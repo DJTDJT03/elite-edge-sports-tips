@@ -1303,6 +1303,8 @@ class ScoringModel {
     const distance = race.distance || '';
     const or = runner.officialRating || 0;
     const sig = enrichment || {};
+    // Helper: get trimmed signal value or empty string
+    const sv = (key) => sig[key] ? sig[key].value.trim() : '';
 
     // Build form context — weave stable_form signal if available
     let formContext = '';
@@ -1318,7 +1320,7 @@ class ScoringModel {
       formContext = 'Limited recent form data available. Relying on profile and connections.';
     }
     if (sig.stable_form) {
-      formContext += ' ' + sig.stable_form.value;
+      formContext += ' ' + sv('stable_form');
     }
 
     // Key reason based on top factor
@@ -1340,28 +1342,28 @@ class ScoringModel {
     // Going suitability — weave going_update and course_report signals inline
     let goingText = `${going} — ${going.toLowerCase().includes('good') || going.toLowerCase().includes('standard') ? 'conditions should suit based on profile and recent efforts' : 'ground conditions are a slight unknown but form suggests adaptability'}.`;
     if (sig.going_update) {
-      goingText = `Official going: ${going}. ${sig.going_update.value} Suitability assessment adjusted accordingly.`;
+      goingText = `Official going: ${going}. ${sv('going_update')} Suitability assessment adjusted accordingly.`;
     }
     if (sig.course_report) {
-      goingText += ' ' + sig.course_report.value;
+      goingText += ' ' + sv('course_report');
     }
 
     // Course record — weave rail_movement signal inline
     let courseText = `${formPositions.includes(1) ? 'Proven winner who handles similar tracks' : 'Course form to be established'} — ${meeting} ${distance ? '(' + distance + ')' : ''} should play to strengths.`;
     if (sig.rail_movement) {
-      courseText += ' ' + sig.rail_movement.value;
+      courseText += ' ' + sv('rail_movement');
     }
 
     // Trainer form — weave jockey_change signal inline
     let trainerText = `${trainer} in ${factors.trainerJockey >= 0.7 ? 'excellent' : factors.trainerJockey >= 0.5 ? 'decent' : 'quiet'} form. ${jockey} takes the ride${factors.trainerJockey >= 0.7 ? ' — a strong booking that adds confidence' : ''}.`;
     if (sig.jockey_change) {
-      trainerText += ' Note: ' + sig.jockey_change.value;
+      trainerText += ' Note: ' + sv('jockey_change');
     }
 
     // Summary — weave non_runner and headgear_change into summary
     let summaryExtra = '';
-    if (sig.non_runner) summaryExtra += ' ' + sig.non_runner.value;
-    if (sig.headgear_change) summaryExtra += ' ' + sig.headgear_change.value;
+    if (sig.non_runner) summaryExtra += ' ' + sv('non_runner');
+    if (sig.headgear_change) summaryExtra += ' ' + sv('headgear_change');
 
     return {
       summary: `${horseName} runs in the ${time} at ${meeting} and our model rates this a strong Win opportunity. ${keyReason}. At ${odds.toFixed(2)}, the edge is ${edgePct}% against the market.${summaryExtra}`,
@@ -1388,6 +1390,7 @@ class ScoringModel {
     const modelPct = (modelProb * 100).toFixed(0);
     const impliedPct = (impliedProb * 100).toFixed(0);
     const sig = enrichment || {};
+    const sv = (key) => sig[key] ? sig[key].value.trim() : '';
 
     const factors = scored.factors || {};
     let keyReason = '';
@@ -1415,7 +1418,7 @@ class ScoringModel {
     }
     // Weave motivation_context inline into form text
     if (sig.motivation_context) {
-      formText += ' ' + sig.motivation_context.value;
+      formText += ' ' + sv('motivation_context');
     }
 
     const riskNotes = odds < 2
@@ -1427,21 +1430,21 @@ class ScoringModel {
     // Weave injury_update + team_news into injuries field
     let injuryText = 'Check team news closer to kick-off for any late changes that could affect the selection.';
     if (sig.team_news) {
-      injuryText = sig.team_news.value;
+      injuryText = sv('team_news');
     }
     if (sig.injury_update) {
-      injuryText += ' ' + sig.injury_update.value;
+      injuryText += ' ' + sv('injury_update');
     }
 
     // Weave tactical_change + rotation_risk into summary extra
     let summaryExtra = '';
-    if (sig.tactical_change) summaryExtra += ' ' + sig.tactical_change.value;
-    if (sig.rotation_risk) summaryExtra += ' ' + sig.rotation_risk.value;
+    if (sig.tactical_change) summaryExtra += ' ' + sv('tactical_change');
+    if (sig.rotation_risk) summaryExtra += ' ' + sv('rotation_risk');
 
     // Weave manager_comments into H2H field (contextual, not statistical)
     let h2hText = `Recent meetings between ${home} and ${away} have been considered in the model's H2H factor.`;
     if (sig.manager_comments) {
-      h2hText += ' ' + sig.manager_comments.value;
+      h2hText += ' ' + sv('manager_comments');
     }
 
     return {

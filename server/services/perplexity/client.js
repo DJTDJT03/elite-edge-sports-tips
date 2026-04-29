@@ -66,9 +66,9 @@ module.exports = function createPerplexityClient(db) {
     if (state === 'open') console.log('[Sonar] Suppression state: OPEN (derived from ledger)');
   }).catch(function() { /* non-fatal */ });
 
-  // Schedule cache cleanup: on init + every hour (unref so tests can exit)
-  _cleanupCache();
-  var _cleanupInterval = setInterval(_cleanupCache, 60 * 60 * 1000);
+  // Schedule cache cleanup + orphan recovery: on init + every hour (unref so tests can exit)
+  _cleanupAndRecover();
+  var _cleanupInterval = setInterval(_cleanupAndRecover, 60 * 60 * 1000);
   if (_cleanupInterval.unref) _cleanupInterval.unref();
 
   // =========================================================================
@@ -730,11 +730,29 @@ module.exports = function createPerplexityClient(db) {
     };
   }
 
-  function _cleanupCache() {
-    if (db && db.isAvailable()) {
-      db.cleanExpiredSonarCache().catch(function(e) {
-        console.error('[Sonar] Cache cleanup failed:', e.message);
-      });
+  function _cleanupAndRecover() {
+    if (!db || !db.isAvailable()) return;
+    // Clean expired cache rows
+    db.cleanExpiredSonarCache().catch(function(e) {
+      console.error('[Sonar] Cache cleanup failed:', e.message);
+    });
+    // Backfill orphaned enrichment links — tips that have a tip_enrichment row
+    // but no enrichment_id set (e.g. after a mid-run crash between createTipEnrichment
+    // and updateTip). Idempotent, cheap single UPDATE.
+    _backfillOrphanEnrichmentLinks();
+  }
+
+  async function _backfillOrphanEnrichmentLinks() {
+    if (!db || !db.isAvailable()) return;
+    try {
+      var result = await db.query(
+        'UPDATE tips t SET enrichment_id = e.id FROM tip_enrichment e WHERE e.tip_id = t.id AND t.enrichment_id IS NULL'
+      );
+      if (result.rowCount > 0) {
+        console.log('[Sonar] Backfilled ' + result.rowCount + ' orphaned enrichment link(s)');
+      }
+    } catch (e) {
+      // Non-fatal — table may not exist yet on first deploy
     }
   }
 
