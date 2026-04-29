@@ -6423,7 +6423,7 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
 .acca-leg-event { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 .acca-leg-stats { display: flex; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--text-secondary); }
 .acca-leg-odds { font-size: 18px; font-weight: 800; color: var(--text-primary); min-width: 60px; text-align: right; }
-.acca-summary { background: linear-gradient(135deg, rgba(212,168,67,0.12), rgba(212,168,67,0.04)); border: 2px solid rgba(212,168,67,0.3); border-radius: 14px; padding: 24px; margin-top: 20px; }
+.acca-gen-page .acca-summary { display: block; background: linear-gradient(135deg, rgba(212,168,67,0.12), rgba(212,168,67,0.04)); border: 2px solid rgba(212,168,67,0.3); border-radius: 14px; padding: 24px; margin-top: 20px; max-width: 100%; box-sizing: border-box; overflow: hidden; }
 .acca-returns-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
 .acca-return-card { background: rgba(255,255,255,0.04); border-radius: 8px; padding: 12px; text-align: center; }
 .acca-return-stake { font-size: 12px; color: var(--text-muted); }
@@ -6433,6 +6433,13 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   .acca-returns-grid { grid-template-columns: repeat(2, 1fr); }
   .acca-leg { flex-wrap: wrap; }
   .acca-actions { flex-direction: column; }
+  .acca-gen-page .acca-summary { padding: 16px; }
+  .acca-gen-page .acca-summary h3 { font-size: 16px; }
+}
+@media (max-width: 480px) {
+  .acca-returns-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .acca-return-card { padding: 10px 8px; }
+  .acca-return-value { font-size: 15px; }
 }
 
 /* =========================================================================
