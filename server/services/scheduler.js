@@ -1381,21 +1381,22 @@ module.exports = function startScheduler(deps) {
 
                 // Generate AI race replay analysis (non-blocking IIFE — does not block settle loop)
                 if (aiReports && aiReports.isAvailable() && tip.sport === 'racing') {
+                  // IIFE has its own function scope — var declarations here don't conflict with outer scope
                   (async function() {
                     try {
-                      var tipRunner2 = match.runners.find(function(rn) { return normHorse(rn.horse) === tipName; });
-                      var winnerRunner2 = match.runners.find(function(rn) { return parseInt(rn.position, 10) === 1; });
+                      var tipRunner = match.runners.find(function(rn) { return normHorse(rn.horse) === tipName; });
+                      var winnerRunner = match.runners.find(function(rn) { return parseInt(rn.position, 10) === 1; });
                       var replayData = {
                         selection: tip.selection,
                         meeting: tip.meeting || tip.event || '',
                         raceTime: tip.raceTime || '',
                         result: resultVal,
-                        position: tipRunner2 ? tipRunner2.position : 'N/A',
+                        position: tipRunner ? tipRunner.position : 'N/A',
                         odds: tip.odds,
                         going: match.going || '',
                         distance: match.distance || '',
-                        winnerName: winnerRunner2 ? winnerRunner2.horse : '',
-                        winnerOdds: winnerRunner2 ? winnerRunner2.sp : '',
+                        winnerName: winnerRunner ? winnerRunner.horse : '',
+                        winnerOdds: winnerRunner ? winnerRunner.sp : '',
                         raceComment: match.race_comment || '',
                         runners: match.runners ? match.runners.length : 0,
                       };

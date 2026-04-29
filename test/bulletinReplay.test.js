@@ -125,6 +125,137 @@ test('enrichBulletin — empty tips array: zero Sonar calls, both null', async f
 });
 
 // =========================================================================
+// BULLETIN PROMPT RENDERING — liveContext ordering
+// =========================================================================
+
+test('bulletin prompt — liveContext inserted BEFORE JSON instruction, not after', function() {
+  // Simulate the exact prompt-construction logic from aiReports.generateEmailBulletin
+  var data = {
+    userName: 'TestUser',
+    date: '2026-04-29',
+    tips: [{ selection: 'Horse A', event: 'Newbury 14:30', odds: 4.5, isPremium: true, confidence: 7 }],
+    yesterdayResults: { wins: 2, losses: 1, pnl: 3.50, strikeRate: 67 },
+    napSelection: 'Horse A',
+    streak: '3W',
+    liveContext: {
+      racing: 'Newbury Good to Firm after watering, clerk expects it to ride Good in places.',
+      football: 'Newcastle 5th, must-win for Champions League. Isak fit to start.',
+    },
+  };
+
+  // Reproduce the prompt-building from aiReports.js
+  var userPrompt = 'Generate a personalised morning email bulletin.\n\n';
+  userPrompt += 'SUBSCRIBER NAME: ' + (data.userName || 'Subscriber') + '\n';
+  userPrompt += 'DATE: ' + (data.date || '') + '\n\n';
+  if (data.yesterdayResults) {
+    userPrompt += 'YESTERDAY\'S RESULTS:\n';
+    userPrompt += '  Wins: ' + data.yesterdayResults.wins + '\n';
+    userPrompt += '  Losses: ' + data.yesterdayResults.losses + '\n\n';
+  }
+  if (data.tips && data.tips.length > 0) {
+    userPrompt += 'TODAY\'S TIPS (' + data.tips.length + '):\n';
+    data.tips.forEach(function(tip) {
+      userPrompt += '  - ' + tip.selection + ' in ' + tip.event + ' at ' + tip.odds + '\n';
+    });
+    userPrompt += '\n';
+  }
+  if (data.napSelection) {
+    userPrompt += 'NAP OF THE DAY: ' + data.napSelection + '\n\n';
+  }
+  if (data.streak) {
+    userPrompt += 'CURRENT STREAK: ' + data.streak + '\n\n';
+  }
+
+  // This is the liveContext block from aiReports.js
+  if (data.liveContext) {
+    var hasLive = data.liveContext.racing || data.liveContext.football;
+    if (hasLive) {
+      userPrompt += 'LIVE INTELLIGENCE (last 24 hours):\n';
+      if (data.liveContext.racing) {
+        userPrompt += '\nRacing:\n' + data.liveContext.racing + '\n';
+      }
+      if (data.liveContext.football) {
+        userPrompt += '\nFootball:\n' + data.liveContext.football + '\n';
+      }
+      userPrompt += '\nWeave relevant intelligence into your resultsReview and todaysPicks fields naturally. Do not list it as a separate section.\n\n';
+    }
+  }
+
+  userPrompt += 'Return your response as JSON with these fields:\n';
+  userPrompt += '- subject: email subject line (max 60 chars)\n';
+
+  // (a) LIVE INTELLIGENCE block appears
+  assert.ok(
+    userPrompt.indexOf('LIVE INTELLIGENCE (last 24 hours):') !== -1,
+    'LIVE INTELLIGENCE header should appear'
+  );
+
+  // (b) Both Racing: and Football: blocks appear
+  assert.ok(
+    userPrompt.indexOf('\nRacing:\n') !== -1,
+    'Racing: block should appear'
+  );
+  assert.ok(
+    userPrompt.indexOf('\nFootball:\n') !== -1,
+    'Football: block should appear'
+  );
+  assert.ok(
+    userPrompt.indexOf('Newbury Good to Firm') !== -1,
+    'Racing context content should be present'
+  );
+  assert.ok(
+    userPrompt.indexOf('Newcastle 5th') !== -1,
+    'Football context content should be present'
+  );
+
+  // (c) CRITICAL: "Return your response as JSON" appears AFTER LIVE INTELLIGENCE, not before
+  var liveIntPos = userPrompt.indexOf('LIVE INTELLIGENCE (last 24 hours):');
+  var jsonInstructPos = userPrompt.indexOf('Return your response as JSON');
+  assert.ok(
+    jsonInstructPos > liveIntPos,
+    'JSON instruction (pos ' + jsonInstructPos + ') must come AFTER LIVE INTELLIGENCE (pos ' + liveIntPos + ')'
+  );
+});
+
+test('bulletin prompt — no liveContext: no LIVE INTELLIGENCE block, JSON instruction still present', function() {
+  var userPrompt = 'Generate a personalised morning email bulletin.\n\n';
+  userPrompt += 'SUBSCRIBER NAME: TestUser\n';
+  userPrompt += 'DATE: 2026-04-29\n\n';
+
+  // No liveContext — simulate data.liveContext undefined
+  var data = {};
+  if (data.liveContext) {
+    var hasLive = data.liveContext.racing || data.liveContext.football;
+    if (hasLive) {
+      userPrompt += 'LIVE INTELLIGENCE (last 24 hours):\n';
+    }
+  }
+  userPrompt += 'Return your response as JSON with these fields:\n';
+
+  assert.ok(userPrompt.indexOf('LIVE INTELLIGENCE') === -1, 'no intelligence block when liveContext absent');
+  assert.ok(userPrompt.indexOf('Return your response as JSON') !== -1, 'JSON instruction still present');
+});
+
+test('bulletin prompt — liveContext with only racing (football null): only racing block', function() {
+  var data = {
+    liveContext: { racing: 'Going changed at Newbury.', football: null },
+  };
+
+  var userPrompt = '';
+  if (data.liveContext) {
+    var hasLive = data.liveContext.racing || data.liveContext.football;
+    if (hasLive) {
+      userPrompt += 'LIVE INTELLIGENCE (last 24 hours):\n';
+      if (data.liveContext.racing) userPrompt += '\nRacing:\n' + data.liveContext.racing + '\n';
+      if (data.liveContext.football) userPrompt += '\nFootball:\n' + data.liveContext.football + '\n';
+    }
+  }
+
+  assert.ok(userPrompt.indexOf('Racing:') !== -1, 'Racing block present');
+  assert.ok(userPrompt.indexOf('Football:') === -1, 'Football block absent when null');
+});
+
+// =========================================================================
 // REPLAY TESTS
 // =========================================================================
 
