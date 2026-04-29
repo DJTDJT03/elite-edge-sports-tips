@@ -850,19 +850,17 @@ module.exports = function(deps) {
   // ---------------------------------------------------------------------------
   router.post('/admin/sonar/disable', authenticate, requireAdmin, async (req, res) => {
     try {
-      await db.recordSonarSpend({
-        callSite: 'admin', entityId: 'kill-switch',
-        enrichmentSkipped: 'admin_disabled',
+      await db.createSonarAdminEvent({
+        action: 'disabled', userId: req.user.id, userEmail: req.user.email,
+        reason: req.body.reason || 'admin action',
       });
-      // Update in-memory state if perplexity client is available
       if (deps.perplexityClient && deps.perplexityClient.setState) {
         deps.perplexityClient.setState('open');
       }
       await db.createAuditEntry({
         userId: req.user.id, userEmail: req.user.email,
         action: 'sonar_disabled', entity: 'system', entityId: 'perplexity',
-        details: { reason: req.body.reason || 'admin action' },
-        ip: req.ip,
+        details: { reason: req.body.reason || 'admin action' }, ip: req.ip,
       });
       console.log('[Sonar] Admin disabled enrichment:', req.user.email);
       res.json({ status: 'disabled', message: 'Sonar enrichment disabled. Tips will publish template-only.' });
@@ -876,9 +874,9 @@ module.exports = function(deps) {
   // ---------------------------------------------------------------------------
   router.post('/admin/sonar/enable', authenticate, requireAdmin, async (req, res) => {
     try {
-      await db.recordSonarSpend({
-        callSite: 'admin', entityId: 'kill-switch',
-        enrichmentSkipped: 'admin_enabled',
+      await db.createSonarAdminEvent({
+        action: 'enabled', userId: req.user.id, userEmail: req.user.email,
+        reason: req.body.reason || 'admin action',
       });
       if (deps.perplexityClient && deps.perplexityClient.setState) {
         deps.perplexityClient.setState('closed');
@@ -886,8 +884,7 @@ module.exports = function(deps) {
       await db.createAuditEntry({
         userId: req.user.id, userEmail: req.user.email,
         action: 'sonar_enabled', entity: 'system', entityId: 'perplexity',
-        details: { reason: req.body.reason || 'admin action' },
-        ip: req.ip,
+        details: { reason: req.body.reason || 'admin action' }, ip: req.ip,
       });
       console.log('[Sonar] Admin re-enabled enrichment:', req.user.email);
       res.json({ status: 'enabled', message: 'Sonar enrichment re-enabled.' });

@@ -290,6 +290,21 @@ const tables = [
           CREATE INDEX IF NOT EXISTS idx_sonar_spend_site ON sonar_spend_ledger(call_site)`,
   },
   {
+    name: 'sonar_admin_events',
+    sql: `CREATE TABLE IF NOT EXISTS sonar_admin_events (
+      id                    SERIAL PRIMARY KEY,
+      action                TEXT NOT NULL,
+      user_id               TEXT,
+      user_email            TEXT,
+      reason                TEXT,
+      created_at            TIMESTAMPTZ DEFAULT NOW()
+    )`,
+  },
+  {
+    name: 'sonar_admin_events_index',
+    sql: `CREATE INDEX IF NOT EXISTS idx_sonar_admin_created ON sonar_admin_events(created_at DESC)`,
+  },
+  {
     name: 'tip_enrichment',
     sql: `CREATE TABLE IF NOT EXISTS tip_enrichment (
       id                    SERIAL PRIMARY KEY,

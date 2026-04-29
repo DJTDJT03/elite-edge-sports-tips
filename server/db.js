@@ -916,6 +916,25 @@ async function getSpendSummary(days) {
 }
 
 // ---------------------------------------------------------------------------
+// SONAR ADMIN EVENTS
+// ---------------------------------------------------------------------------
+async function createSonarAdminEvent(data) {
+  if (!pool) return;
+  await query(
+    'INSERT INTO sonar_admin_events (action, user_id, user_email, reason) VALUES ($1,$2,$3,$4)',
+    [data.action, data.userId || null, data.userEmail || null, data.reason || null]
+  );
+}
+
+async function getLatestSonarAdminEvent() {
+  if (!pool) return null;
+  const { rows } = await query(
+    "SELECT * FROM sonar_admin_events WHERE action IN ('disabled', 'enabled') ORDER BY created_at DESC LIMIT 1"
+  );
+  return rows.length > 0 ? { action: rows[0].action, createdAt: rows[0].created_at, userEmail: rows[0].user_email } : null;
+}
+
+// ---------------------------------------------------------------------------
 // TIP ENRICHMENT
 // ---------------------------------------------------------------------------
 async function createTipEnrichment(data) {
@@ -1000,6 +1019,8 @@ module.exports = {
   getSonarCache, claimSonarCache, completeSonarCache, checkSonarClaim, reclaimStaleSonarCache, cleanExpiredSonarCache,
   // Sonar Spend
   recordSonarSpend, getDailySpend, getSpendSummary,
+  // Sonar Admin Events
+  createSonarAdminEvent, getLatestSonarAdminEvent,
   // Tip Enrichment
   createTipEnrichment, getTipEnrichment, getEnrichmentQualityStats,
 };

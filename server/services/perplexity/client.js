@@ -65,9 +65,10 @@ module.exports = function createPerplexityClient(db) {
     if (state === 'open') console.log('[Sonar] Suppression state: OPEN (derived from ledger)');
   }).catch(function() { /* non-fatal */ });
 
-  // Schedule cache cleanup: on init + every hour
+  // Schedule cache cleanup: on init + every hour (unref so tests can exit)
   _cleanupCache();
-  setInterval(_cleanupCache, 60 * 60 * 1000);
+  var _cleanupInterval = setInterval(_cleanupCache, 60 * 60 * 1000);
+  if (_cleanupInterval.unref) _cleanupInterval.unref();
 
   // =========================================================================
   // PUBLIC API
@@ -199,32 +200,40 @@ module.exports = function createPerplexityClient(db) {
     if (!items || items.length === 0) return new Map();
 
     var results = new Map();
-    var pending = new Set(items.map(function(it) { return it.tipId; }));
+    var budgetExpired = false;
 
     // Launch all enrichments in parallel
     var promises = items.map(function(item) {
       return enrichTip(item.scored, item.sport, item.tipId)
         .then(function(result) {
-          results.set(item.tipId, result);
-          pending.delete(item.tipId);
+          // Only store if budget hasn't expired yet for this tip.
+          // After budget expires, late-arriving results are discarded
+          // (the promise continues running and populates sonar_cache,
+          // but we don't overwrite the budget_exceeded entry).
+          if (!budgetExpired || !results.has(item.tipId)) {
+            results.set(item.tipId, result);
+          }
         })
         .catch(function(err) {
-          results.set(item.tipId, { skipped: true, reason: 'error: ' + err.message, signals: {}, citations: [] });
-          pending.delete(item.tipId);
+          if (!budgetExpired || !results.has(item.tipId)) {
+            results.set(item.tipId, { skipped: true, reason: 'error: ' + err.message, signals: {}, citations: [] });
+          }
         });
     });
 
-    // Race against budget
+    // Race against budget — resolve when all complete OR budget expires
     await new Promise(function(resolve) {
-      // Resolve when all complete OR budget expires
       Promise.all(promises).then(resolve);
       setTimeout(resolve, config.ENRICHMENT_BUDGET_MS);
     });
 
-    // Mark any still-pending tips as budget_exceeded
-    pending.forEach(function(tipId) {
-      results.set(tipId, { skipped: true, reason: 'budget_exceeded', signals: {}, citations: [] });
-      _logSpend({ callSite: 'per-tip', entityId: tipId, tipId: tipId, enrichmentSkipped: 'budget_exceeded' });
+    // Mark budget as expired, then fill in any tips that didn't resolve in time
+    budgetExpired = true;
+    items.forEach(function(item) {
+      if (!results.has(item.tipId)) {
+        results.set(item.tipId, { skipped: true, reason: 'budget_exceeded', signals: {}, citations: [] });
+        _logSpend({ callSite: 'per-tip', entityId: item.tipId, tipId: item.tipId, enrichmentSkipped: 'budget_exceeded' });
+      }
     });
 
     return results;
@@ -349,9 +358,13 @@ module.exports = function createPerplexityClient(db) {
         var outputTokens = usage.completion_tokens || 0;
         var searchCount = usage.search_count || 1;
 
-        // Compute cost
+        // Compute cost.
+        // Sonar's usage response includes prompt_tokens, completion_tokens, and search_count
+        // but does NOT include the request fee. We hardcode based on search_context_size
+        // which we always set to 'low' ($5/1K requests = $0.005/request).
+        // If we ever switch to 'medium' ($0.008) or 'high' ($0.012), update config.DEFAULT_REQUEST_FEE.
         var tokenCost = ((inputTokens * config.COST_PER_M_INPUT) + (outputTokens * config.COST_PER_M_OUTPUT)) / 1000000;
-        var requestFee = config.DEFAULT_REQUEST_FEE; // $0.005 per request (low context)
+        var requestFee = config.DEFAULT_REQUEST_FEE * searchCount;
         var totalCost = tokenCost + requestFee;
 
         // Log spend
@@ -413,11 +426,25 @@ module.exports = function createPerplexityClient(db) {
   // INTERNAL: HTTP POST with timeout
   // =========================================================================
 
+  /**
+   * HTTP POST with hard total timeout.
+   * Uses req.setTimeout (socket idle timeout) AND a setTimeout guard
+   * (total wall-clock timeout) to handle slow-drip responses that keep
+   * the socket alive but never complete.
+   */
   function _httpPost(url, body, timeoutMs) {
     return new Promise(function(resolve, reject) {
       var https = require('https');
       var urlObj = new URL(url);
       var payload = JSON.stringify(body);
+      var settled = false;
+
+      function settle(fn, arg) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(wallTimer);
+        fn(arg);
+      }
 
       var opts = {
         hostname: urlObj.hostname,
@@ -429,7 +456,6 @@ module.exports = function createPerplexityClient(db) {
           'Authorization': 'Bearer ' + API_KEY,
           'Content-Length': Buffer.byteLength(payload),
         },
-        timeout: timeoutMs,
       };
 
       var req = https.request(opts, function(res) {
@@ -437,26 +463,33 @@ module.exports = function createPerplexityClient(db) {
         res.on('data', function(chunk) { data += chunk; });
         res.on('end', function() {
           if (res.statusCode >= 200 && res.statusCode < 300) {
-            try { resolve(JSON.parse(data)); }
+            try { settle(resolve, JSON.parse(data)); }
             catch (e) {
               var err = new Error('Malformed JSON in 200 response');
               err.statusCode = 200;
-              reject(err);
+              settle(reject, err);
             }
           } else {
             var err2 = new Error('HTTP ' + res.statusCode + ': ' + data.slice(0, 200));
             err2.statusCode = res.statusCode;
-            reject(err2);
+            settle(reject, err2);
           }
         });
       });
 
-      req.on('timeout', function() {
+      // Socket-level idle timeout
+      req.setTimeout(timeoutMs, function() {
         req.destroy();
-        reject(new Error('Timeout after ' + timeoutMs + 'ms'));
+        settle(reject, new Error('Socket timeout after ' + timeoutMs + 'ms'));
       });
 
-      req.on('error', function(err) { reject(err); });
+      // Hard wall-clock timeout — catches slow-drip responses
+      var wallTimer = setTimeout(function() {
+        req.destroy();
+        settle(reject, new Error('Wall-clock timeout after ' + timeoutMs + 'ms'));
+      }, timeoutMs);
+
+      req.on('error', function(err) { settle(reject, err); });
       req.write(payload);
       req.end();
     });
@@ -538,14 +571,10 @@ module.exports = function createPerplexityClient(db) {
   async function _deriveSuppressionState() {
     if (!db || !db.isAvailable()) return 'closed';
     try {
-      // Check admin markers first (highest priority)
-      var adminRows = await db.query(
-        "SELECT enrichment_skipped, created_at FROM sonar_spend_ledger WHERE enrichment_skipped IN ('admin_disabled', 'admin_enabled') ORDER BY created_at DESC LIMIT 1"
-      );
-      if (adminRows.rows.length > 0) {
-        if (adminRows.rows[0].enrichment_skipped === 'admin_disabled') return 'open';
-        // admin_enabled — fall through to failure-based check
-      }
+      // Check admin events first (highest priority) — separate table, not spend ledger
+      var adminEvent = await db.getLatestSonarAdminEvent();
+      if (adminEvent && adminEvent.action === 'disabled') return 'open';
+      // admin 'enabled' or no admin event — fall through to failure-based check
 
       // Failure-based: check last N rows in window
       var windowMin = config.SUPPRESSION_WINDOW_MINUTES;
