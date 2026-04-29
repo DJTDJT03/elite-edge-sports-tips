@@ -929,25 +929,62 @@ module.exports = function startScheduler(deps) {
       }
     }
 
-    // Build tip objects
+    // ---------------------------------------------------------------
+    // Pass 1: Assign analysts, generate tip IDs, collect enrichment inputs
+    // ---------------------------------------------------------------
+    var analystProfiles = require('./analystProfiles');
+    var enrichmentInputs = [];
+    for (var si = 0; si < selected.length; si++) {
+      var cand = selected[si];
+      cand._tipId = 'auto_' + Date.now() + '_' + si;
+      cand._analystKey = analystProfiles.assignAnalyst(cand.scored, cand.type);
+      cand._tipsterProfile = analystProfiles.profiles[cand._analystKey].name;
+      cand._adjustedFactors = analystProfiles.applyAnalystWeights(cand.scored.factors || {}, cand._analystKey, cand.type);
+      enrichmentInputs.push({ scored: cand.scored, sport: cand.type, tipId: cand._tipId });
+    }
+
+    // ---------------------------------------------------------------
+    // Pass 2: Enrich tips via Perplexity Sonar (parallel, 15s budget)
+    // enrichBatch returns Map<tipId, {signals, skipped, ...}>
+    // If Perplexity is disabled/suppressed, all results are {skipped: true}
+    // ---------------------------------------------------------------
+    var perplexityClient = deps.perplexityClient;
+    var enrichmentResults = new Map();
+    if (perplexityClient) {
+      try {
+        enrichmentResults = await perplexityClient.enrichBatch(enrichmentInputs);
+        var enrichedCount = 0;
+        enrichmentResults.forEach(function(r) { if (!r.skipped) enrichedCount++; });
+        if (enrichedCount > 0) {
+          console.log('[Auto-Tips] Perplexity enrichment: ' + enrichedCount + '/' + selected.length + ' tips enriched');
+        }
+      } catch (enrichErr) {
+        console.log('[Auto-Tips] Perplexity enrichment skipped: ' + enrichErr.message);
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Pass 3: Build tip objects with enrichment woven into analysis
+    // ---------------------------------------------------------------
     var newTips = [];
-    selected.forEach(function(candidate, idx) {
+    for (var bi = 0; bi < selected.length; bi++) {
+      var candidate = selected[bi];
+      var idx = bi;
       var isNap = (idx === napIdx);
       var isOutsider = !!candidate._isOutsider;
       var scored = candidate.scored;
       var sport = candidate.type;
-      var tipId = 'auto_' + Date.now() + '_' + idx;
+      var tipId = candidate._tipId;
+      var tipsterProfile = candidate._tipsterProfile;
+      var adjustedFactors = candidate._adjustedFactors;
 
-      // Determine tipsterProfile using analyst profiles
-      var analystProfiles = require('./analystProfiles');
-      var analystKey = analystProfiles.assignAnalyst(scored, sport);
-      var tipsterProfile = analystProfiles.profiles[analystKey].name;
+      // Get enrichment signals for this tip (may be empty/skipped)
+      var enrichResult = enrichmentResults.get(tipId) || { signals: {}, skipped: true };
+      var enrichSignals = (!enrichResult.skipped && !enrichResult.lowQuality && !enrichResult.parseError)
+        ? enrichResult.signals : {};
 
-      // Apply analyst-specific weight modifiers to factors for deeper analysis
-      var adjustedFactors = analystProfiles.applyAnalystWeights(scored.factors || {}, analystKey, sport);
-
-      // Generate analysis
-      var analysis = scoringModel.generateAnalysis(scored, sport);
+      // Generate analysis — enrichment signals woven inline into template fields
+      var analysis = scoringModel.generateAnalysis(scored, sport, enrichSignals);
 
       var tip;
       if (sport === 'racing') {
@@ -1040,8 +1077,11 @@ module.exports = function startScheduler(deps) {
         };
       }
 
+      // Persist adjustedFactors on the tip object for quality-loop correlation
+      tip.adjustedFactors = adjustedFactors;
+
       newTips.push(tip);
-    });
+    }
 
     // Save tips — check for duplicates by selection+date before creating
     var existingTips = await db.getTips();
@@ -1059,6 +1099,21 @@ module.exports = function startScheduler(deps) {
       }
       await db.createTip(nt);
       savedCount++;
+
+      // Now tip exists in DB — write tip_enrichment (FK-safe) and link enrichment_id
+      var enrichResult = enrichmentResults.get(nt.id);
+      if (enrichResult && enrichResult.enrichmentData) {
+        try {
+          var eData = enrichResult.enrichmentData;
+          eData.tipId = nt.id;
+          var enrichmentId = await db.createTipEnrichment(eData);
+          if (enrichmentId) {
+            await db.updateTip(nt.id, { enrichmentId: enrichmentId });
+          }
+        } catch (enrichWriteErr) {
+          console.log('[Auto-Tips] Enrichment write failed for ' + nt.selection + ': ' + enrichWriteErr.message);
+        }
+      }
     }
     // Make the lowest-confidence tip free (so free users see at least 1)
     if (newTips.length > 0) {

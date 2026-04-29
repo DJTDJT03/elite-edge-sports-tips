@@ -1268,15 +1268,24 @@ class ScoringModel {
    * @param {string} sport — 'racing' or 'football'
    * @returns {Object} Analysis object matching the tip format
    */
-  generateAnalysis(scored, sport) {
+  /**
+   * Generate analysis text for a scored candidate.
+   * @param {object} scored - Scored candidate
+   * @param {string} sport - 'racing' or 'football'
+   * @param {object} [enrichment] - Optional Perplexity enrichment signals (grounded).
+   *   Racing: {going_update, non_runner, stable_form, headgear_change, jockey_change, course_report, rail_movement}
+   *   Football: {team_news, tactical_change, rotation_risk, motivation_context, manager_comments, injury_update}
+   *   Each signal is {value: string, citation_index: number}. Woven inline into template fields.
+   */
+  generateAnalysis(scored, sport, enrichment) {
     if (sport === 'racing') {
-      return this._generateRacingAnalysis(scored);
+      return this._generateRacingAnalysis(scored, enrichment);
     } else {
-      return this._generateFootballAnalysis(scored);
+      return this._generateFootballAnalysis(scored, enrichment);
     }
   }
 
-  _generateRacingAnalysis(scored) {
+  _generateRacingAnalysis(scored, enrichment) {
     const runner = scored.runner || {};
     const race = scored.race || {};
     const horseName = runner.horseName || 'Selection';
@@ -1293,8 +1302,9 @@ class ScoringModel {
     const className = race.raceClass || 'Unknown';
     const distance = race.distance || '';
     const or = runner.officialRating || 0;
+    const sig = enrichment || {};
 
-    // Build form context
+    // Build form context — weave stable_form signal if available
     let formContext = '';
     if (formPositions.length > 0) {
       const wins = formPositions.filter(p => p === 1).length;
@@ -1307,8 +1317,11 @@ class ScoringModel {
     } else {
       formContext = 'Limited recent form data available. Relying on profile and connections.';
     }
+    if (sig.stable_form) {
+      formContext += ' ' + sig.stable_form.value;
+    }
 
-    // Stale reason based on top factor
+    // Key reason based on top factor
     const factors = scored.factors || {};
     let keyReason = '';
     if (factors.form >= 0.7) keyReason = 'Recent form is the standout factor here';
@@ -1324,17 +1337,43 @@ class ScoringModel {
         ? 'Fair price reflects a competitive race. Each-way could be considered for extra protection.'
         : 'Bigger price carries more risk but the value is clear. Consider smaller stakes.';
 
+    // Going suitability — weave going_update and course_report signals inline
+    let goingText = `${going} — ${going.toLowerCase().includes('good') || going.toLowerCase().includes('standard') ? 'conditions should suit based on profile and recent efforts' : 'ground conditions are a slight unknown but form suggests adaptability'}.`;
+    if (sig.going_update) {
+      goingText = `Official going: ${going}. ${sig.going_update.value} Suitability assessment adjusted accordingly.`;
+    }
+    if (sig.course_report) {
+      goingText += ' ' + sig.course_report.value;
+    }
+
+    // Course record — weave rail_movement signal inline
+    let courseText = `${formPositions.includes(1) ? 'Proven winner who handles similar tracks' : 'Course form to be established'} — ${meeting} ${distance ? '(' + distance + ')' : ''} should play to strengths.`;
+    if (sig.rail_movement) {
+      courseText += ' ' + sig.rail_movement.value;
+    }
+
+    // Trainer form — weave jockey_change signal inline
+    let trainerText = `${trainer} in ${factors.trainerJockey >= 0.7 ? 'excellent' : factors.trainerJockey >= 0.5 ? 'decent' : 'quiet'} form. ${jockey} takes the ride${factors.trainerJockey >= 0.7 ? ' — a strong booking that adds confidence' : ''}.`;
+    if (sig.jockey_change) {
+      trainerText += ' Note: ' + sig.jockey_change.value;
+    }
+
+    // Summary — weave non_runner and headgear_change into summary
+    let summaryExtra = '';
+    if (sig.non_runner) summaryExtra += ' ' + sig.non_runner.value;
+    if (sig.headgear_change) summaryExtra += ' ' + sig.headgear_change.value;
+
     return {
-      summary: `${horseName} runs in the ${time} at ${meeting} and our model rates this a strong Win opportunity. ${keyReason}. At ${odds.toFixed(2)}, the edge is ${edgePct}% against the market.`,
+      summary: `${horseName} runs in the ${time} at ${meeting} and our model rates this a strong Win opportunity. ${keyReason}. At ${odds.toFixed(2)}, the edge is ${edgePct}% against the market.${summaryExtra}`,
       form: `${formStr}. ${formContext}`,
-      goingSuitability: `${going} — ${going.toLowerCase().includes('good') || going.toLowerCase().includes('standard') ? 'conditions should suit based on profile and recent efforts' : 'ground conditions are a slight unknown but form suggests adaptability'}.`,
-      courseRecord: `${formPositions.includes(1) ? 'Proven winner who handles similar tracks' : 'Course form to be established'} — ${meeting} ${distance ? '(' + distance + ')' : ''} should play to strengths.`,
-      trainerForm: `${trainer} in ${factors.trainerJockey >= 0.7 ? 'excellent' : factors.trainerJockey >= 0.5 ? 'decent' : 'quiet'} form. ${jockey} takes the ride${factors.trainerJockey >= 0.7 ? ' — a strong booking that adds confidence' : ''}.`,
+      goingSuitability: goingText,
+      courseRecord: courseText,
+      trainerForm: trainerText,
       riskNotes: riskNotes,
     };
   }
 
-  _generateFootballAnalysis(scored) {
+  _generateFootballAnalysis(scored, enrichment) {
     const fixture = scored.fixture || {};
     const home = fixture.homeTeam || 'Home';
     const away = fixture.awayTeam || 'Away';
@@ -1348,6 +1387,7 @@ class ScoringModel {
     const impliedProb = scored.impliedProbability || 0;
     const modelPct = (modelProb * 100).toFixed(0);
     const impliedPct = (impliedProb * 100).toFixed(0);
+    const sig = enrichment || {};
 
     const factors = scored.factors || {};
     let keyReason = '';
@@ -1373,6 +1413,10 @@ class ScoringModel {
     } else {
       formText = `${home} form and ${away} form both factor into this selection. The double chance offers protection.`;
     }
+    // Weave motivation_context inline into form text
+    if (sig.motivation_context) {
+      formText += ' ' + sig.motivation_context.value;
+    }
 
     const riskNotes = odds < 2
       ? 'Short odds limit the upside but the selection is well-supported. Late team news could impact.'
@@ -1380,12 +1424,32 @@ class ScoringModel {
         ? 'Fair-priced selection in a competitive fixture. Key players and tactical matchups could swing it.'
         : 'Bigger price reflects the inherent uncertainty. Consider staking conservatively.';
 
+    // Weave injury_update + team_news into injuries field
+    let injuryText = 'Check team news closer to kick-off for any late changes that could affect the selection.';
+    if (sig.team_news) {
+      injuryText = sig.team_news.value;
+    }
+    if (sig.injury_update) {
+      injuryText += ' ' + sig.injury_update.value;
+    }
+
+    // Weave tactical_change + rotation_risk into summary extra
+    let summaryExtra = '';
+    if (sig.tactical_change) summaryExtra += ' ' + sig.tactical_change.value;
+    if (sig.rotation_risk) summaryExtra += ' ' + sig.rotation_risk.value;
+
+    // Weave manager_comments into H2H field (contextual, not statistical)
+    let h2hText = `Recent meetings between ${home} and ${away} have been considered in the model's H2H factor.`;
+    if (sig.manager_comments) {
+      h2hText += ' ' + sig.manager_comments.value;
+    }
+
     return {
-      summary: `${home} vs ${away} in ${league}. Our model gives ${selection} a ${modelPct}% probability against the market's ${impliedPct}%. ${keyReason}.`,
+      summary: `${home} vs ${away} in ${league}. Our model gives ${selection} a ${modelPct}% probability against the market's ${impliedPct}%. ${keyReason}.${summaryExtra}`,
       form: formText,
       xG: `Model analysis based on expected goals and recent attacking/defensive metrics for both sides.`,
-      injuries: `Check team news closer to kick-off for any late changes that could affect the selection.`,
-      headToHead: `Recent meetings between ${home} and ${away} have been considered in the model's H2H factor.`,
+      injuries: injuryText,
+      headToHead: h2hText,
       riskNotes: riskNotes,
     };
   }

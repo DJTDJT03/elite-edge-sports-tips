@@ -17,6 +17,7 @@
 var config = require('./config');
 var citationFilter = require('./citationFilter');
 var signalSchema = require('./signalSchema');
+var prompts = require('./prompts');
 
 // ---------------------------------------------------------------------------
 // Dry-run mock response
@@ -135,9 +136,16 @@ module.exports = function createPerplexityClient(db) {
       }
     }
 
-    // 3. Call Sonar
-    var prompt = _buildTipPrompt(scored, sport);
-    var result = await _callSonar(prompt, 'per-tip', entityId, tipId);
+    // 3. Build prompt from templates and call Sonar
+    var promptObj;
+    try {
+      promptObj = sport === 'racing'
+        ? prompts.buildRacingTipPrompt(scored)
+        : prompts.buildFootballTipPrompt(scored);
+    } catch (promptErr) {
+      return _skipResult('prompt_build_error: ' + promptErr.message, 'per-tip', tipId);
+    }
+    var result = await _callSonar(promptObj, promptObj.callSiteKey, entityId, tipId);
 
     if (result.error) {
       _updateSuppressionOnFailure(result.error);
@@ -153,9 +161,10 @@ module.exports = function createPerplexityClient(db) {
       result.inputTokens, result.outputTokens, result.searchCount, result.latencyMs
     );
 
-    // 6. Store enrichment
-    var enrichmentId = await db.createTipEnrichment({
-      tipId: tipId,
+    // 6. Enrichment data returned to caller — NOT written to tip_enrichment yet.
+    // The caller (scheduler) writes to tip_enrichment AFTER the tip exists in
+    // the tips table, because tip_enrichment.tip_id is a FK to tips(id).
+    var enrichmentData = {
       callSite: 'per-tip',
       rawResponse: result.rawBody,
       extractedSignals: processed.grounded,
@@ -170,7 +179,7 @@ module.exports = function createPerplexityClient(db) {
       searchCount: result.searchCount,
       requestFeeUsd: result.requestFee,
       latencyMs: result.latencyMs,
-    });
+    };
 
     // 7. Update suppression on success
     _suppressionState = 'closed';
@@ -181,7 +190,7 @@ module.exports = function createPerplexityClient(db) {
       skipped: false,
       lowQuality: processed.lowQuality,
       parseError: processed.parseError,
-      enrichmentId: enrichmentId,
+      enrichmentData: enrichmentData,
     };
   }
 
@@ -257,19 +266,23 @@ module.exports = function createPerplexityClient(db) {
     var footballContext = null;
 
     if (racingTips.length > 0) {
-      var rPrompt = _buildBulletinPrompt(racingTips, 'racing');
-      var rResult = await _callSonar(rPrompt, 'bulletin', 'racing-daily', null);
-      if (!rResult.error && rResult.rawContent) {
-        racingContext = typeof rResult.rawContent === 'string' ? rResult.rawContent : JSON.stringify(rResult.rawContent);
-      }
+      try {
+        var rPromptObj = prompts.buildBulletinRacingPrompt(racingTips);
+        var rResult = await _callSonar(rPromptObj, 'bulletin', 'racing-daily', null);
+        if (!rResult.error && rResult.rawContent) {
+          racingContext = typeof rResult.rawContent === 'string' ? rResult.rawContent : JSON.stringify(rResult.rawContent);
+        }
+      } catch (e) { /* prompt build failed — skip racing context */ }
     }
 
     if (footballTips.length > 0) {
-      var fPrompt = _buildBulletinPrompt(footballTips, 'football');
-      var fResult = await _callSonar(fPrompt, 'bulletin', 'football-daily', null);
-      if (!fResult.error && fResult.rawContent) {
-        footballContext = typeof fResult.rawContent === 'string' ? fResult.rawContent : JSON.stringify(fResult.rawContent);
-      }
+      try {
+        var fPromptObj = prompts.buildBulletinFootballPrompt(footballTips);
+        var fResult = await _callSonar(fPromptObj, 'bulletin', 'football-daily', null);
+        if (!fResult.error && fResult.rawContent) {
+          footballContext = typeof fResult.rawContent === 'string' ? fResult.rawContent : JSON.stringify(fResult.rawContent);
+        }
+      } catch (e) { /* prompt build failed — skip football context */ }
     }
 
     return { racing: racingContext, football: footballContext };
@@ -284,9 +297,11 @@ module.exports = function createPerplexityClient(db) {
   async function enrichReplay(replayData) {
     if (_suppressionState === 'open') return null;
 
-    var prompt = _buildReplayPrompt(replayData);
+    var promptObj;
+    try { promptObj = prompts.buildReplayPrompt(replayData); }
+    catch (e) { return null; }
     var entityId = (replayData.meeting + '-' + replayData.selection).toLowerCase().replace(/[^a-z0-9]/g, '-');
-    var result = await _callSonar(prompt, 'replay', entityId, null);
+    var result = await _callSonar(promptObj, 'replay', entityId, null);
 
     if (result.error || !result.rawContent) return null;
     return typeof result.rawContent === 'string' ? result.rawContent : JSON.stringify(result.rawContent);
@@ -312,8 +327,36 @@ module.exports = function createPerplexityClient(db) {
   // INTERNAL: Sonar API call with retry
   // =========================================================================
 
-  async function _callSonar(prompt, callSite, entityId, tipId) {
+  /**
+   * Call Sonar API with retry and backoff.
+   *
+   * @param {object|string} promptObj - Either {system, user, callSiteKey} from prompts.js,
+   *   or a plain string (legacy, used by bulletin/replay until migrated)
+   * @param {string} callSite - Call site identifier for logging/budgeting
+   * @param {string} entityId - Entity identifier for cache/ledger
+   * @param {string} tipId - Tip ID for ledger linking (null for bulletin/replay)
+   */
+  async function _callSonar(promptObj, callSite, entityId, tipId) {
     var startMs = Date.now();
+
+    // Resolve prompt object vs legacy string
+    var messages;
+    var callSiteKey;
+    if (typeof promptObj === 'object' && promptObj.system) {
+      messages = [
+        { role: 'system', content: promptObj.system },
+        { role: 'user', content: promptObj.user },
+      ];
+      callSiteKey = promptObj.callSiteKey || callSite;
+    } else {
+      // Legacy: plain string prompt (bulletin/replay until migrated in D3/D4)
+      messages = [{ role: 'user', content: String(promptObj) }];
+      callSiteKey = callSite;
+    }
+
+    var maxTokens = (config.TOKEN_BUDGET[callSiteKey] || {}).maxOutput || 600;
+    var temperature = config.TEMPERATURE[callSiteKey];
+    if (temperature === undefined) temperature = 0;
 
     // Dry-run mode
     if (DRY_RUN) {
@@ -344,8 +387,9 @@ module.exports = function createPerplexityClient(db) {
       try {
         var response = await _httpPost(config.API_ENDPOINT, {
           model: config.DEFAULT_MODEL,
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: (config.TOKEN_BUDGET[callSite] || {}).maxOutput || 600,
+          messages: messages,
+          max_tokens: maxTokens,
+          temperature: temperature,
           return_citations: true,
           search_context_size: 'low',
         }, config.TIMEOUT_MS);
@@ -617,76 +661,7 @@ module.exports = function createPerplexityClient(db) {
     _deriveSuppressionState().then(function(state) { _suppressionState = state; }).catch(function() {});
   }
 
-  // =========================================================================
-  // INTERNAL: Prompt templates
-  // =========================================================================
-
-  function _buildTipPrompt(scored, sport) {
-    if (sport === 'racing') {
-      var runner = scored.runner || {};
-      var race = scored.race || {};
-      return 'You are a UK horse racing intelligence analyst. For this specific race, provide ONLY factual updates from the last 24 hours. Return JSON with a "signals" object.\n\n' +
-        'Race: ' + _sanitize(race.meeting || '') + ' ' + _sanitize(race.time || '') + '\n' +
-        'Horse: ' + _sanitize(runner.horseName || '') + '\n' +
-        'Trainer: ' + _sanitize(runner.trainer || '') + '\n' +
-        'Jockey: ' + _sanitize(runner.jockey || '') + '\n' +
-        'Going: ' + _sanitize(race.going || '') + '\n' +
-        'Distance: ' + _sanitize(race.distance || '') + '\n' +
-        'Class: ' + _sanitize(race.raceClass || '') + '\n\n' +
-        'Return ONLY a JSON object with these optional signal keys (omit any without recent factual info):\n' +
-        '- going_update: {value: "description of going change", citation_index: N}\n' +
-        '- non_runner: {value: "any declared non-runners and market impact", citation_index: N}\n' +
-        '- stable_form: {value: "trainer/yard recent form if notably hot or cold", citation_index: N}\n' +
-        '- headgear_change: {value: "first-time headgear or equipment change", citation_index: N}\n' +
-        '- trainer_booking_change: {value: "jockey booking changes in last 24h", citation_index: N}\n' +
-        '- course_report: {value: "official course walk report or rail movement", citation_index: N}\n' +
-        '- rail_movement: {value: "rail position changes affecting draw bias", citation_index: N}\n\n' +
-        'citation_index must reference the index in your citations array. Only include signals you can cite from Racing Post, Sporting Life, At The Races, or official racecourse sources.';
-    } else {
-      var fixture = scored.fixture || {};
-      return 'You are a UK football intelligence analyst. For this specific match, provide ONLY factual updates from the last 24 hours. Return JSON with a "signals" object.\n\n' +
-        'Match: ' + _sanitize(fixture.homeTeam || '') + ' vs ' + _sanitize(fixture.awayTeam || '') + '\n' +
-        'League: ' + _sanitize(fixture.league || '') + '\n' +
-        'Kickoff: ' + _sanitize(fixture.kickoff || '') + '\n' +
-        'Venue: ' + _sanitize(fixture.venue || '') + '\n\n' +
-        'Return ONLY a JSON object with these optional signal keys (omit any without recent factual info):\n' +
-        '- team_news: {value: "confirmed team news not yet on official APIs", citation_index: N}\n' +
-        '- tactical_change: {value: "formation or playing style changes", citation_index: N}\n' +
-        '- rotation_risk: {value: "manager rotation signals for cup/fixture congestion", citation_index: N}\n' +
-        '- motivation_context: {value: "relegation battle, title race, nothing to play for", citation_index: N}\n' +
-        '- manager_comments: {value: "relevant pre-match press conference quotes", citation_index: N}\n' +
-        '- injury_update: {value: "late injury news not on API-Football", citation_index: N}\n\n' +
-        'citation_index must reference the index in your citations array. Only include signals you can cite from BBC Sport, Sky Sports, The Guardian, or official league sources.';
-    }
-  }
-
-  function _buildBulletinPrompt(tips, sport) {
-    var selections = tips.map(function(t) {
-      return _sanitize(t.selection) + ' (' + _sanitize(t.event || '') + ')';
-    }).join('; ');
-
-    if (sport === 'racing') {
-      return 'You are a UK horse racing correspondent writing a brief morning intelligence update for a premium tipping service email bulletin.\n\n' +
-        'Today\'s selections: ' + selections + '\n\n' +
-        'In 2-3 concise paragraphs, provide: today\'s key going updates across UK courses, any notable non-runners or market movers, and one interesting storyline from today\'s racing. Write for an audience that already knows racing well. Cite sources.';
-    } else {
-      return 'You are a UK football correspondent writing a brief match-day intelligence update for a premium tipping service email bulletin.\n\n' +
-        'Today\'s selections: ' + selections + '\n\n' +
-        'In 2-3 concise paragraphs, provide: key team news for today\'s fixtures, any tactical or motivation angles worth knowing, and one interesting talking point. Write for an audience that follows football closely. Cite sources.';
-    }
-  }
-
-  function _buildReplayPrompt(replayData) {
-    return 'You are a UK horse racing analyst reviewing a recently completed race. Provide post-race context that a statistical model cannot capture.\n\n' +
-      'Race: ' + _sanitize(replayData.meeting || '') + ' ' + _sanitize(replayData.raceTime || '') + '\n' +
-      'Our Selection: ' + _sanitize(replayData.selection || '') + ' (finished ' + _sanitize(replayData.position || 'N/A') + ')\n' +
-      'Result: ' + _sanitize(replayData.result || '') + '\n' +
-      'Winner: ' + _sanitize(replayData.winnerName || '') + ' (SP: ' + _sanitize(String(replayData.winnerOdds || '')) + ')\n' +
-      'Going: ' + _sanitize(replayData.going || '') + '\n' +
-      'Distance: ' + _sanitize(replayData.distance || '') + '\n' +
-      'Runners: ' + (replayData.runners || 0) + '\n\n' +
-      'In 2-3 sentences, provide: track bias or pace observations, any excuses for our selection, and whether the winner was a deserved favourite or fluke. Cite sources if available.';
-  }
+  // Prompt templates moved to prompts.js (pure module, tested separately)
 
   // =========================================================================
   // INTERNAL: Helpers
@@ -710,11 +685,7 @@ module.exports = function createPerplexityClient(db) {
     return config.TTL_HIGH;
   }
 
-  function _sanitize(str) {
-    // Strip anything that could be prompt injection
-    if (!str) return '';
-    return String(str).replace(/[<>{}[\]\\]/g, '').replace(/\n/g, ' ').trim().slice(0, 200);
-  }
+  // _sanitize removed — replaced by prompts._slot / prompts._optSlot
 
   async function _skipResult(reason, callSite, tipId) {
     _logSpend({ callSite: callSite, entityId: tipId || '', tipId: tipId, enrichmentSkipped: reason });

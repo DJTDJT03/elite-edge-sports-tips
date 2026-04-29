@@ -187,6 +187,14 @@ test('buildBulletinRacingPrompt — throws on null tips', function() {
   assert.throws(function() { prompts.buildBulletinRacingPrompt(null); }, TypeError);
 });
 
+test('buildBulletinRacingPrompt — throws on non-array (string)', function() {
+  assert.throws(function() { prompts.buildBulletinRacingPrompt('not an array'); }, TypeError);
+});
+
+test('buildBulletinRacingPrompt — throws on non-array (object)', function() {
+  assert.throws(function() { prompts.buildBulletinRacingPrompt({ length: 1 }); }, TypeError);
+});
+
 // =========================================================================
 // buildBulletinFootballPrompt
 // =========================================================================
@@ -199,6 +207,10 @@ test('buildBulletinFootballPrompt — includes market in selections list', funct
 
 test('buildBulletinFootballPrompt — throws on empty tips', function() {
   assert.throws(function() { prompts.buildBulletinFootballPrompt([]); }, TypeError);
+});
+
+test('buildBulletinFootballPrompt — throws on non-array (number)', function() {
+  assert.throws(function() { prompts.buildBulletinFootballPrompt(42); }, TypeError);
 });
 
 // =========================================================================

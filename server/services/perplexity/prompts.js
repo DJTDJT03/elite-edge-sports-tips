@@ -242,8 +242,8 @@ function buildFootballTipPrompt(scored) {
  * @throws {TypeError} If tips array is empty (caller should check before invoking)
  */
 function buildBulletinRacingPrompt(tips) {
-  if (!tips || tips.length === 0) {
-    throw new TypeError('buildBulletinRacingPrompt called with no tips — caller should skip');
+  if (!Array.isArray(tips) || tips.length === 0) {
+    throw new TypeError('buildBulletinRacingPrompt requires a non-empty array of tips, got: ' + (Array.isArray(tips) ? '[]' : typeof tips));
   }
   var uk = _ukNow();
   var selectionsList = tips.map(function(t) {
@@ -273,8 +273,8 @@ function buildBulletinRacingPrompt(tips) {
  * @throws {TypeError} If tips array is empty
  */
 function buildBulletinFootballPrompt(tips) {
-  if (!tips || tips.length === 0) {
-    throw new TypeError('buildBulletinFootballPrompt called with no tips — caller should skip');
+  if (!Array.isArray(tips) || tips.length === 0) {
+    throw new TypeError('buildBulletinFootballPrompt requires a non-empty array of tips, got: ' + (Array.isArray(tips) ? '[]' : typeof tips));
   }
   var uk = _ukNow();
   var selectionsList = tips.map(function(t) {
