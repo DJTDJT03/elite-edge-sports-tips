@@ -27,6 +27,7 @@ const newsService = require('./services/newsService');
 const stripeService = require('./services/stripeService');
 const footballData = require('./services/footballData');
 const understatService = require('./services/understatService');
+const perplexityClient = require('./services/perplexity/client')(db);
 
 // Utilities
 const helpers = require('./utils/helpers');
@@ -108,6 +109,7 @@ const deps = {
   stripeService,
   footballData,
   understatService,
+  perplexityClient,
 };
 
 // ---------------------------------------------------------------------------
@@ -182,6 +184,22 @@ app.use('/', require('./routes/public')(deps));
         'CREATE INDEX IF NOT EXISTS idx_tph_recorded ON tip_price_history(recorded_at DESC)',
         "CREATE TABLE IF NOT EXISTS analyst_performance_snapshots (id SERIAL PRIMARY KEY, analyst_key TEXT NOT NULL, snapshot_date DATE NOT NULL, total_tips INTEGER DEFAULT 0, wins INTEGER DEFAULT 0, losses INTEGER DEFAULT 0, voids INTEGER DEFAULT 0, strike_rate NUMERIC(6,4), avg_odds NUMERIC(8,2), total_pnl NUMERIC(10,2), avg_clv NUMERIC(8,4), roi_percent NUMERIC(8,4), sport TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(analyst_key, snapshot_date, sport))",
         'CREATE INDEX IF NOT EXISTS idx_aps_analyst ON analyst_performance_snapshots(analyst_key, snapshot_date DESC)',
+        // Perplexity integration: new columns on tips
+        'ALTER TABLE tips ADD COLUMN IF NOT EXISTS adjusted_factors JSONB',
+        'ALTER TABLE tips ADD COLUMN IF NOT EXISTS enrichment_id INTEGER',
+        // Perplexity integration: sonar_cache table
+        "CREATE TABLE IF NOT EXISTS sonar_cache (id SERIAL PRIMARY KEY, cache_key TEXT NOT NULL UNIQUE, call_site TEXT NOT NULL, entity_id TEXT NOT NULL, time_bucket BIGINT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', claimed_at TIMESTAMPTZ DEFAULT NOW(), response_json JSONB, citations JSONB DEFAULT '[]', ttl_seconds INTEGER NOT NULL, expires_at TIMESTAMPTZ NOT NULL, input_tokens INTEGER, output_tokens INTEGER, search_count INTEGER DEFAULT 0, latency_ms INTEGER, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(call_site, entity_id, time_bucket))",
+        'CREATE INDEX IF NOT EXISTS idx_sonar_cache_key ON sonar_cache(cache_key)',
+        'CREATE INDEX IF NOT EXISTS idx_sonar_cache_expires ON sonar_cache(expires_at)',
+        'CREATE INDEX IF NOT EXISTS idx_sonar_cache_site ON sonar_cache(call_site, entity_id)',
+        // Perplexity integration: sonar_spend_ledger table
+        "CREATE TABLE IF NOT EXISTS sonar_spend_ledger (id SERIAL PRIMARY KEY, call_site TEXT NOT NULL, entity_id TEXT, model TEXT NOT NULL DEFAULT 'sonar', input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, search_count INTEGER NOT NULL DEFAULT 0, token_cost_usd NUMERIC(10,6) NOT NULL DEFAULT 0, request_fee_usd NUMERIC(10,6) NOT NULL DEFAULT 0, cost_usd NUMERIC(10,6) NOT NULL DEFAULT 0, date DATE NOT NULL DEFAULT CURRENT_DATE, tip_id TEXT, bulletin_id TEXT, latency_ms INTEGER, cache_hit BOOLEAN DEFAULT FALSE, enrichment_skipped TEXT, error TEXT, created_at TIMESTAMPTZ DEFAULT NOW())",
+        'CREATE INDEX IF NOT EXISTS idx_sonar_spend_date ON sonar_spend_ledger(date)',
+        'CREATE INDEX IF NOT EXISTS idx_sonar_spend_site ON sonar_spend_ledger(call_site)',
+        // Perplexity integration: tip_enrichment table
+        "CREATE TABLE IF NOT EXISTS tip_enrichment (id SERIAL PRIMARY KEY, tip_id TEXT NOT NULL REFERENCES tips(id) ON DELETE CASCADE, call_site TEXT NOT NULL DEFAULT 'per-tip', raw_response JSONB NOT NULL, extracted_signals JSONB NOT NULL DEFAULT '{}', citations JSONB DEFAULT '[]', dropped_claims JSONB DEFAULT '[]', low_quality BOOLEAN NOT NULL DEFAULT FALSE, parse_error BOOLEAN NOT NULL DEFAULT FALSE, used_in_decision BOOLEAN NOT NULL DEFAULT FALSE, sonar_model TEXT DEFAULT 'sonar', input_tokens INTEGER, output_tokens INTEGER, search_count INTEGER DEFAULT 0, request_fee_usd NUMERIC(10,6) DEFAULT 0, latency_ms INTEGER, created_at TIMESTAMPTZ DEFAULT NOW(), CONSTRAINT chk_no_decision_on_bad_data CHECK (NOT (used_in_decision AND (parse_error OR low_quality))))",
+        'CREATE INDEX IF NOT EXISTS idx_enrichment_tip ON tip_enrichment(tip_id)',
+        'CREATE INDEX IF NOT EXISTS idx_enrichment_quality ON tip_enrichment(low_quality, used_in_decision)',
       ];
       for (var ci = 0; ci < alterCols.length; ci++) {
         try { await db.query(alterCols[ci]); } catch(e) {}

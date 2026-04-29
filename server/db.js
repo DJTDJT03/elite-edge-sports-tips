@@ -396,6 +396,8 @@ function dbTipToApp(row) {
     fairOddsDecimal: parseFloat(row.fair_odds_decimal) || null,
     settledAt: row.settled_at || null,
     settlementSource: row.settlement_source || null,
+    adjustedFactors: row.adjusted_factors || null,
+    enrichmentId: row.enrichment_id || null,
     createdAt: row.created_at,
   };
 }
@@ -443,6 +445,8 @@ function appTipToDb(data) {
   if (data.fairOddsDecimal !== undefined) result.fair_odds_decimal = data.fairOddsDecimal;
   if (data.settledAt !== undefined) result.settled_at = data.settledAt;
   if (data.settlementSource !== undefined) result.settlement_source = data.settlementSource;
+  if (data.adjustedFactors !== undefined) result.adjusted_factors = data.adjustedFactors ? JSON.stringify(data.adjustedFactors) : null;
+  if (data.enrichmentId !== undefined) result.enrichment_id = data.enrichmentId;
   return result;
 }
 
@@ -795,6 +799,177 @@ async function getAnalystSnapshots(analystKey, limit) {
 }
 
 // ---------------------------------------------------------------------------
+// SONAR CACHE
+// ---------------------------------------------------------------------------
+async function getSonarCache(cacheKey) {
+  if (!pool) return null;
+  const { rows } = await query(
+    "SELECT * FROM sonar_cache WHERE cache_key = $1 AND status = 'complete' AND expires_at > NOW()",
+    [cacheKey]
+  );
+  return rows.length > 0 ? rows[0] : null;
+}
+
+async function claimSonarCache(cacheKey, callSite, entityId, timeBucket, ttlSeconds) {
+  if (!pool) return false;
+  try {
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+    await query(
+      `INSERT INTO sonar_cache (cache_key, call_site, entity_id, time_bucket, status, ttl_seconds, expires_at)
+       VALUES ($1, $2, $3, $4, 'pending', $5, $6) ON CONFLICT (cache_key) DO NOTHING`,
+      [cacheKey, callSite, entityId, timeBucket, ttlSeconds, expiresAt]
+    );
+    // Check if we won the claim
+    const { rows } = await query(
+      "SELECT status FROM sonar_cache WHERE cache_key = $1 AND status = 'pending' AND claimed_at > NOW() - INTERVAL '10 seconds'",
+      [cacheKey]
+    );
+    return rows.length > 0;
+  } catch (e) { return false; }
+}
+
+async function completeSonarCache(cacheKey, responseJson, citations, inputTokens, outputTokens, searchCount, latencyMs) {
+  if (!pool) return;
+  await query(
+    `UPDATE sonar_cache SET status = 'complete', response_json = $2, citations = $3,
+     input_tokens = $4, output_tokens = $5, search_count = $6, latency_ms = $7 WHERE cache_key = $1`,
+    [cacheKey, JSON.stringify(responseJson), JSON.stringify(citations), inputTokens, outputTokens, searchCount || 0, latencyMs]
+  );
+}
+
+/**
+ * Check if another caller has claimed this cache key.
+ * Returns 'in_flight' if a pending claim exists within the stale threshold.
+ * Returns 'stale' if the claim is older than the threshold (caller crashed).
+ * Returns 'none' if no pending claim exists.
+ * @param {string} cacheKey
+ * @param {number} staleThresholdMs - default 30000 (30s). Should be (timeout * (retries+1)) + 5s.
+ */
+async function checkSonarClaim(cacheKey, staleThresholdMs) {
+  if (!pool) return 'none';
+  var threshold = Math.max(staleThresholdMs || 30000, 30000);
+  var thresholdSec = Math.ceil(threshold / 1000);
+  const { rows } = await query(
+    "SELECT status, claimed_at FROM sonar_cache WHERE cache_key = $1 AND status = 'pending'",
+    [cacheKey]
+  );
+  if (rows.length === 0) return 'none';
+  var claimedAt = new Date(rows[0].claimed_at);
+  var ageMs = Date.now() - claimedAt.getTime();
+  return ageMs > threshold ? 'stale' : 'in_flight';
+}
+
+async function reclaimStaleSonarCache(cacheKey, staleThresholdMs) {
+  if (!pool) return false;
+  var thresholdSec = Math.ceil(Math.max(staleThresholdMs || 30000, 30000) / 1000);
+  const { rowCount } = await query(
+    `UPDATE sonar_cache SET status = 'pending', claimed_at = NOW()
+     WHERE cache_key = $1 AND status = 'pending' AND claimed_at < NOW() - make_interval(secs => $2)`,
+    [cacheKey, thresholdSec]
+  );
+  return rowCount > 0;
+}
+
+async function cleanExpiredSonarCache() {
+  if (!pool) return;
+  await query("DELETE FROM sonar_cache WHERE expires_at < NOW()");
+}
+
+// ---------------------------------------------------------------------------
+// SONAR SPEND LEDGER
+// ---------------------------------------------------------------------------
+async function recordSonarSpend(data) {
+  if (!pool) return;
+  await query(
+    `INSERT INTO sonar_spend_ledger (call_site, entity_id, model, input_tokens, output_tokens,
+     search_count, token_cost_usd, request_fee_usd, cost_usd, tip_id, bulletin_id,
+     latency_ms, cache_hit, enrichment_skipped, error)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+    [data.callSite, data.entityId || null, data.model || 'sonar', data.inputTokens || 0,
+     data.outputTokens || 0, data.searchCount || 0, data.tokenCostUsd || 0,
+     data.requestFeeUsd || 0, data.costUsd || 0, data.tipId || null, data.bulletinId || null,
+     data.latencyMs || null, data.cacheHit || false, data.enrichmentSkipped || null,
+     data.error || null]
+  );
+}
+
+async function getDailySpend(date) {
+  if (!pool) return 0;
+  const d = date || new Date().toISOString().split('T')[0];
+  const { rows } = await query(
+    'SELECT COALESCE(SUM(cost_usd), 0) as total FROM sonar_spend_ledger WHERE date = $1', [d]
+  );
+  return parseFloat(rows[0].total) || 0;
+}
+
+async function getSpendSummary(days) {
+  if (!pool) return [];
+  const { rows } = await query(
+    `SELECT date, call_site, COUNT(*) as calls, SUM(cost_usd) as total_cost,
+     SUM(CASE WHEN cache_hit THEN 1 ELSE 0 END) as cache_hits,
+     AVG(latency_ms) as avg_latency_ms
+     FROM sonar_spend_ledger WHERE date >= CURRENT_DATE - $1
+     GROUP BY date, call_site ORDER BY date DESC, call_site`,
+    [days || 7]
+  );
+  return rows;
+}
+
+// ---------------------------------------------------------------------------
+// TIP ENRICHMENT
+// ---------------------------------------------------------------------------
+async function createTipEnrichment(data) {
+  if (!pool) return null;
+  // CHECK constraint enforces: used_in_decision cannot be true when parse_error or low_quality is true
+  var usedInDecision = data.usedInDecision || false;
+  if (data.parseError || data.lowQuality) usedInDecision = false;
+  const { rows } = await query(
+    `INSERT INTO tip_enrichment (tip_id, call_site, raw_response, extracted_signals, citations,
+     dropped_claims, low_quality, parse_error, used_in_decision, sonar_model,
+     input_tokens, output_tokens, search_count, request_fee_usd, latency_ms)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
+    [data.tipId, data.callSite || 'per-tip', JSON.stringify(data.rawResponse),
+     JSON.stringify(data.extractedSignals || {}), JSON.stringify(data.citations || []),
+     JSON.stringify(data.droppedClaims || []), data.lowQuality || false,
+     data.parseError || false, usedInDecision, data.sonarModel || 'sonar',
+     data.inputTokens || null, data.outputTokens || null, data.searchCount || 0,
+     data.requestFeeUsd || 0, data.latencyMs || null]
+  );
+  return rows.length > 0 ? rows[0].id : null;
+}
+
+async function getTipEnrichment(tipId) {
+  if (!pool) return null;
+  const { rows } = await query('SELECT * FROM tip_enrichment WHERE tip_id = $1 ORDER BY created_at DESC LIMIT 1', [tipId]);
+  if (rows.length === 0) return null;
+  var r = rows[0];
+  return {
+    id: r.id, tipId: r.tip_id, callSite: r.call_site,
+    rawResponse: r.raw_response, extractedSignals: r.extracted_signals,
+    citations: r.citations, droppedClaims: r.dropped_claims,
+    lowQuality: r.low_quality, parseError: r.parse_error,
+    usedInDecision: r.used_in_decision, sonarModel: r.sonar_model,
+    inputTokens: r.input_tokens, outputTokens: r.output_tokens,
+    latencyMs: r.latency_ms, createdAt: r.created_at,
+  };
+}
+
+async function getEnrichmentQualityStats(days) {
+  if (!pool) return {};
+  const { rows } = await query(
+    `SELECT
+       COUNT(*) as total,
+       SUM(CASE WHEN used_in_decision THEN 1 ELSE 0 END) as used,
+       SUM(CASE WHEN low_quality THEN 1 ELSE 0 END) as low_quality,
+       SUM(CASE WHEN parse_error THEN 1 ELSE 0 END) as parse_errors,
+       AVG(latency_ms) as avg_latency
+     FROM tip_enrichment WHERE created_at > NOW() - ($1 || ' days')::INTERVAL`,
+    [days || 30]
+  );
+  return rows[0] || {};
+}
+
+// ---------------------------------------------------------------------------
 // EXPORTS
 // ---------------------------------------------------------------------------
 module.exports = {
@@ -821,4 +996,10 @@ module.exports = {
   createPriceSnapshot, getPriceHistory,
   // Analyst Snapshots
   createAnalystSnapshot, getAnalystSnapshots,
+  // Sonar Cache
+  getSonarCache, claimSonarCache, completeSonarCache, checkSonarClaim, reclaimStaleSonarCache, cleanExpiredSonarCache,
+  // Sonar Spend
+  recordSonarSpend, getDailySpend, getSpendSummary,
+  // Tip Enrichment
+  createTipEnrichment, getTipEnrichment, getEnrichmentQualityStats,
 };

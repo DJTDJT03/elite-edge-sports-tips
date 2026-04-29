@@ -845,5 +845,79 @@ module.exports = function(deps) {
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // ADMIN: Sonar kill-switch — disable enrichment immediately
+  // ---------------------------------------------------------------------------
+  router.post('/admin/sonar/disable', authenticate, requireAdmin, async (req, res) => {
+    try {
+      await db.recordSonarSpend({
+        callSite: 'admin', entityId: 'kill-switch',
+        enrichmentSkipped: 'admin_disabled',
+      });
+      // Update in-memory state if perplexity client is available
+      if (deps.perplexityClient && deps.perplexityClient.setState) {
+        deps.perplexityClient.setState('open');
+      }
+      await db.createAuditEntry({
+        userId: req.user.id, userEmail: req.user.email,
+        action: 'sonar_disabled', entity: 'system', entityId: 'perplexity',
+        details: { reason: req.body.reason || 'admin action' },
+        ip: req.ip,
+      });
+      console.log('[Sonar] Admin disabled enrichment:', req.user.email);
+      res.json({ status: 'disabled', message: 'Sonar enrichment disabled. Tips will publish template-only.' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // ADMIN: Sonar re-enable — resume enrichment
+  // ---------------------------------------------------------------------------
+  router.post('/admin/sonar/enable', authenticate, requireAdmin, async (req, res) => {
+    try {
+      await db.recordSonarSpend({
+        callSite: 'admin', entityId: 'kill-switch',
+        enrichmentSkipped: 'admin_enabled',
+      });
+      if (deps.perplexityClient && deps.perplexityClient.setState) {
+        deps.perplexityClient.setState('closed');
+      }
+      await db.createAuditEntry({
+        userId: req.user.id, userEmail: req.user.email,
+        action: 'sonar_enabled', entity: 'system', entityId: 'perplexity',
+        details: { reason: req.body.reason || 'admin action' },
+        ip: req.ip,
+      });
+      console.log('[Sonar] Admin re-enabled enrichment:', req.user.email);
+      res.json({ status: 'enabled', message: 'Sonar enrichment re-enabled.' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // ADMIN: Sonar status — current state + spend summary
+  // ---------------------------------------------------------------------------
+  router.get('/admin/sonar/status', authenticate, requireAdmin, async (req, res) => {
+    try {
+      var state = deps.perplexityClient ? deps.perplexityClient.getState() : 'not_initialised';
+      var dailySpend = await db.getDailySpend();
+      var weekSummary = await db.getSpendSummary(7);
+      var enrichmentStats = await db.getEnrichmentQualityStats(7);
+      res.json({
+        state: state,
+        enabled: process.env.PERPLEXITY_ENABLED !== 'false',
+        dryRun: process.env.PERPLEXITY_DRY_RUN === 'true',
+        dailySpendUsd: dailySpend,
+        dailyCapUsd: 0.50,
+        weekSummary: weekSummary,
+        enrichmentQuality: enrichmentStats,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return router;
 };
