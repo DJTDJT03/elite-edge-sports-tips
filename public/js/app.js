@@ -10408,39 +10408,39 @@ const App = {
     var summaryHtml = '';
     if (selected.length > 0) {
       summaryHtml =
-        '<div class="acca-summary">' +
+        '<div style="display:block;background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(212,168,67,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:24px;margin-top:24px;max-width:100%;box-sizing:border-box;">' +
           '<h3 style="margin:0 0 20px;color:var(--gold);font-size:18px;text-align:center;">' + (notEnough ? selected.length + '-Fold Accumulator (Best Available)' : 'Accumulator Summary') + '</h3>' +
 
-          // Main stats row
-          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">' +
-            '<div style="text-align:center;padding:16px;background:rgba(212,168,67,0.08);border-radius:10px;">' +
-              '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;">Combined Odds</div>' +
-              '<div style="font-size:28px;font-weight:900;color:var(--gold);">' + self.formatOdds(combinedDecimalOdds) + '</div>' +
+          // Main stats row — 3 cards
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">' +
+            '<div style="text-align:center;padding:14px 8px;background:rgba(212,168,67,0.08);border-radius:10px;">' +
+              '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted,#888);margin-bottom:6px;">Combined Odds</div>' +
+              '<div style="font-size:24px;font-weight:900;color:var(--gold,#d4a843);">' + self.formatOdds(combinedDecimalOdds) + '</div>' +
             '</div>' +
-            '<div style="text-align:center;padding:16px;background:rgba(34,197,94,0.08);border-radius:10px;">' +
-              '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;">Edge</div>' +
-              '<div style="font-size:28px;font-weight:900;color:' + (parseFloat(accaEdge) >= 0 ? 'var(--green)' : '#ef4444') + ';">' + (parseFloat(accaEdge) >= 0 ? '+' : '') + accaEdge + '%</div>' +
+            '<div style="text-align:center;padding:14px 8px;background:rgba(34,197,94,0.08);border-radius:10px;">' +
+              '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted,#888);margin-bottom:6px;">Edge</div>' +
+              '<div style="font-size:24px;font-weight:900;color:' + (parseFloat(accaEdge) >= 0 ? 'var(--green,#16a34a)' : '#ef4444') + ';">' + (parseFloat(accaEdge) >= 0 ? '+' : '') + accaEdge + '%</div>' +
             '</div>' +
-            '<div style="text-align:center;padding:16px;background:rgba(255,255,255,0.03);border-radius:10px;">' +
-              '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:6px;">Risk</div>' +
-              '<div style="font-size:28px;font-weight:900;color:' + riskColor + ';">' + riskLabel + '</div>' +
+            '<div style="text-align:center;padding:14px 8px;background:rgba(255,255,255,0.03);border-radius:10px;">' +
+              '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted,#888);margin-bottom:6px;">Risk</div>' +
+              '<div style="font-size:24px;font-weight:900;color:' + riskColor + ';">' + riskLabel + '</div>' +
             '</div>' +
           '</div>' +
 
           // Probability detail
-          '<div style="display:flex;justify-content:center;gap:24px;margin-bottom:20px;font-size:13px;">' +
-            '<div style="color:var(--text-muted);">Model Prob: <strong style="color:var(--text-primary);">' + (combinedModelProb * 100).toFixed(1) + '%</strong></div>' +
-            '<div style="color:var(--text-muted);">Implied Prob: <strong style="color:var(--text-primary);">' + (combinedImpliedProb * 100).toFixed(1) + '%</strong></div>' +
+          '<div style="display:flex;justify-content:center;gap:20px;margin-bottom:20px;font-size:13px;flex-wrap:wrap;">' +
+            '<div style="color:var(--text-muted,#888);">Model Prob: <strong style="color:var(--text-primary,#fff);">' + (combinedModelProb * 100).toFixed(1) + '%</strong></div>' +
+            '<div style="color:var(--text-muted,#888);">Implied Prob: <strong style="color:var(--text-primary,#fff);">' + (combinedImpliedProb * 100).toFixed(1) + '%</strong></div>' +
           '</div>' +
 
           // Returns grid
           '<div style="margin-bottom:20px;">' +
-            '<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);text-align:center;margin-bottom:10px;">Potential Returns</div>' +
-            '<div class="acca-returns-grid">' + returnsHtml + '</div>' +
+            '<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted,#888);text-align:center;margin-bottom:10px;">Potential Returns</div>' +
+            '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">' + returnsHtml + '</div>' +
           '</div>' +
 
           // Action buttons
-          '<div class="acca-actions" style="display:flex;gap:10px;justify-content:center;">' +
+          '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
             '<button class="btn btn-gold" onclick="App._copyAccaToClipboard()">Copy to Bet Slip</button>' +
             '<button class="btn btn-outline" onclick="App._addAccaToMyBets()">Add to My Bets</button>' +
             '<button class="btn btn-outline" onclick="App._regenerateAcca()">&#8635; Regenerate</button>' +
