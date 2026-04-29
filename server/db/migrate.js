@@ -96,6 +96,12 @@ const tables = [
       recent_form           TEXT[] DEFAULT '{}',
       is_weekly_acca        BOOLEAN DEFAULT FALSE,
       acca_selections       JSONB,
+      advised_price_decimal NUMERIC(8,2),
+      closing_price_decimal NUMERIC(8,2),
+      clv_percent           NUMERIC(8,4),
+      fair_odds_decimal     NUMERIC(8,2),
+      settled_at            TIMESTAMPTZ,
+      settlement_source     TEXT,
       created_at            TIMESTAMPTZ DEFAULT NOW()
     )`,
   },
@@ -184,6 +190,46 @@ const tables = [
   {
     name: 'notifications_index',
     sql: `CREATE INDEX IF NOT EXISTS idx_notifications_timestamp ON notifications(timestamp DESC)`,
+  },
+  {
+    name: 'tip_price_history',
+    sql: `CREATE TABLE IF NOT EXISTS tip_price_history (
+      id                    SERIAL PRIMARY KEY,
+      tip_id                TEXT NOT NULL REFERENCES tips(id) ON DELETE CASCADE,
+      price_decimal         NUMERIC(8,2) NOT NULL,
+      bookmaker             TEXT,
+      source                TEXT DEFAULT 'odds-api',
+      recorded_at           TIMESTAMPTZ DEFAULT NOW()
+    )`,
+  },
+  {
+    name: 'tip_price_history_indexes',
+    sql: `CREATE INDEX IF NOT EXISTS idx_tph_tip_id ON tip_price_history(tip_id);
+          CREATE INDEX IF NOT EXISTS idx_tph_recorded ON tip_price_history(recorded_at DESC)`,
+  },
+  {
+    name: 'analyst_performance_snapshots',
+    sql: `CREATE TABLE IF NOT EXISTS analyst_performance_snapshots (
+      id                    SERIAL PRIMARY KEY,
+      analyst_key           TEXT NOT NULL,
+      snapshot_date         DATE NOT NULL,
+      total_tips            INTEGER DEFAULT 0,
+      wins                  INTEGER DEFAULT 0,
+      losses                INTEGER DEFAULT 0,
+      voids                 INTEGER DEFAULT 0,
+      strike_rate           NUMERIC(6,4),
+      avg_odds              NUMERIC(8,2),
+      total_pnl             NUMERIC(10,2),
+      avg_clv               NUMERIC(8,4),
+      roi_percent           NUMERIC(8,4),
+      sport                 TEXT,
+      created_at            TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(analyst_key, snapshot_date, sport)
+    )`,
+  },
+  {
+    name: 'analyst_snapshots_index',
+    sql: `CREATE INDEX IF NOT EXISTS idx_aps_analyst ON analyst_performance_snapshots(analyst_key, snapshot_date DESC)`,
   },
   {
     name: 'audit_log',

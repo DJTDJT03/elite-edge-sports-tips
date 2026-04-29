@@ -985,6 +985,7 @@ module.exports = function startScheduler(deps) {
           riskLevel: isOutsider ? 'High' : scored.riskLevel,
           analysis: analysis,
           openingOdds: scored.odds,
+          advisedPriceDecimal: scored.odds,
           bookmakerOdds: {},
           recentForm: recentForm,
         };
@@ -1033,6 +1034,7 @@ module.exports = function startScheduler(deps) {
           riskLevel: scored.riskLevel,
           analysis: analysis,
           openingOdds: scored.selectedOdds,
+          advisedPriceDecimal: scored.selectedOdds,
           bookmakerOdds: bkOdds,
           recentForm: [],
         };
@@ -1263,7 +1265,25 @@ module.exports = function startScheduler(deps) {
                   continue;
                 }
 
-                await db.updateTip(tip.id, { status: 'settled', result: resultVal });
+                // Capture closing price (SP) from results API
+                var tipRunner = match.runners.find(function(rn) { return normHorse(rn.horse) === tipName; });
+                var closingPrice = tipRunner && tipRunner.sp ? parseFloat(tipRunner.sp) : null;
+                var advisedPrice = tip.advisedPriceDecimal || tip.odds;
+                var clvPct = null;
+                if (closingPrice && closingPrice > 1 && advisedPrice && advisedPrice > 1) {
+                  // CLV = (closing implied prob - advised implied prob) / advised implied prob * 100
+                  var closingImplied = 1 / closingPrice;
+                  var advisedImplied = 1 / advisedPrice;
+                  clvPct = ((closingImplied - advisedImplied) / advisedImplied) * 100;
+                }
+
+                await db.updateTip(tip.id, {
+                  status: 'settled', result: resultVal,
+                  closingPriceDecimal: closingPrice,
+                  clvPercent: clvPct ? Math.round(clvPct * 100) / 100 : null,
+                  settledAt: new Date().toISOString(),
+                  settlementSource: 'auto-racing-api',
+                });
                 tip.status = 'settled';
                 tip.result = resultVal;
 
@@ -1278,7 +1298,9 @@ module.exports = function startScheduler(deps) {
                 });
                 tip._resultId = resultId;
                 updated++;
-                console.log('[Auto-Settle] Racing: ' + tip.selection + ' = ' + resultVal + ' (' + pnl.toFixed(2) + 'u) [' + tip.date + ']');
+                var clvLabel = clvPct !== null ? ' CLV: ' + clvPct.toFixed(2) + '%' : '';
+                var spLabel = closingPrice ? ' SP: ' + closingPrice : '';
+                console.log('[Auto-Settle] Racing: ' + tip.selection + ' = ' + resultVal + ' (' + pnl.toFixed(2) + 'u)' + spLabel + clvLabel + ' [' + tip.date + ']');
 
                 // Log notification for wins/placed
                 try {
@@ -1418,7 +1440,29 @@ module.exports = function startScheduler(deps) {
                 continue;
               }
 
-              await db.updateTip(ftip.id, { status: 'settled', result: fResultVal });
+              // Capture closing price from last known odds (bookmakerOdds on the tip)
+              var fClosingPrice = null;
+              if (ftip.bookmakerOdds && Object.keys(ftip.bookmakerOdds).length > 0) {
+                var bkValues = Object.values(ftip.bookmakerOdds).filter(function(v) { return v > 0; });
+                if (bkValues.length > 0) {
+                  fClosingPrice = bkValues.reduce(function(sum, v) { return sum + v; }, 0) / bkValues.length;
+                }
+              }
+              var fAdvisedPrice = ftip.advisedPriceDecimal || ftip.odds;
+              var fClvPct = null;
+              if (fClosingPrice && fClosingPrice > 1 && fAdvisedPrice && fAdvisedPrice > 1) {
+                var fClosingImpl = 1 / fClosingPrice;
+                var fAdvisedImpl = 1 / fAdvisedPrice;
+                fClvPct = ((fClosingImpl - fAdvisedImpl) / fAdvisedImpl) * 100;
+              }
+
+              await db.updateTip(ftip.id, {
+                status: 'settled', result: fResultVal,
+                closingPriceDecimal: fClosingPrice ? Math.round(fClosingPrice * 100) / 100 : null,
+                clvPercent: fClvPct ? Math.round(fClvPct * 100) / 100 : null,
+                settledAt: new Date().toISOString(),
+                settlementSource: 'auto-football-api',
+              });
               ftip.status = 'settled';
               ftip.result = fResultVal;
 
@@ -1431,7 +1475,8 @@ module.exports = function startScheduler(deps) {
                 confidence: ftip.confidence,
               });
               updated++;
-              console.log('[Auto-Settle] Football: ' + ftip.selection + ' (' + fmatch.homeTeam + ' ' + homeGoals + '-' + awayGoals + ' ' + fmatch.awayTeam + ') = ' + fResultVal + ' (' + fPnl.toFixed(2) + 'u) [' + ftip.date + ']');
+              var fClvLabel = fClvPct !== null ? ' CLV: ' + fClvPct.toFixed(2) + '%' : '';
+              console.log('[Auto-Settle] Football: ' + ftip.selection + ' (' + fmatch.homeTeam + ' ' + homeGoals + '-' + awayGoals + ' ' + fmatch.awayTeam + ') = ' + fResultVal + ' (' + fPnl.toFixed(2) + 'u)' + fClvLabel + ' [' + ftip.date + ']');
 
               // Log notification for wins
               try {
@@ -2815,6 +2860,114 @@ module.exports = function startScheduler(deps) {
   setTimeout(safeRun('OddsAlerts', checkOddsMovementAlerts), 120000); // 2min after startup
 
   // =========================================================================
+  // PRICE HISTORY LOGGER — snapshots current odds for active tips every 5 mins
+  // =========================================================================
+  async function logPriceHistory() {
+    try {
+      var tips = await db.getTips({ status: 'active' });
+      if (!tips || tips.length === 0) return;
+
+      // Fetch current odds
+      var currentOdds = {};
+      if (oddsSource && process.env.ODDS_API_KEY) {
+        try {
+          var oddsRaw = await oddsSource.fetch();
+          var oddsNorm = oddsSource.normalise(oddsRaw);
+          if (oddsNorm && oddsNorm.length > 0) {
+            oddsNorm.forEach(function(event) {
+              if (!event.homeTeam || !event.bookmakerOdds) return;
+              var eventKey = (event.homeTeam + ' v ' + event.awayTeam).toLowerCase();
+              currentOdds[eventKey] = event.bookmakerOdds;
+            });
+          }
+        } catch (e) { /* non-fatal */ }
+      }
+
+      // Also get racing odds if available
+      var racingOdds = {};
+      if (racingOddsSource && process.env.ODDS_API_KEY) {
+        try {
+          var rOddsRaw = await oddsSource.fetch();
+          var racingRaw = rOddsRaw.racing || [];
+          if (racingRaw.length > 0) {
+            var rOddsNorm = oddsSource.normaliseRacing(racingRaw);
+            if (rOddsNorm) {
+              rOddsNorm.forEach(function(race) {
+                if (race.runners) {
+                  race.runners.forEach(function(runner) {
+                    racingOdds[runner.name.toLowerCase()] = { price: runner.bestPrice, bookmaker: runner.bestBookmaker };
+                  });
+                }
+              });
+            }
+          }
+        } catch (e) { /* non-fatal */ }
+      }
+
+      var logged = 0;
+      for (var i = 0; i < tips.length; i++) {
+        var tip = tips[i];
+        try {
+          if (tip.sport === 'racing') {
+            var selKey = (tip.selection || '').toLowerCase();
+            var rData = racingOdds[selKey];
+            if (rData && rData.price) {
+              await db.createPriceSnapshot({
+                tipId: tip.id, priceDecimal: rData.price,
+                bookmaker: rData.bookmaker, source: 'odds-api-racing',
+              });
+              logged++;
+            }
+          } else if (tip.sport === 'football') {
+            // Match tip event to odds data
+            var eventLower = (tip.event || '').toLowerCase();
+            for (var eKey in currentOdds) {
+              if (eventLower.indexOf(eKey.split(' v ')[0]) !== -1) {
+                var bkOdds = currentOdds[eKey];
+                var bkNames = Object.keys(bkOdds);
+                if (bkNames.length > 0) {
+                  // Get average price across bookmakers for this selection
+                  var prices = [];
+                  bkNames.forEach(function(bk) {
+                    var bkData = bkOdds[bk];
+                    if (bkData) {
+                      var selLower = (tip.selection || '').toLowerCase();
+                      var outcomes = Object.keys(bkData);
+                      for (var oi = 0; oi < outcomes.length; oi++) {
+                        if (outcomes[oi].toLowerCase().indexOf(selLower.split(' ')[0]) !== -1) {
+                          prices.push(parseFloat(bkData[outcomes[oi]]) || 0);
+                        }
+                      }
+                    }
+                  });
+                  if (prices.length > 0) {
+                    var avgPrice = prices.reduce(function(s, p) { return s + p; }, 0) / prices.length;
+                    await db.createPriceSnapshot({
+                      tipId: tip.id, priceDecimal: Math.round(avgPrice * 100) / 100,
+                      bookmaker: 'average-' + prices.length + '-books', source: 'odds-api',
+                    });
+                    logged++;
+                  }
+                }
+                break;
+              }
+            }
+          }
+        } catch (e) { /* skip individual tip errors */ }
+      }
+      if (logged > 0) {
+        console.log('[PriceHistory] Logged ' + logged + ' price snapshot(s) for ' + tips.length + ' active tip(s)');
+      }
+    } catch (err) {
+      console.error('[PriceHistory] Error:', err.message);
+    }
+  }
+
+  // Price history: every 5 minutes, 3 mins after startup
+  setInterval(safeRun('PriceHistory', logPriceHistory), 5 * 60 * 1000);
+  setTimeout(safeRun('PriceHistory', logPriceHistory), 3 * 60 * 1000);
+
+  // =========================================================================
   // AUTO-TUNE ANALYST WEIGHTS (every 14 days)
   // Reviews performance data, adjusts weight modifiers for each analyst
   // =========================================================================
@@ -2985,6 +3138,89 @@ module.exports = function startScheduler(deps) {
   // Auto-tune: check every 30 minutes (only runs on 1st and 15th at 3am)
   setInterval(safeRun('AutoTune', autoTuneAnalysts), 30 * 60 * 1000);
   setTimeout(safeRun('AutoTune', autoTuneAnalysts), 120000);
+
+  // =========================================================================
+  // DAILY ANALYST PERFORMANCE SNAPSHOTS — runs at 3:30am UK time
+  // Captures a daily snapshot of each analyst's performance into the DB
+  // =========================================================================
+  var lastSnapshotDate = '';
+
+  async function captureAnalystSnapshots() {
+    var uk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+    var hour = uk.getHours();
+    var dateStr = uk.toISOString().split('T')[0];
+
+    // Run at 3:30am UK, once per day
+    if (hour !== 3 || lastSnapshotDate === dateStr) return;
+    lastSnapshotDate = dateStr;
+
+    try {
+      console.log('[AnalystSnapshot] Capturing daily analyst performance snapshots...');
+      var tips = await db.getTips({ status: 'settled' });
+      var results = await db.getResults();
+
+      // Build result PnL lookup by tipId
+      var pnlMap = {};
+      results.forEach(function(r) { if (r.tipId) pnlMap[r.tipId] = r.pnl || 0; });
+
+      // Group settled tips by analyst + sport
+      var groups = {};
+      tips.forEach(function(t) {
+        if (!t.result || t.result === 'void') return;
+        var analyst = t.tipsterProfile || 'Unknown';
+        var sport = t.sport || 'unknown';
+        var key = analyst + '|' + sport;
+        if (!groups[key]) groups[key] = { analystKey: analyst, sport: sport, tips: [] };
+        groups[key].tips.push(t);
+      });
+
+      var saved = 0;
+      var keys = Object.keys(groups);
+      for (var i = 0; i < keys.length; i++) {
+        var g = groups[keys[i]];
+        var wins = g.tips.filter(function(t) { return t.result === 'won' || t.result === 'placed'; }).length;
+        var losses = g.tips.filter(function(t) { return t.result === 'lost'; }).length;
+        var voids = g.tips.filter(function(t) { return t.result === 'void'; }).length;
+        var totalPnl = 0;
+        var totalClv = 0;
+        var clvCount = 0;
+        var totalOdds = 0;
+        g.tips.forEach(function(t) {
+          totalPnl += pnlMap[t.id] || 0;
+          totalOdds += t.odds || 0;
+          if (t.clvPercent !== null && t.clvPercent !== undefined) {
+            totalClv += t.clvPercent;
+            clvCount++;
+          }
+        });
+        var counted = wins + losses;
+        var totalStaked = counted * 2; // assume 2u avg stake
+
+        await db.createAnalystSnapshot({
+          analystKey: g.analystKey,
+          snapshotDate: dateStr,
+          totalTips: g.tips.length,
+          wins: wins,
+          losses: losses,
+          voids: voids,
+          strikeRate: counted > 0 ? Math.round((wins / counted) * 10000) / 10000 : 0,
+          avgOdds: g.tips.length > 0 ? Math.round((totalOdds / g.tips.length) * 100) / 100 : 0,
+          totalPnl: Math.round(totalPnl * 100) / 100,
+          avgClv: clvCount > 0 ? Math.round((totalClv / clvCount) * 100) / 100 : null,
+          roiPercent: totalStaked > 0 ? Math.round((totalPnl / totalStaked) * 10000) / 10000 : 0,
+          sport: g.sport,
+        });
+        saved++;
+      }
+      console.log('[AnalystSnapshot] Saved ' + saved + ' snapshots for ' + dateStr);
+    } catch (err) {
+      console.error('[AnalystSnapshot] Error:', err.message);
+    }
+  }
+
+  // Analyst snapshots: check every 10 minutes, 2 mins after startup
+  setInterval(safeRun('AnalystSnapshot', captureAnalystSnapshots), 10 * 60 * 1000);
+  setTimeout(safeRun('AnalystSnapshot', captureAnalystSnapshots), 2 * 60 * 1000);
 
   // =========================================================================
   // DAILY HEALTH CHECK — runs at 4:30am UK time

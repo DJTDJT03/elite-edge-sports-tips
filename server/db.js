@@ -384,6 +384,12 @@ function dbTipToApp(row) {
     recentForm: row.recent_form || [],
     isWeeklyAcca: row.is_weekly_acca || false,
     accaSelections: row.acca_selections,
+    advisedPriceDecimal: parseFloat(row.advised_price_decimal) || null,
+    closingPriceDecimal: parseFloat(row.closing_price_decimal) || null,
+    clvPercent: parseFloat(row.clv_percent) || null,
+    fairOddsDecimal: parseFloat(row.fair_odds_decimal) || null,
+    settledAt: row.settled_at || null,
+    settlementSource: row.settlement_source || null,
     createdAt: row.created_at,
   };
 }
@@ -425,6 +431,12 @@ function appTipToDb(data) {
   if (data.recentForm !== undefined) result.recent_form = Array.isArray(data.recentForm) ? data.recentForm.map(String) : [];
   if (data.isWeeklyAcca !== undefined) result.is_weekly_acca = data.isWeeklyAcca;
   if (data.accaSelections !== undefined) result.acca_selections = data.accaSelections ? JSON.stringify(data.accaSelections) : null;
+  if (data.advisedPriceDecimal !== undefined) result.advised_price_decimal = data.advisedPriceDecimal;
+  if (data.closingPriceDecimal !== undefined) result.closing_price_decimal = data.closingPriceDecimal;
+  if (data.clvPercent !== undefined) result.clv_percent = data.clvPercent;
+  if (data.fairOddsDecimal !== undefined) result.fair_odds_decimal = data.fairOddsDecimal;
+  if (data.settledAt !== undefined) result.settled_at = data.settledAt;
+  if (data.settlementSource !== undefined) result.settlement_source = data.settlementSource;
   return result;
 }
 
@@ -720,6 +732,63 @@ async function getAuditLog(page, limit) {
 }
 
 // ---------------------------------------------------------------------------
+// TIP PRICE HISTORY
+// ---------------------------------------------------------------------------
+async function createPriceSnapshot(data) {
+  if (!pool) return;
+  await query(
+    'INSERT INTO tip_price_history (tip_id, price_decimal, bookmaker, source) VALUES ($1,$2,$3,$4)',
+    [data.tipId, data.priceDecimal, data.bookmaker || null, data.source || 'odds-api']
+  );
+}
+
+async function getPriceHistory(tipId) {
+  if (!pool) return [];
+  const { rows } = await query(
+    'SELECT * FROM tip_price_history WHERE tip_id = $1 ORDER BY recorded_at ASC',
+    [tipId]
+  );
+  return rows.map(r => ({
+    id: r.id, tipId: r.tip_id, priceDecimal: parseFloat(r.price_decimal),
+    bookmaker: r.bookmaker, source: r.source, recordedAt: r.recorded_at,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// ANALYST PERFORMANCE SNAPSHOTS
+// ---------------------------------------------------------------------------
+async function createAnalystSnapshot(data) {
+  if (!pool) return;
+  await query(
+    `INSERT INTO analyst_performance_snapshots
+     (analyst_key, snapshot_date, total_tips, wins, losses, voids, strike_rate, avg_odds, total_pnl, avg_clv, roi_percent, sport)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+     ON CONFLICT (analyst_key, snapshot_date, sport) DO UPDATE SET
+       total_tips=$3, wins=$4, losses=$5, voids=$6, strike_rate=$7, avg_odds=$8, total_pnl=$9, avg_clv=$10, roi_percent=$11`,
+    [data.analystKey, data.snapshotDate, data.totalTips || 0, data.wins || 0,
+     data.losses || 0, data.voids || 0, data.strikeRate || 0, data.avgOdds || 0,
+     data.totalPnl || 0, data.avgClv || null, data.roiPercent || 0, data.sport || null]
+  );
+}
+
+async function getAnalystSnapshots(analystKey, limit) {
+  if (!pool) return [];
+  const lim = limit || 30;
+  const sql = analystKey
+    ? 'SELECT * FROM analyst_performance_snapshots WHERE analyst_key = $1 ORDER BY snapshot_date DESC LIMIT $2'
+    : 'SELECT * FROM analyst_performance_snapshots ORDER BY snapshot_date DESC LIMIT $1';
+  const params = analystKey ? [analystKey, lim] : [lim];
+  const { rows } = await query(sql, params);
+  return rows.map(r => ({
+    id: r.id, analystKey: r.analyst_key, snapshotDate: r.snapshot_date,
+    totalTips: r.total_tips, wins: r.wins, losses: r.losses, voids: r.voids,
+    strikeRate: parseFloat(r.strike_rate) || 0, avgOdds: parseFloat(r.avg_odds) || 0,
+    totalPnl: parseFloat(r.total_pnl) || 0, avgClv: parseFloat(r.avg_clv) || null,
+    roiPercent: parseFloat(r.roi_percent) || 0, sport: r.sport,
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // EXPORTS
 // ---------------------------------------------------------------------------
 module.exports = {
@@ -742,4 +811,8 @@ module.exports = {
   getNotifications, createNotification,
   // Audit
   createAuditEntry, getAuditLog,
+  // Price History
+  createPriceSnapshot, getPriceHistory,
+  // Analyst Snapshots
+  createAnalystSnapshot, getAnalystSnapshots,
 };

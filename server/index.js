@@ -136,6 +136,7 @@ app.use('/api', require('./routes/tips')(deps));
 app.use('/api', require('./routes/results')(deps));
 app.use('/api', require('./routes/admin')(deps));
 app.use('/api', require('./routes/support')(deps));
+app.use('/api', require('./routes/analytics')(deps));
 app.use('/api', require('./routes/stripe')(deps));
 app.use('/', require('./routes/public')(deps));
 
@@ -164,6 +165,19 @@ app.use('/', require('./routes/public')(deps));
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS drips_sent JSONB DEFAULT \'[]\'',
         'ALTER TABLE results ADD COLUMN IF NOT EXISTS voided_by_monitor BOOLEAN DEFAULT FALSE',
         'ALTER TABLE results ADD COLUMN IF NOT EXISTS replay_analysis JSONB',
+        // Phase 1: CLV & Data Integrity columns
+        'ALTER TABLE tips ADD COLUMN IF NOT EXISTS advised_price_decimal NUMERIC(8,2)',
+        'ALTER TABLE tips ADD COLUMN IF NOT EXISTS closing_price_decimal NUMERIC(8,2)',
+        'ALTER TABLE tips ADD COLUMN IF NOT EXISTS clv_percent NUMERIC(8,4)',
+        'ALTER TABLE tips ADD COLUMN IF NOT EXISTS fair_odds_decimal NUMERIC(8,2)',
+        'ALTER TABLE tips ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ',
+        'ALTER TABLE tips ADD COLUMN IF NOT EXISTS settlement_source TEXT',
+        // Phase 1: New tables
+        "CREATE TABLE IF NOT EXISTS tip_price_history (id SERIAL PRIMARY KEY, tip_id TEXT NOT NULL REFERENCES tips(id) ON DELETE CASCADE, price_decimal NUMERIC(8,2) NOT NULL, bookmaker TEXT, source TEXT DEFAULT 'odds-api', recorded_at TIMESTAMPTZ DEFAULT NOW())",
+        'CREATE INDEX IF NOT EXISTS idx_tph_tip_id ON tip_price_history(tip_id)',
+        'CREATE INDEX IF NOT EXISTS idx_tph_recorded ON tip_price_history(recorded_at DESC)',
+        "CREATE TABLE IF NOT EXISTS analyst_performance_snapshots (id SERIAL PRIMARY KEY, analyst_key TEXT NOT NULL, snapshot_date DATE NOT NULL, total_tips INTEGER DEFAULT 0, wins INTEGER DEFAULT 0, losses INTEGER DEFAULT 0, voids INTEGER DEFAULT 0, strike_rate NUMERIC(6,4), avg_odds NUMERIC(8,2), total_pnl NUMERIC(10,2), avg_clv NUMERIC(8,4), roi_percent NUMERIC(8,4), sport TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(analyst_key, snapshot_date, sport))",
+        'CREATE INDEX IF NOT EXISTS idx_aps_analyst ON analyst_performance_snapshots(analyst_key, snapshot_date DESC)',
       ];
       for (var ci = 0; ci < alterCols.length; ci++) {
         try { await db.query(alterCols[ci]); } catch(e) {}
