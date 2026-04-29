@@ -313,6 +313,21 @@ class AIReportGenerator {
         userPrompt += 'CURRENT STREAK: ' + data.streak + '\n\n';
       }
 
+      // Perplexity Sonar live context — additive, absent when Sonar is off or returned null
+      if (data.liveContext) {
+        var hasLive = data.liveContext.racing || data.liveContext.football;
+        if (hasLive) {
+          userPrompt += 'LIVE INTELLIGENCE (last 24 hours):\n';
+          if (data.liveContext.racing) {
+            userPrompt += '\nRacing:\n' + data.liveContext.racing + '\n';
+          }
+          if (data.liveContext.football) {
+            userPrompt += '\nFootball:\n' + data.liveContext.football + '\n';
+          }
+          userPrompt += '\nWeave relevant intelligence into your resultsReview and todaysPicks fields naturally. Do not list it as a separate section.\n\n';
+        }
+      }
+
       userPrompt += 'Return your response as JSON with these fields:\n';
       userPrompt += '- subject: email subject line (max 60 chars)\n';
       userPrompt += '- greeting: personalised morning greeting using the subscriber name once\n';
@@ -372,6 +387,12 @@ class AIReportGenerator {
       if (data.winnerName) userPrompt += 'WINNER: ' + data.winnerName + ' @ ' + (data.winnerOdds || 'N/A') + '\n';
       if (data.raceComment) userPrompt += 'RACE COMMENT: ' + data.raceComment + '\n';
       userPrompt += '\n';
+
+      // Perplexity Sonar post-race context — additive, absent when Sonar is off or returned null
+      if (data.liveContext) {
+        userPrompt += 'POST-RACE INTELLIGENCE (from racing press):\n' + data.liveContext + '\n';
+        userPrompt += 'Incorporate any relevant observations from this intelligence into your analysis.\n\n';
+      }
 
       userPrompt += 'Return your response as JSON with these fields:\n';
       userPrompt += '- analysis: the full post-race analysis (100-150 words)\n';

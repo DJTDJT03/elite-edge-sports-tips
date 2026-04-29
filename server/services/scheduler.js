@@ -1379,30 +1379,44 @@ module.exports = function startScheduler(deps) {
                   } catch (tgErr) { /* non-fatal */ }
                 }
 
-                // Generate AI race replay analysis (non-blocking)
+                // Generate AI race replay analysis (non-blocking IIFE — does not block settle loop)
                 if (aiReports && aiReports.isAvailable() && tip.sport === 'racing') {
                   (async function() {
                     try {
-                      var tipRunner = match.runners.find(function(rn) { return normHorse(rn.horse) === tipName; });
-                      var winnerRunner = match.runners.find(function(rn) { return parseInt(rn.position, 10) === 1; });
+                      var tipRunner2 = match.runners.find(function(rn) { return normHorse(rn.horse) === tipName; });
+                      var winnerRunner2 = match.runners.find(function(rn) { return parseInt(rn.position, 10) === 1; });
                       var replayData = {
                         selection: tip.selection,
                         meeting: tip.meeting || tip.event || '',
                         raceTime: tip.raceTime || '',
                         result: resultVal,
-                        position: tipRunner ? tipRunner.position : 'N/A',
+                        position: tipRunner2 ? tipRunner2.position : 'N/A',
                         odds: tip.odds,
                         going: match.going || '',
                         distance: match.distance || '',
-                        winnerName: winnerRunner ? winnerRunner.horse : '',
-                        winnerOdds: winnerRunner ? winnerRunner.sp : '',
+                        winnerName: winnerRunner2 ? winnerRunner2.horse : '',
+                        winnerOdds: winnerRunner2 ? winnerRunner2.sp : '',
                         raceComment: match.race_comment || '',
                         runners: match.runners ? match.runners.length : 0,
                       };
+
+                      // Fetch Sonar post-race context (non-blocking, runs inside IIFE)
+                      var pxClient = deps.perplexityClient;
+                      if (pxClient) {
+                        try {
+                          var sonarReplayCtx = await pxClient.enrichReplay(replayData);
+                          if (sonarReplayCtx) {
+                            replayData.liveContext = sonarReplayCtx;
+                          }
+                        } catch (sonarReplayErr) {
+                          // Non-fatal — Claude generates without Sonar context
+                        }
+                      }
+
                       var replay = await aiReports.generateRaceReplay(replayData);
                       if (replay && tip._resultId) {
                         await db.updateResult(tip._resultId, { replayAnalysis: replay });
-                        console.log('[Auto-Settle] Race replay generated for: ' + tip.selection);
+                        console.log('[Auto-Settle] Race replay generated for: ' + tip.selection + (replayData.liveContext ? ' (Sonar-enriched)' : ''));
                       }
                     } catch (replayErr) {
                       console.error('[Auto-Settle] Race replay error:', replayErr.message);
@@ -1952,6 +1966,20 @@ module.exports = function startScheduler(deps) {
       }
       var streakStr = streak + streakType;
 
+      // Fetch Sonar live context ONCE (shared across all subscribers)
+      var sonarContext = { racing: null, football: null };
+      var perplexityClient = deps.perplexityClient;
+      if (perplexityClient) {
+        try {
+          sonarContext = await perplexityClient.enrichBulletin(todayTips);
+          if (sonarContext.racing || sonarContext.football) {
+            console.log('[Bulletin] Sonar context: racing=' + (sonarContext.racing ? 'yes' : 'no') + ', football=' + (sonarContext.football ? 'yes' : 'no'));
+          }
+        } catch (sonarErr) {
+          console.log('[Bulletin] Sonar enrichment skipped: ' + sonarErr.message);
+        }
+      }
+
       var sentCount = 0;
       for (var i = 0; i < premiumUsers.length; i++) {
         var u = premiumUsers[i];
@@ -1971,7 +1999,8 @@ module.exports = function startScheduler(deps) {
                 strikeRate: yStrikeRate
               },
               napSelection: nap ? nap.selection : null,
-              streak: streakStr
+              streak: streakStr,
+              liveContext: { racing: sonarContext.racing, football: sonarContext.football },
             });
           } catch (aiErr) {
             console.error('[Bulletin] AI generation failed, using standard template:', aiErr.message);
