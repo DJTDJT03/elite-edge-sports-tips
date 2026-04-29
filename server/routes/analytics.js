@@ -250,5 +250,19 @@ module.exports = function(deps) {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // GET /api/analytics/quality-loop — enrichment quality snapshots
+  // -------------------------------------------------------------------------
+  router.get('/analytics/quality-loop', authenticate, requireAdmin, async (req, res) => {
+    try {
+      var snapshots = await db.getLatestQualitySnapshot();
+      var aggregate = snapshots.filter(function(s) { return s.isAggregate; })[0] || null;
+      var signals = snapshots.filter(function(s) { return !s.isAggregate; });
+      res.json({ aggregate: aggregate, signals: signals });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch quality-loop data' });
+    }
+  });
+
   return router;
 };

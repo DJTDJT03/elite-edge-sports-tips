@@ -19,20 +19,22 @@ window.AnalyticsPage = {
         AdminAPI.get('/analytics/clv'),
         AdminAPI.get('/analytics/edge-vs-results'),
         AdminAPI.get('/analytics/analyst-snapshots'),
+        AdminAPI.get('/analytics/quality-loop'),
       ]);
 
       var data = results[0].status === 'fulfilled' ? results[0].value : {};
       var clvData = results[1].status === 'fulfilled' ? results[1].value : null;
       var edgeData = results[2].status === 'fulfilled' ? results[2].value : null;
       var snapshots = results[3].status === 'fulfilled' ? results[3].value : null;
+      var qualityData = results[4].status === 'fulfilled' ? results[4].value : null;
 
-      this._renderDashboard(content, data, clvData, edgeData, snapshots);
+      this._renderDashboard(content, data, clvData, edgeData, snapshots, qualityData);
     } catch(err) {
       content.innerHTML = '<div class="admin-error">Failed to load analytics: ' + err.message + '</div>';
     }
   },
 
-  _renderDashboard: function(container, data, clvData, edgeData, snapshots) {
+  _renderDashboard: function(container, data, clvData, edgeData, snapshots, qualityData) {
     var html = '<div class="admin-page-header">' +
       '<h2>Selection Performance Analytics</h2>' +
       '<p class="admin-page-sub">Data integrity, CLV tracking, and edge measurement</p>' +
@@ -117,6 +119,66 @@ window.AnalyticsPage = {
           html += '</div>';
         });
         html += '</div>';
+      }
+
+      html += '</div>';
+    }
+
+    // =====================================================================
+    // ENRICHMENT QUALITY LOOP (D5)
+    // =====================================================================
+    if (qualityData) {
+      html += '<div class="admin-section"><h3 class="admin-section-title" style="color:#f59e0b;">Enrichment Quality Loop</h3>';
+      html += '<p style="color:var(--text-muted,#888);font-size:12px;margin-bottom:12px;">Does Perplexity enrichment improve CLV and ROI? Per-signal baseline compares enriched-with-X vs enriched-without-X.</p>';
+
+      // Aggregate card
+      if (qualityData.aggregate) {
+        var agg = qualityData.aggregate;
+        var aggVColor = agg.verdict === 'Earning its keep' ? 'var(--green,#16a34a)' :
+          agg.verdict === 'No benefit — consider disabling' ? 'var(--red,#dc2626)' :
+          agg.verdict === 'Mixed signal' ? '#f59e0b' : '#888';
+        html += '<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:16px;margin-bottom:16px;">';
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:8px;">';
+        html += '<div style="text-align:center;"><div style="font-size:11px;color:var(--text-muted,#888);">Enriched Tips</div><div style="font-size:20px;font-weight:800;">' + agg.tipsWith + '</div></div>';
+        html += '<div style="text-align:center;"><div style="font-size:11px;color:var(--text-muted,#888);">Enriched CLV</div><div style="font-size:20px;font-weight:800;color:' + (agg.avgClvWith > 0 ? 'var(--green,#16a34a)' : 'var(--red,#dc2626)') + ';">' + (agg.avgClvWith > 0 ? '+' : '') + agg.avgClvWith + '%</div></div>';
+        html += '<div style="text-align:center;"><div style="font-size:11px;color:var(--text-muted,#888);">Baseline CLV</div><div style="font-size:20px;font-weight:800;color:' + (agg.avgClvWithout > 0 ? 'var(--green,#16a34a)' : 'var(--red,#dc2626)') + ';">' + (agg.avgClvWithout > 0 ? '+' : '') + agg.avgClvWithout + '%</div></div>';
+        html += '<div style="text-align:center;"><div style="font-size:11px;color:var(--text-muted,#888);">Delta</div><div style="font-size:20px;font-weight:800;color:' + (agg.clvDelta > 0 ? 'var(--green,#16a34a)' : agg.clvDelta < 0 ? 'var(--red,#dc2626)' : '#888') + ';">' + (agg.clvDelta > 0 ? '+' : '') + agg.clvDelta + '%</div></div>';
+        html += '</div>';
+        html += '<div style="text-align:center;font-size:14px;font-weight:700;color:' + aggVColor + ';">' + agg.verdict + '</div>';
+        html += '</div>';
+      } else {
+        html += '<p style="color:var(--text-muted,#888);">No aggregate data yet — quality loop runs nightly at 3am UK.</p>';
+      }
+
+      // Per-signal table
+      if (qualityData.signals && qualityData.signals.length > 0) {
+        html += '<div class="admin-table-wrap"><table class="admin-table"><thead><tr>';
+        html += '<th>Signal</th><th>Tips</th><th>Avg CLV</th><th>ROI</th><th>SR%</th>';
+        html += '<th>Baseline CLV</th><th>Baseline ROI</th><th>CLV Delta</th><th>ROI Delta</th><th>Verdict</th>';
+        html += '</tr></thead><tbody>';
+        qualityData.signals.forEach(function(s) {
+          var vColor = s.verdict === 'Earning its keep' ? 'var(--green,#16a34a)' :
+            s.verdict === 'No benefit — consider disabling' ? 'var(--red,#dc2626)' :
+            s.verdict === 'Mixed signal' ? '#f59e0b' :
+            s.verdict === 'Inconclusive' ? '#888' : '#666';
+          var dClvColor = s.clvDelta > 0 ? 'var(--green,#16a34a)' : s.clvDelta < 0 ? 'var(--red,#dc2626)' : '#888';
+          var dRoiColor = s.roiDeltaPct > 0 ? 'var(--green,#16a34a)' : s.roiDeltaPct < 0 ? 'var(--red,#dc2626)' : '#888';
+          html += '<tr>';
+          html += '<td><code>' + (s.signalKey || '-') + '</code></td>';
+          html += '<td>' + s.tipsWith + '</td>';
+          html += '<td style="color:' + (s.avgClvWith > 0 ? 'var(--green,#16a34a)' : 'var(--red,#dc2626)') + ';">' + (s.avgClvWith > 0 ? '+' : '') + s.avgClvWith + '%</td>';
+          html += '<td>' + s.roiPctWith + '%</td>';
+          html += '<td>' + s.strikeRateWith + '%</td>';
+          html += '<td>' + (s.avgClvWithout > 0 ? '+' : '') + s.avgClvWithout + '%</td>';
+          html += '<td>' + s.roiPctWithout + '%</td>';
+          html += '<td style="color:' + dClvColor + ';font-weight:700;">' + (s.clvDelta > 0 ? '+' : '') + s.clvDelta + '%</td>';
+          html += '<td style="color:' + dRoiColor + ';font-weight:700;">' + (s.roiDeltaPct > 0 ? '+' : '') + s.roiDeltaPct + '%</td>';
+          html += '<td style="color:' + vColor + ';font-weight:700;">' + s.verdict + '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+      } else {
+        html += '<p style="color:var(--text-muted,#888);font-size:13px;">No per-signal data yet. Signals will appear here once tips are settled with enrichment data.</p>';
       }
 
       html += '</div>';

@@ -989,6 +989,65 @@ async function getEnrichmentQualityStats(days) {
 }
 
 // ---------------------------------------------------------------------------
+// ENRICHMENT QUALITY SNAPSHOTS
+// ---------------------------------------------------------------------------
+async function upsertQualitySnapshot(data) {
+  if (!pool) return;
+  await query(
+    `INSERT INTO enrichment_quality_snapshots
+     (snapshot_date, is_aggregate, signal_key, tips_with, avg_clv_with, roi_pct_with, strike_rate_with,
+      tips_without, avg_clv_without, roi_pct_without, strike_rate_without, clv_delta, roi_delta_pct, verdict, sample_sufficient)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+     ON CONFLICT (snapshot_date, is_aggregate, signal_key) DO UPDATE SET
+       tips_with=$4, avg_clv_with=$5, roi_pct_with=$6, strike_rate_with=$7,
+       tips_without=$8, avg_clv_without=$9, roi_pct_without=$10, strike_rate_without=$11,
+       clv_delta=$12, roi_delta_pct=$13, verdict=$14, sample_sufficient=$15`,
+    [data.snapshotDate, data.isAggregate || false, data.signalKey || null,
+     data.tipsWith || 0, data.avgClvWith, data.roiPctWith, data.strikeRateWith,
+     data.tipsWithout || 0, data.avgClvWithout, data.roiPctWithout, data.strikeRateWithout,
+     data.clvDelta, data.roiDeltaPct, data.verdict || null, data.sampleSufficient !== false]
+  );
+}
+
+async function getQualitySnapshots(date) {
+  if (!pool) return [];
+  var d = date || new Date().toISOString().split('T')[0];
+  const { rows } = await query(
+    'SELECT * FROM enrichment_quality_snapshots WHERE snapshot_date = $1 ORDER BY is_aggregate DESC, clv_delta DESC NULLS LAST',
+    [d]
+  );
+  return rows.map(function(r) {
+    return {
+      snapshotDate: r.snapshot_date, isAggregate: r.is_aggregate, signalKey: r.signal_key,
+      tipsWith: r.tips_with, avgClvWith: parseFloat(r.avg_clv_with) || 0,
+      roiPctWith: parseFloat(r.roi_pct_with) || 0, strikeRateWith: parseFloat(r.strike_rate_with) || 0,
+      tipsWithout: r.tips_without, avgClvWithout: parseFloat(r.avg_clv_without) || 0,
+      roiPctWithout: parseFloat(r.roi_pct_without) || 0, strikeRateWithout: parseFloat(r.strike_rate_without) || 0,
+      clvDelta: parseFloat(r.clv_delta) || 0, roiDeltaPct: parseFloat(r.roi_delta_pct) || 0,
+      verdict: r.verdict, sampleSufficient: r.sample_sufficient,
+    };
+  });
+}
+
+async function getLatestQualitySnapshot() {
+  if (!pool) return [];
+  const { rows } = await query(
+    'SELECT DISTINCT ON (is_aggregate, signal_key) * FROM enrichment_quality_snapshots ORDER BY is_aggregate, signal_key, snapshot_date DESC'
+  );
+  return rows.map(function(r) {
+    return {
+      snapshotDate: r.snapshot_date, isAggregate: r.is_aggregate, signalKey: r.signal_key,
+      tipsWith: r.tips_with, avgClvWith: parseFloat(r.avg_clv_with) || 0,
+      roiPctWith: parseFloat(r.roi_pct_with) || 0, strikeRateWith: parseFloat(r.strike_rate_with) || 0,
+      tipsWithout: r.tips_without, avgClvWithout: parseFloat(r.avg_clv_without) || 0,
+      roiPctWithout: parseFloat(r.roi_pct_without) || 0, strikeRateWithout: parseFloat(r.strike_rate_without) || 0,
+      clvDelta: parseFloat(r.clv_delta) || 0, roiDeltaPct: parseFloat(r.roi_delta_pct) || 0,
+      verdict: r.verdict, sampleSufficient: r.sample_sufficient,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // EXPORTS
 // ---------------------------------------------------------------------------
 module.exports = {
@@ -1023,4 +1082,6 @@ module.exports = {
   createSonarAdminEvent, getLatestSonarAdminEvent,
   // Tip Enrichment
   createTipEnrichment, getTipEnrichment, getEnrichmentQualityStats,
+  // Quality Loop
+  upsertQualitySnapshot, getQualitySnapshots, getLatestQualitySnapshot,
 };

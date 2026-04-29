@@ -3281,6 +3281,36 @@ module.exports = function startScheduler(deps) {
   setTimeout(safeRun('AutoTune', autoTuneAnalysts), 120000);
 
   // =========================================================================
+  // ENRICHMENT QUALITY LOOP — runs at 3:00am UK time
+  // Joins enrichment signals to settled tips, computes CLV/ROI correlation
+  // =========================================================================
+  var lastQualityLoopDate = '';
+
+  async function runEnrichmentQualityLoop() {
+    var uk = getUKTime();
+    var hour = uk.getHours();
+    var dateStr = uk.toISOString().split('T')[0];
+
+    // Run at 3:00am UK, once per day
+    if (hour !== 3 || lastQualityLoopDate === dateStr) return;
+    lastQualityLoopDate = dateStr;
+
+    try {
+      var qualityLoop = require('./perplexity/qualityLoop');
+      var results = await qualityLoop.runQualityLoop(db);
+      var sigCount = results.signals ? results.signals.length : 0;
+      console.log('[QualityLoop] Completed: ' + sigCount + ' signal(s) analysed, aggregate: ' +
+        (results.aggregate ? results.aggregate.verdict : 'no data'));
+    } catch (err) {
+      console.error('[QualityLoop] Error:', err.message);
+    }
+  }
+
+  // Quality loop: check every 10 minutes, 3 mins after startup
+  setInterval(safeRun('QualityLoop', runEnrichmentQualityLoop), 10 * 60 * 1000);
+  setTimeout(safeRun('QualityLoop', runEnrichmentQualityLoop), 3 * 60 * 1000);
+
+  // =========================================================================
   // DAILY ANALYST PERFORMANCE SNAPSHOTS — runs at 3:30am UK time
   // Captures a daily snapshot of each analyst's performance into the DB
   // =========================================================================
