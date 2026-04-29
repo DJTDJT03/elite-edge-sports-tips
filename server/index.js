@@ -113,6 +113,21 @@ const deps = {
 // ---------------------------------------------------------------------------
 // Mount routes
 // ---------------------------------------------------------------------------
+// Health & Readiness endpoints (Railway healthcheck)
+var _appReady = false;
+app.get('/healthz', async (req, res) => {
+  try {
+    if (db.isAvailable()) await db.query('SELECT 1');
+    res.status(200).json({ status: 'healthy', db: db.isAvailable() ? 'connected' : 'fallback', uptime: Math.round(process.uptime()) });
+  } catch(e) {
+    res.status(503).json({ status: 'unhealthy', error: e.message });
+  }
+});
+app.get('/ready', (req, res) => {
+  if (_appReady) return res.status(200).json({ status: 'ready' });
+  res.status(503).json({ status: 'starting' });
+});
+
 app.use('/api/auth', require('./routes/auth')(deps));
 app.use('/api', require('./routes/racing')(deps));
 app.use('/api', require('./routes/football')(deps));
@@ -512,6 +527,9 @@ app.use('/', require('./routes/public')(deps));
 })();
 
 // Manual results scripts removed — use admin panel to add results going forward
+
+// Mark app as ready after startup scripts
+setTimeout(function() { _appReady = true; console.log('[Startup] App ready'); }, 5000);
 
 // ---------------------------------------------------------------------------
 // Global error handler — catches unhandled errors in route handlers
