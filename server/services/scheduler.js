@@ -940,11 +940,11 @@ module.exports = function startScheduler(deps) {
 
       // Determine tipsterProfile using analyst profiles
       var analystProfiles = require('./analystProfiles');
-      var analystKey = analystProfiles.assignAnalyst(scored, c.type);
+      var analystKey = analystProfiles.assignAnalyst(scored, sport);
       var tipsterProfile = analystProfiles.profiles[analystKey].name;
 
       // Apply analyst-specific weight modifiers to factors for deeper analysis
-      var adjustedFactors = analystProfiles.applyAnalystWeights(scored.factors || {}, analystKey, c.type);
+      var adjustedFactors = analystProfiles.applyAnalystWeights(scored.factors || {}, analystKey, sport);
 
       // Generate analysis
       var analysis = scoringModel.generateAnalysis(scored, sport);

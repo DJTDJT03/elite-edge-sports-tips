@@ -1042,8 +1042,10 @@ main { min-height: calc(100vh - 64px); }
   .form-visual { gap: 3px; }
   .fv-badge { width: 20px; height: 20px; font-size: 10px; }
 
-  /* Notification dropdown */
-  .notif-dropdown { right: -40px; width: calc(100vw - 24px); max-width: 320px; }
+  /* Notification dropdown — full width on mobile */
+  .notif-dropdown { right: -12px; left: auto; width: calc(100vw - 24px); max-width: 360px; min-width: 280px; }
+  .notif-item { font-size: 14px; padding: 12px 16px; line-height: 1.4; }
+  .notif-item .notif-time { font-size: 11px; }
 
   /* Odds format toggle */
   .odds-format-toggle { font-size: 10px; }

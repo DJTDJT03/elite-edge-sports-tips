@@ -10406,10 +10406,10 @@ const App = {
     var riskColor = foldCount <= 2 ? 'var(--green)' : foldCount <= 4 ? 'var(--gold)' : foldCount <= 6 ? '#f97316' : '#ef4444';
 
     var summaryHtml = '';
-    if (selected.length > 0 && !notEnough) {
+    if (selected.length > 0) {
       summaryHtml =
         '<div class="acca-summary">' +
-          '<h3 style="margin:0 0 20px;color:var(--gold);font-size:18px;text-align:center;">Accumulator Summary</h3>' +
+          '<h3 style="margin:0 0 20px;color:var(--gold);font-size:18px;text-align:center;">' + (notEnough ? selected.length + '-Fold Accumulator (Best Available)' : 'Accumulator Summary') + '</h3>' +
 
           // Main stats row
           '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">' +
