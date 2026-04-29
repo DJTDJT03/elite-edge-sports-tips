@@ -257,7 +257,10 @@ module.exports = function(deps) {
         lastLogin: user.lastLogin,
         loginHistory: (user.loginHistory || []).slice(0, 5),
         trialActive: user.trialActive,
+        trialStart: user.trialStart,
         trialEnd: user.trialEnd,
+        paymentGraceEnd: user.paymentGraceEnd || null,
+        stripeCustomerId: user.stripeCustomerId || null,
       }
     });
   });

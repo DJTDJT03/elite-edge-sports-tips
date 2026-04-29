@@ -732,13 +732,33 @@ const App = {
       if (badgeMobile) { badgeMobile.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">VIP</span>' : ''); badgeMobile.style.cursor = 'pointer'; badgeMobile.onclick = () => { window.location.hash = '#/account'; }; }
       adminLink.style.display = this.user.role === 'admin' ? 'inline-block' : 'none';
       if (myBetsLink) myBetsLink.style.display = 'inline-block';
-      if (this.user.trialActive && this.user.trialEnd) {
-        const trialDaysLeft = Math.max(0, Math.ceil((new Date(this.user.trialEnd).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+      // Payment failed grace period banner
+      if (this.user.paymentGraceEnd) {
+        var graceEnd = new Date(this.user.paymentGraceEnd);
+        var graceHoursLeft = Math.max(0, Math.ceil((graceEnd.getTime() - Date.now()) / (1000 * 60 * 60)));
+        if (graceHoursLeft > 0) {
+          subBar.style.display = 'block';
+          subBar.style.background = 'linear-gradient(135deg, rgba(220,38,38,0.15), rgba(220,38,38,0.05))';
+          subBar.style.borderBottom = '2px solid #dc2626';
+          subBar.style.color = '#fca5a5';
+          subBar.innerHTML = '<strong style="color:#dc2626;">PAYMENT FAILED</strong> <span style="color:#fca5a5;">&mdash; Your access expires in ' + graceHoursLeft + ' hour' + (graceHoursLeft !== 1 ? 's' : '') + '.</span> &nbsp; <a href="#/account" style="color:#fbbf24;font-weight:700;text-decoration:underline;">Update Payment &rarr;</a>';
+        }
+      } else if (this.user.trialActive && this.user.trialEnd) {
+        var trialMsLeft = new Date(this.user.trialEnd).getTime() - Date.now();
+        var trialDaysLeft = Math.max(0, Math.ceil(trialMsLeft / (24 * 60 * 60 * 1000)));
+        var trialHoursLeft = Math.max(0, Math.ceil(trialMsLeft / (1000 * 60 * 60)));
         subBar.style.display = 'block';
         subBar.style.background = 'linear-gradient(135deg, rgba(212,168,67,0.15), rgba(212,168,67,0.05))';
         subBar.style.borderBottom = '2px solid var(--gold)';
         subBar.style.color = '#e8e6e3';
-        subBar.innerHTML = '<strong style="color:#d4a843;">FREE TRIAL</strong> <span style="color:#e8e6e3;">&mdash; ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' remaining</span> &nbsp; <a href="#/pricing" style="color:#d4a843;font-weight:700;text-decoration:underline;">Choose a Plan &rarr;</a>';
+        // Show hours when < 24h left for urgency
+        if (trialHoursLeft <= 24 && trialHoursLeft > 0) {
+          subBar.innerHTML = '<strong style="color:#dc2626;">TRIAL ENDING</strong> <span style="color:#fca5a5;">&mdash; Only ' + trialHoursLeft + ' hour' + (trialHoursLeft !== 1 ? 's' : '') + ' left!</span> &nbsp; <a href="#/pricing" style="color:#d4a843;font-weight:700;text-decoration:underline;">Subscribe Now &rarr;</a>';
+          subBar.style.background = 'linear-gradient(135deg, rgba(220,38,38,0.1), rgba(220,38,38,0.03))';
+          subBar.style.borderBottom = '2px solid #dc2626';
+        } else {
+          subBar.innerHTML = '<strong style="color:#d4a843;">FREE TRIAL</strong> <span style="color:#e8e6e3;">&mdash; ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' remaining</span> &nbsp; <a href="#/pricing" style="color:#d4a843;font-weight:700;text-decoration:underline;">Choose a Plan &rarr;</a>';
+        }
       } else if (this.user.subscription === 'vip') {
         subBar.style.display = 'block';
         subBar.className = 'sub-bar sub-bar-vip';
@@ -751,6 +771,18 @@ const App = {
         subBar.style.background = '';
         subBar.style.borderBottom = '';
         subBar.innerHTML = '<strong>Premium</strong> member — Full access enabled. Thank you for your subscription.';
+      } else if (this.user.subscription === 'free' && this.user.trialStart && !this.user.trialActive) {
+        // Trial expired — show conversion nudge
+        subBar.style.display = 'block';
+        subBar.style.background = 'linear-gradient(135deg, rgba(212,168,67,0.12), rgba(212,168,67,0.04))';
+        subBar.style.borderBottom = '2px solid var(--gold)';
+        subBar.style.color = '#e8e6e3';
+        subBar.innerHTML = '<strong style="color:#d4a843;">TRIAL EXPIRED</strong> <span style="color:#e8e6e3;">&mdash; Your free trial has ended. Subscribe to keep Premium access.</span> &nbsp; <a href="#/pricing" style="color:#d4a843;font-weight:700;text-decoration:underline;">Subscribe Now &rarr;</a>';
+        // Show conversion overlay once per session for expired trial users
+        if (!sessionStorage.getItem('trialExpiredShown')) {
+          sessionStorage.setItem('trialExpiredShown', 'true');
+          setTimeout(() => this._showTrialExpiredOverlay(), 2000);
+        }
       } else if (this.user.subscription === 'free') {
         subBar.style.display = 'block';
         subBar.className = 'sub-bar';
@@ -3122,8 +3154,9 @@ const App = {
         ${isLocked ? `
           <div class="lock-overlay">
             <div class="lock-icon">&#128274;</div>
-            <div class="lock-text">Premium Tip</div>
-            <div class="lock-cta" onclick="event.stopPropagation();App.showTrialOffer()">Start Free Trial</div>
+            <div class="lock-text">Premium Selection</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:8px;">Full analysis, staking advice & edge data</div>
+            <div class="lock-cta" onclick="event.stopPropagation();App.showTrialOffer()">Unlock Free for 7 Days</div>
           </div>
         ` : ''}
       </div>
@@ -8671,6 +8704,31 @@ const App = {
       var overlay2 = document.getElementById('trial-offer-overlay');
       if (overlay2) overlay2.remove();
     }
+  },
+
+  _showTrialExpiredOverlay() {
+    if (!this.user || this.user.subscription !== 'free' || !this.user.trialStart) return;
+    var overlay = document.createElement('div');
+    overlay.id = 'trial-expired-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);backdrop-filter:blur(4px);';
+    overlay.innerHTML =
+      '<div style="background:var(--bg-card,#141828);border:2px solid #d4a843;border-radius:16px;padding:40px;max-width:480px;width:90%;text-align:center;box-shadow:0 0 60px rgba(212,168,67,0.2);">' +
+        '<div style="font-size:48px;margin-bottom:12px;">&#9203;</div>' +
+        '<h2 style="color:#d4a843;margin-bottom:8px;font-size:22px;">Your Free Trial Has Ended</h2>' +
+        '<p style="color:#8b8d93;font-size:14px;margin-bottom:16px;">You\'ve experienced what Elite Edge can do. Don\'t miss another winning selection.</p>' +
+        '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:16px;margin-bottom:20px;text-align:left;">' +
+          '<div style="color:#22c55e;font-size:13px;font-weight:700;margin-bottom:8px;">During your trial you had access to:</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;color:#cbd5e1;">' +
+            '<div>&#10003; AI-powered selections</div>' +
+            '<div>&#10003; Full race analysis</div>' +
+            '<div>&#10003; Value bet scanner</div>' +
+            '<div>&#10003; Expert staking advice</div>' +
+          '</div>' +
+        '</div>' +
+        '<a href="#/pricing" onclick="document.getElementById(\'trial-expired-overlay\').remove()" style="display:block;width:100%;padding:14px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;text-decoration:none;text-align:center;margin-bottom:12px;">View Plans — From &pound;19.99/month</a>' +
+        '<button onclick="document.getElementById(\'trial-expired-overlay\').remove()" style="width:100%;padding:10px;background:transparent;color:#8b8d93;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:13px;cursor:pointer;">Continue on Free Plan</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
   },
 
   showWelcomeEmailNotice() {

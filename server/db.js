@@ -193,6 +193,9 @@ function dbUserToApp(row) {
     stripeCustomerId: row.stripe_customer_id || null,
     stripeSubscriptionId: row.stripe_subscription_id || null,
     dripsSent: row.drips_sent || [],
+    paymentFailedAt: row.payment_failed_at || null,
+    paymentGraceEnd: row.payment_grace_end || null,
+    dunningStage: row.dunning_stage || 0,
   };
 }
 
@@ -227,6 +230,9 @@ function appUserToDb(data) {
   if (data.stripeCustomerId !== undefined) result.stripe_customer_id = data.stripeCustomerId;
   if (data.stripeSubscriptionId !== undefined) result.stripe_subscription_id = data.stripeSubscriptionId;
   if (data.dripsSent !== undefined) result.drips_sent = JSON.stringify(data.dripsSent);
+  if (data.paymentFailedAt !== undefined) result.payment_failed_at = data.paymentFailedAt;
+  if (data.paymentGraceEnd !== undefined) result.payment_grace_end = data.paymentGraceEnd;
+  if (data.dunningStage !== undefined) result.dunning_stage = data.dunningStage;
   return result;
 }
 

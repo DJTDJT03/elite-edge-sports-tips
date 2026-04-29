@@ -1032,6 +1032,81 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
     return this._sendEmail({ to: email, subject, html, text, emailType: 'password_reset' });
   }
 
+  // -----------------------------------------------------------------------
+  // DUNNING — Payment failed notification
+  // -----------------------------------------------------------------------
+  async sendPaymentFailed({ name, email, portalUrl }) {
+    const subject = 'Action Required — Your Elite Edge payment failed';
+    const html = this._wrapHTML(`
+      <h2 style="color:#ffffff;margin:0 0 16px;font-size:20px;">Hi ${this._esc(name)},</h2>
+      <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">We were unable to process your latest payment for your Elite Edge subscription.</p>
+
+      <div style="background:#2a1a1a;padding:20px;border-radius:8px;margin:16px 0;border-left:4px solid #dc2626;">
+        <p style="color:#fca5a5;font-size:14px;font-weight:700;margin:0 0 8px;">Payment Failed</p>
+        <p style="color:#cbd5e1;font-size:14px;margin:0;">Your subscription will remain active for <strong>3 more days</strong> to give you time to update your payment details.</p>
+      </div>
+
+      <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">Please update your payment method to continue receiving:</p>
+      <ul style="color:#cbd5e1;font-size:14px;line-height:1.8;">
+        <li>Daily AI-powered racing &amp; football tips</li>
+        <li>Full analysis from our 3 specialist analysts</li>
+        <li>Premium features &amp; exclusive content</li>
+      </ul>
+
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${portalUrl || 'https://eliteedgesports.co.uk/#/account'}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Update Payment Method</a>
+      </div>
+
+      <p style="color:#94a3b8;font-size:12px;">If you believe this is an error, please contact us at <a href="mailto:admin@eliteedgesports.co.uk" style="color:#d4a843;">admin@eliteedgesports.co.uk</a>.</p>
+      <p style="color:#cbd5e1;font-size:14px;"><strong style="color:#d4a843;">The Elite Edge Team</strong></p>
+    `, 'Payment update required');
+
+    const text = `Hi ${name},
+
+We were unable to process your latest payment for your Elite Edge subscription.
+
+Your subscription will remain active for 3 more days. Please update your payment method.
+
+Update: ${portalUrl || 'https://eliteedgesports.co.uk/#/account'}
+
+The Elite Edge Team
+18+ | Entertainment only | BeGambleAware.org`;
+
+    return this._sendEmail({ to: email, subject, html, text, emailType: 'payment_failed' });
+  }
+
+  // -----------------------------------------------------------------------
+  // DUNNING — Final warning before downgrade
+  // -----------------------------------------------------------------------
+  async sendPaymentFinalWarning({ name, email, portalUrl }) {
+    const subject = 'FINAL NOTICE — Your Elite Edge access expires tomorrow';
+    const html = this._wrapHTML(`
+      <h2 style="color:#ffffff;margin:0 0 16px;font-size:20px;">Hi ${this._esc(name)},</h2>
+      <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">This is your final reminder — your Elite Edge subscription will be <strong style="color:#fca5a5;">downgraded tomorrow</strong> unless you update your payment method.</p>
+
+      <div style="background:#2a1a1a;padding:20px;border-radius:8px;margin:16px 0;border-left:4px solid #f59e0b;">
+        <p style="color:#fbbf24;font-size:16px;font-weight:700;margin:0 0 8px;">Last Chance</p>
+        <p style="color:#cbd5e1;font-size:14px;margin:0;">After tomorrow you'll lose access to premium tips, analysis, and all subscriber features.</p>
+      </div>
+
+      <div style="text-align:center;margin:24px 0;">
+        <a href="${portalUrl || 'https://eliteedgesports.co.uk/#/account'}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Update Payment Now</a>
+      </div>
+
+      <p style="color:#cbd5e1;font-size:14px;"><strong style="color:#d4a843;">The Elite Edge Team</strong></p>
+    `, 'Final payment warning');
+
+    const text = `Hi ${name},
+
+FINAL WARNING: Your Elite Edge subscription will be downgraded tomorrow unless you update your payment method.
+
+Update: ${portalUrl || 'https://eliteedgesports.co.uk/#/account'}
+
+The Elite Edge Team`;
+
+    return this._sendEmail({ to: email, subject, html, text, emailType: 'payment_final_warning' });
+  }
+
   // Utility helpers
   // -----------------------------------------------------------------------
   _esc(str) {

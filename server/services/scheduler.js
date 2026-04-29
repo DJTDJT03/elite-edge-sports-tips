@@ -2860,6 +2860,62 @@ module.exports = function startScheduler(deps) {
   setTimeout(safeRun('OddsAlerts', checkOddsMovementAlerts), 120000); // 2min after startup
 
   // =========================================================================
+  // STRIPE DUNNING — check grace periods, send final warnings, downgrade
+  // =========================================================================
+  async function checkDunningGrace() {
+    try {
+      var users = await db.getUsers();
+      var now = new Date();
+
+      for (var i = 0; i < users.length; i++) {
+        var u = users[i];
+        if (!u.paymentFailedAt || !u.paymentGraceEnd) continue;
+
+        var graceEnd = new Date(u.paymentGraceEnd);
+        var failedAt = new Date(u.paymentFailedAt);
+        var hoursInGrace = (now.getTime() - failedAt.getTime()) / (1000 * 60 * 60);
+
+        // Stage 1: After 48 hours, send final warning (if not already sent)
+        if (hoursInGrace >= 48 && (u.dunningStage || 0) < 2 && now < graceEnd) {
+          try {
+            await emailService.sendPaymentFinalWarning({ name: u.name, email: u.email });
+            await db.updateUser(u.id, { dunningStage: 2 });
+            console.log('[Dunning] Final warning sent to', u.email);
+          } catch (e) {
+            console.error('[Dunning] Final warning email failed for', u.email + ':', e.message);
+          }
+        }
+
+        // Stage 2: Grace period expired — downgrade to free
+        if (now >= graceEnd) {
+          await db.updateUser(u.id, {
+            subscription: 'free',
+            paymentFailedAt: null,
+            paymentGraceEnd: null,
+            dunningStage: 0,
+          });
+          console.log('[Dunning] Grace expired — downgraded', u.email, 'to free');
+
+          // Audit log
+          try {
+            await db.createAuditEntry({
+              userId: u.id, userEmail: u.email,
+              action: 'subscription_downgraded', entity: 'user', entityId: u.id,
+              details: { reason: 'payment_failed_grace_expired' },
+            });
+          } catch (e) { /* non-fatal */ }
+        }
+      }
+    } catch (err) {
+      console.error('[Dunning] Error:', err.message);
+    }
+  }
+
+  // Dunning check: every 30 minutes
+  setInterval(safeRun('Dunning', checkDunningGrace), 30 * 60 * 1000);
+  setTimeout(safeRun('Dunning', checkDunningGrace), 2 * 60 * 1000);
+
+  // =========================================================================
   // PRICE HISTORY LOGGER — snapshots current odds for active tips every 5 mins
   // =========================================================================
   async function logPriceHistory() {

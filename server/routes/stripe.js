@@ -7,7 +7,7 @@
 
 module.exports = function(deps) {
   const router = require('express').Router();
-  const { db, authenticate, stripeService } = deps;
+  const { db, authenticate, stripeService, emailService } = deps;
   const express = require('express');
 
   // ---------------------------------------------------------------------------
@@ -198,6 +198,10 @@ module.exports = function(deps) {
               await db.updateUser(user.id, {
                 subscription: currentTier,
                 subscriptionExpiry: expiry.toISOString(),
+                // Clear any dunning flags on successful payment
+                paymentFailedAt: null,
+                paymentGraceEnd: null,
+                dunningStage: 0,
               });
               console.log('[Stripe] Webhook: renewal success for', user.email, '(' + currentTier + ') — new expiry:', expiry.toISOString());
             }
@@ -240,13 +244,36 @@ module.exports = function(deps) {
         }
 
         case 'invoice.payment_failed': {
-          // Payment failed — log and notify
+          // Payment failed — send dunning email + set grace period
           const invoice = event.data.object;
           const users = await db.getUsers();
           const user = users.find(u => u.stripeSubscriptionId === invoice.subscription);
           if (user) {
             console.log('[Stripe] Webhook: payment failed for', user.email);
-            // Could send email notification here via emailService
+
+            // Set 3-day grace period — paymentFailedAt tracks when it first failed
+            var gracePeriodEnd = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+            await db.updateUser(user.id, {
+              paymentFailedAt: new Date().toISOString(),
+              paymentGraceEnd: gracePeriodEnd,
+            });
+
+            // Send dunning email with payment update link
+            try {
+              var portalUrl = 'https://eliteedgesports.co.uk/#/account';
+              if (user.stripeCustomerId && stripeService.isAvailable) {
+                try {
+                  var portal = await stripeService.createPortalSession(user.stripeCustomerId, portalUrl);
+                  portalUrl = portal.url;
+                } catch (e) { /* fallback to account page */ }
+              }
+              await emailService.sendPaymentFailed({
+                name: user.name, email: user.email, portalUrl: portalUrl,
+              });
+              console.log('[Stripe] Dunning email sent to', user.email, '— grace until', gracePeriodEnd);
+            } catch (emailErr) {
+              console.error('[Stripe] Dunning email failed:', emailErr.message);
+            }
           }
           break;
         }

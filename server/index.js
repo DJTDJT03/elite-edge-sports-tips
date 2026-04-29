@@ -165,6 +165,10 @@ app.use('/', require('./routes/public')(deps));
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS drips_sent JSONB DEFAULT \'[]\'',
         'ALTER TABLE results ADD COLUMN IF NOT EXISTS voided_by_monitor BOOLEAN DEFAULT FALSE',
         'ALTER TABLE results ADD COLUMN IF NOT EXISTS replay_analysis JSONB',
+        // Phase 3: Stripe dunning grace period columns
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS payment_failed_at TIMESTAMPTZ',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS payment_grace_end TIMESTAMPTZ',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS dunning_stage INTEGER DEFAULT 0',
         // Phase 1: CLV & Data Integrity columns
         'ALTER TABLE tips ADD COLUMN IF NOT EXISTS advised_price_decimal NUMERIC(8,2)',
         'ALTER TABLE tips ADD COLUMN IF NOT EXISTS closing_price_decimal NUMERIC(8,2)',

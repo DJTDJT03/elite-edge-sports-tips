@@ -44,6 +44,14 @@
           '</div>' +
         '</div>' +
 
+        // CLV snapshot
+        '<div class="admin-section">' +
+          '<h3 class="admin-section-title" style="color:#d4a843;">Edge & CLV Summary</h3>' +
+          '<div id="dash-clv-summary">' +
+            '<div class="admin-loading">Loading CLV data...</div>' +
+          '</div>' +
+        '</div>' +
+
         // API status
         '<div class="admin-section">' +
           '<h3 class="admin-section-title">API Status</h3>' +
@@ -56,6 +64,7 @@
       this._loadStats();
       this._loadRecentActivity();
       this._loadAPIStatus();
+      this._loadCLVSummary();
     },
 
     // -----------------------------------------------------------------------
@@ -225,9 +234,54 @@
       this._loadStats();
       this._loadRecentActivity();
       this._loadAPIStatus();
+      this._loadCLVSummary();
       setTimeout(function () {
         AdminApp.toast('Data refreshed', 'success');
       }, 600);
+    },
+
+    // -----------------------------------------------------------------------
+    // Load CLV summary for dashboard
+    // -----------------------------------------------------------------------
+    _loadCLVSummary: function () {
+      AdminAPI.get('/analytics/clv?days=30')
+        .then(function (data) {
+          var wrap = document.getElementById('dash-clv-summary');
+          if (!wrap) return;
+
+          if (!data || data.tipsWithClv === 0) {
+            wrap.innerHTML = '<p style="color:var(--text-muted,#888);font-size:13px;">CLV data will appear here once tips are settled with closing prices. This requires the price history logger to run while tips are active.</p>';
+            return;
+          }
+
+          var avgClvColor = data.avgClv > 0 ? '#16a34a' : (data.avgClv < 0 ? '#dc2626' : '#fff');
+          var rateColor = data.positiveClvRate >= 55 ? '#16a34a' : (data.positiveClvRate >= 45 ? '#fbbf24' : '#dc2626');
+
+          var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">';
+          html += '<div class="stat-card"><div class="stat-card-value" style="color:' + avgClvColor + ';">' + (data.avgClv !== null ? (data.avgClv > 0 ? '+' : '') + data.avgClv.toFixed(2) + '%' : '-') + '</div><div class="stat-card-label">Avg CLV (30d)</div></div>';
+          html += '<div class="stat-card"><div class="stat-card-value" style="color:' + rateColor + ';">' + (data.positiveClvRate || 0) + '%</div><div class="stat-card-label">+CLV Rate</div></div>';
+          html += '<div class="stat-card"><div class="stat-card-value">' + data.tipsWithClv + '</div><div class="stat-card-label">Tips Tracked</div></div>';
+          html += '<div class="stat-card"><div class="stat-card-value">' + data.totalSettled + '</div><div class="stat-card-label">Total Settled</div></div>';
+          html += '</div>';
+
+          // Mini CLV by sport
+          if (data.bySport && Object.keys(data.bySport).length > 0) {
+            html += '<div style="display:flex;gap:16px;margin-top:12px;font-size:12px;">';
+            Object.keys(data.bySport).forEach(function(sport) {
+              var s = data.bySport[sport];
+              var c = s.avgClv > 0 ? '#16a34a' : '#dc2626';
+              html += '<span style="text-transform:capitalize;color:var(--text-muted,#888);">' + sport + ': <strong style="color:' + c + ';">' + (s.avgClv > 0 ? '+' : '') + s.avgClv + '%</strong> (' + s.tips + ' tips)</span>';
+            });
+            html += '</div>';
+          }
+
+          html += '<div style="margin-top:8px;"><a href="#/analytics" style="color:#d4a843;font-size:12px;text-decoration:underline;">View full CLV analytics &rarr;</a></div>';
+          wrap.innerHTML = html;
+        })
+        .catch(function () {
+          var wrap = document.getElementById('dash-clv-summary');
+          if (wrap) wrap.innerHTML = '<p style="color:var(--text-muted,#888);font-size:13px;">CLV analytics not available yet. Data will appear after tips are settled with closing prices.</p>';
+        });
     }
   };
 
