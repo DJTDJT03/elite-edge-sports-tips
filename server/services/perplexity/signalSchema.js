@@ -17,7 +17,7 @@ var RACING_SIGNALS = [
   'non_runner',
   'stable_form',
   'headgear_change',
-  'trainer_booking_change',
+  'jockey_change',
   'course_report',
   'rail_movement',
 ];

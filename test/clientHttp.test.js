@@ -1,3 +1,6 @@
+// TODO: add focused _callSonar tests for 429 backoff, 500, wall-clock timeout, malformed JSON,
+// missing-shape JSON. Current suite covers behavioural outputs but not retry/error paths directly.
+
 'use strict';
 
 var test = require('node:test');

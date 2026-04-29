@@ -94,9 +94,18 @@ var FOOTBALL_WILDCARD_PATTERNS = [];
 // Token budgets per call site
 // ---------------------------------------------------------------------------
 var TOKEN_BUDGET = {
-  'per-tip':  { maxInput: 800,  maxOutput: 600 },
-  'bulletin': { maxInput: 1000, maxOutput: 800 },
-  'replay':   { maxInput: 600,  maxOutput: 500 },
+  'per-tip-racing':   { maxInput: 800, maxOutput: 800 },
+  'per-tip-football': { maxInput: 800, maxOutput: 600 },
+  'bulletin':         { maxInput: 1000, maxOutput: 800 },
+  'replay':           { maxInput: 600, maxOutput: 500 },
+};
+
+// Temperature per call site: 0 for structured JSON, 0.3 for prose
+var TEMPERATURE = {
+  'per-tip-racing':   0,
+  'per-tip-football': 0,
+  'bulletin':         0.3,
+  'replay':           0.3,
 };
 
 module.exports = {
@@ -122,4 +131,5 @@ module.exports = {
   FOOTBALL_DOMAINS: FOOTBALL_DOMAINS,
   FOOTBALL_WILDCARD_PATTERNS: FOOTBALL_WILDCARD_PATTERNS,
   TOKEN_BUDGET: TOKEN_BUDGET,
+  TEMPERATURE: TEMPERATURE,
 };

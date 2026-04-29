@@ -364,6 +364,8 @@ module.exports = function createPerplexityClient(db) {
         // which we always set to 'low' ($5/1K requests = $0.005/request).
         // If we ever switch to 'medium' ($0.008) or 'high' ($0.012), update config.DEFAULT_REQUEST_FEE.
         var tokenCost = ((inputTokens * config.COST_PER_M_INPUT) + (outputTokens * config.COST_PER_M_OUTPUT)) / 1000000;
+        // TODO: verify against billed cost after week 1 — Perplexity may charge per request, not per search.
+        // If billed cost ≈ tracked cost / avg search_count, drop the multiplier.
         var requestFee = config.DEFAULT_REQUEST_FEE * searchCount;
         var totalCost = tokenCost + requestFee;
 

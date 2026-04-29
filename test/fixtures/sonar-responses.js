@@ -36,7 +36,7 @@ exports.paywallOnly = {
   content: {
     signals: {
       stable_form: { value: 'Yard in excellent form', citation_index: 0 },
-      trainer_booking_change: { value: 'Top jockey booked late', citation_index: 1 },
+      jockey_change: { value: 'Top jockey booked late', citation_index: 1 },
     },
   },
   citations: [
