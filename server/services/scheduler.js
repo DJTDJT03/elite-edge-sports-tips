@@ -3299,8 +3299,8 @@ module.exports = function startScheduler(deps) {
       var qualityLoop = require('./perplexity/qualityLoop');
       var results = await qualityLoop.runQualityLoop(db);
       var sigCount = results.signals ? results.signals.length : 0;
-      console.log('[QualityLoop] Completed: ' + sigCount + ' signal(s) analysed, aggregate: ' +
-        (results.aggregate ? results.aggregate.verdict : 'no data'));
+      var aggCount = results.aggregates ? results.aggregates.length : 0;
+      console.log('[QualityLoop] Completed: ' + sigCount + ' signal(s), ' + aggCount + ' sport aggregate(s)');
     } catch (err) {
       console.error('[QualityLoop] Error:', err.message);
     }

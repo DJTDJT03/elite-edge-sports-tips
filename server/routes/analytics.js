@@ -256,9 +256,9 @@ module.exports = function(deps) {
   router.get('/analytics/quality-loop', authenticate, requireAdmin, async (req, res) => {
     try {
       var snapshots = await db.getLatestQualitySnapshot();
-      var aggregate = snapshots.filter(function(s) { return s.isAggregate; })[0] || null;
+      var aggregates = snapshots.filter(function(s) { return s.isAggregate; });
       var signals = snapshots.filter(function(s) { return !s.isAggregate; });
-      res.json({ aggregate: aggregate, signals: signals });
+      res.json({ aggregates: aggregates, signals: signals });
     } catch (err) {
       res.status(500).json({ error: 'Failed to fetch quality-loop data' });
     }

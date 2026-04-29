@@ -340,6 +340,7 @@ const tables = [
       snapshot_date         DATE NOT NULL,
       is_aggregate          BOOLEAN NOT NULL DEFAULT FALSE,
       signal_key            TEXT,
+      sport                 TEXT,
       tips_with             INTEGER NOT NULL DEFAULT 0,
       avg_clv_with          NUMERIC(8,2),
       roi_pct_with          NUMERIC(8,2),
@@ -353,7 +354,7 @@ const tables = [
       verdict               TEXT,
       sample_sufficient     BOOLEAN DEFAULT TRUE,
       created_at            TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(snapshot_date, is_aggregate, signal_key)
+      UNIQUE(snapshot_date, is_aggregate, signal_key, sport)
     )`,
   },
   {

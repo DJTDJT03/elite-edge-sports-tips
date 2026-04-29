@@ -131,20 +131,24 @@ window.AnalyticsPage = {
       html += '<div class="admin-section"><h3 class="admin-section-title" style="color:#f59e0b;">Enrichment Quality Loop</h3>';
       html += '<p style="color:var(--text-muted,#888);font-size:12px;margin-bottom:12px;">Does Perplexity enrichment improve CLV and ROI? Per-signal baseline compares enriched-with-X vs enriched-without-X.</p>';
 
-      // Aggregate card
-      if (qualityData.aggregate) {
-        var agg = qualityData.aggregate;
-        var aggVColor = agg.verdict === 'Earning its keep' ? 'var(--green,#16a34a)' :
-          agg.verdict === 'No benefit — consider disabling' ? 'var(--red,#dc2626)' :
-          agg.verdict === 'Mixed signal' ? '#f59e0b' : '#888';
-        html += '<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:16px;margin-bottom:16px;">';
-        html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:8px;">';
-        html += '<div style="text-align:center;"><div style="font-size:11px;color:var(--text-muted,#888);">Enriched Tips</div><div style="font-size:20px;font-weight:800;">' + agg.tipsWith + '</div></div>';
-        html += '<div style="text-align:center;"><div style="font-size:11px;color:var(--text-muted,#888);">Enriched CLV</div><div style="font-size:20px;font-weight:800;color:' + (agg.avgClvWith > 0 ? 'var(--green,#16a34a)' : 'var(--red,#dc2626)') + ';">' + (agg.avgClvWith > 0 ? '+' : '') + agg.avgClvWith + '%</div></div>';
-        html += '<div style="text-align:center;"><div style="font-size:11px;color:var(--text-muted,#888);">Baseline CLV</div><div style="font-size:20px;font-weight:800;color:' + (agg.avgClvWithout > 0 ? 'var(--green,#16a34a)' : 'var(--red,#dc2626)') + ';">' + (agg.avgClvWithout > 0 ? '+' : '') + agg.avgClvWithout + '%</div></div>';
-        html += '<div style="text-align:center;"><div style="font-size:11px;color:var(--text-muted,#888);">Delta</div><div style="font-size:20px;font-weight:800;color:' + (agg.clvDelta > 0 ? 'var(--green,#16a34a)' : agg.clvDelta < 0 ? 'var(--red,#dc2626)' : '#888') + ';">' + (agg.clvDelta > 0 ? '+' : '') + agg.clvDelta + '%</div></div>';
-        html += '</div>';
-        html += '<div style="text-align:center;font-size:14px;font-weight:700;color:' + aggVColor + ';">' + agg.verdict + '</div>';
+      // Per-sport aggregate cards
+      if (qualityData.aggregates && qualityData.aggregates.length > 0) {
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:16px;">';
+        qualityData.aggregates.forEach(function(agg) {
+          var aggVColor = agg.verdict === 'Earning its keep' ? 'var(--green,#16a34a)' :
+            agg.verdict === 'No benefit — consider disabling' ? 'var(--red,#dc2626)' :
+            agg.verdict === 'Mixed signal' ? '#f59e0b' : '#888';
+          html += '<div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:16px;">';
+          html += '<div style="font-size:12px;color:var(--text-muted,#888);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">' + (agg.sport || 'All') + '</div>';
+          html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px;">';
+          html += '<div style="text-align:center;"><div style="font-size:10px;color:var(--text-muted,#888);">Enriched</div><div style="font-size:18px;font-weight:800;">' + agg.tipsWith + '</div></div>';
+          html += '<div style="text-align:center;"><div style="font-size:10px;color:var(--text-muted,#888);">CLV</div><div style="font-size:18px;font-weight:800;color:' + (agg.avgClvWith > 0 ? 'var(--green,#16a34a)' : 'var(--red,#dc2626)') + ';">' + (agg.avgClvWith > 0 ? '+' : '') + agg.avgClvWith + '%</div></div>';
+          html += '<div style="text-align:center;"><div style="font-size:10px;color:var(--text-muted,#888);">Baseline</div><div style="font-size:18px;font-weight:800;color:' + (agg.avgClvWithout > 0 ? 'var(--green,#16a34a)' : 'var(--red,#dc2626)') + ';">' + (agg.avgClvWithout > 0 ? '+' : '') + agg.avgClvWithout + '%</div></div>';
+          html += '<div style="text-align:center;"><div style="font-size:10px;color:var(--text-muted,#888);">Delta</div><div style="font-size:18px;font-weight:800;color:' + (agg.clvDelta > 0 ? 'var(--green,#16a34a)' : agg.clvDelta < 0 ? 'var(--red,#dc2626)' : '#888') + ';">' + (agg.clvDelta > 0 ? '+' : '') + agg.clvDelta + '%</div></div>';
+          html += '</div>';
+          html += '<div style="text-align:center;font-size:13px;font-weight:700;color:' + aggVColor + ';">' + agg.verdict + '</div>';
+          html += '</div>';
+        });
         html += '</div>';
       } else {
         html += '<p style="color:var(--text-muted,#888);">No aggregate data yet — quality loop runs nightly at 3am UK.</p>';
@@ -153,7 +157,7 @@ window.AnalyticsPage = {
       // Per-signal table
       if (qualityData.signals && qualityData.signals.length > 0) {
         html += '<div class="admin-table-wrap"><table class="admin-table"><thead><tr>';
-        html += '<th>Signal</th><th>Tips</th><th>Avg CLV</th><th>ROI</th><th>SR%</th>';
+        html += '<th>Sport</th><th>Signal</th><th>Tips</th><th>Avg CLV</th><th>ROI</th><th>SR%</th>';
         html += '<th>Baseline CLV</th><th>Baseline ROI</th><th>CLV Delta</th><th>ROI Delta</th><th>Verdict</th>';
         html += '</tr></thead><tbody>';
         qualityData.signals.forEach(function(s) {
@@ -164,6 +168,7 @@ window.AnalyticsPage = {
           var dClvColor = s.clvDelta > 0 ? 'var(--green,#16a34a)' : s.clvDelta < 0 ? 'var(--red,#dc2626)' : '#888';
           var dRoiColor = s.roiDeltaPct > 0 ? 'var(--green,#16a34a)' : s.roiDeltaPct < 0 ? 'var(--red,#dc2626)' : '#888';
           html += '<tr>';
+          html += '<td style="text-transform:capitalize;">' + (s.sport || '-') + '</td>';
           html += '<td><code>' + (s.signalKey || '-') + '</code></td>';
           html += '<td>' + s.tipsWith + '</td>';
           html += '<td style="color:' + (s.avgClvWith > 0 ? 'var(--green,#16a34a)' : 'var(--red,#dc2626)') + ';">' + (s.avgClvWith > 0 ? '+' : '') + s.avgClvWith + '%</td>';
