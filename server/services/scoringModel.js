@@ -1282,6 +1282,8 @@ class ScoringModel {
       return this._generateRacingAnalysis(scored, enrichment);
     } else if (sport === 'basketball') {
       return this._generateBasketballAnalysis(scored, enrichment);
+    } else if (sport === 'rugby') {
+      return this._generateRugbyAnalysis(scored, enrichment);
     } else {
       return this._generateFootballAnalysis(scored, enrichment);
     }
@@ -1651,6 +1653,184 @@ class ScoringModel {
       offence: `${home}: ${homePPG.toFixed(1)} PPG | ${away}: ${awayPPG.toFixed(1)} PPG. Combined expected total: ${expectedTotal.toFixed(0)} points.`,
       defence: `${home} conceding ${homePA.toFixed(1)} PPG | ${away} conceding ${awayPA.toFixed(1)} PPG.`,
       headToHead: `Recent meetings between ${home} and ${away} factored into H2H analysis.`,
+      riskNotes: riskNotes,
+    };
+  }
+
+  /**
+   * Score a rugby league game.
+   * Similar structure to football — form, home/away, H2H, standings.
+   */
+  scoreRugbyGame(game, homeStats, awayStats, standings, h2h, odds) {
+    if (!game || !game.homeTeam || !game.awayTeam) return null;
+
+    var factors = {};
+
+    // 1. Form (25%)
+    var homeStanding = standings ? standings.find(function(s) { return s.team === game.homeTeam; }) : null;
+    var awayStanding = standings ? standings.find(function(s) { return s.team === game.awayTeam; }) : null;
+    var homeWinRate = homeStanding && homeStanding.played > 0 ? homeStanding.wins / homeStanding.played : 0.5;
+    var awayWinRate = awayStanding && awayStanding.played > 0 ? awayStanding.wins / awayStanding.played : 0.5;
+    factors.form = Math.max(homeWinRate, awayWinRate);
+
+    // 2. Home advantage (20%) — rugby league home advantage is significant
+    factors.homeAway = Math.min(homeWinRate * 1.15, 1.0);
+
+    // 3. Standings position (20%)
+    var homePos = homeStanding ? homeStanding.position : 8;
+    var awayPos = awayStanding ? awayStanding.position : 8;
+    factors.standings = Math.min(1 - (Math.min(homePos, awayPos) / 16), 1.0);
+
+    // 4. Points scoring (15%)
+    var homePF = homeStanding ? homeStanding.pointsFor : 0;
+    var awayPF = awayStanding ? awayStanding.pointsFor : 0;
+    var homePlayed = homeStanding ? homeStanding.played : 1;
+    var awayPlayed = awayStanding ? awayStanding.played : 1;
+    var homePPG = homePlayed > 0 ? homePF / homePlayed : 20;
+    var awayPPG = awayPlayed > 0 ? awayPF / awayPlayed : 20;
+    factors.offence = Math.min((homePPG + awayPPG) / 60, 1.0);
+
+    // 5. Defence (10%)
+    var homePA = homeStanding ? homeStanding.pointsAgainst : 0;
+    var awayPA = awayStanding ? awayStanding.pointsAgainst : 0;
+    var homePAG = homePlayed > 0 ? homePA / homePlayed : 20;
+    var awayPAG = awayPlayed > 0 ? awayPA / awayPlayed : 20;
+    factors.defence = Math.min(1 - (Math.min(homePAG, awayPAG) / 40), 1.0);
+
+    // 6. H2H (10%)
+    if (h2h && h2h.length > 0) {
+      var homeH2HWins = h2h.filter(function(g) {
+        return (g.homeTeam === game.homeTeam && g.homeScore > g.awayScore) ||
+               (g.awayTeam === game.homeTeam && g.awayScore > g.homeScore);
+      }).length;
+      factors.h2h = h2h.length > 0 ? homeH2HWins / h2h.length : 0.5;
+    } else {
+      factors.h2h = 0.5;
+    }
+
+    // Weighted composite
+    var weights = { form: 0.25, homeAway: 0.20, standings: 0.20, offence: 0.15, defence: 0.10, h2h: 0.10 };
+    var composite = 0;
+    for (var key in weights) {
+      composite += (factors[key] || 0.5) * weights[key];
+    }
+
+    // Markets
+    var markets = [];
+    var expectedTotal = homePPG + awayPPG;
+
+    // Match winner (handicap-adjusted rugby league)
+    if (homeWinRate > awayWinRate + 0.1) {
+      var homeOdds = odds && odds.home ? parseFloat(odds.home) : 0;
+      if (homeOdds >= 1.8) {
+        var homeImplied = homeOdds > 0 ? 1 / homeOdds : 0.5;
+        markets.push({ market: 'Match Winner', selection: game.homeTeam, odds: homeOdds, modelProb: composite, impliedProb: homeImplied });
+      }
+    } else if (awayWinRate > homeWinRate + 0.1) {
+      var awayOdds = odds && odds.away ? parseFloat(odds.away) : 0;
+      if (awayOdds >= 1.8) {
+        var awayImplied = awayOdds > 0 ? 1 / awayOdds : 0.5;
+        markets.push({ market: 'Match Winner', selection: game.awayTeam, odds: awayOdds, modelProb: 1 - composite, impliedProb: awayImplied });
+      }
+    }
+
+    // Over/Under total points
+    if (expectedTotal > 44) {
+      var overOdds = odds && odds.over ? parseFloat(odds.over) : 0;
+      if (overOdds >= 1.8) {
+        var overProb = Math.min((expectedTotal - 38) / 20, 0.75);
+        var overImplied = overOdds > 0 ? 1 / overOdds : 0.5;
+        markets.push({ market: 'Over 42.5 Points', selection: 'Over 42.5', odds: overOdds, modelProb: overProb, impliedProb: overImplied });
+      }
+    } else if (expectedTotal < 38) {
+      var underOdds = odds && odds.under ? parseFloat(odds.under) : 0;
+      if (underOdds >= 1.8) {
+        var underProb = Math.min((44 - expectedTotal) / 20, 0.75);
+        var underImplied = underOdds > 0 ? 1 / underOdds : 0.5;
+        markets.push({ market: 'Under 42.5 Points', selection: 'Under 42.5', odds: underOdds, modelProb: underProb, impliedProb: underImplied });
+      }
+    }
+
+    if (markets.length === 0) return null;
+
+    markets.forEach(function(m) { m.edge = m.modelProb - m.impliedProb; });
+    markets.sort(function(a, b) { return b.edge - a.edge; });
+    var best = markets[0];
+
+    if (best.edge < 0.03) return null;
+
+    var confidence = Math.min(Math.round(composite * 10), 10);
+    if (confidence < 6) confidence = 6;
+
+    return {
+      fixture: game,
+      selectedMarket: best.market,
+      selectedSelection: best.selection,
+      selectedOdds: best.odds,
+      modelProbability: best.modelProb,
+      impliedProbability: best.impliedProb,
+      edge: best.edge,
+      confidence: confidence,
+      valueRating: best.edge >= 0.10 ? 'Strong' : best.edge >= 0.05 ? 'Fair' : 'Slight',
+      staking: best.odds < 2.5 ? '1.5 units' : best.odds < 4 ? '1 unit' : '0.75 units',
+      riskLevel: best.odds < 2.5 ? 'Low' : best.odds < 4 ? 'Medium' : 'High',
+      factors: factors,
+      expectedTotal: expectedTotal,
+    };
+  }
+
+  _generateRugbyAnalysis(scored, enrichment) {
+    const fixture = scored.fixture || {};
+    const home = fixture.homeTeam || 'Home';
+    const away = fixture.awayTeam || 'Away';
+    const league = fixture.league || 'Super League';
+    const market = scored.selectedMarket || 'Market';
+    const selection = scored.selectedSelection || 'Selection';
+    const odds = scored.selectedOdds || 0;
+    const edge = scored.edge || 0;
+    const edgePct = (edge * 100).toFixed(1);
+    const modelProb = scored.modelProbability || 0;
+    const impliedProb = scored.impliedProbability || 0;
+    const modelPct = (modelProb * 100).toFixed(0);
+    const impliedPct = (impliedProb * 100).toFixed(0);
+    const expectedTotal = scored.expectedTotal || 0;
+    const factors = scored.factors || {};
+    const sig = enrichment || {};
+    const sv = (key) => sig[key] ? sig[key].value.trim() : '';
+
+    let keyReason = '';
+    if (factors.form >= 0.7) keyReason = 'Recent form is the standout factor';
+    else if (factors.homeAway >= 0.7) keyReason = 'Home advantage is significant in this fixture';
+    else if (factors.standings >= 0.7) keyReason = 'League position makes the difference';
+    else keyReason = 'Multiple factors align for this selection';
+
+    const isMatchWinner = market.toLowerCase().includes('winner');
+    const isOver = market.toLowerCase().includes('over');
+
+    let formText = '';
+    if (isMatchWinner) {
+      formText = `${home} host ${away} in ${league}. `;
+      if (factors.form >= 0.6) formText += `Strong recent form from the selection.`;
+      else formText += `Both sides have been competitive this season.`;
+    } else if (isOver) {
+      formText = `Expected total of ${expectedTotal.toFixed(0)} points based on both teams\' scoring and defensive records. ${home} and ${away} have been involved in high-scoring fixtures.`;
+    } else {
+      formText = `Defensive matchup expected between ${home} and ${away}. Points could be at a premium.`;
+    }
+
+    if (sig.team_news) formText += ' ' + sv('team_news');
+
+    const riskNotes = odds < 2
+      ? 'Short price reflects clear favourite status. Key risk: complacency or squad rotation.'
+      : odds < 3.5
+        ? 'Competitive price for a close fixture. Conditions and team selection could be decisive.'
+        : 'Bigger price carries risk but the model identifies value here.';
+
+    return {
+      summary: `${home} vs ${away} in ${league}. Our model gives ${selection} a ${modelPct}% probability against the market's ${impliedPct}%. ${keyReason}. Edge: ${edgePct}%.`,
+      form: formText,
+      standings: `League positions factored in. Both teams\' home/away records and recent results analysed.`,
+      headToHead: `Recent meetings between ${home} and ${away} have been considered.`,
       riskNotes: riskNotes,
     };
   }

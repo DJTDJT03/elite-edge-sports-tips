@@ -940,6 +940,77 @@ module.exports = function startScheduler(deps) {
       console.log('[Auto-Tips] NBA pick: ' + basketballCandidates[0].scored.selectedSelection + ' @ ' + basketballCandidates[0].scored.selectedOdds);
     }
 
+    // --- RUGBY LEAGUE SELECTIONS ---
+    var rugbyCandidates = [];
+    var rugbyData = deps.rugbyData;
+    if (rugbyData && rugbyData.isAvailable) {
+      try {
+        console.log('[Auto-Tips] Fetching rugby league games...');
+        var rugbyGames = await rugbyData.getGames(today);
+        var rugbyNotStarted = rugbyGames.filter(function(g) { return g.status === 'NS'; });
+        console.log('[Auto-Tips] Found ' + rugbyNotStarted.length + ' upcoming rugby league games');
+
+        if (rugbyNotStarted.length > 0) {
+          // Fetch standings per league
+          var rugbyStandings = {};
+          for (var rli = 0; rli < rugbyNotStarted.length; rli++) {
+            var rlId = rugbyNotStarted[rli].leagueId;
+            if (!rugbyStandings[rlId]) {
+              try { rugbyStandings[rlId] = await rugbyData.getStandings(rlId); } catch(e) { rugbyStandings[rlId] = []; }
+            }
+          }
+
+          for (var rgIdx = 0; rgIdx < rugbyNotStarted.length; rgIdx++) {
+            var rgGame = rugbyNotStarted[rgIdx];
+            try {
+              var rgResults = await Promise.allSettled([
+                rugbyData.getH2H(rgGame.homeTeamId, rgGame.awayTeamId),
+              ]);
+              var rgH2H = rgResults[0].status === 'fulfilled' ? rgResults[0].value : [];
+              var rgStands = rugbyStandings[rgGame.leagueId] || [];
+
+              var rgOdds = {};
+              // Try to match odds from Odds API
+              if (oddsNormalised) {
+                var rgOddsMatch = oddsNormalised.find(function(o) {
+                  return o.homeTeam && o.awayTeam &&
+                    (o.homeTeam.toLowerCase().indexOf(rgGame.homeTeam.toLowerCase().split(' ').pop()) !== -1);
+                });
+                if (rgOddsMatch && rgOddsMatch.bookmakerOdds) {
+                  var rgFirstBk = Object.keys(rgOddsMatch.bookmakerOdds)[0];
+                  if (rgFirstBk && rgOddsMatch.bookmakerOdds[rgFirstBk]) {
+                    var rgBkData = rgOddsMatch.bookmakerOdds[rgFirstBk];
+                    rgOdds.home = rgBkData[rgGame.homeTeam] || rgBkData['1'] || 0;
+                    rgOdds.away = rgBkData[rgGame.awayTeam] || rgBkData['2'] || 0;
+                  }
+                }
+              }
+
+              var rgScored = scoringModel.scoreRugbyGame(rgGame, null, null, rgStands, rgH2H, rgOdds);
+              if (rgScored && rgScored.edge > 0.03 && rgScored.confidence >= 6) {
+                rugbyCandidates.push({
+                  type: 'rugby',
+                  scored: rgScored,
+                  edge: rgScored.edge,
+                  confidence: rgScored.confidence,
+                });
+              }
+            } catch (rgGameErr) { /* skip individual errors */ }
+          }
+          console.log('[Auto-Tips] Rugby League candidates passing filter: ' + rugbyCandidates.length);
+        }
+      } catch (rgErr) {
+        console.error('[Auto-Tips] Rugby API error:', rgErr.message);
+      }
+    }
+
+    // Add best rugby candidate (1 per day)
+    if (rugbyCandidates.length > 0) {
+      rugbyCandidates.sort(function(a, b) { return b.edge - a.edge; });
+      allCandidates.push(rugbyCandidates[0]);
+      console.log('[Auto-Tips] Rugby pick: ' + rugbyCandidates[0].scored.selectedSelection + ' @ ' + rugbyCandidates[0].scored.selectedOdds);
+    }
+
     // Sort all candidates by edge descending
     allCandidates.sort(function(a, b) { return b.edge - a.edge; });
 
@@ -999,8 +1070,8 @@ module.exports = function startScheduler(deps) {
       }
     }
 
-    // Cap at 6 total (2 racing + 2 football + 1 NBA + 1 outsider)
-    selected = selected.slice(0, 6);
+    // Cap at 7 total (2 racing + 2 football + 1 NBA + 1 rugby + 1 outsider)
+    selected = selected.slice(0, 7);
 
     // If we have fewer than 3 main tips, try to fill from football
     if (selected.filter(function(s) { return !s._isOutsider; }).length < 3 && footballMain.length > 2) {
@@ -1182,6 +1253,38 @@ module.exports = function startScheduler(deps) {
           openingOdds: scored.selectedOdds,
           advisedPriceDecimal: scored.selectedOdds,
           bookmakerOdds: bkOdds,
+          recentForm: [],
+        };
+      } else if (sport === 'rugby') {
+        var rgFixture = scored.fixture || {};
+        tip = {
+          id: tipId,
+          sport: 'rugby',
+          event: (rgFixture.homeTeam || 'Home') + ' vs ' + (rgFixture.awayTeam || 'Away') + ' - ' + (rgFixture.league || 'Super League'),
+          league: rgFixture.league || 'Super League',
+          kickoff: rgFixture.time || '',
+          venue: rgFixture.venue || '',
+          market: scored.selectedMarket,
+          selection: scored.selectedSelection,
+          odds: scored.selectedOdds,
+          confidence: scored.confidence,
+          modelProbability: scored.modelProbability,
+          impliedProbability: scored.impliedProbability,
+          edge: scored.edge,
+          valueRating: scored.valueRating,
+          isPremium: true,
+          isNap: isNap,
+          status: 'active',
+          result: null,
+          date: today,
+          tipster: 'Elite Edge Model',
+          tipsterProfile: tipsterProfile,
+          staking: scored.staking,
+          riskLevel: scored.riskLevel,
+          analysis: analysis,
+          openingOdds: scored.selectedOdds,
+          advisedPriceDecimal: scored.selectedOdds,
+          bookmakerOdds: {},
           recentForm: [],
         };
       } else if (sport === 'basketball') {
@@ -1803,6 +1906,91 @@ module.exports = function startScheduler(deps) {
             }
           }
         } catch (err) { console.error('[Auto-Settle] NBA error:', err.message); }
+      }
+
+      // Auto-settle rugby league results
+      var rugbyDataSvc = deps.rugbyData;
+      if (rugbyDataSvc && rugbyDataSvc.isAvailable) {
+        try {
+          var rgResults = [];
+          for (var rgi = 0; rgi < datesToSettle.length; rgi++) {
+            try {
+              var dayRgResults = await rugbyDataSvc.getResults(datesToSettle[rgi]);
+              rgResults = rgResults.concat(dayRgResults);
+            } catch (e) { /* individual day optional */ }
+          }
+
+          for (var rgti = 0; rgti < activeTips.length; rgti++) {
+            var rgTip = activeTips[rgti];
+            if (rgTip.sport !== 'rugby') continue;
+
+            var rgMatch = rgResults.find(function(g) {
+              var eventLower = (rgTip.event || '').toLowerCase();
+              return eventLower.indexOf(g.homeTeam.toLowerCase()) !== -1 ||
+                     eventLower.indexOf(g.awayTeam.toLowerCase()) !== -1;
+            });
+
+            if (rgMatch) {
+              var rgHomeScore = rgMatch.homeScore || 0;
+              var rgAwayScore = rgMatch.awayScore || 0;
+              var rgTotalPts = rgHomeScore + rgAwayScore;
+              var rgWon = false;
+
+              var rgMarket = (rgTip.market || '').toLowerCase();
+              var rgSelection = (rgTip.selection || '').toLowerCase();
+
+              if (rgMarket.indexOf('winner') !== -1 || rgMarket.indexOf('result') !== -1) {
+                if (rgSelection.indexOf(rgMatch.homeTeam.toLowerCase()) !== -1) rgWon = rgHomeScore > rgAwayScore;
+                else if (rgSelection.indexOf(rgMatch.awayTeam.toLowerCase()) !== -1) rgWon = rgAwayScore > rgHomeScore;
+              } else if (rgMarket.indexOf('over') !== -1) {
+                var rgLine = parseFloat(rgMarket.match(/[\d.]+/)) || 42.5;
+                rgWon = rgTotalPts > rgLine;
+              } else if (rgMarket.indexOf('under') !== -1) {
+                var rgULine = parseFloat(rgMarket.match(/[\d.]+/)) || 42.5;
+                rgWon = rgTotalPts < rgULine;
+              }
+
+              var rgResultVal = rgWon ? 'won' : 'lost';
+              var rgStake = parseFloat(rgTip.staking) || 2;
+              var rgPnl = rgWon ? ((rgTip.odds - 1) * rgStake) : -rgStake;
+
+              var rgAllResults = await db.getResults();
+              var rgAlready = rgAllResults.some(function(r) {
+                return r.selection === rgTip.selection && normDate(r.date) === normDate(rgTip.date);
+              });
+              if (rgAlready) {
+                if (rgTip.status === 'active') await db.updateTip(rgTip.id, { status: 'settled' });
+                continue;
+              }
+
+              await db.updateTip(rgTip.id, {
+                status: 'settled', result: rgResultVal,
+                settledAt: new Date().toISOString(),
+                settlementSource: 'auto-rugby-api',
+              });
+
+              await db.createResult({
+                id: 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                tipId: rgTip.id, sport: 'rugby', event: rgTip.event, selection: rgTip.selection,
+                market: rgTip.market, odds: rgTip.odds, stake: rgStake,
+                result: rgResultVal, pnl: Math.round(rgPnl * 100) / 100,
+                date: rgTip.date, isPremium: rgTip.isPremium, tipsterProfile: rgTip.tipsterProfile || 'The Edge',
+                confidence: rgTip.confidence,
+              });
+              updated++;
+              console.log('[Auto-Settle] Rugby: ' + rgTip.selection + ' (' + rgMatch.homeTeam + ' ' + rgHomeScore + '-' + rgAwayScore + ' ' + rgMatch.awayTeam + ') = ' + rgResultVal + ' (' + rgPnl.toFixed(2) + 'u)');
+
+              if (telegramBot && telegramBot.isAvailable() && rgWon) {
+                try {
+                  await telegramBot.sendResult({
+                    selection: rgTip.selection, odds: rgTip.odds, result: rgResultVal,
+                    pnl: Math.round(rgPnl * 100) / 100, event: rgTip.event,
+                  });
+                } catch (tgErr) { /* non-fatal */ }
+              }
+            }
+          }
+        } catch (err) { console.error('[Auto-Settle] Rugby error:', err.message); }
       }
 
       if (updated > 0) {

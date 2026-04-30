@@ -28,6 +28,7 @@ const stripeService = require('./services/stripeService');
 const footballData = require('./services/footballData');
 const understatService = require('./services/understatService');
 const basketballData = require('./services/basketballData');
+const rugbyData = require('./services/rugbyData');
 const perplexityClient = require('./services/perplexity/client')(db);
 
 // Utilities
@@ -111,6 +112,7 @@ const deps = {
   footballData,
   understatService,
   basketballData,
+  rugbyData,
   perplexityClient,
 };
 
@@ -540,13 +542,13 @@ app.use('/', require('./routes/public')(deps));
   }
 })();
 
-// Cleanup: remove excess tips for today (keep max 6 per day)
+// Cleanup: remove excess tips for today (keep max 7 per day)
 (async function capDailyTips() {
   try {
     if (!db.isAvailable()) return;
     var today = new Date().toISOString().split('T')[0];
     var result = await db.query(
-      "DELETE FROM tips WHERE id IN (SELECT id FROM tips WHERE date::text LIKE $1 AND id LIKE 'auto_%' ORDER BY created_at ASC OFFSET 6)",
+      "DELETE FROM tips WHERE id IN (SELECT id FROM tips WHERE date::text LIKE $1 AND id LIKE 'auto_%' ORDER BY created_at ASC OFFSET 7)",
       [today + '%']
     );
     if (result.rowCount > 0) {
