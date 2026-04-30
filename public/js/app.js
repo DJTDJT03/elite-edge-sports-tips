@@ -10410,7 +10410,7 @@ const App = {
     var summaryHtml = '';
     if (selected.length > 0) {
       summaryHtml =
-        '<div style="display:block;background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(212,168,67,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:24px;margin-top:24px;max-width:100%;box-sizing:border-box;">' +
+        '<div class="acca-gen-summary" style="display:block !important;flex-direction:unset !important;align-items:unset !important;background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(212,168,67,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:24px;margin-top:24px;width:100%;max-width:100%;box-sizing:border-box;overflow:hidden;">' +
           '<h3 style="margin:0 0 20px;color:var(--gold);font-size:18px;text-align:center;">' + (notEnough ? selected.length + '-Fold Accumulator (Best Available)' : 'Accumulator Summary') + '</h3>' +
 
           // Main stats row — 3 cards
