@@ -1,6 +1,7 @@
 module.exports = function(deps) {
   const router = require('express').Router();
-  const { db, jwt, JWT_SECRET } = deps;
+  const { db, JWT_SECRET } = deps;
+  const jwt = require('jsonwebtoken');
 
   // Determine user's actual access level — checks DB, not just JWT
   async function getUserAccess(req) {
@@ -29,6 +30,7 @@ module.exports = function(deps) {
         return 'free';
       }
       if (user.role === 'admin') return 'admin';
+      if (user.subscription === 'vip') return 'premium';
       if (user.subscription === 'premium') return 'premium';
       if (user.trialActive === true) return 'premium';
       console.log('[Tips] User', user.email, 'sub:', user.subscription, 'trial:', user.trialActive, '— access: free');
