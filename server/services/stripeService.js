@@ -158,7 +158,7 @@ class StripeService {
       mode: 'subscription',
       customer_email: userEmail,
       metadata: { userId: userId, tier: tier },
-      subscription_data: { trial_period_days: 0 },
+      subscription_data: {},
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl + '?session_id={CHECKOUT_SESSION_ID}',
       cancel_url: cancelUrl,
