@@ -538,13 +538,13 @@ app.use('/', require('./routes/public')(deps));
   }
 })();
 
-// Cleanup: remove excess tips for today (keep max 4 per day)
+// Cleanup: remove excess tips for today (keep max 5 per day)
 (async function capDailyTips() {
   try {
     if (!db.isAvailable()) return;
     var today = new Date().toISOString().split('T')[0];
     var result = await db.query(
-      "DELETE FROM tips WHERE id IN (SELECT id FROM tips WHERE date::text LIKE $1 AND id LIKE 'auto_%' ORDER BY created_at ASC OFFSET 4)",
+      "DELETE FROM tips WHERE id IN (SELECT id FROM tips WHERE date::text LIKE $1 AND id LIKE 'auto_%' ORDER BY created_at ASC OFFSET 5)",
       [today + '%']
     );
     if (result.rowCount > 0) {

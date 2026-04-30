@@ -884,6 +884,7 @@ module.exports = function startScheduler(deps) {
     // Nothing above 20/1 should ever be published as a tip
     // ===================================================================
     var MAX_MAIN_TIP_ODDS = 9.0;
+    var MIN_MAIN_TIP_ODDS = 1.5;  // Avoid very short odds like 1/4 (1.25 decimal)
     var MIN_OUTSIDER_ODDS = 7.0;
     var MAX_OUTSIDER_ODDS = 21.0;
     var MIN_MAIN_CONFIDENCE = 6;
@@ -891,9 +892,9 @@ module.exports = function startScheduler(deps) {
     var racingCandidates = allCandidates.filter(function(c) { return c.type === 'racing'; });
     var footballCandidatesFinal = allCandidates.filter(function(c) { return c.type === 'football'; });
 
-    // Main racing tips: confidence 6+, odds under 8/1
+    // Main racing tips: confidence 6+, odds between 1/2 (1.5) and 8/1 (9.0)
     var racingMain = racingCandidates.filter(function(c) {
-      return c.scored && c.scored.odds > 1 && c.scored.odds <= MAX_MAIN_TIP_ODDS && c.confidence >= MIN_MAIN_CONFIDENCE;
+      return c.scored && c.scored.odds >= MIN_MAIN_TIP_ODDS && c.scored.odds <= MAX_MAIN_TIP_ODDS && c.confidence >= MIN_MAIN_CONFIDENCE;
     }).sort(function(a, b) { return b.edge - a.edge; });
 
     // EW Outsider: odds 6/1 to 20/1, best edge
@@ -901,14 +902,14 @@ module.exports = function startScheduler(deps) {
       return c.scored && c.scored.odds >= MIN_OUTSIDER_ODDS && c.scored.odds <= MAX_OUTSIDER_ODDS && c.confidence >= 5;
     }).sort(function(a, b) { return b.edge - a.edge; });
 
-    // Main football tips: odds under 8/1, confidence 6+
+    // Main football tips: odds between 1/2 (1.5) and 8/1 (9.0), confidence 6+
     var footballMain = footballCandidatesFinal.filter(function(c) {
-      return c.scored && c.scored.selectedOdds > 1 && c.scored.selectedOdds <= MAX_MAIN_TIP_ODDS && c.confidence >= MIN_MAIN_CONFIDENCE;
+      return c.scored && c.scored.selectedOdds >= MIN_MAIN_TIP_ODDS && c.scored.selectedOdds <= MAX_MAIN_TIP_ODDS && c.confidence >= MIN_MAIN_CONFIDENCE;
     }).sort(function(a, b) { return b.edge - a.edge; });
 
-    // Select: up to 2 main racing + 1 main football + 1 outsider = max 4
+    // Select: up to 2 main racing + 2 main football + 1 outsider = max 5
     var selectedRacing = racingMain.slice(0, 2);
-    var selectedFootball = footballMain.slice(0, 1);
+    var selectedFootball = footballMain.slice(0, 2);
     var selected = selectedRacing.concat(selectedFootball);
 
     // Add one EW Outsider of the Day (if available, mark it specially)
@@ -925,13 +926,13 @@ module.exports = function startScheduler(deps) {
       }
     }
 
-    // Cap at 4 total
-    selected = selected.slice(0, 4);
+    // Cap at 5 total (2 racing + 2 football + 1 outsider)
+    selected = selected.slice(0, 5);
 
-    // If we have fewer than 2 main tips, try to fill from football
-    if (selected.filter(function(s) { return !s._isOutsider; }).length < 2 && footballMain.length > 1) {
-      selected.splice(selected.length - (outsider ? 1 : 0), 0, footballMain[1]);
-      selected = selected.slice(0, 4);
+    // If we have fewer than 3 main tips, try to fill from football
+    if (selected.filter(function(s) { return !s._isOutsider; }).length < 3 && footballMain.length > 2) {
+      selected.splice(selected.length - (outsider ? 1 : 0), 0, footballMain[2]);
+      selected = selected.slice(0, 5);
     }
 
     // NAP must be a MAIN tip with confidence >= 7 (never the outsider)
@@ -2049,11 +2050,18 @@ module.exports = function startScheduler(deps) {
           var tipCardsHtml = '';
           for (var t = 0; t < todayTips.length; t++) {
             var tip = todayTips[t];
-            tipCardsHtml += '<div style="background:#141824;border-left:3px solid #d4a843;padding:12px 16px;margin:8px 0;border-radius:4px;">';
-            tipCardsHtml += '<strong style="color:#d4a843;">' + (tip.selection || '') + '</strong>';
-            tipCardsHtml += '<br><span style="color:#8b8d93;">' + (tip.event || '') + '</span>';
-            if (tip.odds) tipCardsHtml += ' &mdash; <span style="color:#e8e6e3;">' + tip.odds + '</span>';
-            if (tip.isPremium) tipCardsHtml += ' <span style="background:#d4a843;color:#0a0e1a;padding:2px 6px;border-radius:3px;font-size:11px;">PREMIUM</span>';
+            var sportIcon = tip.sport === 'racing' ? '&#127943;' : '&#9917;';
+            tipCardsHtml += '<div style="background:#141824;border-left:3px solid #d4a843;padding:14px 16px;margin:10px 0;border-radius:6px;">';
+            tipCardsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+            tipCardsHtml += '<div><strong style="color:#d4a843;font-size:15px;">' + sportIcon + ' ' + (tip.selection || '') + '</strong>';
+            tipCardsHtml += '<br><span style="color:#8b8d93;font-size:12px;">' + (tip.event || '') + '</span></div>';
+            if (tip.odds) tipCardsHtml += '<div style="color:#e8e6e3;font-weight:800;font-size:18px;">' + tip.odds + '</div>';
+            tipCardsHtml += '</div>';
+            // Analysis summary — why we picked this
+            if (tip.analysis && tip.analysis.summary) {
+              tipCardsHtml += '<p style="color:#a0a4b0;font-size:12px;line-height:1.5;margin:8px 0 4px;border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;">' + tip.analysis.summary + '</p>';
+            }
+            if (tip.isPremium) tipCardsHtml += '<span style="background:#d4a843;color:#0a0e1a;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;">PREMIUM</span>';
             tipCardsHtml += '</div>';
           }
 
@@ -2066,6 +2074,11 @@ module.exports = function startScheduler(deps) {
           htmlBody += '<p>' + (aiContent.todaysPicks || '') + '</p>';
           htmlBody += tipCardsHtml;
           htmlBody += '<p style="color:#8b8d93;margin-top:24px;">' + (aiContent.signOff || '') + '</p>';
+          htmlBody += '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(212,168,67,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:10px;padding:20px;margin:24px 0;text-align:center;">';
+          htmlBody += '<p style="color:#d4a843;font-weight:700;font-size:16px;margin:0 0 8px;">Build Your Own Accumulator</p>';
+          htmlBody += '<p style="color:#8b8d93;font-size:13px;margin:0 0 16px;">Our Smart Acca Generator uses today\'s fixtures and our probability model to build optimised 2-8 fold accumulators.</p>';
+          htmlBody += '<a href="https://eliteedgesports.co.uk/#/acca-generator" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Try Acca Generator &rarr;</a>';
+          htmlBody += '</div>';
           htmlBody += '<p style="font-size:11px;color:#64748b;margin-top:32px;">18+ | Entertainment & statistical analysis only | BeGambleAware.org</p>';
           htmlBody += '</div>';
 
