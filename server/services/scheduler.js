@@ -884,7 +884,7 @@ module.exports = function startScheduler(deps) {
     // Nothing above 20/1 should ever be published as a tip
     // ===================================================================
     var MAX_MAIN_TIP_ODDS = 9.0;
-    var MIN_MAIN_TIP_ODDS = 1.5;  // Avoid very short odds like 1/4 (1.25 decimal)
+    var MIN_MAIN_TIP_ODDS = 1.8;  // Minimum ~4/5 decimal — allows evens (2.0), 10/11 (1.91) but blocks 1/2 (1.5) and shorter
     var MIN_OUTSIDER_ODDS = 7.0;
     var MAX_OUTSIDER_ODDS = 21.0;
     var MIN_MAIN_CONFIDENCE = 6;
