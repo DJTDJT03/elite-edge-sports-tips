@@ -509,6 +509,15 @@ module.exports = function startScheduler(deps) {
                 rc.edge = reScored.edge;
                 rc.confidence = reScored.confidence;
                 var moveSignal = movementInfo.signal || 'neutral';
+                // Store movement data on candidate for odds explainer in Pass 3
+                if (moveSignal === 'steamer' || (movementInfo.changePercent && movementInfo.changePercent < -10)) {
+                  rc._movement = {
+                    direction: 'shortening',
+                    openPrice: bestPriceData.worstPrice || bestPriceData.averagePrice,
+                    currentPrice: bestPriceData.bestPrice,
+                    changePct: Math.abs(movementInfo.changePercent || 0),
+                  };
+                }
                 console.log('[Auto-Tips] Market intel: ' + horseName + ' — best ' + bestPriceData.bestPrice + ' (' + bestPriceData.bestBookmaker + '), avg ' + bestPriceData.averagePrice + ', ' + bestPriceData.bookmakerCount + ' bookmakers, ' + moveSignal);
               }
             } catch (mktErr) {
@@ -749,6 +758,13 @@ module.exports = function startScheduler(deps) {
             if (omMovement && omMovement.bookmakerCount >= 3) {
               if (omMovement.direction === 'shortening') {
                 omScored.factors.marketSupport = Math.min((omScored.factors.marketSupport || 0.5) + 0.15, 1.0);
+                // Store movement on candidate for odds explainer
+                omEntry._movement = {
+                  direction: 'shortening',
+                  openPrice: omMovement.openPrice || null,
+                  currentPrice: omMovement.currentPrice || null,
+                  changePct: Math.abs(omMovement.changePercent || 0),
+                };
                 console.log('[Auto-Tips] Odds movement for ' + omScored.selectedSelection + ': shortening across ' + omMovement.bookmakerCount + ' bookmakers (avg ' + omMovement.changePercent + '%)');
               } else if (omMovement.direction === 'drifting') {
                 omScored.factors.marketSupport = Math.max((omScored.factors.marketSupport || 0.5) - 0.15, 0.05);
@@ -985,6 +1001,26 @@ module.exports = function startScheduler(deps) {
 
       // Generate analysis — enrichment signals woven inline into template fields
       var analysis = scoringModel.generateAnalysis(scored, sport, enrichSignals);
+
+      // Odds movement explainer — if this selection has been shortening, ask Sonar why
+      if (candidate._movement && candidate._movement.direction === 'shortening' && perplexityClient) {
+        try {
+          var movementExplain = await perplexityClient.explainOddsMovement({
+            selection: sport === 'racing' ? (scored.runner || {}).horseName : (scored.selectedSelection || ''),
+            event: sport === 'racing' ? ((scored.race || {}).meeting + ' ' + ((scored.race || {}).time || '')) : (((scored.fixture || {}).homeTeam || '') + ' vs ' + ((scored.fixture || {}).awayTeam || '')),
+            sport: sport,
+            openPrice: String(candidate._movement.openPrice || ''),
+            currentPrice: String(candidate._movement.currentPrice || ''),
+            changePct: String(candidate._movement.changePct || ''),
+          });
+          if (movementExplain) {
+            analysis.oddsMovement = movementExplain;
+            console.log('[Auto-Tips] Odds explainer: ' + (sport === 'racing' ? (scored.runner || {}).horseName : scored.selectedSelection) + ' — ' + movementExplain);
+          }
+        } catch (moveErr) {
+          // Non-fatal — tip publishes without movement explanation
+        }
+      }
 
       var tip;
       if (sport === 'racing') {

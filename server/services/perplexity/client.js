@@ -308,6 +308,29 @@ module.exports = function createPerplexityClient(db) {
   }
 
   /**
+   * Explain why odds have shortened for a selection.
+   * Returns a one-sentence explanation with citation, or null.
+   *
+   * @param {object} data - {selection, event, sport, openPrice, currentPrice, changePct}
+   * @returns {Promise<string|null>}
+   */
+  async function explainOddsMovement(data) {
+    if (_suppressionState === 'open') return null;
+
+    var promptObj;
+    try { promptObj = prompts.buildOddsExplainerPrompt(data); }
+    catch (e) { return null; }
+    var entityId = ('odds-' + (data.selection || '')).toLowerCase().replace(/[^a-z0-9]/g, '-');
+    var result = await _callSonar(promptObj, 'odds-explainer', entityId, null);
+
+    if (result.error || !result.rawContent) return null;
+    var text = typeof result.rawContent === 'string' ? result.rawContent : JSON.stringify(result.rawContent);
+    // Filter out the "no reason found" response
+    if (text.toLowerCase().indexOf('no confirmed reason found') !== -1) return null;
+    return text.trim();
+  }
+
+  /**
    * Get current suppression state.
    * @returns {string} 'open' or 'closed'
    */
@@ -768,6 +791,7 @@ module.exports = function createPerplexityClient(db) {
     enrichBatch: enrichBatch,
     enrichBulletin: enrichBulletin,
     enrichReplay: enrichReplay,
+    explainOddsMovement: explainOddsMovement,
     getState: getState,
     setState: setState,
     deriveSuppressionState: _deriveSuppressionState,
@@ -784,6 +808,7 @@ function _noopClient() {
     enrichBatch: function() { return Promise.resolve(new Map()); },
     enrichBulletin: function() { return Promise.resolve({ racing: null, football: null }); },
     enrichReplay: function() { return Promise.resolve(null); },
+    explainOddsMovement: function() { return Promise.resolve(null); },
     getState: function() { return 'disabled'; },
     setState: function() {},
     deriveSuppressionState: function() { return Promise.resolve('disabled'); },

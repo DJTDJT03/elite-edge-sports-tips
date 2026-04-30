@@ -3302,7 +3302,7 @@ const App = {
           </div>
 
           <!-- Structured Analysis Sections -->
-          ${analysisSections.map(function(sec) {
+          ${analysisSections.filter(Boolean).map(function(sec) {
             var body = sec.body || '';
             if (!body && sec.fields) {
               body = sec.fields.filter(function(f) { return a[f]; }).map(function(f) { return '<p>' + a[f] + '</p>'; }).join('');
@@ -5339,6 +5339,7 @@ const App = {
               if (tip.analysis.goingSuitability) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Going:</strong> ' + tip.analysis.goingSuitability + '</div>';
               if (tip.analysis.courseRecord) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Course:</strong> ' + tip.analysis.courseRecord + '</div>';
               if (tip.analysis.trainerForm) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Trainer:</strong> ' + tip.analysis.trainerForm + '</div>';
+              if (tip.analysis.oddsMovement) tipsHtml += '<div style="margin-bottom:8px;background:rgba(34,197,94,0.08);border-left:3px solid #22c55e;padding:8px 12px;border-radius:4px;"><strong style="color:#22c55e;">Market Mover:</strong> ' + tip.analysis.oddsMovement + '</div>';
               if (tip.analysis.riskNotes) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#ef4444;">Risk:</strong> ' + tip.analysis.riskNotes + '</div>';
             }
             tipsHtml += '</div>';
@@ -7049,6 +7050,7 @@ const App = {
         { icon: '\ud83d\udcca', title: 'Model Assessment', body: self._buildModelText(a, tip) },
         { icon: '\ud83d\udcc8', title: 'Form Analysis', fields: ['form', 'speedRatings'] },
         { icon: '\u26a1', title: 'Key Factors', fields: ['paceAnalysis', 'goingSuitability', 'courseRecord', 'drawBias'] },
+        a.oddsMovement ? { icon: '\ud83d\udcc9', title: 'Market Mover', body: '<p style="color:#22c55e;">' + a.oddsMovement + '</p>' } : null,
         { icon: '\u26a0\ufe0f', title: 'Risk Assessment', body: '<p>Risk Level: <strong>' + (tip.riskLevel || 'Medium') + '</strong></p>' + (a.classMovement ? '<p>' + a.classMovement + '</p>' : '') + (a.weight ? '<p>' + a.weight + '</p>' : '') },
         { icon: '\ud83d\udca1', title: 'Why This Is Value', fields: ['valueReasoning', 'marketSupport'] },
         { icon: '\ud83c\udfaf', title: 'Staking Recommendation', body: '<p>Recommended stake: <strong>' + (tip.staking || '1 unit') + '</strong>. ' + (a.trainerJockeyStats ? 'Trainer/Jockey: ' + a.trainerJockeyStats : '') + '</p>' },

@@ -339,6 +339,42 @@ function buildReplayPrompt(data) {
 }
 
 // ---------------------------------------------------------------------------
+// 6. Odds Movement Explainer
+// ---------------------------------------------------------------------------
+
+var SYSTEM_ODDS_EXPLAINER =
+  'You are a UK racing and football market analyst. Write one concise sentence explaining why odds have shortened.\n' +
+  'Cite your source inline using [Source Name]. Do not speculate — only report if you find a specific reason.\n' +
+  'If you cannot find a cited reason, respond with exactly: "No confirmed reason found."\n' +
+  'If you cannot find a citation from the allowed sources, omit the claim. Do not invent URLs or attribute claims to allowed domains without an actual source.';
+
+/**
+ * Build the odds movement explainer prompt.
+ *
+ * @param {object} data - {selection, event, sport, openPrice, currentPrice, changePct}
+ * @returns {{system: string, user: string, callSiteKey: string}}
+ * @throws {TypeError} If selection is missing
+ */
+function buildOddsExplainerPrompt(data) {
+  var uk = _ukNow();
+  var sport = data.sport || 'racing';
+
+  var sources = sport === 'racing'
+    ? 'Racing Post, Sporting Life, At The Races, or official racecourse sources'
+    : 'BBC Sport, Sky Sports, The Guardian, or official league sources';
+
+  var user =
+    'Today is ' + uk.date + ' at ' + uk.time + ' UK time.\n' +
+    _slot('selection', data.selection) + ' in ' + _optSlot(data.event, 'today\'s card') + '.\n' +
+    'Odds have shortened from ' + _optSlot(data.openPrice, '?') + ' to ' + _optSlot(data.currentPrice, '?') +
+    ' (' + _optSlot(data.changePct, '?') + '% shortening across bookmakers).\n\n' +
+    'In one sentence, explain WHY. Common reasons: trial/gallop reports, jockey booking, stable confidence, non-runner reshuffling market, significant money from known connections.\n\n' +
+    'Only cite ' + sources + '. If no reason is findable, respond: "No confirmed reason found."';
+
+  return { system: SYSTEM_ODDS_EXPLAINER, user: user, callSiteKey: 'odds-explainer' };
+}
+
+// ---------------------------------------------------------------------------
 // EXPORTS
 // ---------------------------------------------------------------------------
 module.exports = {
@@ -347,6 +383,7 @@ module.exports = {
   buildBulletinRacingPrompt: buildBulletinRacingPrompt,
   buildBulletinFootballPrompt: buildBulletinFootballPrompt,
   buildReplayPrompt: buildReplayPrompt,
+  buildOddsExplainerPrompt: buildOddsExplainerPrompt,
   // Exposed for testing only:
   _slot: _slot,
   _optSlot: _optSlot,

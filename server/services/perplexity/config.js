@@ -98,6 +98,7 @@ var TOKEN_BUDGET = {
   'per-tip-football': { maxInput: 800, maxOutput: 600 },
   'bulletin':         { maxInput: 1000, maxOutput: 800 },
   'replay':           { maxInput: 600, maxOutput: 500 },
+  'odds-explainer':   { maxInput: 600, maxOutput: 300 },
 };
 
 // Temperature per call site: 0 for structured JSON, 0.3 for prose
@@ -106,6 +107,7 @@ var TEMPERATURE = {
   'per-tip-football': 0,
   'bulletin':         0.3,
   'replay':           0.3,
+  'odds-explainer':   0.3,
 };
 
 module.exports = {
