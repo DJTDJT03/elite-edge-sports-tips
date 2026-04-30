@@ -1011,6 +1011,66 @@ module.exports = function startScheduler(deps) {
       console.log('[Auto-Tips] Rugby pick: ' + rugbyCandidates[0].scored.selectedSelection + ' @ ' + rugbyCandidates[0].scored.selectedOdds);
     }
 
+    // --- NFL SELECTIONS ---
+    var nflCandidates = [];
+    var nflData = deps.nflData;
+    if (nflData && nflData.isAvailable) {
+      try {
+        console.log('[Auto-Tips] Fetching NFL games...');
+        var nflGames = await nflData.getGames(today);
+        var nflNotStarted = nflGames.filter(function(g) { return g.status === 'NS'; });
+        console.log('[Auto-Tips] Found ' + nflNotStarted.length + ' upcoming NFL games');
+
+        if (nflNotStarted.length > 0) {
+          var nflStandings = [];
+          try { nflStandings = await nflData.getStandings(); } catch(e) {}
+
+          for (var nflIdx = 0; nflIdx < nflNotStarted.length; nflIdx++) {
+            var nflGame = nflNotStarted[nflIdx];
+            try {
+              var nflH2H = [];
+              try { nflH2H = await nflData.getH2H(nflGame.homeTeamId, nflGame.awayTeamId); } catch(e) {}
+
+              var nflOdds = {};
+              if (oddsNormalised) {
+                var nflOddsMatch = oddsNormalised.find(function(o) {
+                  return o.homeTeam && o.awayTeam &&
+                    (o.homeTeam.toLowerCase().indexOf(nflGame.homeTeam.toLowerCase().split(' ').pop()) !== -1);
+                });
+                if (nflOddsMatch && nflOddsMatch.bookmakerOdds) {
+                  var nflFirstBk = Object.keys(nflOddsMatch.bookmakerOdds)[0];
+                  if (nflFirstBk && nflOddsMatch.bookmakerOdds[nflFirstBk]) {
+                    var nflBkData = nflOddsMatch.bookmakerOdds[nflFirstBk];
+                    nflOdds.home = nflBkData[nflGame.homeTeam] || nflBkData['1'] || 0;
+                    nflOdds.away = nflBkData[nflGame.awayTeam] || nflBkData['2'] || 0;
+                  }
+                }
+              }
+
+              var nflScored = scoringModel.scoreNFLGame(nflGame, nflStandings, nflH2H, nflOdds);
+              if (nflScored && nflScored.edge > 0.03 && nflScored.confidence >= 6) {
+                nflCandidates.push({
+                  type: 'american-football',
+                  scored: nflScored,
+                  edge: nflScored.edge,
+                  confidence: nflScored.confidence,
+                });
+              }
+            } catch (nflGameErr) { /* skip */ }
+          }
+          console.log('[Auto-Tips] NFL candidates passing filter: ' + nflCandidates.length);
+        }
+      } catch (nflErr) {
+        console.error('[Auto-Tips] NFL API error:', nflErr.message);
+      }
+    }
+
+    if (nflCandidates.length > 0) {
+      nflCandidates.sort(function(a, b) { return b.edge - a.edge; });
+      allCandidates.push(nflCandidates[0]);
+      console.log('[Auto-Tips] NFL pick: ' + nflCandidates[0].scored.selectedSelection + ' @ ' + nflCandidates[0].scored.selectedOdds);
+    }
+
     // Sort all candidates by edge descending
     allCandidates.sort(function(a, b) { return b.edge - a.edge; });
 
@@ -1070,8 +1130,8 @@ module.exports = function startScheduler(deps) {
       }
     }
 
-    // Cap at 7 total (2 racing + 2 football + 1 NBA + 1 rugby + 1 outsider)
-    selected = selected.slice(0, 7);
+    // Cap at 8 total (2 racing + 2 football + 1 NBA + 1 rugby + 1 NFL + 1 outsider)
+    selected = selected.slice(0, 8);
 
     // If we have fewer than 3 main tips, try to fill from football
     if (selected.filter(function(s) { return !s._isOutsider; }).length < 3 && footballMain.length > 2) {
@@ -1264,6 +1324,38 @@ module.exports = function startScheduler(deps) {
           league: rgFixture.league || 'Super League',
           kickoff: rgFixture.time || '',
           venue: rgFixture.venue || '',
+          market: scored.selectedMarket,
+          selection: scored.selectedSelection,
+          odds: scored.selectedOdds,
+          confidence: scored.confidence,
+          modelProbability: scored.modelProbability,
+          impliedProbability: scored.impliedProbability,
+          edge: scored.edge,
+          valueRating: scored.valueRating,
+          isPremium: true,
+          isNap: isNap,
+          status: 'active',
+          result: null,
+          date: today,
+          tipster: 'Elite Edge Model',
+          tipsterProfile: tipsterProfile,
+          staking: scored.staking,
+          riskLevel: scored.riskLevel,
+          analysis: analysis,
+          openingOdds: scored.selectedOdds,
+          advisedPriceDecimal: scored.selectedOdds,
+          bookmakerOdds: {},
+          recentForm: [],
+        };
+      } else if (sport === 'american-football') {
+        var nfFixture = scored.fixture || {};
+        tip = {
+          id: tipId,
+          sport: 'american-football',
+          event: (nfFixture.homeTeam || 'Home') + ' vs ' + (nfFixture.awayTeam || 'Away') + ' - NFL' + (nfFixture.week ? ' Week ' + nfFixture.week : ''),
+          league: 'NFL',
+          kickoff: nfFixture.time || '',
+          venue: nfFixture.venue || '',
           market: scored.selectedMarket,
           selection: scored.selectedSelection,
           odds: scored.selectedOdds,
@@ -1991,6 +2083,88 @@ module.exports = function startScheduler(deps) {
             }
           }
         } catch (err) { console.error('[Auto-Settle] Rugby error:', err.message); }
+      }
+
+      // Auto-settle NFL results
+      var nflDataSvc = deps.nflData;
+      if (nflDataSvc && nflDataSvc.isAvailable) {
+        try {
+          var nflResults = [];
+          for (var nfi = 0; nfi < datesToSettle.length; nfi++) {
+            try {
+              var dayNflResults = await nflDataSvc.getResults(datesToSettle[nfi]);
+              nflResults = nflResults.concat(dayNflResults);
+            } catch (e) { /* individual day optional */ }
+          }
+
+          for (var nfti = 0; nfti < activeTips.length; nfti++) {
+            var nfTip = activeTips[nfti];
+            if (nfTip.sport !== 'american-football') continue;
+
+            var nfMatch = nflResults.find(function(g) {
+              var eventLower = (nfTip.event || '').toLowerCase();
+              return eventLower.indexOf(g.homeTeam.toLowerCase()) !== -1 ||
+                     eventLower.indexOf(g.awayTeam.toLowerCase()) !== -1;
+            });
+
+            if (nfMatch) {
+              var nfHomeScore = nfMatch.homeScore || 0;
+              var nfAwayScore = nfMatch.awayScore || 0;
+              var nfTotal = nfHomeScore + nfAwayScore;
+              var nfWon = false;
+
+              var nfMarket = (nfTip.market || '').toLowerCase();
+              var nfSelection = (nfTip.selection || '').toLowerCase();
+
+              if (nfMarket.indexOf('moneyline') !== -1 || nfMarket.indexOf('winner') !== -1) {
+                if (nfSelection.indexOf(nfMatch.homeTeam.toLowerCase()) !== -1) nfWon = nfHomeScore > nfAwayScore;
+                else if (nfSelection.indexOf(nfMatch.awayTeam.toLowerCase()) !== -1) nfWon = nfAwayScore > nfHomeScore;
+              } else if (nfMarket.indexOf('over') !== -1) {
+                var nfLine = parseFloat(nfMarket.match(/[\d.]+/)) || 45.5;
+                nfWon = nfTotal > nfLine;
+              } else if (nfMarket.indexOf('under') !== -1) {
+                var nfULine = parseFloat(nfMarket.match(/[\d.]+/)) || 45.5;
+                nfWon = nfTotal < nfULine;
+              }
+
+              var nfResultVal = nfWon ? 'won' : 'lost';
+              var nfStake = parseFloat(nfTip.staking) || 2;
+              var nfPnl = nfWon ? ((nfTip.odds - 1) * nfStake) : -nfStake;
+
+              var nfAllResults = await db.getResults();
+              var nfAlready = nfAllResults.some(function(r) {
+                return r.selection === nfTip.selection && normDate(r.date) === normDate(nfTip.date);
+              });
+              if (nfAlready) {
+                if (nfTip.status === 'active') await db.updateTip(nfTip.id, { status: 'settled' });
+                continue;
+              }
+
+              await db.updateTip(nfTip.id, {
+                status: 'settled', result: nfResultVal,
+                settledAt: new Date().toISOString(),
+                settlementSource: 'auto-nfl-api',
+              });
+
+              await db.createResult({
+                id: 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                tipId: nfTip.id, sport: 'american-football', event: nfTip.event, selection: nfTip.selection,
+                market: nfTip.market, odds: nfTip.odds, stake: nfStake,
+                result: nfResultVal, pnl: Math.round(nfPnl * 100) / 100,
+                date: nfTip.date, isPremium: nfTip.isPremium, tipsterProfile: nfTip.tipsterProfile || 'The Edge',
+                confidence: nfTip.confidence,
+              });
+              updated++;
+              console.log('[Auto-Settle] NFL: ' + nfTip.selection + ' (' + nfMatch.homeTeam + ' ' + nfHomeScore + '-' + nfAwayScore + ' ' + nfMatch.awayTeam + ') = ' + nfResultVal + ' (' + nfPnl.toFixed(2) + 'u)');
+
+              if (telegramBot && telegramBot.isAvailable() && nfWon) {
+                try {
+                  await telegramBot.sendResult({ selection: nfTip.selection, odds: nfTip.odds, result: nfResultVal, pnl: Math.round(nfPnl * 100) / 100, event: nfTip.event });
+                } catch (tgErr) { /* non-fatal */ }
+              }
+            }
+          }
+        } catch (err) { console.error('[Auto-Settle] NFL error:', err.message); }
       }
 
       if (updated > 0) {

@@ -1284,6 +1284,8 @@ class ScoringModel {
       return this._generateBasketballAnalysis(scored, enrichment);
     } else if (sport === 'rugby') {
       return this._generateRugbyAnalysis(scored, enrichment);
+    } else if (sport === 'american-football') {
+      return this._generateNFLAnalysis(scored, enrichment);
     } else {
       return this._generateFootballAnalysis(scored, enrichment);
     }
@@ -1776,6 +1778,150 @@ class ScoringModel {
       riskLevel: best.odds < 2.5 ? 'Low' : best.odds < 4 ? 'Medium' : 'High',
       factors: factors,
       expectedTotal: expectedTotal,
+    };
+  }
+
+  /**
+   * Score an NFL game. Spread/totals focused.
+   */
+  scoreNFLGame(game, standings, h2h, odds) {
+    if (!game || !game.homeTeam || !game.awayTeam) return null;
+
+    var factors = {};
+    var homeStanding = standings ? standings.find(function(s) { return s.team === game.homeTeam; }) : null;
+    var awayStanding = standings ? standings.find(function(s) { return s.team === game.awayTeam; }) : null;
+
+    // 1. Form/Record (25%)
+    var homeWinPct = homeStanding ? homeStanding.winPct : 0.5;
+    var awayWinPct = awayStanding ? awayStanding.winPct : 0.5;
+    factors.form = Math.max(homeWinPct, awayWinPct);
+
+    // 2. Home field (20%) — NFL home advantage ~57%
+    factors.homeAway = Math.min(homeWinPct * 1.1, 1.0);
+
+    // 3. Standings (20%)
+    var homePos = homeStanding ? homeStanding.position : 16;
+    var awayPos = awayStanding ? awayStanding.position : 16;
+    factors.standings = Math.min(1 - (Math.min(homePos, awayPos) / 32), 1.0);
+
+    // 4. Scoring (15%)
+    var homePlayed = homeStanding ? homeStanding.played : 1;
+    var awayPlayed = awayStanding ? awayStanding.played : 1;
+    var homePPG = homeStanding && homePlayed > 0 ? homeStanding.pointsFor / homePlayed : 22;
+    var awayPPG = awayStanding && awayPlayed > 0 ? awayStanding.pointsFor / awayPlayed : 22;
+    factors.offence = Math.min((homePPG + awayPPG) / 55, 1.0);
+
+    // 5. Defence (10%)
+    var homePA = homeStanding && homePlayed > 0 ? homeStanding.pointsAgainst / homePlayed : 22;
+    var awayPA = awayStanding && awayPlayed > 0 ? awayStanding.pointsAgainst / awayPlayed : 22;
+    factors.defence = Math.min(1 - (Math.min(homePA, awayPA) / 35), 1.0);
+
+    // 6. H2H (10%)
+    if (h2h && h2h.length > 0) {
+      var homeH2HWins = h2h.filter(function(g) {
+        return (g.homeTeam === game.homeTeam && g.homeScore > g.awayScore) ||
+               (g.awayTeam === game.homeTeam && g.awayScore > g.homeScore);
+      }).length;
+      factors.h2h = h2h.length > 0 ? homeH2HWins / h2h.length : 0.5;
+    } else {
+      factors.h2h = 0.5;
+    }
+
+    var weights = { form: 0.25, homeAway: 0.20, standings: 0.20, offence: 0.15, defence: 0.10, h2h: 0.10 };
+    var composite = 0;
+    for (var key in weights) { composite += (factors[key] || 0.5) * weights[key]; }
+
+    var markets = [];
+    var expectedTotal = homePPG + awayPPG;
+
+    // Match winner (moneyline)
+    if (homeWinPct > awayWinPct + 0.1) {
+      var homeOdds = odds && odds.home ? parseFloat(odds.home) : 0;
+      if (homeOdds >= 1.8) {
+        markets.push({ market: 'Moneyline', selection: game.homeTeam, odds: homeOdds, modelProb: composite, impliedProb: homeOdds > 0 ? 1 / homeOdds : 0.5 });
+      }
+    } else if (awayWinPct > homeWinPct + 0.1) {
+      var awayOdds = odds && odds.away ? parseFloat(odds.away) : 0;
+      if (awayOdds >= 1.8) {
+        markets.push({ market: 'Moneyline', selection: game.awayTeam, odds: awayOdds, modelProb: 1 - composite, impliedProb: awayOdds > 0 ? 1 / awayOdds : 0.5 });
+      }
+    }
+
+    // Over/Under total points
+    if (expectedTotal > 47) {
+      var overOdds = odds && odds.over ? parseFloat(odds.over) : 0;
+      if (overOdds >= 1.8) {
+        var overProb = Math.min((expectedTotal - 43) / 15, 0.70);
+        markets.push({ market: 'Over 45.5 Points', selection: 'Over 45.5', odds: overOdds, modelProb: overProb, impliedProb: overOdds > 0 ? 1 / overOdds : 0.5 });
+      }
+    } else if (expectedTotal < 41) {
+      var underOdds = odds && odds.under ? parseFloat(odds.under) : 0;
+      if (underOdds >= 1.8) {
+        var underProb = Math.min((47 - expectedTotal) / 15, 0.70);
+        markets.push({ market: 'Under 45.5 Points', selection: 'Under 45.5', odds: underOdds, modelProb: underProb, impliedProb: underOdds > 0 ? 1 / underOdds : 0.5 });
+      }
+    }
+
+    if (markets.length === 0) return null;
+    markets.forEach(function(m) { m.edge = m.modelProb - m.impliedProb; });
+    markets.sort(function(a, b) { return b.edge - a.edge; });
+    var best = markets[0];
+    if (best.edge < 0.03) return null;
+
+    var confidence = Math.min(Math.round(composite * 10), 10);
+    if (confidence < 6) confidence = 6;
+
+    return {
+      fixture: game,
+      selectedMarket: best.market,
+      selectedSelection: best.selection,
+      selectedOdds: best.odds,
+      modelProbability: best.modelProb,
+      impliedProbability: best.impliedProb,
+      edge: best.edge,
+      confidence: confidence,
+      valueRating: best.edge >= 0.10 ? 'Strong' : best.edge >= 0.05 ? 'Fair' : 'Slight',
+      staking: best.odds < 2.5 ? '1.5 units' : '1 unit',
+      riskLevel: best.odds < 2.5 ? 'Low' : 'Medium',
+      factors: factors,
+      expectedTotal: expectedTotal,
+    };
+  }
+
+  _generateNFLAnalysis(scored, enrichment) {
+    const fixture = scored.fixture || {};
+    const home = fixture.homeTeam || 'Home';
+    const away = fixture.awayTeam || 'Away';
+    const market = scored.selectedMarket || 'Market';
+    const selection = scored.selectedSelection || 'Selection';
+    const odds = scored.selectedOdds || 0;
+    const edge = scored.edge || 0;
+    const edgePct = (edge * 100).toFixed(1);
+    const modelPct = ((scored.modelProbability || 0) * 100).toFixed(0);
+    const impliedPct = ((scored.impliedProbability || 0) * 100).toFixed(0);
+    const expectedTotal = scored.expectedTotal || 0;
+    const factors = scored.factors || {};
+    const sig = enrichment || {};
+    const sv = (key) => sig[key] ? sig[key].value.trim() : '';
+
+    let keyReason = '';
+    if (factors.form >= 0.7) keyReason = 'Season record drives this pick';
+    else if (factors.homeAway >= 0.7) keyReason = 'Home field advantage is the key factor';
+    else if (factors.standings >= 0.7) keyReason = 'Division standings support the selection';
+    else keyReason = 'Balanced edge across multiple factors';
+
+    let formText = market.toLowerCase().includes('moneyline')
+      ? `${home} host ${away} in Week ${fixture.week || '?'} of the NFL season. ${keyReason}.`
+      : `Combined expected total of ${expectedTotal.toFixed(0)} points. ${home} and ${away} both factor into the ${market.toLowerCase().includes('over') ? 'over' : 'under'} play.`;
+
+    if (sig.team_news) formText += ' ' + sv('team_news');
+
+    return {
+      summary: `${home} vs ${away} — NFL. Our model gives ${selection} a ${modelPct}% probability vs the market's ${impliedPct}%. ${keyReason}. Edge: ${edgePct}%.`,
+      form: formText,
+      standings: 'Division standings and win-loss records factored into the model.',
+      headToHead: `Recent matchups between ${home} and ${away} considered.`,
+      riskNotes: odds < 2.5 ? 'Favoured selection — main risk is an upset or key injury.' : 'Competitive matchup — line value identified by the model.',
     };
   }
 

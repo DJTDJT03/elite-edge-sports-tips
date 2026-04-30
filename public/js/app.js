@@ -935,6 +935,9 @@ const App = {
       case 'racing': this.renderRacing(); break;
       case 'live': this.renderLiveHub(); break;
       case 'football': this.renderFootball(); break;
+      case 'nba': this.renderSportTips('basketball', 'NBA Basketball'); break;
+      case 'rugby': this.renderSportTips('rugby', 'Rugby League'); break;
+      case 'nfl': this.renderSportTips('american-football', 'NFL'); break;
       case 'selections': this.renderSelections(); break;
       case 'value-bets': this.renderValueBets(); break;
       case 'compare': this.renderCompare(); break;
@@ -3867,6 +3870,119 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // SPORT-SPECIFIC TIPS PAGE (NBA, Rugby, NFL)
+  // -----------------------------------------------------------------------
+  async renderSportTips(sportKey, sportLabel) {
+    var app = document.getElementById('app');
+    var self = this;
+    var isPremium = this.isPremium();
+    app.innerHTML = this.renderSkeleton('tips');
+
+    try {
+      var allTips = await this.api('/tips');
+      if (allTips.tips) allTips = allTips.tips;
+      if (!Array.isArray(allTips)) allTips = [];
+
+      var today = new Date().toISOString().split('T')[0];
+      var sportTips = allTips.filter(function(t) {
+        return t.sport === sportKey;
+      });
+
+      var sportIcon = sportKey === 'basketball' ? '&#127936;' : sportKey === 'rugby' ? '&#127945;' : '&#127944;';
+
+      var html = '<div class="container" style="padding-top:20px;">' +
+        '<div class="page-header">' +
+          '<h1>' + sportIcon + ' <span class="accent">' + sportLabel + '</span> Tips</h1>' +
+          '<p>AI-powered selections with full statistical analysis</p>' +
+        '</div>';
+
+      if (sportTips.length === 0) {
+        html += '<div style="text-align:center;padding:60px 20px;">' +
+          '<div style="font-size:48px;margin-bottom:16px;">' + sportIcon + '</div>' +
+          '<h2 style="color:var(--text-primary);">No ' + sportLabel + ' Tips Today</h2>' +
+          '<p style="color:var(--text-secondary);margin-bottom:24px;">' + sportLabel + ' tips are published when our model identifies value in upcoming fixtures. Check back on game days.</p>' +
+          '<a href="#/" class="btn btn-outline">Back to Dashboard</a>' +
+        '</div>';
+      } else {
+        sportTips.forEach(function(tip) {
+          var isLocked = tip.locked || (tip.isPremium && !isPremium);
+          var oddsDisplay = isLocked ? '?.??' : (self.formatOdds ? self.formatOdds(tip.odds) : tip.odds);
+
+          html += '<div class="tip-card" style="margin-bottom:16px;padding:20px;background:var(--bg-card);border-radius:12px;border:1px solid var(--border);">';
+
+          // Header row
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+          html += '<div>';
+          html += '<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--gold);margin-bottom:4px;">' + sportLabel + '</div>';
+          html += '<h3 style="margin:0;color:var(--text-primary);font-size:18px;">' + (tip.selection || 'Premium Pick') + '</h3>';
+          html += '<div style="color:var(--text-secondary);font-size:13px;margin-top:2px;">' + (tip.event || '') + '</div>';
+          html += '</div>';
+          html += '<div style="text-align:right;">';
+          html += '<div style="font-size:24px;font-weight:900;color:var(--text-primary);">' + oddsDisplay + '</div>';
+          if (tip.market) html += '<div style="font-size:11px;color:var(--text-muted);">' + tip.market + '</div>';
+          html += '</div>';
+          html += '</div>';
+
+          // Stats row
+          if (!isLocked) {
+            html += '<div style="display:flex;gap:16px;font-size:12px;color:var(--text-secondary);margin-bottom:12px;flex-wrap:wrap;">';
+            if (tip.confidence) html += '<span>Conf: <strong>' + tip.confidence + '/10</strong></span>';
+            if (tip.edge) html += '<span>Edge: <strong>' + (tip.edge * 100).toFixed(1) + '%</strong></span>';
+            if (tip.modelProbability) html += '<span>Prob: <strong>' + (tip.modelProbability * 100).toFixed(0) + '%</strong></span>';
+            if (tip.tipsterProfile) html += '<span style="color:var(--gold);">' + tip.tipsterProfile + '</span>';
+            html += '</div>';
+
+            // Analysis
+            if (tip.analysis && tip.analysis.summary) {
+              html += '<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:12px;border-top:1px solid var(--border);padding-top:12px;">' + tip.analysis.summary + '</div>';
+            }
+            if (tip.analysis && tip.analysis.form) {
+              html += '<div style="font-size:12px;color:var(--text-muted);line-height:1.5;">' + tip.analysis.form + '</div>';
+            }
+            if (tip.analysis && tip.analysis.riskNotes) {
+              html += '<div style="font-size:12px;color:#ef4444;margin-top:8px;">' + tip.analysis.riskNotes + '</div>';
+            }
+          } else {
+            html += '<div style="text-align:center;padding:20px;background:rgba(212,168,67,0.05);border-radius:8px;">';
+            html += '<div style="font-size:24px;margin-bottom:8px;">&#128274;</div>';
+            html += '<div style="color:var(--text-secondary);font-size:13px;margin-bottom:12px;">Full analysis available to Premium members</div>';
+            html += '<a href="#/pricing" class="btn btn-gold btn-sm">Unlock Premium</a>';
+            html += '</div>';
+          }
+
+          html += '</div>';
+        });
+      }
+
+      // Results section
+      var results = await this.api('/results');
+      if (results.results) results = results.results;
+      if (!Array.isArray(results)) results = [];
+      var sportResults = results.filter(function(r) { return r.sport === sportKey; }).slice(0, 10);
+
+      if (sportResults.length > 0) {
+        html += '<div style="margin-top:32px;">';
+        html += '<h2 style="color:var(--gold);font-size:20px;margin-bottom:16px;">Recent ' + sportLabel + ' Results</h2>';
+        sportResults.forEach(function(r) {
+          var resultColor = r.result === 'won' ? 'var(--green)' : r.result === 'placed' ? '#60a5fa' : 'var(--red)';
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;">';
+          html += '<div><strong>' + (r.selection || '') + '</strong> <span style="color:var(--text-muted);">' + (r.event || '') + '</span></div>';
+          html += '<div style="display:flex;gap:12px;align-items:center;">';
+          html += '<span>' + (r.odds || '') + '</span>';
+          html += '<span style="color:' + resultColor + ';font-weight:700;text-transform:uppercase;">' + (r.result || '') + '</span>';
+          html += '<span style="color:' + (r.pnl >= 0 ? 'var(--green)' : 'var(--red)') + ';font-weight:700;">' + (r.pnl >= 0 ? '+' : '') + (r.pnl || 0).toFixed(2) + 'u</span>';
+          html += '</div></div>';
+        });
+        html += '</div>';
+      }
+
+      html += '</div>';
+      app.innerHTML = html;
+    } catch (err) {
+      app.innerHTML = '<div class="container"><div class="page-header"><h1>' + sportLabel + ' Tips</h1></div><p style="color:var(--text-secondary);">Unable to load tips. Please try again.</p></div>';
+    }
+  },
+
   // TODAY'S SELECTIONS PAGE
   // -----------------------------------------------------------------------
   async renderSelections() {
