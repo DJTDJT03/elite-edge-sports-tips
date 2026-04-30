@@ -8791,15 +8791,15 @@ const App = {
   // -----------------------------------------------------------------------
   renderWhyEliteEdge() {
     var competitors = [
-      { name: 'Racing Post', price: '£24.99', racing: true, football: 'Basic', ai: false, xg: false, apis: '2', odds: false, value: false, acca: false, steamers: false, alerts: false, going: 'Basic', nonRunner: false, h2h: false, replay: false, chatbot: false, results: 'Partial', calendar: false, drip: false, trial: false, tiers: '1' },
-      { name: 'Timeform', price: '£24.99', racing: true, football: false, ai: false, xg: false, apis: '1', odds: false, value: false, acca: false, steamers: false, alerts: false, going: false, nonRunner: false, h2h: false, replay: false, chatbot: false, results: false, calendar: false, drip: false, trial: true, tiers: '1' },
-      { name: 'Infogol', price: '£4.99', racing: false, football: true, ai: false, xg: 'Basic', apis: '1', odds: false, value: false, acca: false, steamers: false, alerts: false, going: false, nonRunner: false, h2h: 'Basic', replay: false, chatbot: false, results: false, calendar: false, drip: false, trial: true, tiers: '1' },
-      { name: 'OLBG', price: '£9.99', racing: 'Community', football: 'Community', ai: false, xg: false, apis: '0', odds: 'Limited', value: false, acca: false, steamers: false, alerts: false, going: false, nonRunner: false, h2h: false, replay: false, chatbot: false, results: 'User-reported', calendar: false, drip: false, trial: true, tiers: '1' },
+      { name: 'Racing Post', price: '£24.99', racing: true, football: 'Basic', ai: false, xg: false, apis: '2', odds: false, value: false, acca: false, steamers: false, oddsExplainer: false, liveIntel: false, clv: false, alerts: false, going: 'Basic', nonRunner: false, h2h: false, replay: false, chatbot: false, results: 'Partial', calendar: false, drip: false, trial: false, tiers: '1' },
+      { name: 'Timeform', price: '£24.99', racing: true, football: false, ai: false, xg: false, apis: '1', odds: false, value: false, acca: false, steamers: false, oddsExplainer: false, liveIntel: false, clv: false, alerts: false, going: false, nonRunner: false, h2h: false, replay: false, chatbot: false, results: false, calendar: false, drip: false, trial: true, tiers: '1' },
+      { name: 'Infogol', price: '£4.99', racing: false, football: true, ai: false, xg: 'Basic', apis: '1', odds: false, value: false, acca: false, steamers: false, oddsExplainer: false, liveIntel: false, clv: false, alerts: false, going: false, nonRunner: false, h2h: 'Basic', replay: false, chatbot: false, results: false, calendar: false, drip: false, trial: true, tiers: '1' },
+      { name: 'OLBG', price: '£9.99', racing: 'Community', football: 'Community', ai: false, xg: false, apis: '0', odds: 'Limited', value: false, acca: false, steamers: false, oddsExplainer: false, liveIntel: false, clv: false, alerts: false, going: false, nonRunner: false, h2h: false, replay: false, chatbot: false, results: 'User-reported', calendar: false, drip: false, trial: true, tiers: '1' },
     ];
 
     var features = [
       { label: 'Monthly Price', key: 'price', elite: '£19.99' },
-      { label: 'Live Data APIs', key: 'apis', elite: '10' },
+      { label: 'Live Data APIs', key: 'apis', elite: '11' },
       { label: 'Horse Racing Tips', key: 'racing', elite: true },
       { label: 'Football Tips (7 English + 2 Scottish Leagues)', key: 'football', elite: true },
       { label: 'Real xG Data (Understat)', key: 'xg', elite: true },
@@ -8810,6 +8810,9 @@ const App = {
       { label: 'Value Bet Scanner', key: 'value', elite: true },
       { label: 'Smart Acca Generator (2-8 fold)', key: 'acca', elite: true },
       { label: 'Steamer/Drifter Detection', key: 'steamers', elite: true },
+      { label: 'Market Mover Explainer (Live Web AI)', key: 'oddsExplainer', elite: true },
+      { label: 'Live Racing Intelligence (Perplexity AI)', key: 'liveIntel', elite: true },
+      { label: 'CLV Tracking (Closing Line Value)', key: 'clv', elite: true },
       { label: 'Custom Alerts (5 Types)', key: 'alerts', elite: true },
       { label: 'Going Forecast (Weather + Ground)', key: 'going', elite: true },
       { label: 'Non-Runner Auto Detection & Void', key: 'nonRunner', elite: true },
@@ -8846,40 +8849,42 @@ const App = {
     }).join('');
 
     var exclusives = [
-      { icon: '&#129302;', title: 'AI Match Previews', desc: 'Professional analysis from live data — manager names, real xG, form, H2H. No other service uses AI.' },
+      { icon: '&#127760;', title: 'Live Web Intelligence (Perplexity AI)', desc: 'Real-time going updates, team news, stable form, and jockey changes scraped from Racing Post, BBC Sport, and Sporting Life — woven into every tip.' },
+      { icon: '&#128201;', title: 'Market Mover Explainer', desc: 'When odds shorten, we tell you WHY. Gallop reports, connection money, non-runner reshuffles — cited from live racing press.' },
+      { icon: '&#128200;', title: 'CLV Tracking', desc: 'We measure Closing Line Value on every tip. Positive CLV = genuine edge over bookmakers, not just luck. Full transparency.' },
+      { icon: '&#129302;', title: 'Dual AI Engine (Claude + Perplexity)', desc: 'Claude AI writes analysis. Perplexity AI feeds it live web context. Two AI models working together — no other tipping service does this.' },
       { icon: '&#128200;', title: 'Value Bet Scanner', desc: 'Compares odds across 40+ UK bookmakers in real-time. Finds where prices disagree.' },
       { icon: '&#9917;', title: 'Smart Acca Generator', desc: 'Scans every live fixture, ranks by probability, builds 2-8 fold accas automatically.' },
       { icon: '&#128202;', title: 'Real xG Data', desc: 'Understat xG fed directly into our model. Real expected goals, not estimates.' },
       { icon: '&#128293;', title: 'Steamer & Drifter Alerts', desc: 'Know when the market moves on our selections. Shortening = market agrees.' },
       { icon: '&#127793;', title: 'Going Forecast', desc: 'OpenWeather data for every racecourse. Predicted going changes before bookmakers adjust.' },
-      { icon: '&#127942;', title: 'AI Race Replay', desc: 'After every result, AI explains WHY it happened. Pace, going, tactics, draw.' },
+      { icon: '&#127942;', title: 'AI Race Replay', desc: 'After every result, dual AI explains WHY it happened. Live press reports + statistical analysis combined.' },
       { icon: '&#128276;', title: '5 Custom Alert Types', desc: 'Elite confidence, steamers, pre-race, big price, all tips. You control what you receive.' },
       { icon: '&#128274;', title: 'Anti-Sharing Protection', desc: 'One device per account. No password sharing. Every subscription = one person.' },
-      { icon: '&#128172;', title: 'AI Chatbot', desc: 'Ask questions about tips, results, subscriptions. Powered by Claude AI.' },
-      { icon: '&#128232;', title: '14-Day Email Campaign', desc: 'Automated onboarding for new users. Welcome, FOMO, social proof, conversion.' },
-      { icon: '&#127919;', title: '10 Live Data APIs', desc: 'Racing, Football, Odds, Weather, xG, Standings, News, AI, Payments, Email. Always live.' },
+      { icon: '&#128232;', title: 'Automated Email Intelligence', desc: 'Morning bulletins enriched with live racing and football intelligence. Not templates — real context from today\'s cards.' },
+      { icon: '&#127919;', title: '11 Live Data APIs', desc: 'Racing, Football, Odds, Weather, xG, Standings, News, Claude AI, Perplexity AI, Payments, Email. Always live.' },
     ];
 
     document.getElementById('app').innerHTML =
       '<div class="container" style="max-width:1100px;">' +
         '<div style="text-align:center;margin-bottom:20px;">' +
           '<h1 style="font-size:32px;font-weight:900;">Why <span style="color:#d4a843;">Elite Edge</span> Is Different</h1>' +
-          '<p style="color:#8b8d93;font-size:16px;margin-bottom:24px;">The UK\'s most advanced sports analysis platform — 10 live APIs, AI-powered, 42+ features</p>' +
+          '<p style="color:#8b8d93;font-size:16px;margin-bottom:24px;">The UK\'s most advanced sports analysis platform — 11 live APIs, dual AI-powered, 50+ features</p>' +
         '</div>' +
 
         // Stats bar
         '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:32px;">' +
           '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:16px;text-align:center;">' +
-            '<div style="font-size:28px;font-weight:900;color:#d4a843;">10</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Live APIs</div>' +
+            '<div style="font-size:28px;font-weight:900;color:#d4a843;">11</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Live APIs</div>' +
           '</div>' +
           '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:16px;text-align:center;">' +
-            '<div style="font-size:28px;font-weight:900;color:#22c55e;">42+</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Features</div>' +
+            '<div style="font-size:28px;font-weight:900;color:#22c55e;">50+</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Features</div>' +
           '</div>' +
           '<div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:10px;padding:16px;text-align:center;">' +
-            '<div style="font-size:28px;font-weight:900;color:#60a5fa;">14</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Automated Systems</div>' +
+            '<div style="font-size:28px;font-weight:900;color:#60a5fa;">17</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Automated Systems</div>' +
           '</div>' +
           '<div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;padding:16px;text-align:center;">' +
-            '<div style="font-size:28px;font-weight:900;color:#a855f7;">5</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">AI Features</div>' +
+            '<div style="font-size:28px;font-weight:900;color:#a855f7;">2</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">AI Engines</div>' +
           '</div>' +
         '</div>' +
 
