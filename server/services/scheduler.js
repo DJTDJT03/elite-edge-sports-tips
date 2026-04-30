@@ -867,6 +867,79 @@ module.exports = function startScheduler(deps) {
 
     allCandidates = allCandidates.concat(footballCandidates);
 
+    // --- NBA BASKETBALL SELECTIONS ---
+    var basketballCandidates = [];
+    var basketballData = deps.basketballData;
+    if (basketballData && basketballData.isAvailable) {
+      try {
+        console.log('[Auto-Tips] Fetching NBA games...');
+        var nbaGames = await basketballData.getGames(today);
+        var nbaNotStarted = nbaGames.filter(function(g) { return g.status === 'NS'; });
+        console.log('[Auto-Tips] Found ' + nbaNotStarted.length + ' upcoming NBA games');
+
+        if (nbaNotStarted.length > 0) {
+          // Fetch standings once
+          var nbaStandings = [];
+          try { nbaStandings = await basketballData.getStandings(); } catch(e) {}
+
+          // Score each game
+          for (var nbaIdx = 0; nbaIdx < nbaNotStarted.length; nbaIdx++) {
+            var nbaGame = nbaNotStarted[nbaIdx];
+            try {
+              // Fetch team stats and H2H
+              var nbaResults = await Promise.allSettled([
+                basketballData.getTeamStats(nbaGame.homeTeamId),
+                basketballData.getTeamStats(nbaGame.awayTeamId),
+                basketballData.getH2H(nbaGame.homeTeamId, nbaGame.awayTeamId),
+              ]);
+              var nbaHomeStats = nbaResults[0].status === 'fulfilled' ? nbaResults[0].value : null;
+              var nbaAwayStats = nbaResults[1].status === 'fulfilled' ? nbaResults[1].value : null;
+              var nbaH2H = nbaResults[2].status === 'fulfilled' ? nbaResults[2].value : [];
+
+              // Get odds from Odds API if available (look for NBA events)
+              var nbaOdds = {};
+              if (oddsNormalised) {
+                var nbaOddsMatch = oddsNormalised.find(function(o) {
+                  return o.homeTeam && o.awayTeam &&
+                    (o.homeTeam.toLowerCase().indexOf(nbaGame.homeTeam.toLowerCase().split(' ').pop()) !== -1);
+                });
+                if (nbaOddsMatch && nbaOddsMatch.bookmakerOdds) {
+                  var firstBk = Object.keys(nbaOddsMatch.bookmakerOdds)[0];
+                  if (firstBk && nbaOddsMatch.bookmakerOdds[firstBk]) {
+                    var bkData = nbaOddsMatch.bookmakerOdds[firstBk];
+                    nbaOdds.home = bkData[nbaGame.homeTeam] || bkData['1'] || 0;
+                    nbaOdds.away = bkData[nbaGame.awayTeam] || bkData['2'] || 0;
+                  }
+                }
+              }
+
+              var nbaScored = scoringModel.scoreBasketballGame(nbaGame, nbaHomeStats, nbaAwayStats, nbaStandings, nbaH2H, nbaOdds);
+              if (nbaScored && nbaScored.edge > 0.03 && nbaScored.confidence >= 6) {
+                basketballCandidates.push({
+                  type: 'basketball',
+                  scored: nbaScored,
+                  edge: nbaScored.edge,
+                  confidence: nbaScored.confidence,
+                });
+              }
+            } catch (nbaGameErr) {
+              // Skip individual game errors
+            }
+          }
+          console.log('[Auto-Tips] NBA candidates passing filter: ' + basketballCandidates.length);
+        }
+      } catch (nbaErr) {
+        console.error('[Auto-Tips] NBA API error:', nbaErr.message);
+      }
+    }
+
+    // Add best NBA candidate (1 per day to start)
+    if (basketballCandidates.length > 0) {
+      basketballCandidates.sort(function(a, b) { return b.edge - a.edge; });
+      allCandidates.push(basketballCandidates[0]);
+      console.log('[Auto-Tips] NBA pick: ' + basketballCandidates[0].scored.selectedSelection + ' @ ' + basketballCandidates[0].scored.selectedOdds);
+    }
+
     // Sort all candidates by edge descending
     allCandidates.sort(function(a, b) { return b.edge - a.edge; });
 
@@ -926,8 +999,8 @@ module.exports = function startScheduler(deps) {
       }
     }
 
-    // Cap at 5 total (2 racing + 2 football + 1 outsider)
-    selected = selected.slice(0, 5);
+    // Cap at 6 total (2 racing + 2 football + 1 NBA + 1 outsider)
+    selected = selected.slice(0, 6);
 
     // If we have fewer than 3 main tips, try to fill from football
     if (selected.filter(function(s) { return !s._isOutsider; }).length < 3 && footballMain.length > 2) {
@@ -1063,8 +1136,7 @@ module.exports = function startScheduler(deps) {
           bookmakerOdds: {},
           recentForm: recentForm,
         };
-      } else {
-        // Football
+      } else if (sport === 'football') {
         var ftFixture = scored.fixture || {};
         var kickoffDate = ftFixture.kickoff ? new Date(ftFixture.kickoff) : null;
         var kickoffTime = kickoffDate
@@ -1110,6 +1182,38 @@ module.exports = function startScheduler(deps) {
           openingOdds: scored.selectedOdds,
           advisedPriceDecimal: scored.selectedOdds,
           bookmakerOdds: bkOdds,
+          recentForm: [],
+        };
+      } else if (sport === 'basketball') {
+        var bkFixture = scored.fixture || {};
+        tip = {
+          id: tipId,
+          sport: 'basketball',
+          event: (bkFixture.homeTeam || 'Home') + ' vs ' + (bkFixture.awayTeam || 'Away') + ' - NBA',
+          league: 'NBA',
+          kickoff: bkFixture.time || '',
+          venue: bkFixture.venue || '',
+          market: scored.selectedMarket,
+          selection: scored.selectedSelection,
+          odds: scored.selectedOdds,
+          confidence: scored.confidence,
+          modelProbability: scored.modelProbability,
+          impliedProbability: scored.impliedProbability,
+          edge: scored.edge,
+          valueRating: scored.valueRating,
+          isPremium: true,
+          isNap: isNap,
+          status: 'active',
+          result: null,
+          date: today,
+          tipster: 'Elite Edge Model',
+          tipsterProfile: tipsterProfile,
+          staking: scored.staking,
+          riskLevel: scored.riskLevel,
+          analysis: analysis,
+          openingOdds: scored.selectedOdds,
+          advisedPriceDecimal: scored.selectedOdds,
+          bookmakerOdds: {},
           recentForm: [],
         };
       }
@@ -1609,6 +1713,96 @@ module.exports = function startScheduler(deps) {
             }
           }
         } catch (err) { console.error('[Auto-Settle] Football error:', err.message); }
+      }
+
+      // Auto-settle NBA basketball results
+      var basketballDataSvc = deps.basketballData;
+      if (basketballDataSvc && basketballDataSvc.isAvailable) {
+        try {
+          var nbaResults = [];
+          for (var nbi = 0; nbi < datesToSettle.length; nbi++) {
+            try {
+              var dayNbaResults = await basketballDataSvc.getResults(datesToSettle[nbi]);
+              nbaResults = nbaResults.concat(dayNbaResults);
+            } catch (e) { /* individual day optional */ }
+          }
+
+          for (var nbti = 0; nbti < activeTips.length; nbti++) {
+            var nbTip = activeTips[nbti];
+            if (nbTip.sport !== 'basketball') continue;
+
+            var nbMatch = nbaResults.find(function(g) {
+              var eventLower = (nbTip.event || '').toLowerCase();
+              return eventLower.indexOf(g.homeTeam.toLowerCase()) !== -1 ||
+                     eventLower.indexOf(g.awayTeam.toLowerCase()) !== -1;
+            });
+
+            if (nbMatch) {
+              var nbHomeScore = nbMatch.homeScore || 0;
+              var nbAwayScore = nbMatch.awayScore || 0;
+              var nbTotalPoints = nbHomeScore + nbAwayScore;
+              var nbWon = false;
+
+              var nbMarket = (nbTip.market || '').toLowerCase();
+              var nbSelection = (nbTip.selection || '').toLowerCase();
+
+              // Match Winner
+              if (nbMarket.indexOf('winner') !== -1 || nbMarket.indexOf('result') !== -1) {
+                if (nbSelection.indexOf(nbMatch.homeTeam.toLowerCase()) !== -1) nbWon = nbHomeScore > nbAwayScore;
+                else if (nbSelection.indexOf(nbMatch.awayTeam.toLowerCase()) !== -1) nbWon = nbAwayScore > nbHomeScore;
+              }
+              // Over/Under
+              else if (nbMarket.indexOf('over') !== -1) {
+                var nbLine = parseFloat(nbMarket.match(/[\d.]+/)) || 220.5;
+                nbWon = nbTotalPoints > nbLine;
+              } else if (nbMarket.indexOf('under') !== -1) {
+                var nbULine = parseFloat(nbMarket.match(/[\d.]+/)) || 220.5;
+                nbWon = nbTotalPoints < nbULine;
+              }
+
+              var nbResultVal = nbWon ? 'won' : 'lost';
+              var nbStake = parseFloat(nbTip.staking) || 2;
+              var nbPnl = nbWon ? ((nbTip.odds - 1) * nbStake) : -nbStake;
+
+              // Check for duplicate
+              var nbAllResults = await db.getResults();
+              var nbAlready = nbAllResults.some(function(r) {
+                return r.selection === nbTip.selection && normDate(r.date) === normDate(nbTip.date);
+              });
+              if (nbAlready) {
+                if (nbTip.status === 'active') await db.updateTip(nbTip.id, { status: 'settled' });
+                continue;
+              }
+
+              await db.updateTip(nbTip.id, {
+                status: 'settled', result: nbResultVal,
+                settledAt: new Date().toISOString(),
+                settlementSource: 'auto-basketball-api',
+              });
+
+              await db.createResult({
+                id: 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                tipId: nbTip.id, sport: 'basketball', event: nbTip.event, selection: nbTip.selection,
+                market: nbTip.market, odds: nbTip.odds, stake: nbStake,
+                result: nbResultVal, pnl: Math.round(nbPnl * 100) / 100,
+                date: nbTip.date, isPremium: nbTip.isPremium, tipsterProfile: nbTip.tipsterProfile || 'The Edge',
+                confidence: nbTip.confidence,
+              });
+              updated++;
+              console.log('[Auto-Settle] NBA: ' + nbTip.selection + ' (' + nbMatch.homeTeam + ' ' + nbHomeScore + '-' + nbAwayScore + ' ' + nbMatch.awayTeam + ') = ' + nbResultVal + ' (' + nbPnl.toFixed(2) + 'u)');
+
+              // Telegram for wins
+              if (telegramBot && telegramBot.isAvailable() && nbWon) {
+                try {
+                  await telegramBot.sendResult({
+                    selection: nbTip.selection, odds: nbTip.odds, result: nbResultVal,
+                    pnl: Math.round(nbPnl * 100) / 100, event: nbTip.event,
+                  });
+                } catch (tgErr) { /* non-fatal */ }
+              }
+            }
+          }
+        } catch (err) { console.error('[Auto-Settle] NBA error:', err.message); }
       }
 
       if (updated > 0) {

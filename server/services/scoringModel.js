@@ -1280,9 +1280,145 @@ class ScoringModel {
   generateAnalysis(scored, sport, enrichment) {
     if (sport === 'racing') {
       return this._generateRacingAnalysis(scored, enrichment);
+    } else if (sport === 'basketball') {
+      return this._generateBasketballAnalysis(scored, enrichment);
     } else {
       return this._generateFootballAnalysis(scored, enrichment);
     }
+  }
+
+  /**
+   * Score an NBA game for a specific market.
+   *
+   * @param {object} game - Normalised game from basketballData
+   * @param {object} homeStats - Team stats for home team
+   * @param {object} awayStats - Team stats for away team
+   * @param {Array} standings - League standings
+   * @param {Array} h2h - Head to head results
+   * @param {object} odds - Odds data {home, away, over, under}
+   * @returns {object|null} Scored selection
+   */
+  scoreBasketballGame(game, homeStats, awayStats, standings, h2h, odds) {
+    if (!game || !game.homeTeam || !game.awayTeam) return null;
+
+    var factors = {};
+
+    // 1. Form (25%) — recent win/loss record
+    var homeForm = homeStats ? (homeStats.wins / Math.max(homeStats.games, 1)) : 0.5;
+    var awayForm = awayStats ? (awayStats.wins / Math.max(awayStats.games, 1)) : 0.5;
+    factors.form = Math.min(Math.max(homeForm, awayForm), 1.0);
+
+    // 2. Home/Away advantage (15%) — NBA home court is ~60% win rate
+    var homeWinPct = homeStats ? (homeStats.wins / Math.max(homeStats.games, 1)) : 0.5;
+    factors.homeAway = Math.min(homeWinPct * 1.2, 1.0);
+
+    // 3. Points scored (20%) — offensive strength
+    var homePPG = homeStats && homeStats.pointsFor ? parseFloat(homeStats.pointsFor.average) || 105 : 105;
+    var awayPPG = awayStats && awayStats.pointsFor ? parseFloat(awayStats.pointsFor.average) || 105 : 105;
+    var avgPPG = (homePPG + awayPPG) / 2;
+    factors.offence = Math.min(avgPPG / 120, 1.0); // 120 PPG is elite
+
+    // 4. Points allowed (15%) — defensive strength
+    var homePA = homeStats && homeStats.pointsAgainst ? parseFloat(homeStats.pointsAgainst.average) || 108 : 108;
+    var awayPA = awayStats && awayStats.pointsAgainst ? parseFloat(awayStats.pointsAgainst.average) || 108 : 108;
+    factors.defence = Math.min(1 - (Math.min(homePA, awayPA) / 130), 1.0);
+
+    // 5. H2H (10%)
+    if (h2h && h2h.length > 0) {
+      var homeH2HWins = h2h.filter(function(g) {
+        return (g.homeTeam === game.homeTeam && g.homeScore > g.awayScore) ||
+               (g.awayTeam === game.homeTeam && g.awayScore > g.homeScore);
+      }).length;
+      factors.h2h = h2h.length > 0 ? homeH2HWins / h2h.length : 0.5;
+    } else {
+      factors.h2h = 0.5;
+    }
+
+    // 6. Standings position (15%) — conference ranking
+    var homeStanding = standings ? standings.find(function(s) { return s.team === game.homeTeam; }) : null;
+    var awayStanding = standings ? standings.find(function(s) { return s.team === game.awayTeam; }) : null;
+    var homeRank = homeStanding ? homeStanding.winPct : 0.5;
+    var awayRank = awayStanding ? awayStanding.winPct : 0.5;
+    factors.standings = Math.max(homeRank, awayRank);
+
+    // Weighted composite score
+    var weights = { form: 0.25, homeAway: 0.15, offence: 0.20, defence: 0.15, h2h: 0.10, standings: 0.15 };
+    var composite = 0;
+    for (var key in weights) {
+      composite += (factors[key] || 0.5) * weights[key];
+    }
+
+    // Determine best market
+    var markets = [];
+    var expectedTotal = homePPG + awayPPG;
+
+    // Match winner
+    if (homeForm > awayForm + 0.1 && homeRank > awayRank) {
+      var homeOdds = odds && odds.home ? parseFloat(odds.home) : 0;
+      if (homeOdds >= 1.8) {
+        var homeImplied = homeOdds > 0 ? 1 / homeOdds : 0.5;
+        markets.push({ market: 'Match Winner', selection: game.homeTeam, odds: homeOdds, modelProb: composite, impliedProb: homeImplied });
+      }
+    } else if (awayForm > homeForm + 0.1) {
+      var awayOdds = odds && odds.away ? parseFloat(odds.away) : 0;
+      if (awayOdds >= 1.8) {
+        var awayImplied = awayOdds > 0 ? 1 / awayOdds : 0.5;
+        markets.push({ market: 'Match Winner', selection: game.awayTeam, odds: awayOdds, modelProb: 1 - composite, impliedProb: awayImplied });
+      }
+    }
+
+    // Over/Under totals
+    if (expectedTotal > 220) {
+      var overOdds = odds && odds.over ? parseFloat(odds.over) : 0;
+      if (overOdds >= 1.8) {
+        var overProb = Math.min((expectedTotal - 210) / 30, 0.75);
+        var overImplied = overOdds > 0 ? 1 / overOdds : 0.5;
+        markets.push({ market: 'Over 220.5 Points', selection: 'Over 220.5', odds: overOdds, modelProb: overProb, impliedProb: overImplied });
+      }
+    } else if (expectedTotal < 210) {
+      var underOdds = odds && odds.under ? parseFloat(odds.under) : 0;
+      if (underOdds >= 1.8) {
+        var underProb = Math.min((220 - expectedTotal) / 30, 0.75);
+        var underImplied = underOdds > 0 ? 1 / underOdds : 0.5;
+        markets.push({ market: 'Under 220.5 Points', selection: 'Under 220.5', odds: underOdds, modelProb: underProb, impliedProb: underImplied });
+      }
+    }
+
+    if (markets.length === 0) return null;
+
+    // Pick market with best edge
+    markets.forEach(function(m) {
+      m.edge = m.modelProb - m.impliedProb;
+    });
+    markets.sort(function(a, b) { return b.edge - a.edge; });
+    var best = markets[0];
+
+    if (best.edge < 0.02) return null; // Not enough edge
+
+    var confidence = Math.min(Math.round(composite * 10), 10);
+    if (confidence < 6) confidence = 6;
+
+    var staking = best.odds < 2.5 ? '1.5 units' : best.odds < 4 ? '1 unit' : '0.75 units';
+    var riskLevel = best.odds < 2.5 ? 'Low' : best.odds < 4 ? 'Medium' : 'High';
+    var valueRating = best.edge >= 0.10 ? 'Strong' : best.edge >= 0.05 ? 'Fair' : 'Slight';
+
+    return {
+      fixture: game,
+      selectedMarket: best.market,
+      selectedSelection: best.selection,
+      selectedOdds: best.odds,
+      modelProbability: best.modelProb,
+      impliedProbability: best.impliedProb,
+      edge: best.edge,
+      confidence: confidence,
+      valueRating: valueRating,
+      staking: staking,
+      riskLevel: riskLevel,
+      factors: factors,
+      homeStats: homeStats,
+      awayStats: awayStats,
+      expectedTotal: expectedTotal,
+    };
   }
 
   _generateRacingAnalysis(scored, enrichment) {
@@ -1453,6 +1589,68 @@ class ScoringModel {
       xG: `Model analysis based on expected goals and recent attacking/defensive metrics for both sides.`,
       injuries: injuryText,
       headToHead: h2hText,
+      riskNotes: riskNotes,
+    };
+  }
+  _generateBasketballAnalysis(scored, enrichment) {
+    const fixture = scored.fixture || {};
+    const home = fixture.homeTeam || 'Home';
+    const away = fixture.awayTeam || 'Away';
+    const market = scored.selectedMarket || 'Market';
+    const selection = scored.selectedSelection || 'Selection';
+    const odds = scored.selectedOdds || 0;
+    const edge = scored.edge || 0;
+    const edgePct = (edge * 100).toFixed(1);
+    const modelProb = scored.modelProbability || 0;
+    const impliedProb = scored.impliedProbability || 0;
+    const modelPct = (modelProb * 100).toFixed(0);
+    const impliedPct = (impliedProb * 100).toFixed(0);
+    const factors = scored.factors || {};
+    const expectedTotal = scored.expectedTotal || 0;
+    const homeStats = scored.homeStats || {};
+    const awayStats = scored.awayStats || {};
+    const sig = enrichment || {};
+    const sv = (key) => sig[key] ? sig[key].value.trim() : '';
+
+    let keyReason = '';
+    if (factors.offence >= 0.7) keyReason = 'Offensive output is the standout factor';
+    else if (factors.form >= 0.7) keyReason = 'Recent form drives this selection';
+    else if (factors.standings >= 0.7) keyReason = 'Conference positioning makes the difference';
+    else if (factors.homeAway >= 0.7) keyReason = 'Home court advantage is significant here';
+    else keyReason = 'Multiple factors align to provide an edge';
+
+    const isMatchWinner = market.toLowerCase().includes('winner');
+    const isOver = market.toLowerCase().includes('over');
+    const isUnder = market.toLowerCase().includes('under');
+
+    let formText = '';
+    const homePPG = homeStats.pointsFor ? parseFloat(homeStats.pointsFor.average) || 0 : 0;
+    const awayPPG = awayStats.pointsFor ? parseFloat(awayStats.pointsFor.average) || 0 : 0;
+    const homePA = homeStats.pointsAgainst ? parseFloat(homeStats.pointsAgainst.average) || 0 : 0;
+    const awayPA = awayStats.pointsAgainst ? parseFloat(awayStats.pointsAgainst.average) || 0 : 0;
+
+    if (isMatchWinner) {
+      formText = `${home} averaging ${homePPG.toFixed(1)} PPG, conceding ${homePA.toFixed(1)}. ${away} averaging ${awayPPG.toFixed(1)} PPG, conceding ${awayPA.toFixed(1)}.`;
+    } else if (isOver || isUnder) {
+      formText = `Combined expected total of ${expectedTotal.toFixed(0)} points. ${home} averaging ${homePPG.toFixed(1)} PPG and ${away} averaging ${awayPPG.toFixed(1)} PPG. ${isOver ? 'Both offences support the over.' : 'Defensive matchup favours the under.'}`;
+    } else {
+      formText = `${home} and ${away} both bring strong records into this matchup.`;
+    }
+
+    if (sig.team_news) formText += ' ' + sv('team_news');
+
+    const riskNotes = odds < 2
+      ? 'Short price reflects the favourite status. Main risk is an off night or load management.'
+      : odds < 3.5
+        ? 'Fair price for a competitive matchup. Rest days and back-to-back scheduling could be a factor.'
+        : 'Bigger price carries more risk but the value is clear based on our model.';
+
+    return {
+      summary: `${home} vs ${away} in the NBA. Our model gives ${selection} a ${modelPct}% probability against the market's ${impliedPct}%. ${keyReason}. Edge: ${edgePct}%.`,
+      form: formText,
+      offence: `${home}: ${homePPG.toFixed(1)} PPG | ${away}: ${awayPPG.toFixed(1)} PPG. Combined expected total: ${expectedTotal.toFixed(0)} points.`,
+      defence: `${home} conceding ${homePA.toFixed(1)} PPG | ${away} conceding ${awayPA.toFixed(1)} PPG.`,
+      headToHead: `Recent meetings between ${home} and ${away} factored into H2H analysis.`,
       riskNotes: riskNotes,
     };
   }
