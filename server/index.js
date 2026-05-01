@@ -566,6 +566,63 @@ app.use('/', require('./routes/public')(deps));
   }
 })();
 
+// ---------------------------------------------------------------------------
+// Startup: migrate existing users — credits, referral codes, monthly allowances
+// ---------------------------------------------------------------------------
+(async function migrateCredits() {
+  try {
+    if (!db.isAvailable()) return;
+    var users = await db.getUsers();
+    var migrated = 0;
+    var crypto = require('crypto');
+    for (var i = 0; i < users.length; i++) {
+      var u = users[i];
+      var updates = {};
+      var needsUpdate = false;
+
+      // Generate referral code if missing
+      if (!u.referralCode) {
+        var namePart = (u.name || 'user').split(' ')[0].toLowerCase().replace(/[^a-z]/g, '').substring(0, 6);
+        updates.referralCode = namePart + '_' + Date.now().toString(36).slice(-4) + i;
+        needsUpdate = true;
+      }
+
+      // Set credits based on subscription tier if not already set
+      if (u.subscription === 'vip' && u.creditsMonthlyAllowance !== 999999) {
+        updates.credits = 999999;
+        updates.creditsMonthlyAllowance = 999999;
+        needsUpdate = true;
+      } else if (u.subscription === 'premium' && u.creditsMonthlyAllowance !== 120) {
+        updates.credits = 120;
+        updates.creditsMonthlyAllowance = 120;
+        var resetDate = new Date();
+        resetDate.setMonth(resetDate.getMonth() + 1);
+        updates.creditsResetDate = resetDate.toISOString().split('T')[0];
+        needsUpdate = true;
+      } else if (u.subscription === 'starter' && u.creditsMonthlyAllowance !== 40) {
+        updates.credits = 40;
+        updates.creditsMonthlyAllowance = 40;
+        var resetDate2 = new Date();
+        resetDate2.setMonth(resetDate2.getMonth() + 1);
+        updates.creditsResetDate = resetDate2.toISOString().split('T')[0];
+        needsUpdate = true;
+      } else if (u.subscription === 'free' && !u.credits && u.credits !== 0) {
+        updates.credits = 5;
+        updates.creditsMonthlyAllowance = 0;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        await db.updateUser(u.id, updates);
+        migrated++;
+      }
+    }
+    if (migrated > 0) console.log('[Startup] Migrated credits/referrals for ' + migrated + ' user(s)');
+  } catch (e) {
+    console.log('[Startup] Credit migration skipped:', e.message);
+  }
+})();
+
 // Cleanup: remove excess tips for today (keep max 9 per day)
 (async function capDailyTips() {
   try {
