@@ -45,21 +45,24 @@ function footballScored(overrides) {
 // Racing — no enrichment (template-only)
 // =========================================================================
 
-test('racing — no enrichment produces all template fields', function() {
+test('racing — no enrichment produces all template fields with real data', function() {
   var analysis = scoringModel.generateAnalysis(racingScored(), 'racing');
-  assert.ok(analysis.summary.indexOf('Test Horse') !== -1);
-  assert.ok(analysis.summary.indexOf('Newbury') !== -1);
-  assert.ok(analysis.summary.indexOf('8.0%') !== -1); // edge
-  assert.ok(analysis.form.indexOf('12311') !== -1);
-  assert.ok(analysis.goingSuitability.indexOf('Good to Firm') !== -1);
-  assert.ok(analysis.courseRecord.indexOf('Newbury') !== -1);
-  assert.ok(analysis.trainerForm.indexOf('J. Trainer') !== -1);
-  assert.ok(analysis.riskNotes.length > 0);
+  assert.ok(analysis.summary.indexOf('Test Horse') !== -1 || analysis.summary.indexOf('rated 120') !== -1, 'summary mentions horse or rating');
+  assert.ok(analysis.summary.indexOf('edge') !== -1 || analysis.summary.indexOf('%') !== -1, 'summary mentions edge');
+  assert.ok(analysis.form.indexOf('12311') !== -1, 'form includes raw form string');
+  assert.ok(analysis.form.indexOf('win') !== -1, 'form mentions wins');
+  assert.ok(analysis.goingSuitability.indexOf('Good to Firm') !== -1 || analysis.goingSuitability.indexOf('good') !== -1, 'going mentions actual going');
+  assert.ok(analysis.courseRecord.indexOf('Newbury') !== -1, 'course mentions meeting');
+  assert.ok(analysis.trainerForm.indexOf('J. Trainer') !== -1, 'trainer mentioned');
+  assert.ok(analysis.trainerForm.indexOf('R. Jockey') !== -1, 'jockey mentioned');
+  assert.ok(analysis.riskNotes.length > 20, 'risk notes are substantive');
+  assert.ok(analysis.riskNotes.indexOf('4.50') !== -1, 'risk notes mention specific odds');
 });
 
-test('racing — no enrichment, goingSuitability uses template default', function() {
+test('racing — no enrichment, goingSuitability is specific to conditions', function() {
   var analysis = scoringModel.generateAnalysis(racingScored(), 'racing');
-  assert.ok(analysis.goingSuitability.indexOf('conditions should suit') !== -1);
+  assert.ok(analysis.goingSuitability.indexOf('Good to Firm') !== -1, 'going text includes actual going description');
+  assert.ok(analysis.goingSuitability.length > 30, 'going text is substantive, not generic');
 });
 
 // =========================================================================

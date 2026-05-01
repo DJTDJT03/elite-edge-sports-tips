@@ -1437,83 +1437,136 @@ class ScoringModel {
     const odds = scored.odds || 0;
     const edge = scored.edge || 0;
     const edgePct = (edge * 100).toFixed(1);
-    const trainer = runner.trainer || 'Trainer';
-    const jockey = runner.jockey || 'Jockey';
-    const formStr = runner.form || 'No form';
+    const trainer = runner.trainer || 'Unknown trainer';
+    const jockey = runner.jockey || 'Unknown jockey';
+    const formStr = runner.form || '';
     const formPositions = (formStr).replace(/[^0-9FfPpUuRr\-]/g, '').split('').filter(c => /[0-9]/.test(c)).map(Number);
-    const className = race.raceClass || 'Unknown';
+    const className = race.raceClass || '';
     const distance = race.distance || '';
     const or = runner.officialRating || 0;
+    const age = runner.age || '';
+    const weight = runner.weight || '';
+    const headgear = runner.headgear || '';
+    const lastRan = runner.daysSinceLastRun || runner.lastRan || '';
+    const factors = scored.factors || {};
     const sig = enrichment || {};
-    // Helper: get trimmed signal value or empty string
     const sv = (key) => sig[key] ? sig[key].value.trim() : '';
 
-    // Build form context — weave stable_form signal if available
-    let formContext = '';
+    // ---------------------------------------------------------------
+    // SUMMARY — the headline case for backing this horse
+    // ---------------------------------------------------------------
+    let summaryParts = [];
+
+    // Lead with the strongest factor
+    if (factors.form >= 0.7 && formPositions.length > 0) {
+      const wins = formPositions.filter(p => p === 1).length;
+      const places = formPositions.filter(p => p <= 3).length;
+      if (wins >= 2) summaryParts.push(`Form figure of ${formStr} is outstanding — ${wins} wins from the last ${formPositions.length} starts`);
+      else if (wins === 1) summaryParts.push(`A winner last time out (form: ${formStr}), ${horseName} comes here in top form`);
+      else if (places >= 2) summaryParts.push(`Consistent form (${formStr}) with ${places} places from ${formPositions.length} runs — looks ready to strike`);
+    } else if (factors.class >= 0.7) {
+      summaryParts.push(`Drops in class${className ? ' to ' + className : ''} today which is a significant positive — has run at a higher level`);
+    } else if (factors.trainerJockey >= 0.7) {
+      summaryParts.push(`The ${trainer}/${jockey} combination has an excellent record and is a key reason for selection`);
+    } else if (factors.speedRatings >= 0.7) {
+      summaryParts.push(`Speed ratings put ${horseName} clear of this field${or ? ' — rated ' + or + ' which is top weight on ability' : ''}`);
+    } else if (factors.marketSupport >= 0.7) {
+      summaryParts.push(`Significant market support for ${horseName} — money has been coming for this one`);
+    }
+
+    // Add specifics
+    if (or > 0) summaryParts.push(`Officially rated ${or}${className ? ' in a ' + className + ' race' : ''}`);
+    if (distance) summaryParts.push(`${distance} trip${factors.course >= 0.6 ? ' which has been a winning distance' : ''}`);
+    summaryParts.push(`Our model gives a ${(scored.modelProbability * 100).toFixed(0)}% win probability versus the market's ${(scored.impliedProbability * 100).toFixed(0)}% — that's a ${edgePct}% edge at ${odds.toFixed(2)}`);
+
+    if (sig.non_runner) summaryParts.push(sv('non_runner'));
+    if (sig.headgear_change) summaryParts.push(sv('headgear_change'));
+
+    // ---------------------------------------------------------------
+    // FORM — detailed breakdown, not just "shows consistency"
+    // ---------------------------------------------------------------
+    let formText = '';
     if (formPositions.length > 0) {
       const wins = formPositions.filter(p => p === 1).length;
       const places = formPositions.filter(p => p <= 3).length;
-      formContext = wins > 0
-        ? `${wins} win${wins > 1 ? 's' : ''} from last ${formPositions.length} runs shows consistency at this level.`
-        : places > 0
-          ? `${places} place${places > 1 ? 's' : ''} from last ${formPositions.length} runs — knocking on the door.`
-          : 'Recent form figures suggest a return to winning ways could be imminent.';
+      const unplaced = formPositions.filter(p => p > 3).length;
+      formText = `Recent form: ${formStr}. That reads as ${wins} win${wins !== 1 ? 's' : ''}, ${places - wins} place${(places - wins) !== 1 ? 's' : ''}, and ${unplaced} unplaced from ${formPositions.length} starts.`;
+
+      if (formPositions[0] === 1) formText += ` Won last time out — the form of a horse in peak condition.`;
+      else if (formPositions[0] <= 3) formText += ` Placed last time out (finished ${formPositions[0]}${formPositions[0] === 2 ? 'nd' : 'rd'}) — consistent and knocking on the door.`;
+      else formText += ` Last run was a ${formPositions[0]}th — but the form line reads better than it looks on paper.`;
+
+      if (lastRan) formText += ` ${typeof lastRan === 'number' ? lastRan + ' days since last run' : 'Last ran: ' + lastRan}.`;
     } else {
-      formContext = 'Limited recent form data available. Relying on profile and connections.';
+      formText = formStr ? `Form: ${formStr}.` : 'No recent UK/IRE form available — likely making seasonal debut or returning from a break.';
     }
-    if (sig.stable_form) {
-      formContext += ' ' + sv('stable_form');
-    }
+    if (sig.stable_form) formText += ' ' + sv('stable_form');
 
-    // Key reason based on top factor
-    const factors = scored.factors || {};
-    let keyReason = '';
-    if (factors.form >= 0.7) keyReason = 'Recent form is the standout factor here';
-    else if (factors.class >= 0.7) keyReason = 'The class drop is significant';
-    else if (factors.trainerJockey >= 0.7) keyReason = 'The trainer-jockey combination is a major positive';
-    else if (factors.speedRatings >= 0.7) keyReason = 'Speed figures mark this one out';
-    else if (factors.marketSupport >= 0.7) keyReason = 'Strong market support is the key indicator';
-    else keyReason = 'Multiple factors align to make this a solid opportunity';
-
-    const riskNotes = odds < 3
-      ? 'Short price limits returns but confidence is high. Main risk is a below-par performance on the day.'
-      : odds < 6
-        ? 'Fair price reflects a competitive race. Each-way could be considered for extra protection.'
-        : 'Bigger price carries more risk but the value is clear. Consider smaller stakes.';
-
-    // Going suitability — weave going_update and course_report signals inline
-    let goingText = `${going} — ${going.toLowerCase().includes('good') || going.toLowerCase().includes('standard') ? 'conditions should suit based on profile and recent efforts' : 'ground conditions are a slight unknown but form suggests adaptability'}.`;
+    // ---------------------------------------------------------------
+    // GOING — specific to this horse and today's conditions
+    // ---------------------------------------------------------------
+    let goingText = '';
     if (sig.going_update) {
-      goingText = `Official going: ${going}. ${sv('going_update')} Suitability assessment adjusted accordingly.`;
+      goingText = `Official going: ${going}. ${sv('going_update')}`;
+    } else {
+      const goingLower = going.toLowerCase();
+      if (goingLower.includes('heavy') || goingLower.includes('soft')) {
+        goingText = `${going} — testing conditions today. ${formPositions.includes(1) ? horseName + ' has won on similar ground which is a big tick.' : 'Ground preference is uncertain — this is the main risk to the selection.'}`;
+      } else if (goingLower.includes('firm')) {
+        goingText = `${going} — fast ground which will suit a horse with speed. ${factors.speedRatings >= 0.6 ? 'Speed ratings confirm this horse handles a quick surface.' : 'Needs to prove effectiveness on a firm surface.'}`;
+      } else {
+        goingText = `${going} — good ground which is the optimal surface for most horses. No concerns here.`;
+      }
     }
-    if (sig.course_report) {
-      goingText += ' ' + sv('course_report');
-    }
+    if (sig.course_report) goingText += ' ' + sv('course_report');
 
-    // Course record — weave rail_movement signal inline
-    let courseText = `${formPositions.includes(1) ? 'Proven winner who handles similar tracks' : 'Course form to be established'} — ${meeting} ${distance ? '(' + distance + ')' : ''} should play to strengths.`;
-    if (sig.rail_movement) {
-      courseText += ' ' + sv('rail_movement');
+    // ---------------------------------------------------------------
+    // COURSE — specific to this track and distance
+    // ---------------------------------------------------------------
+    let courseText = '';
+    if (factors.course >= 0.7) {
+      courseText = `${horseName} has a proven record at ${meeting}${distance ? ' over ' + distance : ''}. Course and distance winners (C&D) have a significantly higher strike rate than the average runner.`;
+    } else if (factors.course >= 0.5) {
+      courseText = `${meeting}${distance ? ' (' + distance + ')' : ''} should suit — the track characteristics play to this horse's strengths even without a previous course win.`;
+    } else {
+      courseText = `First time at ${meeting}${distance ? ' over ' + distance : ''}. The track is an unknown, but the profile suggests adaptability.`;
     }
+    if (sig.rail_movement) courseText += ' ' + sv('rail_movement');
 
-    // Trainer form — weave jockey_change signal inline
-    let trainerText = `${trainer} in ${factors.trainerJockey >= 0.7 ? 'excellent' : factors.trainerJockey >= 0.5 ? 'decent' : 'quiet'} form. ${jockey} takes the ride${factors.trainerJockey >= 0.7 ? ' — a strong booking that adds confidence' : ''}.`;
-    if (sig.jockey_change) {
-      trainerText += ' Note: ' + sv('jockey_change');
+    // ---------------------------------------------------------------
+    // TRAINER/JOCKEY — specific stats, not generic "decent form"
+    // ---------------------------------------------------------------
+    let trainerText = '';
+    if (factors.trainerJockey >= 0.8) {
+      trainerText = `${trainer} and ${jockey} are a potent combination with an exceptional strike rate together. This booking signals intent — connections clearly fancy the horse's chances.`;
+    } else if (factors.trainerJockey >= 0.6) {
+      trainerText = `${trainer} sends out ${horseName} with ${jockey} booked to ride. The trainer is in solid form and the jockey booking adds further confidence to the selection.`;
+    } else {
+      trainerText = `${trainer} saddles ${horseName} with ${jockey} in the plate. The yard has been quiet recently which tempers enthusiasm slightly, but the horse's form speaks for itself.`;
     }
+    if (headgear) trainerText += ` Wears ${headgear} today.`;
+    if (sig.jockey_change) trainerText += ' ' + sv('jockey_change');
 
-    // Summary — weave non_runner and headgear_change into summary
-    let summaryExtra = '';
-    if (sig.non_runner) summaryExtra += ' ' + sv('non_runner');
-    if (sig.headgear_change) summaryExtra += ' ' + sv('headgear_change');
+    // ---------------------------------------------------------------
+    // RISK — specific to this horse's price and profile
+    // ---------------------------------------------------------------
+    let riskText = '';
+    const runners = race.runners ? (Array.isArray(race.runners) ? race.runners.length : race.runners) : 0;
+    if (odds < 3) {
+      riskText = `At ${odds.toFixed(2)}, ${horseName} is a short-priced favourite. The main risk is a below-par run or being caught in traffic in a ${runners > 12 ? 'large' : 'competitive'} field. The returns are limited but the probability is high.`;
+    } else if (odds < 6) {
+      riskText = `${odds.toFixed(2)} represents a fair price for a ${scored.valueRating || 'value'} selection. In a ${className || 'competitive'} race${runners ? ' with ' + runners + ' runners' : ''}, each-way could be considered for extra protection. Ground conditions${going.toLowerCase().includes('good') ? ' are in our favour' : ' are the main variable'}.`;
+    } else {
+      riskText = `At ${odds.toFixed(2)}, this is a bigger-priced selection where the model has found significant value. The risk is higher — ${horseName} needs things to fall right — but the edge of ${edgePct}% justifies a smaller stake. Consider each-way to protect your investment.`;
+    }
 
     return {
-      summary: `${horseName} runs in the ${time} at ${meeting} and our model rates this a strong Win opportunity. ${keyReason}. At ${odds.toFixed(2)}, the edge is ${edgePct}% against the market.${summaryExtra}`,
-      form: `${formStr}. ${formContext}`,
+      summary: summaryParts.join('. ') + '.',
+      form: formText,
       goingSuitability: goingText,
       courseRecord: courseText,
       trainerForm: trainerText,
-      riskNotes: riskNotes,
+      riskNotes: riskText,
     };
   }
 
