@@ -3125,6 +3125,7 @@ const App = {
             ${tip.isOutsider ? '<span class="badge-outsider">Outsider</span>' : `<span class="${tip.isPremium ? 'badge-premium' : 'badge-free'}">${tip.isPremium ? 'Premium' : 'Free'}</span>`}
             ${tip.valueRating ? `<span class="badge-premium">${tip.valueRating}</span>` : ''}
             ${tip.tipsterProfile ? `<span class="analyst-badge ${tip.tipsterProfile === 'The Professor' ? 'professor' : tip.tipsterProfile === 'The Scout' ? 'scout' : 'edge'}">${tip.tipsterProfile}</span>` : ''}
+            ${tip.analysis && tip.analysis.dualAIVerified ? '<span style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;letter-spacing:0.5px;">DUAL AI VERIFIED</span>' : ''}
           </div>
           <div>
             <div class="tip-odds">${tip.locked ? '?.??' : this.formatOdds(tip.odds)} ${!isLocked ? this.renderOddsMovement(tip.odds, tip.openingOdds) : ''}</div>
@@ -5611,6 +5612,7 @@ const App = {
               if (tip.analysis.courseRecord) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Course:</strong> ' + tip.analysis.courseRecord + '</div>';
               if (tip.analysis.trainerForm) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Trainer:</strong> ' + tip.analysis.trainerForm + '</div>';
               if (tip.analysis.oddsMovement) tipsHtml += '<div style="margin-bottom:8px;background:rgba(34,197,94,0.08);border-left:3px solid #22c55e;padding:8px 12px;border-radius:4px;"><strong style="color:#22c55e;">Market Mover:</strong> ' + tip.analysis.oddsMovement + '</div>';
+              if (tip.analysis.dualAIVerified) tipsHtml += '<div style="margin-bottom:8px;background:rgba(34,197,94,0.06);border-left:3px solid #22c55e;padding:8px 12px;border-radius:4px;"><strong style="color:#22c55e;">Dual AI Verified:</strong> GPT independently rates this ' + (tip.analysis.gptConfidence || '?') + '/10 confidence. ' + (tip.analysis.gptReasoning || '') + '</div>';
               if (tip.analysis.riskNotes) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#ef4444;">Risk:</strong> ' + tip.analysis.riskNotes + '</div>';
             }
             tipsHtml += '</div>';

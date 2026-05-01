@@ -1326,6 +1326,35 @@ module.exports = function startScheduler(deps) {
         }
       }
 
+      // GPT Consensus Verification — independent second opinion from OpenAI
+      var gptVerification = { consensus: false, dualAIVerified: false };
+      var gptVerifier = deps.gptVerifier;
+      if (gptVerifier && gptVerifier.isAvailable) {
+        try {
+          // Build a preview tip object for GPT to evaluate
+          var previewTip = {
+            selection: sport === 'racing' ? (scored.runner || {}).horseName : (scored.selectedSelection || ''),
+            event: sport === 'racing' ? ((scored.race || {}).meeting + ' ' + ((scored.race || {}).time || '')) : ((scored.fixture || {}).homeTeam + ' vs ' + (scored.fixture || {}).awayTeam),
+            market: sport === 'racing' ? (isOutsider ? 'Each-Way' : 'Win') : (scored.selectedMarket || ''),
+            odds: sport === 'racing' ? scored.odds : (scored.selectedOdds || 0),
+            modelProbability: scored.modelProbability,
+            impliedProbability: scored.impliedProbability,
+            edge: scored.edge,
+            confidence: scored.confidence,
+            sport: sport,
+            analysis: analysis,
+          };
+          gptVerification = await gptVerifier.verifyTip(previewTip, scored);
+          if (gptVerification.dualAIVerified) {
+            analysis.dualAIVerified = true;
+            analysis.gptConfidence = gptVerification.gptConfidence;
+            analysis.gptReasoning = gptVerification.gptReasoning;
+          }
+        } catch (gptErr) {
+          // Non-fatal — tip publishes without verification badge
+        }
+      }
+
       var tip;
       if (sport === 'racing') {
         var runner = scored.runner || {};

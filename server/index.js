@@ -31,6 +31,7 @@ const basketballData = require('./services/basketballData');
 const rugbyData = require('./services/rugbyData');
 const nflData = require('./services/americanFootballData');
 const tennisData = require('./services/tennisData');
+const gptVerifier = require('./services/gptVerifier');
 const perplexityClient = require('./services/perplexity/client')(db);
 
 // Utilities
@@ -125,6 +126,7 @@ const deps = {
   rugbyData,
   nflData,
   tennisData,
+  gptVerifier,
   perplexityClient,
 };
 
