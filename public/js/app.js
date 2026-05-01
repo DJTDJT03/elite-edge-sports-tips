@@ -3962,6 +3962,7 @@ const App = {
               '<h3 style="color:var(--gold);margin-bottom:8px;">Ready to put theory into practice?</h3>' +
               '<p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Our AI-powered model applies these principles automatically across 6 sports, 14 data sources, and 40+ bookmakers.</p>' +
               '<a href="#/pricing" class="btn btn-gold">Start 14-Day Free Trial &rarr;</a>' +
+              '<p style="color:#64748b;font-size:10px;margin-top:12px;">18+ | Educational content only | Gambling involves risk | <a href="https://www.begambleaware.org" target="_blank" rel="noopener" style="color:#f59e0b;">BeGambleAware.org</a></p>' +
             '</div>' +
           '</div>';
         return;
@@ -3982,7 +3983,11 @@ const App = {
       '<div class="container" style="max-width:900px;padding-top:30px;">' +
         '<div class="page-header text-center">' +
           '<h1 style="color:var(--gold);">Betting Academy</h1>' +
-          '<p style="color:var(--text-secondary);">Free guides to help you bet smarter. Written by our AI analysts.</p>' +
+          '<p style="color:var(--text-secondary);">Educational guides explaining how sports betting works.</p>' +
+          '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:12px 16px;margin-top:12px;max-width:600px;margin-left:auto;margin-right:auto;text-align:left;">' +
+            '<p style="color:#f59e0b;font-size:11px;font-weight:700;margin:0 0 4px;">RESPONSIBLE GAMBLING</p>' +
+            '<p style="color:#94a3b8;font-size:11px;margin:0;line-height:1.5;">This content is for educational purposes only. We do not encourage gambling. If you choose to bet, only wager what you can afford to lose. If you feel you may have a gambling problem, visit <a href="https://www.begambleaware.org" target="_blank" rel="noopener" style="color:#f59e0b;">BeGambleAware.org</a> or call the National Gambling Helpline: 0808 8020 133. 18+</p>' +
+          '</div>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px;">' + cardsHtml + '</div>' +
         '<div style="text-align:center;">' +
