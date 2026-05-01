@@ -416,6 +416,21 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
           <p style="color:#94a3b8;font-size:12px;margin:12px 0 0;">14 days completely free. Cancel anytime before your trial ends.</p>
         </div>
 
+        <div style="background:#141824;border:1px solid #2a2d45;border-radius:10px;padding:20px;margin:20px 0;">
+          <p style="color:#d4a843;font-weight:700;font-size:15px;margin:0 0 12px;">How Credits Work</p>
+          <p style="color:#cbd5e1;font-size:13px;line-height:1.6;margin:0 0 12px;">Elite Edge uses a credit system to access premium tips and tools. Here's what you need to know:</p>
+          <table cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:12px;">
+            <tr><td style="color:#d4a843;padding:6px 0;font-size:13px;font-weight:700;border-bottom:1px solid #2a2d45;">Your Plan</td><td style="color:#cbd5e1;padding:6px 0;font-size:13px;text-align:right;border-bottom:1px solid #2a2d45;">Monthly Credits</td></tr>
+            <tr><td style="color:#cbd5e1;padding:6px 0;font-size:13px;">Free</td><td style="color:#cbd5e1;padding:6px 0;font-size:13px;text-align:right;">5 credits (one-time welcome bonus)</td></tr>
+            <tr><td style="color:#cbd5e1;padding:6px 0;font-size:13px;">Starter (£9.99/mo)</td><td style="color:#cbd5e1;padding:6px 0;font-size:13px;text-align:right;">40 credits/month</td></tr>
+            <tr><td style="color:#cbd5e1;padding:6px 0;font-size:13px;">Premium (£19.99/mo)</td><td style="color:#cbd5e1;padding:6px 0;font-size:13px;text-align:right;">120 credits/month</td></tr>
+            <tr><td style="color:#cbd5e1;padding:6px 0;font-size:13px;">VIP (£39.99/mo)</td><td style="color:#d4a843;padding:6px 0;font-size:13px;font-weight:700;text-align:right;">Unlimited</td></tr>
+          </table>
+          <p style="color:#94a3b8;font-size:12px;line-height:1.5;margin:0 0 8px;"><strong style="color:#cbd5e1;">What costs credits:</strong> Viewing a premium tip costs 1 credit. Your credit balance is shown in the top menu bar.</p>
+          <p style="color:#94a3b8;font-size:12px;line-height:1.5;margin:0 0 8px;"><strong style="color:#cbd5e1;">Running low?</strong> Buy credit packs from £1.99 or upgrade your plan for more monthly credits.</p>
+          <p style="color:#94a3b8;font-size:12px;line-height:1.5;margin:0;"><strong style="color:#cbd5e1;">Earn free credits:</strong> Refer a friend (+3 credits when they sign up, +5 when they start a trial). Share tips on social media (+1/day).</p>
+        </div>
+
         <p style="color:#cbd5e1;font-size:14px;line-height:1.6;"><strong>Your login details:</strong><br>Email: ${this._esc(email)}</p>
 
         <div style="background:#1e2235;padding:16px;border-radius:8px;margin:20px 0;border-left:3px solid #f59e0b;">
@@ -435,6 +450,17 @@ Click this link: ${verifyUrl}
 STEP 2: Start your 14-day free trial
 After verifying, start your free trial to unlock all premium features.
 14 days completely free. Cancel anytime.
+
+HOW CREDITS WORK:
+Elite Edge uses credits to access premium tips.
+- Free: 5 credits (one-time welcome bonus)
+- Starter (£9.99/mo): 40 credits/month
+- Premium (£19.99/mo): 120 credits/month
+- VIP (£39.99/mo): Unlimited
+
+Viewing a premium tip costs 1 credit.
+Buy more credit packs from £1.99, or upgrade for more monthly credits.
+Earn free credits: refer a friend (+3), share on social (+1/day).
 
 Your login email: ${email}
 

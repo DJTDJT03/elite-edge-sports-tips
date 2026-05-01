@@ -9748,10 +9748,11 @@ const App = {
   },
 
   _onboardingSteps: [
-    { title: 'Welcome to Elite Edge', desc: 'Your new home for data-driven betting intelligence. We use statistical models to identify value in horse racing and football markets, giving you a genuine edge over the bookmakers.' },
-    { title: 'Browse Tips', desc: 'Our dashboard shows today\'s top selections with confidence scores, edge percentages, and detailed analysis. Free members get 1 daily tip. Premium members get 2-4 carefully selected edge plays — we never publish tips just to fill a quota.' },
-    { title: 'Track Performance', desc: 'Visit the Results page to see our full, transparent track record. Every tip is recorded with P/L, strike rate, and ROI. Use the "I backed this" button to track your own personal performance.' },
-    { title: 'Go Premium', desc: 'Unlock all tips, full analysis, staking recommendations, and priority alerts. First month is completely FREE. Then just \u00a319.99/month, cancel anytime. Your edge starts here.' },
+    { title: 'Welcome to Elite Edge', desc: 'The UK\'s most advanced sports tipping platform. AI-powered tips across 6 sports — Racing, Football, NBA, Tennis, Rugby, and NFL. Every selection analysed by 3 AI engines before publication.' },
+    { title: 'Your 5 Free Credits', desc: 'You\'ve received 5 free credits. Each premium tip costs 1 credit to view. Your credit balance is shown in the top menu bar. When you run out, buy more credit packs from £1.99 or upgrade to a subscription for monthly credits.' },
+    { title: 'Browse Tips & Tools', desc: 'Check today\'s selections on the Dashboard. Use the Smart Acca Generator to build accumulators across all 6 sports. Explore the Betting Calculators for returns on any bet type. Visit the Betting Academy to sharpen your knowledge.' },
+    { title: 'Earn Free Credits', desc: 'Refer a friend and earn +3 credits when they sign up (+5 more if they start a trial). Share a tip on social media for +1 credit per day. Check your referral link and stats on the Refer & Earn page.' },
+    { title: 'Start Your Free Trial', desc: 'Ready for full access? Start a 14-day free trial — get 120 credits per month, full AI analysis, email bulletins, alerts, and the acca generator. Card required but you won\'t be charged for 14 days. Cancel anytime.' },
   ],
 
   _renderOnboardingStep() {
