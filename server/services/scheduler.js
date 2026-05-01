@@ -401,20 +401,30 @@ module.exports = function startScheduler(deps) {
           }
         }
 
+        // Major festival meetings get a priority boost — subscribers expect coverage
+        var festivalMeetings = ['punchestown', 'cheltenham', 'aintree', 'ascot', 'goodwood', 'york', 'epsom', 'newmarket', 'doncaster', 'leopardstown', 'curragh', 'galway', 'sandown', 'kempton', 'haydock'];
+
         races.forEach(function(race) {
           if (!race.runners || race.runners.length === 0) return;
           var raceWeather = (race.meeting && meetingWeather[race.meeting]) ? meetingWeather[race.meeting] : null;
+          var isFestival = race.meeting && festivalMeetings.some(function(f) { return race.meeting.toLowerCase().indexOf(f) !== -1; });
+
           race.runners.forEach(function(runner) {
             try {
               var scored = scoringModel.scoreRunner(runner, race, null, raceWeather);
               if (!scored) return;
+              // Festival meetings get a 15% edge boost — ensures premium meetings are covered
+              var adjustedEdge = scored.edge;
+              if (isFestival) adjustedEdge = scored.edge * 1.15;
+
               // Filter: edge > 5% AND confidence >= 6
-              if (scored.edge > 0.05 && scored.confidence >= 6) {
+              if (adjustedEdge > 0.05 && scored.confidence >= 6) {
                 allCandidates.push({
                   type: 'racing',
                   scored: scored,
-                  edge: scored.edge,
+                  edge: adjustedEdge,
                   confidence: scored.confidence,
+                  _isFestival: isFestival,
                 });
               }
             } catch (err) {
