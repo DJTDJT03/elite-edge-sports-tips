@@ -10463,7 +10463,7 @@ const App = {
     }).join('');
 
     // Build sport filter buttons
-    var sports = [{key: 'all', label: 'All'}, {key: 'racing', label: 'Racing'}, {key: 'football', label: 'Football'}];
+    var sports = [{key: 'all', label: 'All'}, {key: 'racing', label: 'Racing'}, {key: 'football', label: 'Football'}, {key: 'basketball', label: 'NBA'}, {key: 'tennis', label: 'Tennis'}, {key: 'rugby', label: 'Rugby'}, {key: 'american-football', label: 'NFL'}];
     var sportBtns = sports.map(function(s) {
       return '<button class="acca-fold-btn' + (s.key === sportFilter ? ' active' : '') + '" onclick="App._accaSportFilter=\'' + s.key + '\';App._renderAccaPage();">' + s.label + '</button>';
     }).join('');
