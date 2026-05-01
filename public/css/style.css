@@ -1861,14 +1861,15 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
 .notif-dropdown {
   position: absolute;
   top: 42px;
-  right: 0;
-  width: 320px;
+  right: -60px;
+  width: 360px;
+  min-width: 340px;
   max-height: 400px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
-  z-index: 300;
+  z-index: 9999;
   overflow: hidden;
 }
 .notif-dropdown-header {
@@ -1884,12 +1885,16 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   overflow-y: auto;
 }
 .notif-item {
-  padding: 10px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
+  line-height: 1.5;
   color: var(--text-secondary);
   cursor: pointer;
   transition: background var(--transition);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 .notif-item:hover {
   background: var(--bg-card-hover);

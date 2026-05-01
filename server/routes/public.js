@@ -142,7 +142,7 @@ module.exports = function(deps) {
     }
   });
 
-  // POST /api/chat/ai — AI-powered chatbot using Claude
+  // POST /api/chat/ai — AI-powered chatbot using Claude with live data context
   router.post('/api/chat/ai', async (req, res) => {
     try {
       var message = (req.body && req.body.message) || '';
@@ -154,11 +154,59 @@ module.exports = function(deps) {
         return res.status(503).json({ reply: 'AI chat is temporarily unavailable. Please try again later.' });
       }
 
-      var systemPrompt = 'You are the Elite Edge assistant — the helpful chatbot for Elite Edge Sports Tips, the UK\'s premium sports betting analysis service. Answer questions about tips, results, how the service works, subscription plans, and general sports queries. Be helpful, concise, and use British English. Never give financial advice or guarantee outcomes. If asked about specific tips, reference our published selections. Keep responses under 150 words. Premium costs £19.99/month (first month free). We cover horse racing and football with AI-powered analysis.';
+      // Fetch live context for the chatbot
+      var today = new Date().toISOString().split('T')[0];
+      var liveContext = '';
+      try {
+        var tips = await db.getTips();
+        var todayTips = tips.filter(function(t) {
+          var d = t.date;
+          if (d && typeof d !== 'string') try { d = new Date(d).toISOString().split('T')[0]; } catch(e) { return false; }
+          return d === today && t.status === 'active';
+        });
+        if (todayTips.length > 0) {
+          liveContext += '\n\nTODAY\'S LIVE TIPS (' + today + '):\n';
+          todayTips.forEach(function(t) {
+            liveContext += '- ' + (t.sport || '').toUpperCase() + ': ' + (t.selection || '') + ' in ' + (t.event || '') + ' @ ' + (t.odds || '') + ' (Confidence: ' + (t.confidence || '') + '/10, Edge: ' + ((t.edge || 0) * 100).toFixed(1) + '%)';
+            if (t.analysis && t.analysis.summary) liveContext += ' — ' + t.analysis.summary.substring(0, 100);
+            liveContext += '\n';
+          });
+        }
+
+        var results = await db.getResults();
+        var recentResults = results.slice(-5);
+        if (recentResults.length > 0) {
+          liveContext += '\nRECENT RESULTS (last 5):\n';
+          recentResults.forEach(function(r) {
+            liveContext += '- ' + (r.selection || '') + ' @ ' + (r.odds || '') + ' = ' + (r.result || '') + ' (' + (r.pnl >= 0 ? '+' : '') + (r.pnl || 0).toFixed(2) + 'u)\n';
+          });
+        }
+      } catch (ctxErr) {
+        // Non-fatal — chatbot works without live context
+      }
+
+      var systemPrompt = 'You are the Elite Edge assistant — the helpful AI chatbot for Elite Edge Sports Tips, the UK\'s most advanced multi-sport betting analysis platform.\n\n' +
+        'ABOUT THE SERVICE:\n' +
+        '- We cover 6 sports: Horse Racing, Football (18 leagues), NBA Basketball, Tennis (ATP + WTA), Rugby League (Super League + NRL), and NFL\n' +
+        '- Up to 9 AI-powered tips daily across all sports\n' +
+        '- Powered by 14 live data APIs + dual AI (Claude + Perplexity)\n' +
+        '- Every tip includes full analysis: form, going/surface, H2H, statistical model probability, and risk assessment\n' +
+        '- CLV tracking proves genuine edge over bookmakers\n' +
+        '- Premium: £19.99/month or £199.99/year | VIP: £39.99/month or £399.99/year\n' +
+        '- 7-day free trial available for new users\n' +
+        '- Features: Value Bet Scanner, Smart Acca Generator (2-8 fold, multi-sport), Steamer Alerts, AI Race Replays, Going Forecast\n\n' +
+        'RULES:\n' +
+        '- Be helpful, concise, and use British English\n' +
+        '- Never give financial advice or guarantee outcomes\n' +
+        '- When asked about today\'s tips, reference the LIVE TIPS data below\n' +
+        '- When asked about results, reference the RECENT RESULTS data below\n' +
+        '- Keep responses under 200 words\n' +
+        '- If you don\'t know something specific, direct them to the relevant page (e.g. "Check the Results page for full history")' +
+        liveContext;
 
       var response = await aiReports.client.messages.create({
         model: process.env.AI_MODEL || 'claude-haiku-4-5-20251001',
-        max_tokens: 256,
+        max_tokens: 400,
         system: systemPrompt,
         messages: [{ role: 'user', content: message }],
       });
