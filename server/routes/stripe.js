@@ -107,15 +107,38 @@ module.exports = function(deps) {
         ? session.subscription
         : (session.subscription && session.subscription.id) || null;
 
+      // Detect if this is a trial signup (14-day trial via Stripe)
+      var isTrial = session.metadata && session.metadata.isTrial === 'true';
+      var subObj = session.subscription;
+      var trialEndDate = null;
+      if (typeof subObj === 'object' && subObj.trial_end) {
+        trialEndDate = new Date(subObj.trial_end * 1000);
+      } else if (isTrial) {
+        trialEndDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      }
+
       await db.updateUser(user.id, {
         subscription: tier,
         subscriptionExpiry: expiryDate.toISOString(),
-        trialActive: false,
+        trialActive: !!trialEndDate,
+        trialStart: trialEndDate ? new Date().toISOString() : undefined,
+        trialEnd: trialEndDate ? trialEndDate.toISOString() : undefined,
         stripeCustomerId: stripeCustomerId,
         stripeSubscriptionId: stripeSubscriptionId,
       });
 
-      console.log('[Stripe] User upgraded to ' + tier + ':', user.email, '— expires:', expiryDate.toISOString());
+      // Send trial confirmation email with charge date
+      if (trialEndDate && emailService) {
+        var chargeDate = trialEndDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        emailService.sendTrialConfirmation({
+          name: user.name, email: user.email, tier: tier,
+          trialEndDate: chargeDate,
+          price: tier === 'vip' ? '£39.99' : '£19.99',
+          portalUrl: 'https://eliteedgesports.co.uk/#/account',
+        }).catch(function(err) { console.error('[Email] Trial confirmation failed:', err.message); });
+      }
+
+      console.log('[Stripe] User ' + (isTrial ? 'started 14-day trial' : 'upgraded') + ' to ' + tier + ':', user.email);
       res.redirect('/#/account?upgraded=true');
     } catch (err) {
       console.error('[Stripe] Success handler error:', err.message);

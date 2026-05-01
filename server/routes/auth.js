@@ -32,6 +32,10 @@ module.exports = function(deps) {
       const now = new Date().toISOString();
       const deviceHash = helpers.hashDeviceFingerprint(ip, userAgent);
 
+      // Generate email verification token
+      const crypto = require('crypto');
+      const verifyToken = crypto.randomBytes(32).toString('hex');
+
       const userData = {
         id: `usr_${Date.now()}`,
         email,
@@ -55,6 +59,8 @@ module.exports = function(deps) {
         loginHistory: [{ ip, userAgent, timestamp: now, sessionId }],
         trustedDevices: [deviceHash],
         emailPrefs: { dailyBulletin: true, weeklySummary: true, marketing: true, bigWins: true },
+        emailVerified: false,
+        emailVerifyToken: verifyToken,
       };
 
       const user = await db.createUser(userData);
@@ -66,8 +72,9 @@ module.exports = function(deps) {
       );
       const tokenExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
 
-      // Send welcome email (async, non-blocking)
-      emailService.sendWelcome({ name: user.name, email: user.email }).catch(function(err) {
+      // Send welcome email with verification link (async, non-blocking)
+      var verifyUrl = 'https://eliteedgesports.co.uk/api/auth/verify-email?token=' + verifyToken;
+      emailService.sendWelcomeWithVerification({ name: user.name, email: user.email, verifyUrl: verifyUrl }).catch(function(err) {
         console.error('[Email] Welcome email failed:', err.message);
       });
 
@@ -205,41 +212,94 @@ module.exports = function(deps) {
   // ---------------------------------------------------------------------------
   // START FREE TRIAL — separate from registration
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // EMAIL VERIFICATION
+  // ---------------------------------------------------------------------------
+  router.get('/verify-email', async (req, res) => {
+    try {
+      var token = req.query.token;
+      if (!token) return res.redirect('/?error=missing_token');
+
+      // Find user by verify token
+      var users = await db.getUsers();
+      var user = users.find(function(u) { return u.emailVerifyToken === token; });
+      if (!user) return res.redirect('/?error=invalid_token');
+
+      await db.updateUser(user.id, {
+        emailVerified: true,
+        emailVerifyToken: null,
+      });
+
+      console.log('[Auth] Email verified for:', user.email);
+      res.redirect('/#/pricing?verified=true');
+    } catch (err) {
+      console.error('[Auth] Email verification error:', err.message);
+      res.redirect('/?error=verification_failed');
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // START FREE TRIAL — redirects to Stripe Checkout with 14-day trial
+  // Card required upfront. Auto-charges after 14 days if not cancelled.
+  // ---------------------------------------------------------------------------
   router.post('/start-trial', authenticate, async (req, res) => {
     try {
       var user = await db.getUserById(req.user.id);
       if (!user) return res.status(404).json({ error: 'User not found' });
 
-      // Check if user already had a trial
       if (user.trialStart) {
         return res.status(400).json({ error: 'You have already used your free trial.' });
       }
 
-      // Check if already premium
-      if (user.subscription === 'premium') {
+      if (user.subscription === 'premium' || user.subscription === 'vip') {
         return res.status(400).json({ error: 'You already have premium access.' });
       }
 
-      // Activate 7-day trial
-      var trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      var stripeService = deps.stripeService;
+      if (!stripeService || !stripeService.isAvailable) {
+        return res.status(503).json({ error: 'Payment system not configured. Please try again later.' });
+      }
+
+      // Create Stripe Checkout with 14-day trial — card required, auto-charges after trial
+      var plan = req.body.plan || 'premium-monthly';
+      var prices = await stripeService.ensureProducts();
+      var priceMap = {
+        'premium-monthly': prices.premiumMonthlyId,
+        'premium-annual': prices.premiumAnnualId,
+        'vip-monthly': prices.vipMonthlyId,
+        'vip-annual': prices.vipAnnualId,
+      };
+      var priceId = priceMap[plan] || prices.premiumMonthlyId;
+      var tier = plan.startsWith('vip') ? 'vip' : 'premium';
+
+      var baseUrl = req.headers.origin || req.protocol + '://' + req.get('host');
+
+      var stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+      var session = await stripe.checkout.sessions.create({
+        mode: 'subscription',
+        customer_email: user.email,
+        metadata: { userId: user.id, tier: tier, isTrial: 'true' },
+        subscription_data: {
+          trial_period_days: 14,
+          metadata: { userId: user.id, tier: tier },
+        },
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: baseUrl + '/api/stripe/success?session_id={CHECKOUT_SESSION_ID}',
+        cancel_url: baseUrl + '/#/pricing',
+        allow_promotion_codes: true,
+        consent_collection: { terms_of_service: 'none' },
+      });
+
+      // Mark trial as started (Stripe webhook will confirm subscription)
       await db.updateUser(user.id, {
-        subscription: 'premium',
-        subscriptionExpiry: trialEnd,
-        trialActive: true,
         trialStart: new Date().toISOString(),
-        trialEnd: trialEnd,
       });
 
-      console.log('[Trial] Started 7-day trial for ' + user.email);
-
-      res.json({
-        message: 'Your 7-day free trial has started! You now have full premium access.',
-        trialEnd: trialEnd,
-        subscription: 'premium',
-        trialActive: true,
-      });
+      console.log('[Trial] Stripe checkout created for 14-day trial:', user.email, '— plan:', plan);
+      res.json({ url: session.url });
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      console.error('[Trial] Error:', err.message);
+      res.status(500).json({ error: 'Unable to start trial. Please try again.' });
     }
   });
 

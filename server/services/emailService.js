@@ -389,6 +389,124 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
   }
 
   // -----------------------------------------------------------------------
+  // 1b. WELCOME WITH EMAIL VERIFICATION
+  // -----------------------------------------------------------------------
+  async sendWelcomeWithVerification({ name, email, verifyUrl }) {
+    const subject = 'Verify your email — Welcome to Elite Edge Sports Tips';
+
+    const html = this._wrapHTML(`
+        <h2 style="color:#ffffff;margin:0 0 16px;font-size:20px;">Hi ${this._esc(name)},</h2>
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">Welcome to <strong style="color:#d4a843;">Elite Edge Sports Tips</strong> — the UK's most advanced multi-sport betting intelligence platform.</p>
+
+        <div style="background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(34,197,94,0.03));border:2px solid rgba(34,197,94,0.3);border-radius:10px;padding:20px;margin:20px 0;text-align:center;">
+          <p style="color:#22c55e;font-weight:700;font-size:16px;margin:0 0 8px;">Step 1: Verify Your Email</p>
+          <p style="color:#cbd5e1;font-size:13px;margin:0 0 16px;">Click the button below to verify your email address and unlock your account.</p>
+          <a href="${verifyUrl}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Verify My Email</a>
+        </div>
+
+        <div style="background:linear-gradient(135deg,rgba(212,168,67,0.1),rgba(212,168,67,0.03));border:2px solid rgba(212,168,67,0.3);border-radius:10px;padding:20px;margin:20px 0;text-align:center;">
+          <p style="color:#d4a843;font-weight:700;font-size:16px;margin:0 0 8px;">Step 2: Start Your 14-Day Free Trial</p>
+          <p style="color:#cbd5e1;font-size:13px;margin:0 0 8px;">After verifying, start your free trial to unlock:</p>
+          <table cellpadding="0" cellspacing="0" style="margin:12px auto;text-align:left;">
+            <tr><td style="color:#22c55e;padding:3px 8px 3px 0;font-size:13px;">&#10003;</td><td style="color:#cbd5e1;font-size:13px;padding:3px 0;">Up to 9 daily tips across 6 sports</td></tr>
+            <tr><td style="color:#22c55e;padding:3px 8px 3px 0;font-size:13px;">&#10003;</td><td style="color:#cbd5e1;font-size:13px;padding:3px 0;">Full AI analysis on every selection</td></tr>
+            <tr><td style="color:#22c55e;padding:3px 8px 3px 0;font-size:13px;">&#10003;</td><td style="color:#cbd5e1;font-size:13px;padding:3px 0;">Smart Acca Generator + Value Bet Scanner</td></tr>
+            <tr><td style="color:#22c55e;padding:3px 8px 3px 0;font-size:13px;">&#10003;</td><td style="color:#cbd5e1;font-size:13px;padding:3px 0;">Daily email bulletins with live intelligence</td></tr>
+          </table>
+          <p style="color:#94a3b8;font-size:12px;margin:12px 0 0;">14 days completely free. Cancel anytime before your trial ends.</p>
+        </div>
+
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;"><strong>Your login details:</strong><br>Email: ${this._esc(email)}</p>
+
+        <div style="background:#1e2235;padding:16px;border-radius:8px;margin:20px 0;border-left:3px solid #f59e0b;">
+          <p style="color:#f59e0b;font-size:13px;font-weight:700;margin:0 0 8px;">IMPORTANT</p>
+          <p style="color:#94a3b8;font-size:12px;margin:0;line-height:1.5;">This service provides statistical analysis and entertainment content ONLY. We do not provide financial or betting advice. All betting is at your own risk. Please gamble responsibly. 18+ | BeGambleAware.org</p>
+        </div>
+        <p style="color:#cbd5e1;font-size:14px;">Welcome aboard,<br><strong style="color:#d4a843;">The Elite Edge Team</strong></p>
+    `, 'Verify your email to get started');
+
+    const text = `Hi ${name},
+
+Welcome to Elite Edge Sports Tips!
+
+STEP 1: Verify your email
+Click this link: ${verifyUrl}
+
+STEP 2: Start your 14-day free trial
+After verifying, start your free trial to unlock all premium features.
+14 days completely free. Cancel anytime.
+
+Your login email: ${email}
+
+IMPORTANT: This service provides statistical analysis and entertainment content ONLY.
+18+ | BeGambleAware.org
+
+The Elite Edge Team`;
+
+    return this._sendEmail({ to: email, subject, html, text, emailType: 'welcome_verification' });
+  }
+
+  // -----------------------------------------------------------------------
+  // 1c. TRIAL CONFIRMATION — sent when Stripe trial starts (card on file)
+  // -----------------------------------------------------------------------
+  async sendTrialConfirmation({ name, email, tier, trialEndDate, price, portalUrl }) {
+    const subject = 'Your 14-day free trial has started — Elite Edge Sports Tips';
+
+    const html = this._wrapHTML(`
+        <h2 style="color:#ffffff;margin:0 0 16px;font-size:20px;">Hi ${this._esc(name)},</h2>
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">Great news — your <strong style="color:#d4a843;">14-day free trial</strong> of Elite Edge ${this._esc(tier === 'vip' ? 'VIP' : 'Premium')} is now active!</p>
+
+        <div style="background:#141824;border:1px solid var(--border,#2a2d45);border-radius:10px;padding:20px;margin:20px 0;">
+          <table cellpadding="0" cellspacing="0" style="width:100%;">
+            <tr><td style="color:#8b8d93;font-size:13px;padding:6px 0;">Plan:</td><td style="color:#d4a843;font-size:13px;font-weight:700;text-align:right;padding:6px 0;">Elite Edge ${this._esc(tier === 'vip' ? 'VIP' : 'Premium')}</td></tr>
+            <tr><td style="color:#8b8d93;font-size:13px;padding:6px 0;">Trial period:</td><td style="color:#ffffff;font-size:13px;font-weight:700;text-align:right;padding:6px 0;">14 days (FREE)</td></tr>
+            <tr><td style="color:#8b8d93;font-size:13px;padding:6px 0;">Trial ends:</td><td style="color:#ffffff;font-size:13px;font-weight:700;text-align:right;padding:6px 0;">${this._esc(trialEndDate)}</td></tr>
+            <tr><td colspan="2" style="border-top:1px solid #2a2d45;padding-top:10px;margin-top:6px;"></td></tr>
+            <tr><td style="color:#8b8d93;font-size:13px;padding:6px 0;">First payment:</td><td style="color:#fbbf24;font-size:13px;font-weight:700;text-align:right;padding:6px 0;">${this._esc(price)}/month on ${this._esc(trialEndDate)}</td></tr>
+          </table>
+        </div>
+
+        <div style="background:rgba(251,191,36,0.08);border-left:3px solid #fbbf24;padding:16px;border-radius:0 8px 8px 0;margin:20px 0;">
+          <p style="color:#fbbf24;font-size:13px;font-weight:700;margin:0 0 8px;">BILLING INFORMATION</p>
+          <p style="color:#cbd5e1;font-size:13px;margin:0;line-height:1.6;">Your card will <strong>not</strong> be charged during the trial period. If you enjoy the service, you don't need to do anything — your subscription will begin automatically on <strong>${this._esc(trialEndDate)}</strong> at <strong>${this._esc(price)}/month</strong>.</p>
+          <p style="color:#cbd5e1;font-size:13px;margin:8px 0 0;line-height:1.6;">If you decide it's not for you, simply cancel before <strong>${this._esc(trialEndDate)}</strong> and you will not be charged. No questions asked.</p>
+        </div>
+
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${portalUrl || 'https://eliteedgesports.co.uk/#/account'}" style="display:inline-block;padding:12px 28px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:13px;">Manage Subscription / Cancel Anytime</a>
+        </div>
+
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">Enjoy your trial!</p>
+        <p style="color:#cbd5e1;font-size:14px;"><strong style="color:#d4a843;">The Elite Edge Team</strong></p>
+
+        <div style="background:#1e2235;padding:12px;border-radius:8px;margin:20px 0;">
+          <p style="color:#94a3b8;font-size:11px;margin:0;line-height:1.5;">18+ | Entertainment & statistical analysis only | BeGambleAware.org<br>You can cancel your subscription at any time from your account page or by contacting us at contact@eliteedgesports.co.uk</p>
+        </div>
+    `, 'Your 14-day free trial is active');
+
+    const text = `Hi ${name},
+
+Your 14-day free trial of Elite Edge ${tier === 'vip' ? 'VIP' : 'Premium'} is now active!
+
+Plan: Elite Edge ${tier === 'vip' ? 'VIP' : 'Premium'}
+Trial period: 14 days (FREE)
+Trial ends: ${trialEndDate}
+First payment: ${price}/month on ${trialEndDate}
+
+BILLING INFORMATION:
+Your card will NOT be charged during the trial period.
+If you enjoy the service, your subscription begins automatically on ${trialEndDate} at ${price}/month.
+If you decide it's not for you, cancel before ${trialEndDate} and you will not be charged.
+
+Manage subscription: ${portalUrl || 'https://eliteedgesports.co.uk/#/account'}
+
+18+ | Entertainment only | BeGambleAware.org
+Cancel anytime: contact@eliteedgesports.co.uk`;
+
+    return this._sendEmail({ to: email, subject, html, text, emailType: 'trial_confirmation' });
+  }
+
+  // -----------------------------------------------------------------------
   // 2. PREMIUM UPGRADE WELCOME
   // -----------------------------------------------------------------------
   async sendPremiumWelcome({ name, email, chargeDate }) {

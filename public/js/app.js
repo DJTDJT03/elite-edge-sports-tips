@@ -8777,8 +8777,8 @@ const App = {
     overlay.innerHTML =
       '<div style="background:var(--bg-card,#141828);border:2px solid #d4a843;border-radius:16px;padding:40px;max-width:440px;width:90%;text-align:center;animation:celebrateIn 0.4s ease-out;box-shadow:0 0 60px rgba(212,168,67,0.2);">' +
         '<div style="font-size:48px;margin-bottom:12px;">&#127775;</div>' +
-        '<h2 style="color:#d4a843;margin-bottom:8px;font-size:22px;">Unlock 7 Days Free Premium</h2>' +
-        '<p style="color:#8b8d93;font-size:14px;margin-bottom:20px;">Get full access to all premium tips, AI analysis, value bets, custom alerts, and expert selections. No payment required.</p>' +
+        '<h2 style="color:#d4a843;margin-bottom:8px;font-size:22px;">Start Your 14-Day Free Trial</h2>' +
+        '<p style="color:#8b8d93;font-size:14px;margin-bottom:20px;">Get full access to all premium tips across 6 sports, AI analysis, value bets, and expert selections for 14 days free.</p>' +
         '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:12px;margin-bottom:20px;">' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:#e8e6e3;">' +
             '<div>&#10003; All premium tips</div>' +
@@ -8789,39 +8789,39 @@ const App = {
             '<div>&#10003; Expert analysis</div>' +
           '</div>' +
         '</div>' +
-        '<button onclick="App.startFreeTrial()" style="width:100%;padding:14px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:12px;">Start My Free Trial</button>' +
+        '<button onclick="App.startFreeTrial()" style="width:100%;padding:14px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:12px;">Start 14-Day Free Trial</button>' +
         '<button onclick="document.getElementById(\'trial-offer-overlay\').remove()" style="width:100%;padding:10px;background:transparent;color:#8b8d93;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:13px;cursor:pointer;">Maybe Later</button>' +
-        '<p style="font-size:11px;color:#64748b;margin-top:12px;">No credit card required. Trial ends automatically after 7 days.</p>' +
+        '<p style="font-size:11px;color:#64748b;margin-top:12px;">Card details required. You will not be charged during the 14-day trial. Cancel anytime before the trial ends — no obligation.</p>' +
       '</div>';
 
     document.body.appendChild(overlay);
   },
 
-  async startFreeTrial() {
+  async startFreeTrial(plan) {
     try {
       var overlay = document.getElementById('trial-offer-overlay');
       var btn = overlay ? overlay.querySelector('button') : null;
-      if (btn) { btn.textContent = 'Activating...'; btn.disabled = true; }
+      if (btn) { btn.textContent = 'Redirecting to secure checkout...'; btn.disabled = true; }
 
-      var data = await this.api('/auth/start-trial', { method: 'POST', body: '{}' });
+      // Redirect to Stripe Checkout with 14-day trial — card required
+      var data = await this.api('/auth/start-trial', {
+        method: 'POST',
+        body: JSON.stringify({ plan: plan || 'premium-monthly' })
+      });
 
-      // Update local user data
-      this.user.subscription = 'premium';
-      this.user.trialActive = true;
-      this.user.trialEnd = data.trialEnd;
-      localStorage.setItem('ee_user', JSON.stringify(this.user));
-
-      // Remove overlay
-      if (overlay) overlay.remove();
-
-      // Show celebration
-      this.showToast('Your 7-day free trial is active! Enjoy full premium access.', 'success');
-      this.updateAuthUI();
-      this.route(); // Re-render current page with premium content unlocked
+      if (data.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || 'Unable to create checkout session');
+      }
     } catch (err) {
       this.showToast(err.message || 'Unable to start trial. Please try again.', 'error');
       var overlay2 = document.getElementById('trial-offer-overlay');
-      if (overlay2) overlay2.remove();
+      if (overlay2) {
+        var btn2 = overlay2.querySelector('button');
+        if (btn2) { btn2.textContent = 'Start My Free Trial'; btn2.disabled = false; }
+      }
     }
   },
 
