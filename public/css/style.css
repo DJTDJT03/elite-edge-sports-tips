@@ -6661,3 +6661,8 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   .challenge-stats-grid { grid-template-columns: repeat(2, 1fr); }
   .challenge-daily-log { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
 }
+
+/* Calculator tabs */
+.calc-tab { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; transition: all 0.2s; }
+.calc-tab:hover { border-color: var(--gold); color: var(--text-primary); }
+.calc-tab.active { background: rgba(212,168,67,0.1); border-color: var(--gold); color: var(--gold); }

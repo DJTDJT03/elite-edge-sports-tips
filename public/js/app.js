@@ -962,6 +962,7 @@ const App = {
       case 'rugby': this.renderSportTips('rugby', 'Rugby League'); break;
       case 'nfl': this.renderSportTips('american-football', 'NFL'); break;
       case 'tennis': this.renderSportTips('tennis', 'Tennis'); break;
+      case 'calculators': BetCalc.render(); break;
       case 'buy-credits': this.renderBuyCredits(); break;
       case 'refer': this.renderReferral(); break;
       case 'selections': this.renderSelections(); break;
