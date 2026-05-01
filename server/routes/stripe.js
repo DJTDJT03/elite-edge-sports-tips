@@ -20,8 +20,8 @@ module.exports = function(deps) {
       }
 
       const { plan } = req.body;
-      if (!plan || !['premium-monthly', 'premium-annual', 'vip-monthly', 'vip-annual'].includes(plan)) {
-        return res.status(400).json({ error: 'Invalid plan. Choose premium-monthly, premium-annual, vip-monthly, or vip-annual.' });
+      if (!plan || !['starter-monthly', 'starter-annual', 'premium-monthly', 'premium-annual', 'vip-monthly', 'vip-annual'].includes(plan)) {
+        return res.status(400).json({ error: 'Invalid plan.' });
       }
 
       const user = await db.getUserById(req.user.id);

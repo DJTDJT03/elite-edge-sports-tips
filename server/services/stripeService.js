@@ -80,6 +80,50 @@ class StripeService {
       console.log('[Stripe] Created Premium annual price:', premiumAnnualId);
     }
 
+    // --- Starter product (£9.99/month, £99.99/year) ---
+    let starterProductId;
+    const foundStarter = existingProducts.data.find(p => p.name === 'Elite Edge Starter');
+    if (foundStarter) {
+      starterProductId = foundStarter.id;
+      console.log('[Stripe] Found existing Starter product:', starterProductId);
+    } else {
+      const product = await stripe.products.create({
+        name: 'Elite Edge Starter',
+        description: '3 daily tips from 2 sports with selection and odds',
+      });
+      starterProductId = product.id;
+      console.log('[Stripe] Created Starter product:', starterProductId);
+    }
+
+    const starterPrices = await stripe.prices.list({ product: starterProductId, limit: 100 });
+
+    let starterMonthlyId;
+    const smPrice = starterPrices.data.find(
+      p => p.active && p.recurring && p.recurring.interval === 'month' && p.unit_amount === 999 && p.currency === 'gbp'
+    );
+    if (smPrice) {
+      starterMonthlyId = smPrice.id;
+    } else {
+      const mp = await stripe.prices.create({
+        product: starterProductId, unit_amount: 999, currency: 'gbp', recurring: { interval: 'month' },
+      });
+      starterMonthlyId = mp.id;
+    }
+
+    let starterAnnualId;
+    const saPrice = starterPrices.data.find(
+      p => p.active && p.recurring && p.recurring.interval === 'year' && p.unit_amount === 9999 && p.currency === 'gbp'
+    );
+    if (saPrice) {
+      starterAnnualId = saPrice.id;
+    } else {
+      const ap = await stripe.prices.create({
+        product: starterProductId, unit_amount: 9999, currency: 'gbp', recurring: { interval: 'year' },
+      });
+      starterAnnualId = ap.id;
+    }
+    console.log('[Stripe] Starter prices ready');
+
     // --- VIP product (£39.99/month, £399.99/year) ---
     let vipProductId;
     const foundVip = existingProducts.data.find(p => p.name === 'Elite Edge VIP');
@@ -127,7 +171,7 @@ class StripeService {
       console.log('[Stripe] Created VIP annual price:', vipAnnualId);
     }
 
-    this._priceIds = { premiumMonthlyId, premiumAnnualId, vipMonthlyId, vipAnnualId, premiumProductId, vipProductId };
+    this._priceIds = { starterMonthlyId, starterAnnualId, premiumMonthlyId, premiumAnnualId, vipMonthlyId, vipAnnualId, starterProductId, premiumProductId, vipProductId };
     return this._priceIds;
   }
 
@@ -135,7 +179,7 @@ class StripeService {
    * Creates a Stripe Checkout session for a subscription.
    * @param {string} userId - Internal user ID
    * @param {string} userEmail - User email
-   * @param {string} plan - 'premium-monthly', 'premium-annual', 'vip-monthly', or 'vip-annual'
+   * @param {string} plan - 'starter-monthly', 'starter-annual', 'premium-monthly', 'premium-annual', 'vip-monthly', or 'vip-annual'
    * @param {string} successUrl - URL to redirect on success
    * @param {string} cancelUrl - URL to redirect on cancel
    */
@@ -144,6 +188,8 @@ class StripeService {
 
     const prices = await this.ensureProducts();
     const priceMap = {
+      'starter-monthly': prices.starterMonthlyId,
+      'starter-annual': prices.starterAnnualId,
       'premium-monthly': prices.premiumMonthlyId,
       'premium-annual': prices.premiumAnnualId,
       'vip-monthly': prices.vipMonthlyId,
@@ -152,7 +198,7 @@ class StripeService {
     const priceId = priceMap[plan];
     if (!priceId) throw new Error('Invalid plan: ' + plan);
 
-    const tier = plan.startsWith('vip') ? 'vip' : 'premium';
+    const tier = plan.startsWith('vip') ? 'vip' : plan.startsWith('starter') ? 'starter' : 'premium';
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',

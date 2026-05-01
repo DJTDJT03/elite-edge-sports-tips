@@ -33,6 +33,7 @@ module.exports = function(deps) {
       if (user.subscription === 'vip') return 'premium';
       if (user.subscription === 'premium') return 'premium';
       if (user.trialActive === true) return 'premium';
+      if (user.subscription === 'starter') return 'starter';
       console.log('[Tips] User', user.email, 'sub:', user.subscription, 'trial:', user.trialActive, '— access: free');
       return 'free';
     } catch (e) {
@@ -85,15 +86,40 @@ module.exports = function(deps) {
 
       var access = await getUserAccess(req);
 
+      // Starter: sees 3 tips (selection + odds only, no analysis)
+      var starterCount = 0;
+      var STARTER_TIP_LIMIT = 3;
+
       const result = filtered.map(tip => {
-        if (tip.isPremium && access !== 'premium' && access !== 'admin') {
+        // Free users: locked on premium tips
+        if (tip.isPremium && access === 'free') {
           return {
             ...tip,
             selection: 'Premium Pick — Upgrade to View',
-            analysis: { summary: 'Full analysis available to Premium subscribers. Start your 7-day free trial to access all tips.' },
+            analysis: { summary: 'Full analysis available to Premium subscribers. Start your 14-day free trial to access all tips.' },
             locked: true,
           };
         }
+        // Starter users: see 3 tips with selection + odds, but no analysis
+        if (tip.isPremium && access === 'starter') {
+          starterCount++;
+          if (starterCount <= STARTER_TIP_LIMIT) {
+            return {
+              ...tip,
+              analysis: { summary: 'Upgrade to Premium for full analysis, form breakdown, going assessment, and staking advice.' },
+              locked: false,
+              starterLimited: true,
+            };
+          } else {
+            return {
+              ...tip,
+              selection: 'Premium Pick — Upgrade for Full Access',
+              analysis: { summary: 'Starter plan includes 3 tips per day. Upgrade to Premium for all tips and full analysis.' },
+              locked: true,
+            };
+          }
+        }
+        // Premium/VIP/Admin: full access
         return { ...tip, locked: false };
       });
 

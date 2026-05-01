@@ -264,13 +264,15 @@ module.exports = function(deps) {
       var plan = req.body.plan || 'premium-monthly';
       var prices = await stripeService.ensureProducts();
       var priceMap = {
+        'starter-monthly': prices.starterMonthlyId,
+        'starter-annual': prices.starterAnnualId,
         'premium-monthly': prices.premiumMonthlyId,
         'premium-annual': prices.premiumAnnualId,
         'vip-monthly': prices.vipMonthlyId,
         'vip-annual': prices.vipAnnualId,
       };
       var priceId = priceMap[plan] || prices.premiumMonthlyId;
-      var tier = plan.startsWith('vip') ? 'vip' : 'premium';
+      var tier = plan.startsWith('vip') ? 'vip' : plan.startsWith('starter') ? 'starter' : 'premium';
 
       var baseUrl = req.headers.origin || req.protocol + '://' + req.get('host');
 

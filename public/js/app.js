@@ -54,15 +54,27 @@ const App = {
     if (this.user.role === 'admin') return 'vip'; // admin gets everything
     if (this.user.subscription === 'vip') return 'vip';
     if (this.user.subscription === 'premium') return 'premium';
+    if (this.user.subscription === 'starter') return 'starter';
     if (this.user.trialActive) return 'premium'; // trial = premium level
     return 'free';
   },
 
-  // A user has premium access if premium or vip tier
+  // A user has premium access if premium or vip tier (full access)
   // -----------------------------------------------------------------------
   isPremium() {
     var level = this.getAccessLevel();
     return level === 'premium' || level === 'vip';
+  },
+
+  // Starter has partial access (tips + odds, no analysis)
+  isStarter() {
+    return this.getAccessLevel() === 'starter';
+  },
+
+  // Any paid tier (starter, premium, or vip)
+  isPaid() {
+    var level = this.getAccessLevel();
+    return level === 'starter' || level === 'premium' || level === 'vip';
   },
 
   isVIP() {
@@ -6222,7 +6234,7 @@ const App = {
         <!-- Confidence Tier Leaderboard (social proof before plans) -->
         <div id="pricing-confidence-leaderboard"></div>
 
-        <div class="pricing-grid mb-32" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="pricing-grid mb-32" style="grid-template-columns: repeat(4, 1fr);">
           <!-- FREE CARD -->
           <div class="pricing-card">
             ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">START HERE</div>' : ''}
@@ -6241,6 +6253,28 @@ const App = {
             </button>
           </div>
 
+          <!-- STARTER CARD -->
+          <div class="pricing-card${accessLevel === 'starter' ? ' featured' : ''}">
+            <h3>Starter</h3>
+            <p class="text-muted">Get your feet wet</p>
+            <div class="pricing-price"><span class="currency">&pound;</span>9<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
+            <p class="text-xs text-gold mb-8">&pound;99.99/year (save &pound;20) | Cancel anytime</p>
+            <ul class="pricing-features">
+              <li><strong>Everything in Free, plus:</strong></li>
+              <li>3 daily tips (2 sports)</li>
+              <li>Selection + odds revealed</li>
+              <li>Full results + tracking</li>
+              <li style="color:var(--text-muted);text-decoration:line-through;">Full AI analysis</li>
+              <li style="color:var(--text-muted);text-decoration:line-through;">Email bulletins</li>
+              <li style="color:var(--text-muted);text-decoration:line-through;">Acca generator</li>
+              <li style="color:var(--text-muted);text-decoration:line-through;">Alerts</li>
+            </ul>
+            ${accessLevel === 'starter' ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button><p class="text-xs text-gold mt-8"><a href="#" onclick="App.startCheckout(\'premium-monthly\');return false;" style="color:var(--gold);">Upgrade to Premium &rarr;</a></p>' :
+              isLoggedIn && !isPremium ? '<button class="btn btn-outline btn-full" onclick="App.startCheckout(\'starter-monthly\')">Subscribe &mdash; &pound;9.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'starter-annual\')">Annual &mdash; &pound;99.99/year</button>' :
+              isPremium ? '<button class="btn btn-outline btn-full" disabled>Included in your plan</button>' :
+              '<button class="btn btn-outline btn-full" onclick="App.showModal(\'register\')">Sign Up First</button>'}
+          </div>
+
           <!-- PREMIUM CARD -->
           <div class="pricing-card${accessLevel === 'premium' ? ' featured' : ''}">
             <div class="featured-badge" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">MOST POPULAR</div>
@@ -6249,15 +6283,15 @@ const App = {
             <div class="pricing-price"><span class="currency">&pound;</span>19<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
             <p class="text-xs text-gold mb-8">&pound;199.99/year (save &pound;40) | Cancel anytime</p>
             <ul class="pricing-features">
-              <li><strong>Everything in Free, plus:</strong></li>
-              <li>All tips before kick-off</li>
+              <li><strong>Everything in Starter, plus:</strong></li>
+              <li>All tips, all 6 sports</li>
               <li>Full AI analysis</li>
               <li>Value bet scanner</li>
               <li>Live hub</li>
               <li>H2H compare</li>
               <li>5 alert types</li>
               <li>Daily email bulletin</li>
-              <li>Weekend acca</li>
+              <li>Smart acca generator</li>
               <li>PL preview</li>
             </ul>
             ${accessLevel === 'premium' && !this.user.trialActive ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
