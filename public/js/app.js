@@ -6234,7 +6234,7 @@ const App = {
         <!-- Confidence Tier Leaderboard (social proof before plans) -->
         <div id="pricing-confidence-leaderboard"></div>
 
-        <div class="pricing-grid mb-32" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="pricing-grid mb-32">
           <!-- FREE CARD -->
           <div class="pricing-card">
             ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">START HERE</div>' : ''}

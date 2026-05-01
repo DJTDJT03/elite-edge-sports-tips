@@ -413,24 +413,28 @@ main { min-height: calc(100vh - 64px); }
 /* =========================================================================
    PRICING
    ========================================================================= */
-.pricing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 800px; margin: 0 auto; }
+.pricing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; max-width: 1100px; margin: 0 auto; align-items: stretch; }
 .pricing-card {
   background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius-xl); padding: 32px; text-align: center;
+  border-radius: var(--radius-xl); padding: 24px 20px; text-align: center;
   transition: transform 0.3s, box-shadow 0.3s, border-color var(--transition);
+  display: flex; flex-direction: column;
 }
+.pricing-card .pricing-features { flex: 1; }
+.pricing-card .btn { margin-top: auto; }
 .pricing-card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
 @keyframes pricingFadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 .pricing-grid .pricing-card:nth-child(1) { animation: pricingFadeIn 0.5s ease-out 0.1s both; }
 .pricing-grid .pricing-card:nth-child(2) { animation: pricingFadeIn 0.5s ease-out 0.25s both; }
 .pricing-grid .pricing-card:nth-child(3) { animation: pricingFadeIn 0.5s ease-out 0.4s both; }
+.pricing-grid .pricing-card:nth-child(4) { animation: pricingFadeIn 0.5s ease-out 0.55s both; }
 @keyframes badgePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.8; } }
 .pricing-card .featured-badge { animation: badgePulse 2s infinite; }
 .pricing-card.featured {
   border-color: var(--gold); box-shadow: var(--shadow-gold);
-  position: relative; transform: scale(1.02);
+  position: relative;
 }
-.pricing-card.featured:hover { transform: scale(1.02) translateY(-4px); }
+.pricing-card.featured:hover { transform: translateY(-4px); }
 .pricing-card.featured::before {
   content: 'MOST POPULAR'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
   background: var(--gold); color: var(--bg-deep); padding: 4px 16px; border-radius: 20px;
@@ -893,7 +897,7 @@ main { min-height: calc(100vh - 64px); }
   .nav-links.open .mobile-menu-tools .odds-format-toggle,
   .nav-links.open .mobile-menu-tools .theme-toggle { display: inline-flex; font-size: 14px; }
   .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
-  .pricing-grid { grid-template-columns: 1fr; }
+  .pricing-grid { grid-template-columns: 1fr 1fr; }
   .pricing-card.featured { transform: none; }
   .detail-grid { grid-template-columns: repeat(2, 1fr); }
   .analysis-grid { grid-template-columns: 1fr; }
@@ -6401,8 +6405,10 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
 
 /* --- Pricing cards on mobile — stack vertically (768px) --- */
 @media (max-width: 768px) {
-  .pricing-grid { grid-template-columns: 1fr !important; gap: 16px; }
-  .pricing-card { transform: none !important; }
+  .pricing-grid { grid-template-columns: 1fr 1fr !important; gap: 12px; }
+  .pricing-card { transform: none !important; padding: 20px 16px !important; }
+  .pricing-card h3 { font-size: 18px; }
+  .pricing-price { font-size: 32px; }
 }
 
 /* --- General mobile fixes (768px) --- */
