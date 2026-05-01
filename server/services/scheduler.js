@@ -2798,18 +2798,17 @@ module.exports = function startScheduler(deps) {
           var tipCardsHtml = '';
           for (var t = 0; t < todayTips.length; t++) {
             var tip = todayTips[t];
-            var sportIcon = tip.sport === 'racing' ? '&#127943;' : '&#9917;';
+            var sportLabel = tip.sport === 'racing' ? 'Racing' : tip.sport === 'football' ? 'Football' : tip.sport === 'basketball' ? 'NBA' : tip.sport === 'tennis' ? 'Tennis' : tip.sport === 'rugby' ? 'Rugby' : tip.sport === 'american-football' ? 'NFL' : 'Tip';
             tipCardsHtml += '<div style="background:#141824;border-left:3px solid #d4a843;padding:14px 16px;margin:10px 0;border-radius:6px;">';
-            tipCardsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-            tipCardsHtml += '<div><strong style="color:#d4a843;font-size:15px;">' + sportIcon + ' ' + (tip.selection || '') + '</strong>';
-            tipCardsHtml += '<br><span style="color:#8b8d93;font-size:12px;">' + (tip.event || '') + '</span></div>';
-            if (tip.odds) tipCardsHtml += '<div style="color:#e8e6e3;font-weight:800;font-size:18px;">' + tip.odds + '</div>';
-            tipCardsHtml += '</div>';
+            tipCardsHtml += '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8b8d93;margin-bottom:4px;">' + sportLabel + '</div>';
+            tipCardsHtml += '<strong style="color:#d4a843;font-size:15px;">' + (tip.selection || '') + '</strong>';
+            if (tip.odds) tipCardsHtml += ' <span style="color:#e8e6e3;font-weight:800;font-size:15px;">&mdash; ' + tip.odds + '</span>';
+            tipCardsHtml += '<br><span style="color:#8b8d93;font-size:12px;">' + (tip.event || '') + '</span>';
+            if (tip.isPremium) tipCardsHtml += ' <span style="background:#d4a843;color:#0a0e1a;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;">PREMIUM</span>';
             // Analysis summary — why we picked this
             if (tip.analysis && tip.analysis.summary) {
-              tipCardsHtml += '<p style="color:#a0a4b0;font-size:12px;line-height:1.5;margin:8px 0 4px;border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;">' + tip.analysis.summary + '</p>';
+              tipCardsHtml += '<p style="color:#a0a4b0;font-size:12px;line-height:1.5;margin:8px 0 0;border-top:1px solid rgba(255,255,255,0.06);padding-top:8px;">' + tip.analysis.summary + '</p>';
             }
-            if (tip.isPremium) tipCardsHtml += '<span style="background:#d4a843;color:#0a0e1a;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700;">PREMIUM</span>';
             tipCardsHtml += '</div>';
           }
 
@@ -2823,9 +2822,9 @@ module.exports = function startScheduler(deps) {
           htmlBody += tipCardsHtml;
           htmlBody += '<p style="color:#8b8d93;margin-top:24px;">' + (aiContent.signOff || '') + '</p>';
           htmlBody += '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(212,168,67,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:10px;padding:20px;margin:24px 0;text-align:center;">';
-          htmlBody += '<p style="color:#d4a843;font-weight:700;font-size:16px;margin:0 0 8px;">Build Your Own Accumulator</p>';
+          htmlBody += '<a href="https://eliteedgesports.co.uk/#/acca-generator" style="color:#d4a843;font-weight:700;font-size:16px;text-decoration:none;display:block;margin:0 0 8px;">Try Our Acca Generator &rarr;</a>';
           htmlBody += '<p style="color:#8b8d93;font-size:13px;margin:0 0 16px;">Our Smart Acca Generator uses today\'s fixtures and our probability model to build optimised 2-8 fold accumulators.</p>';
-          htmlBody += '<a href="https://eliteedgesports.co.uk/#/acca-generator" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Try Acca Generator &rarr;</a>';
+          htmlBody += '<a href="https://eliteedgesports.co.uk/#/acca-generator" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Build My Acca &rarr;</a>';
           htmlBody += '</div>';
           htmlBody += '<p style="font-size:11px;color:#64748b;margin-top:32px;">18+ | Entertainment & statistical analysis only | BeGambleAware.org</p>';
           htmlBody += '</div>';
