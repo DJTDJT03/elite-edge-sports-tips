@@ -963,6 +963,7 @@ const App = {
       case 'nfl': this.renderSportTips('american-football', 'NFL'); break;
       case 'tennis': this.renderSportTips('tennis', 'Tennis'); break;
       case 'calculators': BetCalc.render(); break;
+      case 'academy': this.renderAcademy(); break;
       case 'buy-credits': this.renderBuyCredits(); break;
       case 'refer': this.renderReferral(); break;
       case 'selections': this.renderSelections(); break;
@@ -3895,6 +3896,99 @@ const App = {
     this._selectedRace = intel.time;
     this._racingView = 'detail';
     this.renderRacing();
+  },
+
+  // -----------------------------------------------------------------------
+  // BETTING ACADEMY
+  // -----------------------------------------------------------------------
+  _academyGuide: null,
+
+  renderAcademy() {
+    var app = document.getElementById('app');
+    var self = this;
+
+    var guides = [
+      {
+        id: 'fundamentals', icon: '&#128218;', title: 'Betting Fundamentals',
+        subtitle: 'Everything you need to know before placing your first bet',
+        sections: [
+          { heading: 'What Are Odds?', body: 'Odds represent the probability of an outcome happening and determine how much you win. There are three formats:<br><br><strong>Fractional (5/2)</strong> — for every £2 you stake, you win £5 profit. Traditional UK format.<br><strong>Decimal (3.50)</strong> — multiply your stake by this number for total returns. £10 at 3.50 = £35.<br><strong>American (+250)</strong> — how much you win from a £100 stake (positive) or how much you need to stake to win £100 (negative).<br><br><a href="#/calculators" style="color:var(--gold);">Try our Odds Converter →</a>' },
+          { heading: 'What Is Value Betting?', body: 'Value exists when the bookmaker\'s odds are higher than the true probability of an outcome. If a horse has a 40% chance of winning but the odds imply only 25%, that\'s a value bet — the bookmaker has priced it wrong.<br><br>Our model calculates this as <strong>Edge</strong>. A positive edge means we believe the true probability is higher than what the odds suggest. This is how professional bettors make money long-term — not by picking winners, but by finding value.<br><br><a href="#/selections" style="color:var(--gold);">See today\'s value selections →</a>' },
+          { heading: 'Understanding Stake Sizing', body: 'Never bet more than you can afford to lose. Professional staking strategies include:<br><br><strong>Level Stakes</strong> — same amount on every bet. Simple and effective.<br><strong>Percentage Staking</strong> — bet 1-3% of your total bank on each selection. Adjusts as your bank grows or shrinks.<br><strong>Kelly Criterion</strong> — stake proportional to your edge. Higher edge = bigger stake. Mathematically optimal but aggressive.<br><br>Our tips include staking recommendations based on confidence and edge. <a href="#/calculators" style="color:var(--gold);">Use our Bet Calculator →</a>' },
+          { heading: 'What Is a Strike Rate?', body: 'Strike rate is the percentage of bets that win. A 50% strike rate means half your bets win. But strike rate alone doesn\'t tell you if you\'re profitable — a 30% strike rate at average odds of 5/1 is far more profitable than an 80% strike rate at 1/5.<br><br>What matters is <strong>ROI (Return on Investment)</strong> — your total profit divided by total stakes. A positive ROI means you\'re beating the bookmaker. We track both strike rate and ROI for every tip on our <a href="#/results" style="color:var(--gold);">Results page →</a>' },
+        ]
+      },
+      {
+        id: 'bookmakers', icon: '&#127970;', title: 'How Bookmakers Work',
+        subtitle: 'Understanding the house edge and why odds move',
+        sections: [
+          { heading: 'How Bookmakers Make Money', body: 'Bookmakers build a margin (overround) into every market. In a fair coin toss, both outcomes should be evens (2.0 decimal). But a bookmaker might price it at 1.91 each way — the difference is their profit margin.<br><br>In horse racing, the overround is typically 115-130%, meaning the implied probabilities of all runners add up to more than 100%. The excess is the bookmaker\'s edge. Our model identifies where this margin is distributed unfairly — creating value for you.' },
+          { heading: 'Why Do Odds Change?', body: 'Odds move for three reasons:<br><br><strong>1. Market money</strong> — when lots of people back a selection, the bookmaker shortens the price (lowers the odds) to manage their liability.<br><strong>2. Information</strong> — team news, injuries, going changes, non-runners all cause odds to move.<br><strong>3. Bookmaker balancing</strong> — they adjust odds to ensure profit regardless of the outcome.<br><br>When we detect odds shortening significantly, our <strong>Market Mover Explainer</strong> tells you WHY using live intelligence from Perplexity AI. <a href="#/selections" style="color:var(--gold);">See today\'s market movers →</a>' },
+          { heading: 'What Is Closing Line Value (CLV)?', body: 'The closing line is the final odds before an event starts. Professional bettors measure their skill by whether they consistently get better odds than the closing line.<br><br>If you back a horse at 5/1 and it closes at 3/1, you had positive CLV — you got a better price than the market settled at. This proves genuine edge, not just luck.<br><br>We track CLV on every single tip. Consistent positive CLV = a model that genuinely beats the market. <a href="#/results" style="color:var(--gold);">See our CLV performance →</a>' },
+        ]
+      },
+      {
+        id: 'bet-types', icon: '&#127922;', title: 'Bet Types Explained',
+        subtitle: 'From singles to Lucky 63s — every bet type broken down',
+        sections: [
+          { heading: 'Singles, Doubles, and Trebles', body: '<strong>Single</strong> — one selection. Simplest bet. Lowest risk.<br><strong>Double</strong> — two selections, both must win. Odds multiply together.<br><strong>Treble</strong> — three selections, all must win. Higher returns, higher risk.<br><br>Example: Three selections at 2/1, 3/1, and 5/1 as a treble pays (3 × 4 × 6) - 1 = 71/1. A £1 stake returns £72.' },
+          { heading: 'Accumulators (4+ Fold)', body: 'An accumulator combines 4 or more selections. All must win for the bet to pay out. The odds multiply, creating potentially huge returns from small stakes.<br><br>Our <strong>Smart Acca Generator</strong> uses probability modelling to build accumulators with the best chance of landing. It ranks selections by edge and confidence, not just odds. <a href="#/acca-generator" style="color:var(--gold);">Build an acca now →</a>' },
+          { heading: 'Each-Way Betting', body: 'An each-way bet is two bets in one: a win bet and a place bet. If your selection wins, both parts pay out. If it places (typically top 2-4), only the place part pays — at a fraction of the win odds (usually 1/4 or 1/5).<br><br>Each-way is ideal for bigger-priced selections where a place return covers your stake. Our outsider picks are always recommended each-way. <a href="#/calculators" style="color:var(--gold);">Calculate EW returns →</a>' },
+          { heading: 'System Bets: Trixie, Yankee, Lucky 15', body: '<strong>Trixie (3 selections)</strong> — 4 bets: 3 doubles + 1 treble. Two must win to get a return.<br><strong>Patent (3 selections)</strong> — 7 bets: 3 singles + 3 doubles + 1 treble. One winner gives a return.<br><strong>Yankee (4 selections)</strong> — 11 bets: 6 doubles + 4 trebles + 1 four-fold.<br><strong>Lucky 15 (4 selections)</strong> — 15 bets: 4 singles + 6 doubles + 4 trebles + 1 four-fold. Bookmakers often offer consolation bonuses if only one wins.<br><br><a href="#/calculators" style="color:var(--gold);">Calculate system bets →</a>' },
+          { heading: 'Dutching', body: 'Dutching means backing multiple selections in the same event with calculated stakes so you win the same amount regardless of which one wins. Useful when you can\'t separate two or three runners.<br><br><a href="#/calculators" style="color:var(--gold);">Use our Dutching Calculator →</a>' },
+        ]
+      },
+    ];
+
+    if (this._academyGuide) {
+      var guide = guides.find(function(g) { return g.id === self._academyGuide; });
+      if (guide) {
+        var sectionsHtml = guide.sections.map(function(s, i) {
+          return '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px;">' +
+            '<h3 style="color:var(--gold);font-size:18px;margin-bottom:12px;">' + (i + 1) + '. ' + s.heading + '</h3>' +
+            '<div style="color:var(--text-secondary);font-size:14px;line-height:1.8;">' + s.body + '</div>' +
+          '</div>';
+        }).join('');
+
+        app.innerHTML =
+          '<div class="container" style="max-width:800px;padding-top:30px;">' +
+            '<a href="#/academy" onclick="App._academyGuide=null;App.route();return false;" style="color:var(--gold);font-size:13px;text-decoration:none;">&larr; Back to Academy</a>' +
+            '<div class="page-header" style="margin-top:16px;">' +
+              '<h1><span style="font-size:36px;margin-right:12px;">' + guide.icon + '</span> ' + guide.title + '</h1>' +
+              '<p style="color:var(--text-secondary);">' + guide.subtitle + '</p>' +
+            '</div>' +
+            sectionsHtml +
+            '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.1),rgba(212,168,67,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:24px;text-align:center;margin-top:24px;">' +
+              '<h3 style="color:var(--gold);margin-bottom:8px;">Ready to put theory into practice?</h3>' +
+              '<p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Our AI-powered model applies these principles automatically across 6 sports, 14 data sources, and 40+ bookmakers.</p>' +
+              '<a href="#/pricing" class="btn btn-gold">Start 14-Day Free Trial &rarr;</a>' +
+            '</div>' +
+          '</div>';
+        return;
+      }
+    }
+
+    // Guide list page
+    var cardsHtml = guides.map(function(g) {
+      return '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;cursor:pointer;transition:border-color 0.2s;" onclick="App._academyGuide=\'' + g.id + '\';App.route();" onmouseover="this.style.borderColor=\'rgba(212,168,67,0.5)\'" onmouseout="this.style.borderColor=\'\'">' +
+        '<div style="font-size:36px;margin-bottom:12px;">' + g.icon + '</div>' +
+        '<h3 style="color:var(--text-primary);font-size:18px;margin-bottom:6px;">' + g.title + '</h3>' +
+        '<p style="color:var(--text-secondary);font-size:13px;line-height:1.5;margin-bottom:12px;">' + g.subtitle + '</p>' +
+        '<div style="color:var(--gold);font-size:13px;font-weight:600;">' + g.sections.length + ' lessons &rarr;</div>' +
+      '</div>';
+    }).join('');
+
+    app.innerHTML =
+      '<div class="container" style="max-width:900px;padding-top:30px;">' +
+        '<div class="page-header text-center">' +
+          '<h1 style="color:var(--gold);">Betting Academy</h1>' +
+          '<p style="color:var(--text-secondary);">Free guides to help you bet smarter. Written by our AI analysts.</p>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px;">' + cardsHtml + '</div>' +
+        '<div style="text-align:center;">' +
+          '<p style="color:var(--text-muted);font-size:13px;">Want to skip the theory and see it in action? <a href="#/selections" style="color:var(--gold);">View today\'s AI-powered selections →</a></p>' +
+        '</div>' +
+      '</div>';
   },
 
   // -----------------------------------------------------------------------
