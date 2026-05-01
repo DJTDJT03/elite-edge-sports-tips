@@ -2489,8 +2489,71 @@ const App = {
     var bankrollHtml = this.renderBankroll();
     var recoveryHtml = this.renderRecoveryPick(allResults, tips);
 
+    var credits = this.user ? this.user.credits : null;
+    var creditHtml = '';
+    if (this.user && !this.isVIP() && credits !== null) {
+      creditHtml = '<div style="display:flex;align-items:center;gap:8px;"><span style="color:var(--gold);font-weight:800;">' + credits + ' credits</span>';
+      if (credits <= 3) creditHtml += ' <a href="#/buy-credits" style="color:#ef4444;font-size:12px;">Running low — buy more</a>';
+      creditHtml += '</div>';
+    }
+
+    var sportCounts = {};
+    todayTips.forEach(function(t) {
+      if (!t.isWeeklyAcca) {
+        var s = t.sport || 'other';
+        sportCounts[s] = (sportCounts[s] || 0) + 1;
+      }
+    });
+    var sportCountHtml = Object.keys(sportCounts).map(function(s) {
+      var icon = s === 'racing' ? '&#127943;' : s === 'football' ? '&#9917;' : s === 'basketball' ? '&#127936;' : s === 'tennis' ? '&#127934;' : s === 'rugby' ? '&#127945;' : s === 'american-football' ? '&#127944;' : '&#127919;';
+      var label = s === 'american-football' ? 'NFL' : s.charAt(0).toUpperCase() + s.slice(1);
+      return '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:10px 16px;text-align:center;"><div style="font-size:20px;">' + icon + '</div><div style="font-size:18px;font-weight:900;color:var(--gold);">' + sportCounts[s] + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">' + label + '</div></div>';
+    }).join('');
+
     app.innerHTML = `
       <div class="container">
+        <!-- HERO: Welcome + Date + Credits -->
+        <div style="margin-bottom:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <div>
+              <h1 style="margin:0;">Welcome to <span class="accent">Elite Edge</span></h1>
+              <p style="color:var(--text-secondary);margin:4px 0 0;">${new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}</p>
+            </div>
+            ${creditHtml}
+          </div>
+        </div>
+
+        <!-- TODAY'S TIPS OVERVIEW — what's been published across all sports -->
+        ${todayTips.length > 0 ? `
+        <div style="background:linear-gradient(135deg,rgba(212,168,67,0.08),rgba(212,168,67,0.02));border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;margin-bottom:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <div style="font-weight:800;font-size:16px;color:var(--gold);">Today's Selections</div>
+            <div style="font-size:13px;color:var(--text-secondary);">${todayTips.filter(t => !t.isWeeklyAcca).length} tips published</div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">${sportCountHtml}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="#/selections" class="btn btn-gold btn-sm">View All Tips</a>
+            <a href="#/acca-generator" class="btn btn-outline btn-sm">Build Acca</a>
+            <a href="#/calculators" class="btn btn-outline btn-sm">Calculators</a>
+            ${this.user && this.user.referralCode ? '<a href="#/refer" class="btn btn-outline btn-sm">Refer &amp; Earn</a>' : ''}
+          </div>
+        </div>` : ''}
+
+        <!-- PERFORMANCE STATS — trust bar -->
+        <div class="trust-banner" style="margin-bottom:20px;">
+          <div class="trust-item"><div class="trust-value">+${perf.roi}%</div><div class="trust-label">Overall ROI</div></div>
+          <div class="trust-item"><div class="trust-value">${perf.strikeRate}%</div><div class="trust-label">Strike Rate</div></div>
+          <div class="trust-item"><div class="trust-value">${perf.runningBank}</div><div class="trust-label">Running Bank</div></div>
+          <div class="trust-item"><div class="trust-value">${perf.totalTips}</div><div class="trust-label">Tips</div></div>
+          <div class="trust-item"><div class="trust-value">${perf.wins}</div><div class="trust-label">Winners</div></div>
+          ${streak > 1 ? `<div class="trust-item"><div class="streak-badge">\ud83d\udd25 ${streak}-Tip Streak</div></div>` : ''}
+        </div>
+
+        <!-- Dynamic Big Winner Banner -->
+        <div id="big-winner-banner"></div>
+
+        <!-- NAP OF THE DAY — most prominent tip -->
+
         <!-- Live Race Tracker -->
         <div id="live-race-tracker"></div>
 
@@ -2500,9 +2563,6 @@ const App = {
         <!-- Morning Brief (logged-in users only) -->
         ${morningBriefHtml}
 
-        <!-- Your Elite Edge Stats (premium users only) -->
-        <div id="personal-stats-container"></div>
-
         <!-- AI Morning Briefing (premium users only) -->
         ${this.isPremium() ? `
         <div class="card" id="ai-briefing-card" style="margin-bottom:20px;padding:20px;border:1px solid rgba(212,168,67,0.2);background:linear-gradient(135deg,rgba(212,168,67,0.06),rgba(212,168,67,0.01));">
@@ -2510,7 +2570,7 @@ const App = {
             <div style="font-size:24px;">&#129302;</div>
             <div>
               <div style="font-weight:800;font-size:15px;color:#d4a843;">AI Morning Briefing</div>
-              <div style="font-size:11px;color:var(--text-muted);">Powered by Claude AI — exclusive to Elite Edge Premium</div>
+              <div style="font-size:11px;color:var(--text-muted);">Powered by Claude + Perplexity — exclusive to subscribers</div>
             </div>
           </div>
           <div id="ai-briefing-content">
@@ -2518,41 +2578,17 @@ const App = {
           </div>
         </div>` : ''}
 
+        <!-- Your Elite Edge Stats (premium users only) -->
+        <div id="personal-stats-container"></div>
+
+        <!-- Would Have Won (non-premium users only) -->
+        ${wouldHaveWonHtml}
+
         <!-- Bankroll Tracker (logged-in users only) -->
         ${bankrollHtml}
 
         <!-- Recovery Pick (premium, only on losing runs) -->
         ${recoveryHtml}
-
-        <div class="page-header">
-          <h1>Welcome to <span class="accent">Elite Edge</span></h1>
-          <p>Today's premium betting intelligence — ${new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}</p>
-        </div>
-
-        <!-- Would Have Won (non-premium users only) -->
-        ${wouldHaveWonHtml}
-
-        <!-- Dynamic Big Winner Banner — shows biggest recent winner -->
-        <div id="big-winner-banner"></div>
-
-        <!-- Quality Philosophy Banner -->
-        <div style="background:linear-gradient(135deg, rgba(212,168,67,0.1), rgba(212,168,67,0.02));border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;">
-          <div style="font-size:28px;">&#127919;</div>
-          <div>
-            <div style="font-weight:700;font-size:14px;color:#d4a843;margin-bottom:2px;">Quality Over Quantity — We Only Tip When The Edge Is Real</div>
-            <div style="font-size:12px;color:var(--text-secondary);">We publish 2-4 selections daily maximum. If there's no genuine edge, we say "no bet today". We never publish filler tips to hit a quota. Every selection has a calculated statistical edge.</div>
-          </div>
-        </div>
-
-        <!-- Trust Banner -->
-        <div class="trust-banner">
-          <div class="trust-item"><div class="trust-value">+${perf.roi}%</div><div class="trust-label">Overall ROI</div></div>
-          <div class="trust-item"><div class="trust-value">${perf.strikeRate}%</div><div class="trust-label">Strike Rate</div></div>
-          <div class="trust-item"><div class="trust-value">${perf.runningBank}</div><div class="trust-label">Running Bank (units)</div></div>
-          <div class="trust-item"><div class="trust-value">${perf.totalTips}</div><div class="trust-label">Tips Published</div></div>
-          <div class="trust-item"><div class="trust-value">${perf.wins}</div><div class="trust-label">Winners</div></div>
-          ${streak > 1 ? `<div class="trust-item"><div class="streak-badge">\ud83d\udd25 ${streak}-Tip Winning Streak</div></div>` : ''}
-        </div>
 
         <!-- Streak Badges -->
         ${streakBadgesHtml}
