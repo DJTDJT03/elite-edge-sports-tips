@@ -1071,6 +1071,95 @@ module.exports = function startScheduler(deps) {
       console.log('[Auto-Tips] NFL pick: ' + nflCandidates[0].scored.selectedSelection + ' @ ' + nflCandidates[0].scored.selectedOdds);
     }
 
+    // --- TENNIS SELECTIONS ---
+    var tennisCandidates = [];
+    var tennisData = deps.tennisData;
+    if (tennisData && tennisData.isAvailable) {
+      try {
+        console.log('[Auto-Tips] Fetching tennis fixtures...');
+        var tennisMatches = await tennisData.getFixtures(today);
+        var tennisUpcoming = tennisMatches.filter(function(m) { return m.status === '' || m.status === 'NS' || !m.status; });
+        console.log('[Auto-Tips] Found ' + tennisUpcoming.length + ' upcoming tennis matches');
+
+        if (tennisUpcoming.length > 0) {
+          // Fetch rankings once
+          var atpRankings = [];
+          var wtaRankings = [];
+          try {
+            var rankResults = await Promise.allSettled([
+              tennisData.getRankings('ATP'),
+              tennisData.getRankings('WTA'),
+            ]);
+            atpRankings = rankResults[0].status === 'fulfilled' ? rankResults[0].value : [];
+            wtaRankings = rankResults[1].status === 'fulfilled' ? rankResults[1].value : [];
+          } catch (e) {}
+
+          // Score top matches (limit to top-tier: ranked players only)
+          var rankedMatches = tennisUpcoming.filter(function(m) {
+            var rankings = m.tour === 'ATP' ? atpRankings : wtaRankings;
+            var p1Rank = rankings.find(function(r) { return r.playerKey === m.player1Key; });
+            var p2Rank = rankings.find(function(r) { return r.playerKey === m.player2Key; });
+            return p1Rank || p2Rank; // at least one ranked player
+          });
+
+          for (var tnIdx = 0; tnIdx < Math.min(rankedMatches.length, 15); tnIdx++) {
+            var tnMatch = rankedMatches[tnIdx];
+            try {
+              var tnRankings = tnMatch.tour === 'ATP' ? atpRankings : wtaRankings;
+              var p1R = tnRankings.find(function(r) { return r.playerKey === tnMatch.player1Key; });
+              var p2R = tnRankings.find(function(r) { return r.playerKey === tnMatch.player2Key; });
+              var p1Rank = p1R ? p1R.rank : 500;
+              var p2Rank = p2R ? p2R.rank : 500;
+
+              // Fetch H2H
+              var tnH2H = { matches: [], p1Wins: 0, p2Wins: 0, total: 0 };
+              try { tnH2H = await tennisData.getH2H(tnMatch.player1Key, tnMatch.player2Key); } catch (e) {}
+
+              // Try to get odds from Odds API
+              var tnOdds = {};
+              if (oddsNormalised) {
+                var p1Last = tnMatch.player1.split(' ').pop().toLowerCase();
+                var tnOddsMatch = oddsNormalised.find(function(o) {
+                  return o.homeTeam && o.homeTeam.toLowerCase().indexOf(p1Last) !== -1;
+                });
+                if (tnOddsMatch && tnOddsMatch.bookmakerOdds) {
+                  var tnFirstBk = Object.keys(tnOddsMatch.bookmakerOdds)[0];
+                  if (tnFirstBk && tnOddsMatch.bookmakerOdds[tnFirstBk]) {
+                    var tnBkData = tnOddsMatch.bookmakerOdds[tnFirstBk];
+                    var tnKeys = Object.keys(tnBkData);
+                    if (tnKeys.length >= 2) {
+                      tnOdds.p1 = tnBkData[tnKeys[0]] || 0;
+                      tnOdds.p2 = tnBkData[tnKeys[1]] || 0;
+                    }
+                  }
+                }
+              }
+
+              var tnScored = scoringModel.scoreTennisMatch(tnMatch, p1Rank, p2Rank, tnH2H, tnOdds);
+              if (tnScored && tnScored.edge > 0.03 && tnScored.confidence >= 6) {
+                tennisCandidates.push({
+                  type: 'tennis',
+                  scored: tnScored,
+                  edge: tnScored.edge,
+                  confidence: tnScored.confidence,
+                });
+              }
+            } catch (tnErr) { /* skip individual match errors */ }
+          }
+          console.log('[Auto-Tips] Tennis candidates passing filter: ' + tennisCandidates.length);
+        }
+      } catch (tennisErr) {
+        console.error('[Auto-Tips] Tennis API error:', tennisErr.message);
+      }
+    }
+
+    // Add best tennis candidate (1 per day)
+    if (tennisCandidates.length > 0) {
+      tennisCandidates.sort(function(a, b) { return b.edge - a.edge; });
+      allCandidates.push(tennisCandidates[0]);
+      console.log('[Auto-Tips] Tennis pick: ' + tennisCandidates[0].scored.selectedSelection + ' @ ' + tennisCandidates[0].scored.selectedOdds);
+    }
+
     // Sort all candidates by edge descending
     allCandidates.sort(function(a, b) { return b.edge - a.edge; });
 
@@ -1130,8 +1219,8 @@ module.exports = function startScheduler(deps) {
       }
     }
 
-    // Cap at 8 total (2 racing + 2 football + 1 NBA + 1 rugby + 1 NFL + 1 outsider)
-    selected = selected.slice(0, 8);
+    // Cap at 9 total (2 racing + 2 football + 1 NBA + 1 rugby + 1 NFL + 1 tennis + 1 outsider)
+    selected = selected.slice(0, 9);
 
     // If we have fewer than 3 main tips, try to fill from football
     if (selected.filter(function(s) { return !s._isOutsider; }).length < 3 && footballMain.length > 2) {
@@ -1324,6 +1413,38 @@ module.exports = function startScheduler(deps) {
           league: rgFixture.league || 'Super League',
           kickoff: rgFixture.time || '',
           venue: rgFixture.venue || '',
+          market: scored.selectedMarket,
+          selection: scored.selectedSelection,
+          odds: scored.selectedOdds,
+          confidence: scored.confidence,
+          modelProbability: scored.modelProbability,
+          impliedProbability: scored.impliedProbability,
+          edge: scored.edge,
+          valueRating: scored.valueRating,
+          isPremium: true,
+          isNap: isNap,
+          status: 'active',
+          result: null,
+          date: today,
+          tipster: 'Elite Edge Model',
+          tipsterProfile: tipsterProfile,
+          staking: scored.staking,
+          riskLevel: scored.riskLevel,
+          analysis: analysis,
+          openingOdds: scored.selectedOdds,
+          advisedPriceDecimal: scored.selectedOdds,
+          bookmakerOdds: {},
+          recentForm: [],
+        };
+      } else if (sport === 'tennis') {
+        var tnFixture = scored.fixture || {};
+        tip = {
+          id: tipId,
+          sport: 'tennis',
+          event: (tnFixture.player1 || 'P1') + ' vs ' + (tnFixture.player2 || 'P2') + ' - ' + (tnFixture.tournament || 'Tournament'),
+          league: tnFixture.tour || 'ATP',
+          kickoff: tnFixture.time || '',
+          venue: tnFixture.tournament || '',
           market: scored.selectedMarket,
           selection: scored.selectedSelection,
           odds: scored.selectedOdds,
@@ -2165,6 +2286,77 @@ module.exports = function startScheduler(deps) {
             }
           }
         } catch (err) { console.error('[Auto-Settle] NFL error:', err.message); }
+      }
+
+      // Auto-settle tennis results
+      var tennisDataSvc = deps.tennisData;
+      if (tennisDataSvc && tennisDataSvc.isAvailable) {
+        try {
+          var tnResults = [];
+          for (var tni = 0; tni < datesToSettle.length; tni++) {
+            try {
+              var dayTnResults = await tennisDataSvc.getResults(datesToSettle[tni]);
+              tnResults = tnResults.concat(dayTnResults);
+            } catch (e) { /* individual day optional */ }
+          }
+
+          for (var tnti = 0; tnti < activeTips.length; tnti++) {
+            var tnTip = activeTips[tnti];
+            if (tnTip.sport !== 'tennis') continue;
+
+            // Match by player name in the event
+            var tnMatch = tnResults.find(function(m) {
+              var eventLower = (tnTip.event || '').toLowerCase();
+              return eventLower.indexOf(m.player1.toLowerCase()) !== -1 ||
+                     eventLower.indexOf(m.player2.toLowerCase()) !== -1;
+            });
+
+            if (tnMatch && tnMatch.winner) {
+              var tnSelection = (tnTip.selection || '').toLowerCase();
+              var tnWinner = '';
+              if (tnMatch.winner === 'First Player') tnWinner = tnMatch.player1.toLowerCase();
+              else if (tnMatch.winner === 'Second Player') tnWinner = tnMatch.player2.toLowerCase();
+
+              var tnWon = tnSelection.indexOf(tnWinner) !== -1 || tnWinner.indexOf(tnSelection.split(' ').pop()) !== -1;
+
+              var tnResultVal = tnWon ? 'won' : 'lost';
+              var tnStake = parseFloat(tnTip.staking) || 2;
+              var tnPnl = tnWon ? ((tnTip.odds - 1) * tnStake) : -tnStake;
+
+              var tnAllResults = await db.getResults();
+              var tnAlready = tnAllResults.some(function(r) {
+                return r.selection === tnTip.selection && normDate(r.date) === normDate(tnTip.date);
+              });
+              if (tnAlready) {
+                if (tnTip.status === 'active') await db.updateTip(tnTip.id, { status: 'settled' });
+                continue;
+              }
+
+              await db.updateTip(tnTip.id, {
+                status: 'settled', result: tnResultVal,
+                settledAt: new Date().toISOString(),
+                settlementSource: 'auto-tennis-api',
+              });
+
+              await db.createResult({
+                id: 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                tipId: tnTip.id, sport: 'tennis', event: tnTip.event, selection: tnTip.selection,
+                market: tnTip.market, odds: tnTip.odds, stake: tnStake,
+                result: tnResultVal, pnl: Math.round(tnPnl * 100) / 100,
+                date: tnTip.date, isPremium: tnTip.isPremium, tipsterProfile: tnTip.tipsterProfile || 'The Edge',
+                confidence: tnTip.confidence,
+              });
+              updated++;
+              console.log('[Auto-Settle] Tennis: ' + tnTip.selection + ' = ' + tnResultVal + ' (' + tnPnl.toFixed(2) + 'u) [' + tnMatch.finalResult + ']');
+
+              if (telegramBot && telegramBot.isAvailable() && tnWon) {
+                try {
+                  await telegramBot.sendResult({ selection: tnTip.selection, odds: tnTip.odds, result: tnResultVal, pnl: Math.round(tnPnl * 100) / 100, event: tnTip.event });
+                } catch (tgErr) { /* non-fatal */ }
+              }
+            }
+          }
+        } catch (err) { console.error('[Auto-Settle] Tennis error:', err.message); }
       }
 
       if (updated > 0) {

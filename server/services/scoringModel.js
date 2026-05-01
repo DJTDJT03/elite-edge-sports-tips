@@ -1286,6 +1286,8 @@ class ScoringModel {
       return this._generateRugbyAnalysis(scored, enrichment);
     } else if (sport === 'american-football') {
       return this._generateNFLAnalysis(scored, enrichment);
+    } else if (sport === 'tennis') {
+      return this._generateTennisAnalysis(scored, enrichment);
     } else {
       return this._generateFootballAnalysis(scored, enrichment);
     }
@@ -1885,6 +1887,140 @@ class ScoringModel {
       riskLevel: best.odds < 2.5 ? 'Low' : 'Medium',
       factors: factors,
       expectedTotal: expectedTotal,
+    };
+  }
+
+  /**
+   * Score a tennis match. Ranking, H2H, surface form.
+   */
+  scoreTennisMatch(match, p1Ranking, p2Ranking, h2h, odds) {
+    if (!match || !match.player1 || !match.player2) return null;
+
+    var factors = {};
+
+    // 1. Ranking (30%) — lower rank = better
+    var r1 = p1Ranking || 500;
+    var r2 = p2Ranking || 500;
+    var rankDiff = r2 - r1; // positive = player 1 is higher ranked
+    factors.ranking = Math.min(Math.max((rankDiff + 100) / 200, 0.1), 0.95);
+
+    // 2. H2H (20%)
+    if (h2h && h2h.total > 0) {
+      factors.h2h = h2h.p1Wins / h2h.total;
+    } else {
+      factors.h2h = 0.5;
+    }
+
+    // 3. Surface suitability (20%) — derived from ranking delta on this surface
+    // Higher-ranked players on their preferred surface get a boost
+    var surfaceBoost = 0;
+    if (match.surface === 'Clay' && r1 <= 20) surfaceBoost = 0.05; // top clay courters
+    if (match.surface === 'Grass' && r1 <= 15) surfaceBoost = 0.08; // grass specialists rarer
+    factors.surface = Math.min(factors.ranking + surfaceBoost, 1.0);
+
+    // 4. Form (15%) — use ranking as proxy (ranking reflects recent form)
+    factors.form = r1 <= 10 ? 0.85 : r1 <= 30 ? 0.7 : r1 <= 50 ? 0.6 : r1 <= 100 ? 0.5 : 0.35;
+
+    // 5. Tournament level (15%)
+    var tName = (match.tournament || '').toLowerCase();
+    var isGrandSlam = tName.indexOf('open') !== -1 || tName.indexOf('wimbledon') !== -1 || tName.indexOf('roland') !== -1;
+    var isMasters = tName.indexOf('masters') !== -1 || tName.indexOf('1000') !== -1;
+    factors.tournament = isGrandSlam ? 0.9 : isMasters ? 0.75 : 0.55;
+
+    // Weighted composite — higher = player 1 more likely to win
+    var weights = { ranking: 0.30, h2h: 0.20, surface: 0.20, form: 0.15, tournament: 0.15 };
+    var composite = 0;
+    for (var key in weights) { composite += (factors[key] || 0.5) * weights[key]; }
+
+    // Determine selection: favour the higher-ranked player if composite > 0.55
+    var selectedPlayer, selectedOdds, otherOdds;
+    if (composite >= 0.55) {
+      selectedPlayer = match.player1;
+      selectedOdds = odds && odds.p1 ? parseFloat(odds.p1) : 0;
+      otherOdds = odds && odds.p2 ? parseFloat(odds.p2) : 0;
+    } else if (composite <= 0.45) {
+      selectedPlayer = match.player2;
+      selectedOdds = odds && odds.p2 ? parseFloat(odds.p2) : 0;
+      otherOdds = odds && odds.p1 ? parseFloat(odds.p1) : 0;
+      composite = 1 - composite; // flip for the selected player
+    } else {
+      return null; // too close to call
+    }
+
+    if (!selectedOdds || selectedOdds < 1.8 || selectedOdds > 9.0) return null;
+
+    var impliedProb = 1 / selectedOdds;
+    var edge = composite - impliedProb;
+    if (edge < 0.03) return null;
+
+    var confidence = Math.min(Math.round(composite * 10), 10);
+    if (confidence < 6) confidence = 6;
+
+    return {
+      fixture: match,
+      selectedMarket: 'Match Winner',
+      selectedSelection: selectedPlayer,
+      selectedOdds: selectedOdds,
+      modelProbability: composite,
+      impliedProbability: impliedProb,
+      edge: edge,
+      confidence: confidence,
+      valueRating: edge >= 0.10 ? 'Strong' : edge >= 0.05 ? 'Fair' : 'Slight',
+      staking: selectedOdds < 2.0 ? '1.5 units' : selectedOdds < 3.5 ? '1 unit' : '0.75 units',
+      riskLevel: selectedOdds < 2.0 ? 'Low' : selectedOdds < 3.5 ? 'Medium' : 'High',
+      factors: factors,
+      p1Ranking: r1,
+      p2Ranking: r2,
+      h2hRecord: h2h,
+    };
+  }
+
+  _generateTennisAnalysis(scored, enrichment) {
+    const match = scored.fixture || {};
+    const p1 = match.player1 || 'Player 1';
+    const p2 = match.player2 || 'Player 2';
+    const selection = scored.selectedSelection || 'Selection';
+    const odds = scored.selectedOdds || 0;
+    const edge = scored.edge || 0;
+    const edgePct = (edge * 100).toFixed(1);
+    const modelPct = ((scored.modelProbability || 0) * 100).toFixed(0);
+    const impliedPct = ((scored.impliedProbability || 0) * 100).toFixed(0);
+    const surface = match.surface || 'Unknown';
+    const tournament = match.tournament || 'Tournament';
+    const r1 = scored.p1Ranking || '?';
+    const r2 = scored.p2Ranking || '?';
+    const h2h = scored.h2hRecord || {};
+    const factors = scored.factors || {};
+    const sig = enrichment || {};
+    const sv = (key) => sig[key] ? sig[key].value.trim() : '';
+
+    let keyReason = '';
+    if (factors.ranking >= 0.75) keyReason = 'Significant ranking advantage is the key factor';
+    else if (factors.h2h >= 0.7) keyReason = 'Head-to-head record strongly favours the selection';
+    else if (factors.surface >= 0.7) keyReason = 'Surface suitability gives a clear edge';
+    else if (factors.form >= 0.7) keyReason = 'Current form is the driving factor';
+    else keyReason = 'Multiple factors align for this pick';
+
+    let formText = `${p1} (ranked ${r1}) vs ${p2} (ranked ${r2}) on ${surface} at ${tournament}. `;
+    if (h2h && h2h.total > 0) {
+      formText += `H2H record: ${h2h.p1Wins}-${h2h.p2Wins} in ${h2h.total} meetings. `;
+    }
+    formText += `${surface} surface ${factors.surface >= 0.65 ? 'suits the selection well' : 'is a neutral factor in this matchup'}.`;
+
+    if (sig.team_news) formText += ' ' + sv('team_news');
+
+    const riskNotes = odds < 1.6
+      ? 'Heavy favourite — short price limits returns but confidence is high.'
+      : odds < 2.5
+        ? 'Fair price for a competitive match. Fitness and recent tournament load could be factors.'
+        : 'Bigger price suggests an upset opportunity — the model sees value the market is underpricing.';
+
+    return {
+      summary: `${p1} vs ${p2} at ${tournament} (${surface}). Our model gives ${selection} a ${modelPct}% probability against the market's ${impliedPct}%. ${keyReason}. Edge: ${edgePct}%.`,
+      form: formText,
+      surface: `${surface} court. ${factors.surface >= 0.65 ? 'Selection has a strong record on this surface.' : 'Surface is not a major differentiator here.'}`,
+      headToHead: h2h && h2h.total > 0 ? `${p1} leads ${h2h.p1Wins}-${h2h.p2Wins} in ${h2h.total} career meetings.` : 'No significant head-to-head record between these players.',
+      riskNotes: riskNotes,
     };
   }
 
