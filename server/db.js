@@ -193,6 +193,12 @@ function dbUserToApp(row) {
     stripeCustomerId: row.stripe_customer_id || null,
     stripeSubscriptionId: row.stripe_subscription_id || null,
     dripsSent: row.drips_sent || [],
+    credits: parseInt(row.credits) || 0,
+    creditsMonthlyAllowance: parseInt(row.credits_monthly_allowance) || 0,
+    creditsResetDate: row.credits_reset_date || null,
+    referralCode: row.referral_code || null,
+    referredBy: row.referred_by || null,
+    referralCount: parseInt(row.referral_count) || 0,
     emailVerified: row.email_verified || false,
     emailVerifyToken: row.email_verify_token || null,
     paymentFailedAt: row.payment_failed_at || null,
@@ -232,6 +238,12 @@ function appUserToDb(data) {
   if (data.stripeCustomerId !== undefined) result.stripe_customer_id = data.stripeCustomerId;
   if (data.stripeSubscriptionId !== undefined) result.stripe_subscription_id = data.stripeSubscriptionId;
   if (data.dripsSent !== undefined) result.drips_sent = JSON.stringify(data.dripsSent);
+  if (data.credits !== undefined) result.credits = data.credits;
+  if (data.creditsMonthlyAllowance !== undefined) result.credits_monthly_allowance = data.creditsMonthlyAllowance;
+  if (data.creditsResetDate !== undefined) result.credits_reset_date = data.creditsResetDate;
+  if (data.referralCode !== undefined) result.referral_code = data.referralCode;
+  if (data.referredBy !== undefined) result.referred_by = data.referredBy;
+  if (data.referralCount !== undefined) result.referral_count = data.referralCount;
   if (data.emailVerified !== undefined) result.email_verified = data.emailVerified;
   if (data.emailVerifyToken !== undefined) result.email_verify_token = data.emailVerifyToken;
   if (data.paymentFailedAt !== undefined) result.payment_failed_at = data.paymentFailedAt;
@@ -803,6 +815,63 @@ async function getAnalystSnapshots(analystKey, limit) {
 }
 
 // ---------------------------------------------------------------------------
+// CREDIT TRANSACTIONS
+// ---------------------------------------------------------------------------
+async function recordCreditTransaction(data) {
+  if (!pool) return;
+  await query(
+    'INSERT INTO credit_transactions (user_id, amount, balance_after, type, description, tip_id) VALUES ($1,$2,$3,$4,$5,$6)',
+    [data.userId, data.amount, data.balanceAfter, data.type, data.description || null, data.tipId || null]
+  );
+}
+
+async function getCreditHistory(userId, limit) {
+  if (!pool) return [];
+  var lim = limit || 20;
+  const { rows } = await query(
+    'SELECT * FROM credit_transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
+    [userId, lim]
+  );
+  return rows.map(function(r) {
+    return {
+      id: r.id, userId: r.user_id, amount: r.amount, balanceAfter: r.balance_after,
+      type: r.type, description: r.description, tipId: r.tip_id, createdAt: r.created_at,
+    };
+  });
+}
+
+/**
+ * Deduct credits from a user. Returns the new balance or -1 if insufficient.
+ * Atomic: uses UPDATE with WHERE credits >= cost to prevent going negative.
+ */
+async function deductCredits(userId, cost, type, description, tipId) {
+  if (!pool) return -1;
+  const { rows } = await query(
+    'UPDATE users SET credits = credits - $2 WHERE id = $1 AND credits >= $2 RETURNING credits',
+    [userId, cost]
+  );
+  if (rows.length === 0) return -1; // insufficient credits
+  var newBalance = parseInt(rows[0].credits);
+  await recordCreditTransaction({ userId: userId, amount: -cost, balanceAfter: newBalance, type: type, description: description, tipId: tipId });
+  return newBalance;
+}
+
+/**
+ * Add credits to a user.
+ */
+async function addCredits(userId, amount, type, description) {
+  if (!pool) return 0;
+  const { rows } = await query(
+    'UPDATE users SET credits = credits + $2 WHERE id = $1 RETURNING credits',
+    [userId, amount]
+  );
+  if (rows.length === 0) return 0;
+  var newBalance = parseInt(rows[0].credits);
+  await recordCreditTransaction({ userId: userId, amount: amount, balanceAfter: newBalance, type: type, description: description });
+  return newBalance;
+}
+
+// ---------------------------------------------------------------------------
 // SONAR CACHE
 // ---------------------------------------------------------------------------
 async function getSonarCache(cacheKey) {
@@ -1071,6 +1140,8 @@ module.exports = {
   createPriceSnapshot, getPriceHistory,
   // Analyst Snapshots
   createAnalystSnapshot, getAnalystSnapshots,
+  // Credits
+  recordCreditTransaction, getCreditHistory, deductCredits, addCredits,
   // Sonar Cache
   getSonarCache, claimSonarCache, completeSonarCache, checkSonarClaim, reclaimStaleSonarCache, cleanExpiredSonarCache,
   // Sonar Spend

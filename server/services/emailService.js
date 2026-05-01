@@ -1225,6 +1225,34 @@ The Elite Edge Team`;
     return this._sendEmail({ to: email, subject, html, text, emailType: 'payment_final_warning' });
   }
 
+  // -----------------------------------------------------------------------
+  // LOW CREDITS WARNING
+  // -----------------------------------------------------------------------
+  async sendLowCredits({ name, email, credits, subscription }) {
+    const subject = 'You have ' + credits + ' credit' + (credits !== 1 ? 's' : '') + ' remaining — Elite Edge';
+    const isStarter = subscription === 'starter';
+    const upgradeTier = isStarter ? 'Premium (120 credits/month)' : 'Starter (40 credits/month)';
+    const upgradePrice = isStarter ? '£19.99' : '£9.99';
+
+    const html = this._wrapHTML(`
+      <h2 style="color:#ffffff;margin:0 0 16px;font-size:20px;">Hi ${this._esc(name)},</h2>
+      <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">You have <strong style="color:#fbbf24;">${credits} credit${credits !== 1 ? 's' : ''}</strong> remaining on your Elite Edge account.</p>
+      <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">Today's tips are waiting — don't miss out on the next winner.</p>
+
+      <div style="text-align:center;margin:24px 0;">
+        <a href="https://eliteedgesports.co.uk/#/buy-credits" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;margin-right:8px;">Buy More Credits</a>
+        <a href="https://eliteedgesports.co.uk/#/pricing" style="display:inline-block;padding:14px 28px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Upgrade to ${upgradeTier.split(' ')[0]} — ${upgradePrice}/mo</a>
+      </div>
+
+      <p style="color:#94a3b8;font-size:12px;">Tip: Refer a friend and earn 3 free credits when they sign up.</p>
+      <p style="color:#cbd5e1;font-size:14px;"><strong style="color:#d4a843;">The Elite Edge Team</strong></p>
+    `, 'Credits running low');
+
+    const text = `Hi ${name}, you have ${credits} credit${credits !== 1 ? 's' : ''} remaining. Buy more: https://eliteedgesports.co.uk/#/buy-credits or upgrade: https://eliteedgesports.co.uk/#/pricing`;
+
+    return this._sendEmail({ to: email, subject, html, text, emailType: 'low_credits' });
+  }
+
   // Utility helpers
   // -----------------------------------------------------------------------
   _esc(str) {

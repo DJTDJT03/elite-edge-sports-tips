@@ -4087,6 +4087,48 @@ module.exports = function startScheduler(deps) {
   setTimeout(safeRun('AutoTune', autoTuneAnalysts), 120000);
 
   // =========================================================================
+  // MONTHLY CREDIT RESET — runs at 1am UK daily, resets credits for users whose reset date has passed
+  // =========================================================================
+  async function resetMonthlyCredits() {
+    try {
+      if (!db.isAvailable()) return;
+      var today = new Date().toISOString().split('T')[0];
+      var uk = getUKTime();
+      if (uk.getHours() !== 1) return; // only run at 1am
+
+      var users = await db.getUsers();
+      var resetCount = 0;
+      for (var i = 0; i < users.length; i++) {
+        var u = users[i];
+        if (!u.creditsMonthlyAllowance || u.creditsMonthlyAllowance <= 0) continue;
+        if (!u.creditsResetDate) continue;
+        var resetDate = typeof u.creditsResetDate === 'string' ? u.creditsResetDate.split('T')[0] : '';
+        if (resetDate > today) continue; // not due yet
+
+        // Reset credits to monthly allowance
+        var nextReset = new Date();
+        nextReset.setMonth(nextReset.getMonth() + 1);
+        await db.updateUser(u.id, {
+          credits: u.creditsMonthlyAllowance,
+          creditsResetDate: nextReset.toISOString().split('T')[0],
+        });
+        await db.recordCreditTransaction({
+          userId: u.id, amount: u.creditsMonthlyAllowance,
+          balanceAfter: u.creditsMonthlyAllowance,
+          type: 'monthly_reset', description: 'Monthly credit reset — ' + u.creditsMonthlyAllowance + ' credits',
+        });
+        resetCount++;
+      }
+      if (resetCount > 0) console.log('[Credits] Reset monthly credits for ' + resetCount + ' user(s)');
+    } catch (err) {
+      console.error('[Credits] Monthly reset error:', err.message);
+    }
+  }
+
+  setInterval(safeRun('CreditReset', resetMonthlyCredits), 30 * 60 * 1000);
+  setTimeout(safeRun('CreditReset', resetMonthlyCredits), 60000);
+
+  // =========================================================================
   // ENRICHMENT QUALITY LOOP — runs at 3:00am UK time
   // Joins enrichment signals to settled tips, computes CLV/ROI correlation
   // =========================================================================

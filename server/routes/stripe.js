@@ -107,6 +107,11 @@ module.exports = function(deps) {
         ? session.subscription
         : (session.subscription && session.subscription.id) || null;
 
+      // Set monthly credit allowance based on tier
+      var creditAllowance = tier === 'vip' ? 999999 : tier === 'premium' ? 120 : tier === 'starter' ? 40 : 0;
+      var nextResetDate = new Date();
+      nextResetDate.setMonth(nextResetDate.getMonth() + 1);
+
       // Detect if this is a trial signup (14-day trial via Stripe)
       var isTrial = session.metadata && session.metadata.isTrial === 'true';
       var subObj = session.subscription;
@@ -125,7 +130,13 @@ module.exports = function(deps) {
         trialEnd: trialEndDate ? trialEndDate.toISOString() : undefined,
         stripeCustomerId: stripeCustomerId,
         stripeSubscriptionId: stripeSubscriptionId,
+        credits: creditAllowance,
+        creditsMonthlyAllowance: creditAllowance,
+        creditsResetDate: nextResetDate.toISOString().split('T')[0],
       });
+
+      // Record the credit grant
+      await db.recordCreditTransaction({ userId: user.id, amount: creditAllowance, balanceAfter: creditAllowance, type: 'subscription_grant', description: tier + ' plan — ' + creditAllowance + ' monthly credits' });
 
       // Send trial confirmation email with charge date
       if (trialEndDate && emailService) {
@@ -374,6 +385,82 @@ module.exports = function(deps) {
     } catch (err) {
       console.error('[Stripe] Status error:', err.message);
       res.status(500).json({ error: 'Unable to fetch subscription status' });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /api/stripe/buy-credits — one-time credit pack purchase
+  // ---------------------------------------------------------------------------
+  var CREDIT_PACKS = [
+    { id: 'credits-5', credits: 5, amount: 199, label: '5 Credits — £1.99' },
+    { id: 'credits-15', credits: 15, amount: 499, label: '15 Credits — £4.99' },
+    { id: 'credits-40', credits: 40, amount: 899, label: '40 Credits — £8.99' },
+  ];
+
+  router.post('/stripe/buy-credits', authenticate, async (req, res) => {
+    try {
+      if (!stripeService.isAvailable) return res.status(503).json({ error: 'Payment system not configured' });
+
+      var packId = req.body.pack;
+      var pack = CREDIT_PACKS.find(function(p) { return p.id === packId; });
+      if (!pack) return res.status(400).json({ error: 'Invalid credit pack' });
+
+      var user = await db.getUserById(req.user.id);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      var baseUrl = req.headers.origin || req.protocol + '://' + req.get('host');
+
+      var stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+      var session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        customer_email: user.email,
+        metadata: { userId: user.id, type: 'credit_purchase', credits: String(pack.credits), packId: pack.id },
+        line_items: [{
+          price_data: {
+            currency: 'gbp',
+            product_data: { name: pack.label },
+            unit_amount: pack.amount,
+          },
+          quantity: 1,
+        }],
+        success_url: baseUrl + '/api/stripe/credits-success?session_id={CHECKOUT_SESSION_ID}',
+        cancel_url: baseUrl + '/#/buy-credits',
+      });
+
+      res.json({ url: session.url });
+    } catch (err) {
+      console.error('[Stripe] Buy credits error:', err.message);
+      res.status(500).json({ error: 'Unable to create checkout' });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/stripe/credits-success — credit pack purchase success
+  // ---------------------------------------------------------------------------
+  router.get('/stripe/credits-success', async (req, res) => {
+    try {
+      var sessionId = req.query.session_id;
+      if (!sessionId) return res.redirect('/#/buy-credits?error=missing_session');
+
+      var stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+      var session = await stripe.checkout.sessions.retrieve(sessionId);
+      if (!session || session.payment_status !== 'paid') return res.redirect('/#/buy-credits?error=payment_incomplete');
+
+      var userId = session.metadata && session.metadata.userId;
+      var credits = parseInt(session.metadata && session.metadata.credits) || 0;
+      if (!userId || !credits) return res.redirect('/#/buy-credits?error=invalid');
+
+      var user = await db.getUserById(userId);
+      if (!user) return res.redirect('/#/buy-credits?error=user_not_found');
+
+      // Add credits
+      await db.addCredits(userId, credits, 'purchase', 'Purchased ' + credits + ' credits');
+
+      console.log('[Stripe] Credit purchase: +' + credits + ' credits for ' + user.email);
+      res.redirect('/#/account?credits_added=' + credits);
+    } catch (err) {
+      console.error('[Stripe] Credits success error:', err.message);
+      res.redirect('/#/buy-credits?error=processing');
     }
   });
 

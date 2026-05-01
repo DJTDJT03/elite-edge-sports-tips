@@ -88,6 +88,9 @@ const App = {
     this.loadTheme();
     this.loadOddsFormat();
     this.checkTokenExpiry();
+    // Capture referral code from URL on landing
+    var refParam = new URLSearchParams(window.location.search).get('ref');
+    if (refParam) localStorage.setItem('ee_ref', refParam);
     this.initInactivityTimer();
     // Refresh user data from server on every page load (catches trial/subscription changes)
     if (this.token && this.user) {
@@ -690,8 +693,12 @@ const App = {
       this._updateOddsToggleUI();
     }
     try {
+      // Capture referral code from URL if present
+      var refCode = new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('ee_ref') || '';
+      if (refCode) localStorage.setItem('ee_ref', refCode);
+
       const data = await this.api('/auth/register', {
-        method: 'POST', body: JSON.stringify({ name, email, password, agreementTimestamp })
+        method: 'POST', body: JSON.stringify({ name, email, password, agreementTimestamp, referralCode: refCode || undefined })
       });
       this.token = data.token; this.user = data.user;
       localStorage.setItem('ee_token', data.token);
@@ -735,7 +742,11 @@ const App = {
     if (this.user) {
       guest.style.display = 'none';
       userEl.style.display = 'flex';
-      badge.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">VIP</span>' : '');
+      var creditDisplay = '';
+      if (this.user.credits !== undefined && !this.isVIP()) {
+        creditDisplay = ' <span style="background:rgba(212,168,67,0.15);color:#d4a843;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation();window.location.hash=\'#/buy-credits\'">' + (this.user.credits || 0) + ' credits</span>';
+      }
+      badge.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">VIP</span>' : '') + creditDisplay;
       badge.style.cursor = 'pointer';
       badge.onclick = () => { window.location.hash = '#/account'; };
       // Mobile auth
@@ -951,6 +962,8 @@ const App = {
       case 'rugby': this.renderSportTips('rugby', 'Rugby League'); break;
       case 'nfl': this.renderSportTips('american-football', 'NFL'); break;
       case 'tennis': this.renderSportTips('tennis', 'Tennis'); break;
+      case 'buy-credits': this.renderBuyCredits(); break;
+      case 'refer': this.renderReferral(); break;
       case 'selections': this.renderSelections(); break;
       case 'value-bets': this.renderValueBets(); break;
       case 'compare': this.renderCompare(); break;
@@ -3880,6 +3893,135 @@ const App = {
     this._selectedRace = intel.time;
     this._racingView = 'detail';
     this.renderRacing();
+  },
+
+  // -----------------------------------------------------------------------
+  // BUY CREDITS PAGE
+  // -----------------------------------------------------------------------
+  renderBuyCredits() {
+    var app = document.getElementById('app');
+    var credits = this.user ? this.user.credits || 0 : 0;
+    var sub = this.user ? this.user.subscription : 'free';
+
+    var upgradeTier = sub === 'free' ? 'Starter' : sub === 'starter' ? 'Premium' : sub === 'premium' ? 'VIP' : '';
+    var upgradeCredits = sub === 'free' ? '40' : sub === 'starter' ? '120' : sub === 'premium' ? 'Unlimited' : '';
+    var upgradePrice = sub === 'free' ? '9.99' : sub === 'starter' ? '19.99' : sub === 'premium' ? '39.99' : '';
+    var upgradePlan = sub === 'free' ? 'starter-monthly' : sub === 'starter' ? 'premium-monthly' : sub === 'premium' ? 'vip-monthly' : '';
+
+    app.innerHTML =
+      '<div class="container" style="max-width:700px;padding-top:40px;">' +
+        '<div class="page-header text-center">' +
+          '<h1 style="color:var(--gold);">Buy Credits</h1>' +
+          '<p style="color:var(--text-secondary);">You have <strong style="color:var(--gold);font-size:20px;">' + credits + '</strong> credits remaining</p>' +
+        '</div>' +
+
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px;">' +
+          '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;" onclick="App.buyCredits(\'credits-5\')">' +
+            '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;">Quick Top-Up</div>' +
+            '<div style="font-size:32px;font-weight:900;color:var(--text-primary);">5</div>' +
+            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">credits</div>' +
+            '<div style="font-size:20px;font-weight:800;color:var(--gold);">&pound;1.99</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);">40p per credit</div>' +
+          '</div>' +
+          '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;" onclick="App.buyCredits(\'credits-15\')">' +
+            '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;">Weekend Pack</div>' +
+            '<div style="font-size:32px;font-weight:900;color:var(--text-primary);">15</div>' +
+            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">credits</div>' +
+            '<div style="font-size:20px;font-weight:800;color:var(--gold);">&pound;4.99</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);">33p per credit</div>' +
+          '</div>' +
+          '<div style="background:var(--bg-card);border:2px solid var(--gold);border-radius:12px;padding:24px;text-align:center;cursor:pointer;position:relative;" onclick="App.buyCredits(\'credits-40\')">' +
+            '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--gold);color:#0a0e1a;padding:2px 12px;border-radius:10px;font-size:10px;font-weight:800;">BEST VALUE</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;">40 Pack</div>' +
+            '<div style="font-size:32px;font-weight:900;color:var(--text-primary);">40</div>' +
+            '<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">credits</div>' +
+            '<div style="font-size:20px;font-weight:800;color:var(--gold);">&pound;8.99</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);">22p per credit</div>' +
+          '</div>' +
+        '</div>' +
+
+        (upgradeTier ? '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.1),rgba(212,168,67,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:24px;text-align:center;margin-bottom:32px;">' +
+          '<div style="font-size:14px;color:var(--text-secondary);margin-bottom:8px;">Or get <strong style="color:var(--gold);">' + upgradeCredits + ' credits every month</strong> with ' + upgradeTier + '</div>' +
+          '<div style="display:flex;justify-content:center;gap:16px;align-items:center;margin-bottom:12px;">' +
+            '<div style="color:var(--text-muted);"><span style="text-decoration:line-through;">40 credits one-time: &pound;8.99</span></div>' +
+            '<div style="color:var(--gold);font-weight:800;">' + upgradeCredits + ' credits EVERY month: &pound;' + upgradePrice + '</div>' +
+          '</div>' +
+          '<button class="btn btn-gold" onclick="App.startCheckout(\'' + upgradePlan + '\')">Subscribe to ' + upgradeTier + ' &rarr;</button>' +
+        '</div>' : '') +
+
+        '<div style="text-align:center;margin-bottom:32px;">' +
+          '<p style="color:var(--text-muted);font-size:13px;">Earn free credits: <a href="#/refer" style="color:var(--gold);">Refer a friend for +3 credits &rarr;</a></p>' +
+        '</div>' +
+      '</div>';
+  },
+
+  async buyCredits(packId) {
+    try {
+      this.showToast('Redirecting to checkout...', 'info');
+      var data = await this.api('/stripe/buy-credits', { method: 'POST', body: JSON.stringify({ pack: packId }) });
+      if (data.url) window.location.href = data.url;
+      else throw new Error(data.error || 'Unable to create checkout');
+    } catch (err) {
+      this.showToast(err.message, 'error');
+    }
+  },
+
+  // -----------------------------------------------------------------------
+  // REFERRAL PAGE
+  // -----------------------------------------------------------------------
+  async renderReferral() {
+    var app = document.getElementById('app');
+    if (!this.user) {
+      app.innerHTML = '<div class="container text-center" style="padding:60px;"><h2>Sign in to access referrals</h2><button class="btn btn-gold" onclick="App.showModal(\'login\')">Sign In</button></div>';
+      return;
+    }
+
+    try {
+      var data = await this.api('/auth/referral');
+      var referralLink = data.referralLink || '';
+      var referralCount = data.referralCount || 0;
+      var referralCode = data.referralCode || '';
+
+      app.innerHTML =
+        '<div class="container" style="max-width:600px;padding-top:40px;">' +
+          '<div class="page-header text-center">' +
+            '<h1 style="color:var(--gold);">Refer &amp; Earn</h1>' +
+            '<p style="color:var(--text-secondary);">Share your link. Earn free credits.</p>' +
+          '</div>' +
+
+          '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px;text-align:center;">' +
+            '<div style="font-size:48px;margin-bottom:12px;">&#127381;</div>' +
+            '<h3 style="color:var(--text-primary);margin-bottom:16px;">How It Works</h3>' +
+            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">' +
+              '<div><div style="font-size:24px;font-weight:900;color:var(--gold);">1</div><div style="font-size:12px;color:var(--text-secondary);">Share your unique link</div></div>' +
+              '<div><div style="font-size:24px;font-weight:900;color:var(--gold);">2</div><div style="font-size:12px;color:var(--text-secondary);">Friend signs up (free)</div></div>' +
+              '<div><div style="font-size:24px;font-weight:900;color:var(--gold);">3</div><div style="font-size:12px;color:var(--text-secondary);">You earn +3 credits</div></div>' +
+            '</div>' +
+            '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#22c55e;">Bonus: Earn +5 extra credits when your referral starts a free trial!</div>' +
+          '</div>' +
+
+          '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px;">' +
+            '<div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;">Your Referral Link</div>' +
+            '<div style="display:flex;gap:8px;">' +
+              '<input type="text" value="' + referralLink + '" readonly style="flex:1;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:13px;" id="referral-link-input">' +
+              '<button class="btn btn-gold" onclick="navigator.clipboard.writeText(document.getElementById(\'referral-link-input\').value);App.showToast(\'Link copied!\',\'success\')">Copy</button>' +
+            '</div>' +
+          '</div>' +
+
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+            '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;">' +
+              '<div style="font-size:32px;font-weight:900;color:var(--gold);">' + referralCount + '</div>' +
+              '<div style="font-size:12px;color:var(--text-muted);">People Referred</div>' +
+            '</div>' +
+            '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;">' +
+              '<div style="font-size:32px;font-weight:900;color:#22c55e;">' + (referralCount * 3) + '</div>' +
+              '<div style="font-size:12px;color:var(--text-muted);">Credits Earned</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    } catch (err) {
+      app.innerHTML = '<div class="container"><p>Unable to load referral data.</p></div>';
+    }
   },
 
   // -----------------------------------------------------------------------

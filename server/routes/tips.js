@@ -130,7 +130,7 @@ module.exports = function(deps) {
     }
   });
 
-  // GET /api/tips/:id
+  // GET /api/tips/:id — view individual tip (costs 1 credit for non-premium)
   router.get('/tips/:id', async (req, res) => {
     try {
       const tip = await db.getTipById(req.params.id);
@@ -138,14 +138,66 @@ module.exports = function(deps) {
 
       var access = await getUserAccess(req);
 
-      if (tip.isPremium && access !== 'premium' && access !== 'admin') {
+      // Premium/VIP/Admin: full access, no credits spent
+      if (access === 'premium' || access === 'admin') {
+        return res.json({ ...tip, locked: false });
+      }
+
+      // Free/Starter: premium tips require credits
+      if (tip.isPremium) {
+        // Check if user has credits
+        var authHeader = req.headers.authorization;
+        var userId = null;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          try {
+            var decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
+            userId = decoded.id;
+          } catch (e) {}
+        }
+
+        if (!userId) {
+          return res.json({ ...tip, selection: 'Premium Pick — Sign Up to View', analysis: { summary: 'Create a free account to get 5 credits.' }, locked: true });
+        }
+
+        var user = await db.getUserById(userId);
+        if (!user || user.credits <= 0) {
+          return res.json({
+            ...tip,
+            selection: tip.selection, // show selection name
+            odds: tip.odds, // show odds
+            analysis: { summary: 'You have 0 credits. Buy more credits or upgrade your plan to unlock full analysis.' },
+            locked: true,
+            outOfCredits: true,
+          });
+        }
+
+        // Deduct 1 credit for viewing tip (use query param ?spend=true to actually deduct)
+        if (req.query.spend === 'true') {
+          var newBalance = await db.deductCredits(userId, 1, 'view_tip', 'Viewed: ' + (tip.selection || 'tip'), tip.id);
+          if (newBalance < 0) {
+            return res.json({ ...tip, analysis: { summary: 'Insufficient credits.' }, locked: true, outOfCredits: true });
+          }
+          // Starter: show tip but not full analysis
+          if (access === 'starter') {
+            return res.json({
+              ...tip, locked: false, starterLimited: true, creditsRemaining: newBalance,
+              analysis: { summary: tip.analysis ? tip.analysis.summary : 'Upgrade to Premium for full breakdown.' },
+            });
+          }
+          return res.json({ ...tip, locked: false, creditsRemaining: newBalance });
+        }
+
+        // Preview mode: show selection + odds, prompt to spend credit
         return res.json({
           ...tip,
-          selection: 'Premium Pick — Upgrade to View',
-          analysis: { summary: 'Full analysis available to Premium subscribers.' },
+          analysis: { summary: 'Spend 1 credit to unlock this tip. You have ' + user.credits + ' credits remaining.' },
           locked: true,
+          creditCost: 1,
+          creditsRemaining: user.credits,
         });
       }
+
+      // Free tip: no credits needed
       res.json({ ...tip, locked: false });
     } catch (err) {
       console.error('[Tips] GET /tips/:id error:', err.message);

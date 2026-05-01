@@ -32,9 +32,11 @@ module.exports = function(deps) {
       const now = new Date().toISOString();
       const deviceHash = helpers.hashDeviceFingerprint(ip, userAgent);
 
-      // Generate email verification token
       const crypto = require('crypto');
+      // Generate email verification token
       const verifyToken = crypto.randomBytes(32).toString('hex');
+      // Generate unique referral code
+      const referralCode = name.split(' ')[0].toLowerCase().replace(/[^a-z]/g, '').substring(0, 6) + '_' + Date.now().toString(36).slice(-4);
 
       const userData = {
         id: `usr_${Date.now()}`,
@@ -61,6 +63,11 @@ module.exports = function(deps) {
         emailPrefs: { dailyBulletin: true, weeklySummary: true, marketing: true, bigWins: true },
         emailVerified: false,
         emailVerifyToken: verifyToken,
+        credits: 5,
+        creditsMonthlyAllowance: 0,
+        referralCode: referralCode,
+        referredBy: req.body.referralCode || null,
+        referralCount: 0,
       };
 
       const user = await db.createUser(userData);
@@ -71,6 +78,22 @@ module.exports = function(deps) {
         JWT_SECRET, { expiresIn: '30d' }
       );
       const tokenExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+
+      // Record signup credits
+      await db.recordCreditTransaction({ userId: user.id, amount: 5, balanceAfter: 5, type: 'signup_bonus', description: 'Welcome bonus — 5 free credits' });
+
+      // Reward referrer if this user was referred
+      if (req.body.referralCode) {
+        try {
+          var allUsers = await db.getUsers();
+          var referrer = allUsers.find(function(u) { return u.referralCode === req.body.referralCode; });
+          if (referrer) {
+            await db.addCredits(referrer.id, 3, 'referral_signup', 'Referral: ' + user.name + ' signed up');
+            await db.updateUser(referrer.id, { referralCount: (referrer.referralCount || 0) + 1 });
+            console.log('[Referral] +3 credits to ' + referrer.email + ' for referring ' + user.email);
+          }
+        } catch (refErr) { /* non-fatal */ }
+      }
 
       // Send welcome email with verification link (async, non-blocking)
       var verifyUrl = 'https://eliteedgesports.co.uk/api/auth/verify-email?token=' + verifyToken;
@@ -297,6 +320,18 @@ module.exports = function(deps) {
         trialStart: new Date().toISOString(),
       });
 
+      // Reward referrer with +5 bonus if this user was referred and starting trial
+      if (user.referredBy) {
+        try {
+          var trialUsers = await db.getUsers();
+          var trialReferrer = trialUsers.find(function(u) { return u.referralCode === user.referredBy; });
+          if (trialReferrer) {
+            await db.addCredits(trialReferrer.id, 5, 'referral_trial', 'Referral bonus: ' + user.name + ' started trial');
+            console.log('[Referral] +5 trial bonus to ' + trialReferrer.email);
+          }
+        } catch (refErr) { /* non-fatal */ }
+      }
+
       console.log('[Trial] Stripe checkout created for 14-day trial:', user.email, '— plan:', plan);
       res.json({ url: session.url });
     } catch (err) {
@@ -323,8 +358,71 @@ module.exports = function(deps) {
         trialEnd: user.trialEnd,
         paymentGraceEnd: user.paymentGraceEnd || null,
         stripeCustomerId: user.stripeCustomerId || null,
+        credits: user.credits || 0,
+        creditsMonthlyAllowance: user.creditsMonthlyAllowance || 0,
+        creditsResetDate: user.creditsResetDate || null,
+        referralCode: user.referralCode || null,
+        referralCount: user.referralCount || 0,
       }
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  // CREDIT HISTORY
+  // ---------------------------------------------------------------------------
+  router.get('/credits/history', authenticate, async (req, res) => {
+    try {
+      var history = await db.getCreditHistory(req.user.id, 30);
+      var user = await db.getUserById(req.user.id);
+      res.json({
+        credits: user ? user.credits : 0,
+        monthlyAllowance: user ? user.creditsMonthlyAllowance : 0,
+        resetDate: user ? user.creditsResetDate : null,
+        history: history,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // REFERRAL INFO
+  // ---------------------------------------------------------------------------
+  router.get('/referral', authenticate, async (req, res) => {
+    try {
+      var user = await db.getUserById(req.user.id);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      res.json({
+        referralCode: user.referralCode,
+        referralCount: user.referralCount || 0,
+        referralLink: 'https://eliteedgesports.co.uk/?ref=' + (user.referralCode || ''),
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // SHARE TIP ON SOCIAL — earn 1 credit (max 1/day)
+  // ---------------------------------------------------------------------------
+  router.post('/credits/share', authenticate, async (req, res) => {
+    try {
+      var user = await db.getUserById(req.user.id);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      // Check if already shared today
+      var history = await db.getCreditHistory(req.user.id, 10);
+      var today = new Date().toISOString().split('T')[0];
+      var sharedToday = history.some(function(h) {
+        return h.type === 'social_share' && h.createdAt && h.createdAt.toISOString().split('T')[0] === today;
+      });
+      if (sharedToday) return res.json({ credits: user.credits, message: 'Already earned share credit today' });
+
+      var newBalance = await db.addCredits(req.user.id, 1, 'social_share', 'Shared tip on social media');
+      res.json({ credits: newBalance, message: '+1 credit for sharing!' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // ---------------------------------------------------------------------------

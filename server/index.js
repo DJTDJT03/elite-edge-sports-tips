@@ -183,6 +183,15 @@ app.use('/', require('./routes/public')(deps));
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS drips_sent JSONB DEFAULT \'[]\'',
         'ALTER TABLE results ADD COLUMN IF NOT EXISTS voided_by_monitor BOOLEAN DEFAULT FALSE',
         'ALTER TABLE results ADD COLUMN IF NOT EXISTS replay_analysis JSONB',
+        // Credit system
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS credits INTEGER DEFAULT 0',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS credits_monthly_allowance INTEGER DEFAULT 0',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS credits_reset_date DATE',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by TEXT',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_count INTEGER DEFAULT 0',
+        "CREATE TABLE IF NOT EXISTS credit_transactions (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, amount INTEGER NOT NULL, balance_after INTEGER NOT NULL, type TEXT NOT NULL, description TEXT, tip_id TEXT, created_at TIMESTAMPTZ DEFAULT NOW())",
+        'CREATE INDEX IF NOT EXISTS idx_credit_tx_user ON credit_transactions(user_id, created_at DESC)',
         // Email verification
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE',
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_token TEXT',
