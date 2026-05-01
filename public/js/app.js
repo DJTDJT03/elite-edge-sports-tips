@@ -2682,7 +2682,7 @@ const App = {
           </div>
           <div style="text-align:center;">
             <button onclick="App.showTrialOffer()" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;border:none;font-weight:700;font-size:14px;cursor:pointer;">Start 7-Day Free Trial — Full Premium Access</button>
-            <div style="font-size:11px;color:#6b7280;margin-top:8px;">No credit card required. Cancel anytime. 18+ BeGambleAware.org</div>
+            <div style="font-size:11px;color:#6b7280;margin-top:8px;">Card stored securely. No charges on free tier. Cancel anytime. 18+ BeGambleAware.org</div>
           </div>
         </div>` : ''}
 
@@ -6469,7 +6469,7 @@ const App = {
       <div class="container">
         <div class="page-header text-center">
           <h1>Choose Your <span class="accent">Plan</span></h1>
-          <p>Sign up free in 30 seconds. No bank details required. Upgrade when you're ready.</p>
+          <p>Sign up free in 30 seconds. Card securely stored for credit purchases — you will not be charged.</p>
         </div>
 
         ${isOnTrial ? '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.15),rgba(212,168,67,0.05));border:2px solid var(--gold);border-radius:14px;padding:24px;margin-bottom:32px;text-align:center;"><div style="font-size:28px;margin-bottom:8px;">&#9201;</div><div style="font-size:20px;font-weight:800;color:var(--gold);margin-bottom:8px;">You\'re on your free trial — ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' left</div><div style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">Subscribe now to continue enjoying full premium access after your trial ends.</div></div>' : ''}
@@ -6485,16 +6485,18 @@ const App = {
             <h3>Free Access</h3>
             <p class="text-muted">Get started with the basics</p>
             <div class="pricing-price">&pound;<span style="font-size:42px;">0</span><span class="period">/forever</span></div>
-            <p class="text-xs text-gold mb-8">No credit card required.</p>
+            <p class="text-xs text-gold mb-8">5 free credits included.</p>
             <ul class="pricing-features">
+              <li>5 credits on signup</li>
               <li>1 free daily tip (after race)</li>
               <li>Full results page</li>
-              <li>Weekly blog</li>
-              <li>Staking calculator</li>
+              <li>Betting calculators</li>
+              <li>Betting academy</li>
             </ul>
             <button class="btn ${!isLoggedIn ? 'btn-gold' : 'btn-outline'} btn-full" onclick="${isLoggedIn ? '' : "App.showModal('register')"}">
               ${isLoggedIn ? (isPremium ? 'Free Features Included' : 'Your Current Plan') : 'Sign Up Free — 30 Seconds'}
             </button>
+            ${!isLoggedIn ? '<p class="text-xs" style="color:#64748b;margin-top:8px;">Card details stored securely for credit purchases only. You will not be charged on the free tier.</p>' : ''}
           </div>
 
           <!-- STARTER CARD -->
@@ -7613,7 +7615,7 @@ const App = {
           (!isPremium ? '<div style="text-align:center;padding-top:8px;">' +
             '<p style="font-size:13px;color:#c0c4d0;margin-bottom:12px;">Premium members received these selections <strong style="color:#d4a843;">before kick-off</strong> with full analysis, staking plans, and AI previews.</p>' +
             '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;">Start Your 7-Day Free Trial</a>' +
-            '<div style="font-size:11px;color:#6b7280;margin-top:8px;">No credit card required. Cancel anytime. 18+</div>' +
+            '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Card stored securely. No charges on free tier. Cancel anytime. 18+</div>' +
           '</div>' : '') +
         '</div>';
     } catch (e) {
@@ -9317,7 +9319,7 @@ const App = {
 
         '<div style="text-align:center;margin:48px 0 20px;">' +
           '<a href="#/pricing" style="display:inline-block;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;padding:16px 48px;border-radius:10px;font-size:18px;font-weight:800;text-decoration:none;">Start Your 7-Day Free Trial</a>' +
-          '<p style="color:#8b8d93;font-size:13px;margin-top:12px;">No credit card required. Full premium access. Cancel anytime.</p>' +
+          '<p style="color:#8b8d93;font-size:13px;margin-top:12px;">Card stored securely. No charges on free tier. Full premium access. Cancel anytime.</p>' +
         '</div>' +
 
         '<p style="text-align:center;font-size:10px;color:#555;margin-top:32px;line-height:1.6;">Elite Edge Sports Tips Ltd. Company No. 17138566. Registered in England & Wales. Entertainment and statistical analysis only. Not financial or betting advice. No guarantee of profit. 18+ only. Please gamble responsibly. BeGambleAware.org</p>' +
