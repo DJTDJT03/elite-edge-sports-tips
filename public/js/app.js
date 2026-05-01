@@ -10443,8 +10443,10 @@ const App = {
     var sportFilter = this._accaSportFilter || 'all';
 
     var filtered = activeTips;
-    if (sportFilter === 'racing') filtered = filtered.filter(function(t) { return t.sport === 'racing'; });
-    if (sportFilter === 'football') filtered = filtered.filter(function(t) { return t.sport === 'football'; });
+    if (sportFilter && sportFilter !== 'all') {
+      var allowedSports = sportFilter.split(',');
+      filtered = filtered.filter(function(t) { return allowedSports.indexOf(t.sport) !== -1; });
+    }
 
     // Sort by modelProbability * confidence (highest combined score)
     filtered.sort(function(a, b) {
@@ -10463,7 +10465,19 @@ const App = {
     }).join('');
 
     // Build sport filter buttons
-    var sports = [{key: 'all', label: 'All'}, {key: 'racing', label: 'Racing'}, {key: 'football', label: 'Football'}, {key: 'basketball', label: 'NBA'}, {key: 'tennis', label: 'Tennis'}, {key: 'rugby', label: 'Rugby'}, {key: 'american-football', label: 'NFL'}];
+    var sports = [
+      {key: 'all', label: 'All Sports'},
+      {key: 'racing', label: 'Racing'},
+      {key: 'football', label: 'Football'},
+      {key: 'basketball', label: 'NBA'},
+      {key: 'tennis', label: 'Tennis'},
+      {key: 'rugby', label: 'Rugby'},
+      {key: 'american-football', label: 'NFL'},
+      {key: 'football,basketball', label: 'Football + NBA'},
+      {key: 'football,rugby', label: 'Football + Rugby'},
+      {key: 'basketball,american-football', label: 'NBA + NFL'},
+      {key: 'football,basketball,rugby,american-football', label: 'All Ball Sports'},
+    ];
     var sportBtns = sports.map(function(s) {
       return '<button class="acca-fold-btn' + (s.key === sportFilter ? ' active' : '') + '" onclick="App._accaSportFilter=\'' + s.key + '\';App._renderAccaPage();">' + s.label + '</button>';
     }).join('');
@@ -10656,8 +10670,10 @@ const App = {
     var activeTips = this._accaAllTips || [];
 
     var filtered = activeTips;
-    if (sportFilter === 'racing') filtered = filtered.filter(function(t) { return t.sport === 'racing'; });
-    if (sportFilter === 'football') filtered = filtered.filter(function(t) { return t.sport === 'football'; });
+    if (sportFilter && sportFilter !== 'all') {
+      var allowedSports = sportFilter.split(',');
+      filtered = filtered.filter(function(t) { return allowedSports.indexOf(t.sport) !== -1; });
+    }
 
     var selected = filtered.slice(0, foldCount);
     if (selected.length === 0) return;
@@ -10703,8 +10719,10 @@ const App = {
     var activeTips = this._accaAllTips || [];
 
     var filtered = activeTips;
-    if (sportFilter === 'racing') filtered = filtered.filter(function(t) { return t.sport === 'racing'; });
-    if (sportFilter === 'football') filtered = filtered.filter(function(t) { return t.sport === 'football'; });
+    if (sportFilter && sportFilter !== 'all') {
+      var allowedSports = sportFilter.split(',');
+      filtered = filtered.filter(function(t) { return allowedSports.indexOf(t.sport) !== -1; });
+    }
 
     var selected = filtered.slice(0, foldCount);
     if (selected.length === 0) return;
