@@ -66,8 +66,16 @@ require('./middleware/geoRestrict')(app);
 const rateLimiterFns = require('./middleware/rateLimiter');
 app.use('/api', rateLimiterFns.rateLimiter);
 
-// Static files
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// Static files — short cache for JS/CSS so updates propagate quickly
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  setHeaders: function(res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'public, max-age=300'); // 5 minutes
+    }
+  }
+}));
 app.use('/admin', express.static(path.join(__dirname, '..', 'admin')));
 
 // Auth middleware
