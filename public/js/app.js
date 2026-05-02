@@ -10848,23 +10848,23 @@ const App = {
       return '<button class="acca-fold-btn' + (n === foldCount ? ' active' : '') + '" onclick="App._accaFoldCount=' + n + ';App._renderAccaPage();">' + n + '-fold</button>';
     }).join('');
 
-    // Build sport filter buttons
-    var sports = [
-      {key: 'all', label: 'All Sports'},
-      {key: 'racing', label: 'Racing'},
-      {key: 'football', label: 'Football'},
-      {key: 'basketball', label: 'NBA'},
-      {key: 'tennis', label: 'Tennis'},
-      {key: 'rugby', label: 'Rugby'},
-      {key: 'american-football', label: 'NFL'},
-      {key: 'football,basketball', label: 'Football + NBA'},
-      {key: 'football,rugby', label: 'Football + Rugby'},
-      {key: 'basketball,american-football', label: 'NBA + NFL'},
-      {key: 'football,basketball,rugby,american-football', label: 'All Ball Sports'},
+    // Build sport multi-select toggles
+    var sportToggles = this._accaSportToggles || { racing: true, football: true, basketball: true, tennis: true, rugby: true, 'american-football': true };
+    var sportOptions = [
+      { key: 'racing', label: '&#127943; Racing' },
+      { key: 'football', label: '&#9917; Football' },
+      { key: 'basketball', label: '&#127936; NBA' },
+      { key: 'tennis', label: '&#127934; Tennis' },
+      { key: 'rugby', label: '&#127945; Rugby' },
+      { key: 'american-football', label: '&#127944; NFL' },
     ];
-    var sportBtns = sports.map(function(s) {
-      return '<button class="acca-fold-btn' + (s.key === sportFilter ? ' active' : '') + '" onclick="App._accaSportFilter=\'' + s.key + '\';App._renderAccaPage();">' + s.label + '</button>';
+    var sportBtns = sportOptions.map(function(s) {
+      var isOn = sportToggles[s.key];
+      return '<button class="acca-fold-btn' + (isOn ? ' active' : '') + '" onclick="App._toggleAccaSport(\'' + s.key + '\');App._renderAccaPage();">' + s.label + '</button>';
     }).join('');
+    // Build the composite filter string from active toggles
+    var activeToggles = Object.keys(sportToggles).filter(function(k) { return sportToggles[k]; });
+    sportFilter = activeToggles.length === sportOptions.length ? 'all' : activeToggles.join(',');
 
     // Build legs HTML
     var legsHtml = '';
@@ -11003,10 +11003,15 @@ const App = {
         manualPickerHtml += '<div style="margin-bottom:12px;"><div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px;">' + (sportLabels[sport] || sport) + '</div>';
         sportGroups[sport].forEach(function(t) {
           var checked = manualPicks[t.id] ? 'checked' : '';
-          manualPickerHtml += '<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:' + (manualPicks[t.id] ? 'rgba(212,168,67,0.08)' : 'var(--bg-card)') + ';border:1px solid ' + (manualPicks[t.id] ? 'rgba(212,168,67,0.3)' : 'var(--border)') + ';border-radius:8px;margin-bottom:4px;cursor:pointer;" onclick="event.preventDefault();App._toggleManualPick(\'' + t.id + '\');App._renderAccaPage();">' +
+          var eventName = t.event || t.match || '';
+          manualPickerHtml += '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:' + (manualPicks[t.id] ? 'rgba(212,168,67,0.08)' : 'var(--bg-card)') + ';border:1px solid ' + (manualPicks[t.id] ? 'rgba(212,168,67,0.3)' : 'var(--border)') + ';border-radius:8px;margin-bottom:4px;cursor:pointer;" onclick="event.preventDefault();App._toggleManualPick(\'' + t.id + '\');App._renderAccaPage();">' +
             '<input type="checkbox" ' + checked + ' style="pointer-events:none;" />' +
-            '<div style="flex:1;"><strong style="color:#fff;font-size:13px;">' + (t.selection || '') + '</strong><br><span style="font-size:11px;color:var(--text-muted);">' + (t.event || '') + ' &bull; ' + (t.market || '') + '</span></div>' +
-            '<div style="font-weight:800;color:var(--gold);font-size:15px;">' + (t.odds || '') + '</div>' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:12px;color:var(--gold);margin-bottom:2px;">' + eventName + '</div>' +
+              '<strong style="color:#fff;font-size:14px;">' + (t.selection || '') + '</strong>' +
+              '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + (t.market || '') + (t.confidence ? ' &bull; Conf: ' + t.confidence + '/10' : '') + (t.edge ? ' &bull; Edge: ' + ((t.edge || 0) * 100).toFixed(1) + '%' : '') + '</div>' +
+            '</div>' +
+            '<div style="font-weight:800;color:var(--gold);font-size:16px;">' + (t.odds || '') + '</div>' +
           '</label>';
         });
         manualPickerHtml += '</div>';
@@ -11039,6 +11044,14 @@ const App = {
 
   _accaManualMode: false,
   _accaManualPicks: {},
+  _accaSportToggles: { racing: true, football: true, basketball: true, tennis: true, rugby: true, 'american-football': true },
+
+  _toggleAccaSport(sport) {
+    this._accaSportToggles[sport] = !this._accaSportToggles[sport];
+    // Ensure at least one sport is selected
+    var anyOn = Object.keys(this._accaSportToggles).some(function(k) { return App._accaSportToggles[k]; });
+    if (!anyOn) this._accaSportToggles[sport] = true;
+  },
 
   _toggleManualPick(tipId) {
     if (this._accaManualPicks[tipId]) {
