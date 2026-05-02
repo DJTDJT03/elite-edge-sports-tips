@@ -10866,6 +10866,38 @@ const App = {
       return '<button class="acca-fold-btn' + (isOn ? ' active' : '') + '" onclick="App._toggleAccaSport(\'' + s.key + '\');App._renderAccaPage();">' + s.label + '</button>';
     }).join('');
 
+    // League sub-filter for football — only show when football is toggled on
+    var leagueFilterHtml = '';
+    if (sportToggles.football) {
+      var leagueToggles = this._accaLeagueToggles || {};
+      // Get all unique leagues from football tips
+      var availableLeagues = {};
+      filtered.concat(activeTips.filter(function(t) { return t.sport === 'football'; })).forEach(function(t) {
+        if (t.sport === 'football' && t.league) availableLeagues[t.league] = true;
+      });
+      var leagueNames = Object.keys(availableLeagues).sort();
+
+      if (leagueNames.length > 1) {
+        var leagueBtns = '<button class="acca-fold-btn' + (Object.keys(leagueToggles).length === 0 ? ' active' : '') + '" style="font-size:11px;padding:5px 10px;" onclick="App._accaLeagueToggles={};App._renderAccaPage();">All Leagues</button>';
+        leagueBtns += leagueNames.map(function(lg) {
+          var isOn = Object.keys(leagueToggles).length === 0 || leagueToggles[lg];
+          return '<button class="acca-fold-btn' + (isOn && Object.keys(leagueToggles).length > 0 ? ' active' : '') + '" style="font-size:11px;padding:5px 10px;" onclick="App._toggleAccaLeague(\'' + lg.replace(/'/g, "\\'") + '\');App._renderAccaPage();">' + lg + '</button>';
+        }).join('');
+        leagueFilterHtml = '<div style="margin-bottom:16px;">' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Football Leagues</div>' +
+          '<div style="display:flex;gap:4px;flex-wrap:wrap;">' + leagueBtns + '</div>' +
+        '</div>';
+
+        // Apply league filter to the filtered tips
+        if (Object.keys(leagueToggles).length > 0) {
+          filtered = filtered.filter(function(t) {
+            if (t.sport !== 'football') return true; // non-football tips pass through
+            return leagueToggles[t.league];
+          });
+        }
+      }
+    }
+
     // Build legs HTML
     var legsHtml = '';
     var combinedDecimalOdds = 1;
@@ -11030,10 +11062,11 @@ const App = {
           '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Fold Count</div>' +
           '<div class="acca-fold-selector">' + foldBtns + '</div>' +
         '</div>' : '') +
-        '<div style="margin-bottom:24px;">' +
-          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Sport Filter</div>' +
+        '<div style="margin-bottom:16px;">' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Sports</div>' +
           '<div class="acca-fold-selector" style="flex-wrap:wrap;">' + sportBtns + '</div>' +
         '</div>' +
+        leagueFilterHtml +
         manualPickerHtml +
         (notEnough ? notEnoughMsg : '') +
         (isManual && selected.length < 2 ? '<div style="text-align:center;padding:20px;color:var(--text-muted);">Select at least 2 tips above to build your accumulator.</div>' : '') +
@@ -11046,11 +11079,30 @@ const App = {
   _accaManualPicks: {},
   _accaSportToggles: { racing: true, football: true, basketball: true, tennis: true, rugby: true, 'american-football': true },
 
+  _accaLeagueToggles: {},
+
   _toggleAccaSport(sport) {
     this._accaSportToggles[sport] = !this._accaSportToggles[sport];
     // Ensure at least one sport is selected
     var anyOn = Object.keys(this._accaSportToggles).some(function(k) { return App._accaSportToggles[k]; });
     if (!anyOn) this._accaSportToggles[sport] = true;
+    // Reset league filter when football toggled
+    if (sport === 'football') this._accaLeagueToggles = {};
+  },
+
+  _toggleAccaLeague(league) {
+    if (Object.keys(this._accaLeagueToggles).length === 0) {
+      // First toggle — switching from "All" to specific: enable only this one
+      this._accaLeagueToggles[league] = true;
+    } else if (this._accaLeagueToggles[league]) {
+      delete this._accaLeagueToggles[league];
+      // If none left, reset to all
+      if (Object.keys(this._accaLeagueToggles).length === 0) {
+        // stays empty = all leagues
+      }
+    } else {
+      this._accaLeagueToggles[league] = true;
+    }
   },
 
   _toggleManualPick(tipId) {
