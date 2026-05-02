@@ -10808,7 +10808,11 @@ const App = {
     var app = document.getElementById('app');
     var activeTips = this._accaAllTips || [];
     var foldCount = this._accaFoldCount || 4;
-    var sportFilter = this._accaSportFilter || 'all';
+
+    // Build sport filter from multi-select toggles
+    var sportToggles = this._accaSportToggles || { racing: true, football: true, basketball: true, tennis: true, rugby: true, 'american-football': true };
+    var activeToggles = Object.keys(sportToggles).filter(function(k) { return sportToggles[k]; });
+    var sportFilter = activeToggles.length === 6 ? 'all' : activeToggles.join(',');
 
     var filtered = activeTips;
     if (sportFilter && sportFilter !== 'all') {
@@ -10848,8 +10852,7 @@ const App = {
       return '<button class="acca-fold-btn' + (n === foldCount ? ' active' : '') + '" onclick="App._accaFoldCount=' + n + ';App._renderAccaPage();">' + n + '-fold</button>';
     }).join('');
 
-    // Build sport multi-select toggles
-    var sportToggles = this._accaSportToggles || { racing: true, football: true, basketball: true, tennis: true, rugby: true, 'american-football': true };
+    // Build sport multi-select toggle buttons
     var sportOptions = [
       { key: 'racing', label: '&#127943; Racing' },
       { key: 'football', label: '&#9917; Football' },
@@ -10862,9 +10865,6 @@ const App = {
       var isOn = sportToggles[s.key];
       return '<button class="acca-fold-btn' + (isOn ? ' active' : '') + '" onclick="App._toggleAccaSport(\'' + s.key + '\');App._renderAccaPage();">' + s.label + '</button>';
     }).join('');
-    // Build the composite filter string from active toggles
-    var activeToggles = Object.keys(sportToggles).filter(function(k) { return sportToggles[k]; });
-    sportFilter = activeToggles.length === sportOptions.length ? 'all' : activeToggles.join(',');
 
     // Build legs HTML
     var legsHtml = '';
@@ -11063,12 +11063,14 @@ const App = {
 
   _regenerateAcca() {
     var foldCount = this._accaFoldCount || 4;
-    var sportFilter = this._accaSportFilter || 'all';
     var activeTips = this._accaAllTips || [];
+    var sportToggles = this._accaSportToggles || {};
+    var activeToggles = Object.keys(sportToggles).filter(function(k) { return sportToggles[k]; });
 
     var filtered = activeTips.slice();
-    if (sportFilter === 'racing') filtered = filtered.filter(function(t) { return t.sport === 'racing'; });
-    if (sportFilter === 'football') filtered = filtered.filter(function(t) { return t.sport === 'football'; });
+    if (activeToggles.length < 6) {
+      filtered = filtered.filter(function(t) { return activeToggles.indexOf(t.sport) !== -1; });
+    }
 
     // Sort by score
     filtered.sort(function(a, b) {
@@ -11106,8 +11108,10 @@ const App = {
   _copyAccaToClipboard() {
     var self = this;
     var foldCount = this._accaFoldCount || 4;
-    var sportFilter = this._accaSportFilter || 'all';
     var activeTips = this._accaAllTips || [];
+    var sportToggles = this._accaSportToggles || {};
+    var activeToggles = Object.keys(sportToggles).filter(function(k) { return sportToggles[k]; });
+    var sportFilter = activeToggles.length === 6 ? 'all' : activeToggles.join(',');
 
     var filtered = activeTips;
     if (sportFilter && sportFilter !== 'all') {
@@ -11115,7 +11119,9 @@ const App = {
       filtered = filtered.filter(function(t) { return allowedSports.indexOf(t.sport) !== -1; });
     }
 
-    var selected = filtered.slice(0, foldCount);
+    var selected = this._accaManualMode
+      ? filtered.filter(function(t) { return (self._accaManualPicks || {})[t.id]; })
+      : filtered.slice(0, foldCount);
     if (selected.length === 0) return;
 
     var combinedDecimalOdds = 1;
@@ -11155,16 +11161,18 @@ const App = {
   _addAccaToMyBets() {
     var self = this;
     var foldCount = this._accaFoldCount || 4;
-    var sportFilter = this._accaSportFilter || 'all';
     var activeTips = this._accaAllTips || [];
+    var sportToggles = this._accaSportToggles || {};
+    var activeToggles = Object.keys(sportToggles).filter(function(k) { return sportToggles[k]; });
 
     var filtered = activeTips;
-    if (sportFilter && sportFilter !== 'all') {
-      var allowedSports = sportFilter.split(',');
-      filtered = filtered.filter(function(t) { return allowedSports.indexOf(t.sport) !== -1; });
+    if (activeToggles.length < 6) {
+      filtered = filtered.filter(function(t) { return activeToggles.indexOf(t.sport) !== -1; });
     }
 
-    var selected = filtered.slice(0, foldCount);
+    var selected = this._accaManualMode
+      ? filtered.filter(function(t) { return (self._accaManualPicks || {})[t.id]; })
+      : filtered.slice(0, foldCount);
     if (selected.length === 0) return;
 
     var combinedDecimalOdds = 1;
