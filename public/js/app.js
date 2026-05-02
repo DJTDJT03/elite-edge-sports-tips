@@ -11108,11 +11108,15 @@ const App = {
       this.showToast('Acca shared! Check the Community Accas section.', 'success');
 
       // Also copy to clipboard for social posting
-      var text = 'My Elite Edge Acca:\n';
-      selected.forEach(function(s, i) { text += (i + 1) + '. ' + s.selection + ' (' + (s.event || s.match) + ') @ ' + s.odds + '\n'; });
-      text += 'Combined Odds: ' + self.formatOdds(combinedOdds) + '\n';
-      text += '£10 returns £' + potentialReturn.toFixed(2) + '\n';
-      text += 'Built with eliteedgesports.co.uk';
+      var text = '&#127919; #ShareMyAcca — Elite Edge\n\n';
+      selected.forEach(function(s, i) {
+        var sportTag = s.sport === 'racing' ? '&#127943;' : s.sport === 'basketball' ? '&#127936;' : s.sport === 'tennis' ? '&#127934;' : s.sport === 'rugby' ? '&#127945;' : s.sport === 'american-football' ? '&#127944;' : '&#9917;';
+        text += sportTag + ' ' + s.selection + '\n   ' + (s.event || s.match) + ' @ ' + s.odds + '\n';
+      });
+      text += '\n&#128176; Combined Odds: ' + self.formatOdds(combinedOdds) + '\n';
+      text += '&#128181; £10 returns £' + potentialReturn.toFixed(2) + '\n\n';
+      text += '#ShareMyAcca #EliteEdgeTips #Acca #BettingTips\n';
+      text += '&#128073; Build yours: eliteedgesports.co.uk/#/acca-generator';
       try { await navigator.clipboard.writeText(text); } catch(e) {}
 
       // Award 1 credit for sharing
