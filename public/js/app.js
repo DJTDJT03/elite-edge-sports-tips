@@ -3159,7 +3159,7 @@ const App = {
         ${tip.isOutsider ? '<div class="outsider-banner">EW Outsider of the Day</div>' : ''}
         <div class="tip-top">
           <div class="tip-badges">
-            <span class="tip-sport-badge ${tip.sport === 'racing' ? 'badge-racing' : 'badge-football'}">${tip.sport === 'racing' ? 'Racing' : 'Football'}</span>
+            <span class="tip-sport-badge ${tip.sport === 'racing' ? 'badge-racing' : 'badge-football'}">${tip.sport === 'racing' ? 'Racing' : tip.sport === 'basketball' ? 'NBA' : tip.sport === 'tennis' ? 'Tennis' : tip.sport === 'rugby' ? 'Rugby' : tip.sport === 'american-football' ? 'NFL' : 'Football'}</span>
             ${tip.isOutsider ? '<span class="badge-outsider">Outsider</span>' : `<span class="${tip.isPremium ? 'badge-premium' : 'badge-free'}">${tip.isPremium ? 'Premium' : 'Free'}</span>`}
             ${tip.valueRating ? `<span class="badge-premium">${tip.valueRating}</span>` : ''}
             ${tip.tipsterProfile ? `<span class="analyst-badge ${tip.tipsterProfile === 'The Professor' ? 'professor' : tip.tipsterProfile === 'The Scout' ? 'scout' : 'edge'}">${tip.tipsterProfile}</span>` : ''}
@@ -3173,6 +3173,17 @@ const App = {
         <div class="${isLocked ? 'tip-locked-content' : ''}">
           <div class="tip-selection">${tip.selection}</div>
           <div class="tip-event">${tip.event}${tip.league ? ' &bull; ' + tip.league : ''}${tip.raceTime ? ' &bull; ' + tip.raceTime : ''}</div>
+          ${tip.isWeeklyAcca && tip.accaSelections && !isLocked ? `
+          <div style="margin:10px 0;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+            ${(Array.isArray(tip.accaSelections) ? tip.accaSelections : []).map(function(leg, i) {
+              var legSport = leg.sport === 'racing' ? '&#127943;' : leg.sport === 'basketball' ? '&#127936;' : leg.sport === 'tennis' ? '&#127934;' : leg.sport === 'rugby' ? '&#127945;' : leg.sport === 'american-football' ? '&#127944;' : '&#9917;';
+              return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;' + (i % 2 ? 'background:rgba(255,255,255,0.02);' : '') + '">' +
+                '<div><span style="margin-right:6px;">' + legSport + '</span><strong style="color:#fff;">' + (leg.selection || leg.name || '') + '</strong> <span style="color:var(--text-muted);">' + (leg.event || leg.match || '') + '</span></div>' +
+                '<div style="font-weight:800;color:var(--gold);">' + (leg.odds || '') + '</div>' +
+              '</div>';
+            }).join('')}
+          </div>
+          ` : ''}
           <div class="tip-summary">${tip.analysis?.summary ? tip.analysis.summary.substring(0, 150) + '...' : ''}</div>
           <div class="tip-meta">
             <div class="tip-meta-item">
@@ -10772,10 +10783,26 @@ const App = {
       return scoreB - scoreA;
     });
 
-    var selected = filtered.slice(0, foldCount);
-    var notEnough = selected.length < foldCount;
+    // Mode: auto (AI picks best) or manual (user picks)
+    var isManual = this._accaManualMode || false;
+    var manualPicks = this._accaManualPicks || {};
+    var selected;
 
-    // Build fold selector buttons
+    if (isManual) {
+      selected = filtered.filter(function(t) { return manualPicks[t.id]; });
+      foldCount = selected.length || 2;
+    } else {
+      selected = filtered.slice(0, foldCount);
+    }
+    var notEnough = !isManual && selected.length < foldCount;
+
+    // Build mode toggle
+    var modeToggle = '<div style="display:flex;gap:4px;margin-bottom:12px;">' +
+      '<button class="acca-fold-btn' + (!isManual ? ' active' : '') + '" onclick="App._accaManualMode=false;App._renderAccaPage();">AI Auto-Pick</button>' +
+      '<button class="acca-fold-btn' + (isManual ? ' active' : '') + '" onclick="App._accaManualMode=true;App._accaManualPicks={};App._renderAccaPage();">Build Your Own</button>' +
+    '</div>';
+
+    // Build fold selector buttons (only for auto mode)
     var folds = [2, 3, 4, 5, 6, 7, 8];
     var foldBtns = folds.map(function(n) {
       return '<button class="acca-fold-btn' + (n === foldCount ? ' active' : '') + '" onclick="App._accaFoldCount=' + n + ';App._renderAccaPage();">' + n + '-fold</button>';
@@ -10918,24 +10945,67 @@ const App = {
         '</div>';
     }
 
+    // Manual picker — show all available tips with checkboxes
+    var manualPickerHtml = '';
+    if (isManual) {
+      var pickerCount = Object.keys(manualPicks).filter(function(k) { return manualPicks[k]; }).length;
+      manualPickerHtml = '<div style="margin-bottom:20px;">' +
+        '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Select Your Tips (' + pickerCount + ' selected)</div>';
+      // Group by sport
+      var sportGroups = {};
+      filtered.forEach(function(t) {
+        var s = t.sport || 'other';
+        if (!sportGroups[s]) sportGroups[s] = [];
+        sportGroups[s].push(t);
+      });
+      var sportLabels = { racing: '&#127943; Racing', football: '&#9917; Football', basketball: '&#127936; NBA', tennis: '&#127934; Tennis', rugby: '&#127945; Rugby', 'american-football': '&#127944; NFL' };
+      Object.keys(sportGroups).forEach(function(sport) {
+        manualPickerHtml += '<div style="margin-bottom:12px;"><div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px;">' + (sportLabels[sport] || sport) + '</div>';
+        sportGroups[sport].forEach(function(t) {
+          var checked = manualPicks[t.id] ? 'checked' : '';
+          manualPickerHtml += '<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:' + (manualPicks[t.id] ? 'rgba(212,168,67,0.08)' : 'var(--bg-card)') + ';border:1px solid ' + (manualPicks[t.id] ? 'rgba(212,168,67,0.3)' : 'var(--border)') + ';border-radius:8px;margin-bottom:4px;cursor:pointer;" onclick="event.preventDefault();App._toggleManualPick(\'' + t.id + '\');App._renderAccaPage();">' +
+            '<input type="checkbox" ' + checked + ' style="pointer-events:none;" />' +
+            '<div style="flex:1;"><strong style="color:#fff;font-size:13px;">' + (t.selection || '') + '</strong><br><span style="font-size:11px;color:var(--text-muted);">' + (t.event || '') + ' &bull; ' + (t.market || '') + '</span></div>' +
+            '<div style="font-weight:800;color:var(--gold);font-size:15px;">' + (t.odds || '') + '</div>' +
+          '</label>';
+        });
+        manualPickerHtml += '</div>';
+      });
+      manualPickerHtml += '</div>';
+    }
+
     app.innerHTML =
       '<div class="container acca-gen-page" style="padding-top:40px;">' +
         '<div class="page-header" style="text-align:center;">' +
           '<h1 style="color:var(--gold);">Smart Acca Generator</h1>' +
           '<p style="color:var(--text-secondary);">Powered by Elite Edge probability model</p>' +
         '</div>' +
-        '<div style="margin-bottom:16px;">' +
+        modeToggle +
+        (!isManual ? '<div style="margin-bottom:16px;">' +
           '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Fold Count</div>' +
           '<div class="acca-fold-selector">' + foldBtns + '</div>' +
-        '</div>' +
+        '</div>' : '') +
         '<div style="margin-bottom:24px;">' +
           '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Sport Filter</div>' +
-          '<div class="acca-fold-selector">' + sportBtns + '</div>' +
+          '<div class="acca-fold-selector" style="flex-wrap:wrap;">' + sportBtns + '</div>' +
         '</div>' +
+        manualPickerHtml +
         (notEnough ? notEnoughMsg : '') +
-        legsHtml +
-        summaryHtml +
+        (isManual && selected.length < 2 ? '<div style="text-align:center;padding:20px;color:var(--text-muted);">Select at least 2 tips above to build your accumulator.</div>' : '') +
+        (selected.length >= 2 ? legsHtml : '') +
+        (selected.length >= 2 ? summaryHtml : '') +
       '</div>';
+  },
+
+  _accaManualMode: false,
+  _accaManualPicks: {},
+
+  _toggleManualPick(tipId) {
+    if (this._accaManualPicks[tipId]) {
+      delete this._accaManualPicks[tipId];
+    } else {
+      this._accaManualPicks[tipId] = true;
+    }
   },
 
   _regenerateAcca() {
