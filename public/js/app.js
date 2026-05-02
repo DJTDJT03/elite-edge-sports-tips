@@ -6520,7 +6520,7 @@ const App = {
         </div>
 
         ${isOnTrial ? '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.15),rgba(212,168,67,0.05));border:2px solid var(--gold);border-radius:14px;padding:24px;margin-bottom:32px;text-align:center;"><div style="font-size:28px;margin-bottom:8px;">&#9201;</div><div style="font-size:20px;font-weight:800;color:var(--gold);margin-bottom:8px;">You\'re on your free trial — ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' left</div><div style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">Subscribe now to continue enjoying full premium access after your trial ends.</div></div>' : ''}
-        ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(34,197,94,0.03));border:2px solid rgba(34,197,94,0.3);border-radius:14px;padding:24px;margin-bottom:32px;text-align:center;"><div style="font-size:28px;margin-bottom:8px;">&#127881;</div><div style="font-size:20px;font-weight:800;color:#22c55e;margin-bottom:8px;">Start Free — No Bank Details Needed</div><div style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">Create your free account to access daily tips, race cards, results, and our weekly blog. Upgrade to Premium anytime from inside your account.</div><button class="btn btn-gold btn-lg" onclick="App.showModal(\'register\')">Create Free Account</button></div>' : ''}
+        ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(34,197,94,0.03));border:2px solid rgba(34,197,94,0.3);border-radius:14px;padding:24px;margin-bottom:32px;text-align:center;"><div style="font-size:28px;margin-bottom:8px;">&#127881;</div><div style="font-size:20px;font-weight:800;color:#22c55e;margin-bottom:8px;">Sign Up &amp; Get 5 Free Credits</div><div style="font-size:14px;color:var(--text-secondary);margin-bottom:8px;">Create your account to start using credits on premium tips. Card details stored securely for credit purchases — you will not be charged on the free tier.</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Use credits to unlock tips. Buy more from &pound;1.99 or subscribe for monthly credits.</div><button class="btn btn-gold btn-lg" onclick="App.showModal(\'register\')">Create Free Account</button></div>' : ''}
 
         <!-- Confidence Tier Leaderboard (social proof before plans) -->
         <div id="pricing-confidence-leaderboard"></div>
@@ -6532,13 +6532,17 @@ const App = {
             <h3>Free Access</h3>
             <p class="text-muted">Get started with the basics</p>
             <div class="pricing-price">&pound;<span style="font-size:42px;">0</span><span class="period">/forever</span></div>
-            <p class="text-xs text-gold mb-8">5 free credits included.</p>
+            <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);border-radius:8px;padding:10px;margin:8px 0 12px;text-align:center;">
+              <div style="font-size:24px;font-weight:900;color:var(--gold);">5</div>
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">One-Time Credits</div>
+            </div>
             <ul class="pricing-features">
-              <li>5 credits on signup</li>
+              <li>1 credit per premium tip</li>
               <li>1 free daily tip (after race)</li>
               <li>Full results page</li>
               <li>Betting calculators</li>
               <li>Betting academy</li>
+              <li>Buy more from &pound;1.99</li>
             </ul>
             <button class="btn ${!isLoggedIn ? 'btn-gold' : 'btn-outline'} btn-full" onclick="${isLoggedIn ? '' : "App.showModal('register')"}">
               ${isLoggedIn ? (isPremium ? 'Free Features Included' : 'Your Current Plan') : 'Sign Up Free — 30 Seconds'}
@@ -6552,15 +6556,19 @@ const App = {
             <p class="text-muted">Get your feet wet</p>
             <div class="pricing-price"><span class="currency">&pound;</span>9<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
             <p class="text-xs text-gold mb-8">&pound;99.99/year (save &pound;20) | Cancel anytime</p>
+            <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);border-radius:8px;padding:10px;margin:0 0 12px;text-align:center;">
+              <div style="font-size:24px;font-weight:900;color:var(--gold);">40</div>
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
+            </div>
             <ul class="pricing-features">
               <li><strong>Everything in Free, plus:</strong></li>
+              <li>40 credits renewed monthly</li>
               <li>3 daily tips (2 sports)</li>
               <li>Selection + odds revealed</li>
               <li>Full results + tracking</li>
               <li style="color:var(--text-muted);text-decoration:line-through;">Full AI analysis</li>
               <li style="color:var(--text-muted);text-decoration:line-through;">Email bulletins</li>
               <li style="color:var(--text-muted);text-decoration:line-through;">Acca generator</li>
-              <li style="color:var(--text-muted);text-decoration:line-through;">Alerts</li>
             </ul>
             ${accessLevel === 'starter' ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button><p class="text-xs text-gold mt-8"><a href="#" onclick="App.startCheckout(\'premium-monthly\');return false;" style="color:var(--gold);">Upgrade to Premium &rarr;</a></p>' :
               isLoggedIn && !isPremium ? '<button class="btn btn-outline btn-full" onclick="App.startCheckout(\'starter-monthly\')">Subscribe &mdash; &pound;9.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'starter-annual\')">Annual &mdash; &pound;99.99/year</button>' :
@@ -6575,17 +6583,19 @@ const App = {
             <p class="text-muted">Every edge play, every day</p>
             <div class="pricing-price"><span class="currency">&pound;</span>19<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
             <p class="text-xs text-gold mb-8">&pound;199.99/year (save &pound;40) | Cancel anytime</p>
+            <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:10px;margin:0 0 12px;text-align:center;">
+              <div style="font-size:24px;font-weight:900;color:#3b82f6;">120</div>
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
+            </div>
             <ul class="pricing-features">
               <li><strong>Everything in Starter, plus:</strong></li>
+              <li>120 credits renewed monthly</li>
               <li>All tips, all 6 sports</li>
               <li>Full AI analysis</li>
               <li>Value bet scanner</li>
-              <li>Live hub</li>
-              <li>H2H compare</li>
               <li>5 alert types</li>
               <li>Daily email bulletin</li>
               <li>Smart acca generator</li>
-              <li>PL preview</li>
             </ul>
             ${accessLevel === 'premium' && !this.user.trialActive ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
               isOnTrial ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'premium-monthly\')">Subscribe — &pound;19.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'premium-annual\')">Annual — &pound;199.99/year (Save &pound;40)</button><p class="text-xs text-gold mt-8">Lock in before your trial ends.</p>' :
@@ -6601,15 +6611,19 @@ const App = {
             <p class="text-muted">The ultimate edge — priority everything</p>
             <div class="pricing-price"><span class="currency">&pound;</span>39<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
             <p class="text-xs text-gold mb-8">&pound;399.99/year (save &pound;80) | Cancel anytime</p>
+            <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.3);border-radius:8px;padding:10px;margin:0 0 12px;text-align:center;">
+              <div style="font-size:20px;font-weight:900;color:var(--gold);">UNLIMITED</div>
+              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits Forever</div>
+            </div>
             <ul class="pricing-features">
               <li><strong>Everything in Premium, plus:</strong></li>
+              <li style="color:var(--gold);font-weight:700;">Unlimited credits — no limits</li>
               <li>Early access tips (6:30am)</li>
               <li>AI race replay analysis</li>
               <li>Personalised AI bulletin</li>
               <li>Priority email support</li>
               <li>VIP-only midweek acca</li>
               <li>Custom edge threshold alerts</li>
-              <li>Enhanced odds movement alerts</li>
             </ul>
             ${isVIP && !this.user.trialActive ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
               isOnTrial ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'vip-monthly\')">Subscribe — &pound;39.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'vip-annual\')">Annual — &pound;399.99/year (Save &pound;80)</button><p class="text-xs text-gold mt-8">Lock in before your trial ends.</p>' :
