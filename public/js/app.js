@@ -10698,99 +10698,33 @@ const App = {
 
     app.innerHTML = this.renderSkeleton('tips');
 
-    // Fetch LIVE football fixtures — not just published tips
+    // Fetch ALL published tips across all sports for the acca generator
     var selections = [];
     try {
-      var liveData = await this.fetchLiveFootball();
-      var fixtures = liveData && liveData.fixtures ? liveData.fixtures : [];
-
-      // Also get any published tips for extra intel
       var tips = [];
       try { tips = await this.api('/tips'); } catch(e) {}
-      var activeTips = (tips || []).filter(function(t) { return !t.locked && t.sport === 'football' && t.status === 'active' && !t.isWeeklyAcca; });
+      if (!Array.isArray(tips)) tips = tips.tips || [];
 
-      // Build selections from all today's fixtures
-      var self = this;
-      fixtures.forEach(function(f) {
-        if (!f.homeTeam || !f.awayTeam) return;
-        var matchName = f.homeTeam + ' vs ' + f.awayTeam;
-        var league = f.league || '';
-        var kickoff = f.kickoff ? new Date(f.kickoff).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '';
+      // Use all active, unlocked tips from all sports
+      var allActiveTips = tips.filter(function(t) { return !t.locked && t.status === 'active' && !t.isWeeklyAcca; });
 
-        // Check if we have a published tip for this fixture
-        var matchingTip = activeTips.find(function(t) {
-          var event = (t.event || '').toLowerCase();
-          return event.indexOf(f.homeTeam.toLowerCase()) !== -1 || event.indexOf(f.awayTeam.toLowerCase()) !== -1;
-        });
-
-        // Generate best markets for this fixture using simple analysis
-        var markets = [];
-
-        // Home Win — strong home side
-        markets.push({
-          selection: f.homeTeam + ' Win', match: matchName, league: league, kickoff: kickoff,
-          market: 'Match Result', odds: 1.7 + Math.random() * 1.3,
-          modelProbability: 0.45 + Math.random() * 0.2,
-          confidence: 6 + Math.floor(Math.random() * 3),
-          edge: 0.03 + Math.random() * 0.08,
-          analyst: 'The Professor', sport: 'football'
-        });
-
-        // BTTS
-        markets.push({
-          selection: 'Both Teams to Score — Yes', match: matchName, league: league, kickoff: kickoff,
-          market: 'BTTS', odds: 1.6 + Math.random() * 0.5,
-          modelProbability: 0.5 + Math.random() * 0.15,
-          confidence: 6 + Math.floor(Math.random() * 3),
-          edge: 0.04 + Math.random() * 0.07,
-          analyst: 'The Scout', sport: 'football'
-        });
-
-        // Over 2.5 Goals
-        markets.push({
-          selection: 'Over 2.5 Goals', match: matchName, league: league, kickoff: kickoff,
-          market: 'Over/Under', odds: 1.7 + Math.random() * 0.6,
-          modelProbability: 0.45 + Math.random() * 0.2,
-          confidence: 6 + Math.floor(Math.random() * 3),
-          edge: 0.03 + Math.random() * 0.08,
-          analyst: 'The Edge', sport: 'football'
-        });
-
-        // If we have a tip, use that as the best selection for this fixture
-        if (matchingTip) {
-          markets.unshift({
-            selection: matchingTip.selection, match: matchName, league: league, kickoff: kickoff,
-            market: matchingTip.market || 'Match Result',
-            odds: matchingTip.odds || 2.0,
-            modelProbability: matchingTip.modelProbability || 0.5,
-            confidence: matchingTip.confidence || 7,
-            edge: matchingTip.edge || 0.05,
-            analyst: matchingTip.tipsterProfile || 'The Edge', sport: 'football',
-            isPublishedTip: true
-          });
-        }
-
-        // Pick the best market for this fixture (highest probability * confidence)
-        markets.sort(function(a, b) {
-          return (b.modelProbability * b.confidence) - (a.modelProbability * a.confidence);
-        });
-        var best = markets[0];
-        best.odds = Math.round(best.odds * 100) / 100;
-        best.modelProbability = Math.round(best.modelProbability * 1000) / 1000;
-        best.edge = Math.round(best.edge * 1000) / 1000;
-        selections.push(best);
-      });
-
-      // Also add racing tips if available
-      var racingTips = (tips || []).filter(function(t) { return !t.locked && t.sport === 'racing' && t.status === 'active' && !t.isWeeklyAcca; });
-      racingTips.forEach(function(t) {
+      // Build selections from ALL published tips across all sports
+      allActiveTips.forEach(function(t) {
         selections.push({
-          selection: t.selection, match: t.event || t.meeting || '', league: t.meeting || '',
-          kickoff: t.raceTime || '', market: t.market || 'Win',
-          odds: t.odds || 3.0, modelProbability: t.modelProbability || 0.3,
-          confidence: t.confidence || 7, edge: t.edge || 0.05,
-          analyst: t.tipsterProfile || 'The Professor', sport: 'racing',
-          isPublishedTip: true
+          id: t.id,
+          selection: t.selection || '',
+          event: t.event || '',
+          match: t.event || t.meeting || '',
+          league: t.league || t.meeting || '',
+          kickoff: t.kickoff || t.raceTime || '',
+          market: t.market || 'Win',
+          odds: t.odds || 2.0,
+          modelProbability: t.modelProbability || 0.5,
+          confidence: t.confidence || 7,
+          edge: t.edge || 0.05,
+          analyst: t.tipsterProfile || 'Elite Edge',
+          sport: t.sport || 'football',
+          isPublishedTip: true,
         });
       });
 
