@@ -6654,6 +6654,32 @@ const App = {
           </a>
         </div>
 
+        <!-- Referral Scheme -->
+        <div style="background:linear-gradient(135deg,rgba(34,197,94,0.08),rgba(34,197,94,0.02));border:2px solid rgba(34,197,94,0.25);border-radius:14px;padding:28px;margin-bottom:32px;max-width:700px;margin-left:auto;margin-right:auto;">
+          <div style="text-align:center;margin-bottom:16px;">
+            <div style="font-size:36px;margin-bottom:8px;">&#127381;</div>
+            <h3 style="color:#22c55e;font-size:20px;margin-bottom:4px;">Earn Free Credits — Refer a Friend</h3>
+            <p style="color:var(--text-secondary);font-size:14px;">Share your unique link. Earn credits every time someone signs up.</p>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">
+            <div style="text-align:center;background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;">
+              <div style="font-size:28px;font-weight:900;color:#22c55e;">+3</div>
+              <div style="font-size:11px;color:var(--text-muted);">credits when your friend signs up</div>
+            </div>
+            <div style="text-align:center;background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;">
+              <div style="font-size:28px;font-weight:900;color:#22c55e;">+5</div>
+              <div style="font-size:11px;color:var(--text-muted);">bonus when they start a trial</div>
+            </div>
+            <div style="text-align:center;background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;">
+              <div style="font-size:28px;font-weight:900;color:var(--gold);">+1</div>
+              <div style="font-size:11px;color:var(--text-muted);">credit for sharing on social (daily)</div>
+            </div>
+          </div>
+          <div style="text-align:center;">
+            ${isLoggedIn ? '<a href="#/refer" class="btn btn-gold">Get Your Referral Link &rarr;</a>' : '<p style="color:var(--text-muted);font-size:13px;">Sign up to get your unique referral link and start earning.</p>'}
+          </div>
+        </div>
+
         <!-- Lead capture -->
         <div class="card card-premium text-center" style="padding:40px;max-width:600px;margin:0 auto;">
           <h3 class="mb-8">Not Ready to Commit?</h3>
