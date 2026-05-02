@@ -142,6 +142,60 @@ module.exports = function(deps) {
     }
   });
 
+  // POST /api/accas/save — save a user-built acca for tracking + social
+  router.post('/api/accas/save', async (req, res) => {
+    try {
+      var body = req.body || {};
+      if (!body.selections || !Array.isArray(body.selections) || body.selections.length < 2) {
+        return res.status(400).json({ error: 'At least 2 selections required' });
+      }
+      // Get user if logged in
+      var userName = 'Anonymous';
+      var userId = null;
+      var authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+          var jwt = require('jsonwebtoken');
+          var decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET || '');
+          userId = decoded.id;
+          userName = decoded.name || 'User';
+        } catch (e) {}
+      }
+
+      await db.query(
+        'INSERT INTO user_accas (user_id, user_name, selections, combined_odds, stake, potential_return, shared) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [userId, userName, JSON.stringify(body.selections), body.combinedOdds || 0, body.stake || 0, body.potentialReturn || 0, body.share || false]
+      );
+      res.json({ saved: true, message: 'Acca saved!' });
+    } catch (err) {
+      console.error('[Accas] Save error:', err.message);
+      res.status(500).json({ error: 'Failed to save acca' });
+    }
+  });
+
+  // GET /api/accas/shared — get recently shared accas for social feed
+  router.get('/api/accas/shared', async (req, res) => {
+    try {
+      if (!db.isAvailable()) return res.json([]);
+      var result = await db.query(
+        'SELECT * FROM user_accas WHERE shared = true ORDER BY created_at DESC LIMIT 20'
+      );
+      res.json(result.rows.map(function(r) {
+        return {
+          id: r.id, userName: r.user_name, selections: r.selections,
+          combinedOdds: parseFloat(r.combined_odds) || 0,
+          stake: parseFloat(r.stake) || 0,
+          potentialReturn: parseFloat(r.potential_return) || 0,
+          status: r.status, result: r.result,
+          pnl: parseFloat(r.pnl) || 0,
+          createdAt: r.created_at,
+        };
+      }));
+    } catch (err) {
+      res.json([]);
+    }
+  });
+
   // POST /api/chat/ai — AI-powered chatbot using Claude with live data context
   router.post('/api/chat/ai', async (req, res) => {
     try {

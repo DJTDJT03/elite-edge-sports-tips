@@ -10705,8 +10705,27 @@ const App = {
       try { tips = await this.api('/tips'); } catch(e) {}
       if (!Array.isArray(tips)) tips = tips.tips || [];
 
-      // Use all active, unlocked tips from all sports
-      var allActiveTips = tips.filter(function(t) { return !t.locked && t.status === 'active' && !t.isWeeklyAcca; });
+      // Use all active, unlocked tips — filter out games that have already kicked off
+      var now = new Date();
+      var nowStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/London' });
+      var todayStr = now.toISOString().split('T')[0];
+
+      var allActiveTips = tips.filter(function(t) {
+        if (t.locked || t.status !== 'active' || t.isWeeklyAcca) return false;
+        // Filter out tips where kickoff/raceTime has passed
+        var tipTime = t.kickoff || t.raceTime || '';
+        var tipDate = t.date ? App._normDate(t.date) : todayStr;
+        if (tipDate < todayStr) return false; // past date
+        if (tipDate > todayStr) return true; // future date — always include
+        // Same day — check time
+        if (tipTime && tipTime.match(/^\d{1,2}:\d{2}/)) {
+          // Pad to HH:MM for comparison
+          var parts = tipTime.split(':');
+          var tipHHMM = (parts[0].length === 1 ? '0' : '') + parts[0] + ':' + parts[1];
+          if (tipHHMM <= nowStr) return false; // already kicked off
+        }
+        return true;
+      });
 
       // Build selections from ALL published tips across all sports
       allActiveTips.forEach(function(t) {
@@ -10938,6 +10957,7 @@ const App = {
           '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
             '<button class="btn btn-gold" onclick="App._copyAccaToClipboard()">Copy to Bet Slip</button>' +
             '<button class="btn btn-outline" onclick="App._addAccaToMyBets()">Add to My Bets</button>' +
+            '<button class="btn btn-outline" onclick="App._shareAcca()">&#128230; Share My Acca</button>' +
             '<button class="btn btn-outline" onclick="App._regenerateAcca()">&#8635; Regenerate</button>' +
           '</div>' +
         '</div>';
@@ -11044,6 +11064,61 @@ const App = {
       delete this._accaManualPicks[tipId];
     } else {
       this._accaManualPicks[tipId] = true;
+    }
+  },
+
+  async _shareAcca() {
+    var self = this;
+    var activeTips = this._accaAllTips || [];
+    var sportToggles = this._accaSportToggles || {};
+    var activeToggles = Object.keys(sportToggles).filter(function(k) { return sportToggles[k]; });
+
+    var filtered = activeTips;
+    if (activeToggles.length < 6) {
+      filtered = filtered.filter(function(t) { return activeToggles.indexOf(t.sport) !== -1; });
+    }
+
+    var selected = this._accaManualMode
+      ? filtered.filter(function(t) { return (self._accaManualPicks || {})[t.id]; })
+      : filtered.slice(0, this._accaFoldCount || 4);
+
+    if (selected.length < 2) {
+      this.showToast('Select at least 2 tips to share', 'error');
+      return;
+    }
+
+    var combinedOdds = 1;
+    selected.forEach(function(s) { combinedOdds *= (parseFloat(s.odds) || 2); });
+    var stake = 10;
+    var potentialReturn = stake * combinedOdds;
+
+    try {
+      await this.api('/accas/save', {
+        method: 'POST',
+        body: JSON.stringify({
+          selections: selected.map(function(s) {
+            return { selection: s.selection, event: s.event || s.match, market: s.market, odds: s.odds, sport: s.sport };
+          }),
+          combinedOdds: Math.round(combinedOdds * 100) / 100,
+          stake: stake,
+          potentialReturn: Math.round(potentialReturn * 100) / 100,
+          share: true,
+        }),
+      });
+      this.showToast('Acca shared! Check the Community Accas section.', 'success');
+
+      // Also copy to clipboard for social posting
+      var text = 'My Elite Edge Acca:\n';
+      selected.forEach(function(s, i) { text += (i + 1) + '. ' + s.selection + ' (' + (s.event || s.match) + ') @ ' + s.odds + '\n'; });
+      text += 'Combined Odds: ' + self.formatOdds(combinedOdds) + '\n';
+      text += '£10 returns £' + potentialReturn.toFixed(2) + '\n';
+      text += 'Built with eliteedgesports.co.uk';
+      try { await navigator.clipboard.writeText(text); } catch(e) {}
+
+      // Award 1 credit for sharing
+      try { await this.api('/auth/credits/share', { method: 'POST', body: '{}' }); } catch(e) {}
+    } catch (err) {
+      this.showToast(err.message || 'Failed to share acca', 'error');
     }
   },
 

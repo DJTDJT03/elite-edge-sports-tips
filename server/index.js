@@ -185,6 +185,10 @@ app.use('/', require('./routes/public')(deps));
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS drips_sent JSONB DEFAULT \'[]\'',
         'ALTER TABLE results ADD COLUMN IF NOT EXISTS voided_by_monitor BOOLEAN DEFAULT FALSE',
         'ALTER TABLE results ADD COLUMN IF NOT EXISTS replay_analysis JSONB',
+        // User accas (shared/tracked)
+        "CREATE TABLE IF NOT EXISTS user_accas (id SERIAL PRIMARY KEY, user_id TEXT, user_name TEXT, selections JSONB NOT NULL, combined_odds NUMERIC(10,2), stake NUMERIC(8,2), potential_return NUMERIC(10,2), status TEXT DEFAULT 'pending', result TEXT, pnl NUMERIC(10,2), shared BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW())",
+        'CREATE INDEX IF NOT EXISTS idx_user_accas_created ON user_accas(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_user_accas_shared ON user_accas(shared, created_at DESC)',
         // Credit system
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS credits INTEGER DEFAULT 0',
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS credits_monthly_allowance INTEGER DEFAULT 0',
