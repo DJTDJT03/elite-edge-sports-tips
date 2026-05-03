@@ -219,6 +219,11 @@ app.use('/', require('./routes/public')(deps));
         'CREATE INDEX IF NOT EXISTS idx_sc_date ON scored_candidates(date DESC)',
         'CREATE INDEX IF NOT EXISTS idx_sc_sport ON scored_candidates(sport, date DESC)',
         'CREATE INDEX IF NOT EXISTS idx_sc_settled ON scored_candidates(settled, date DESC)',
+        // Login streak tracking
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS login_streak INTEGER DEFAULT 0',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_date DATE',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS best_login_streak INTEGER DEFAULT 0',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_reward_claimed DATE',
         // Mobile number for SMS
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS mobile TEXT',
         // User bets — server-side persistence for Personal ROI Dashboard

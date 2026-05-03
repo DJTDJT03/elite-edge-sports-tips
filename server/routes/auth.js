@@ -203,6 +203,43 @@ module.exports = function(deps) {
 
       console.log(`[Auth] Login: ${user.email} | IP: ${ip} | Session: ${sessionId.slice(0, 8)}...`);
 
+      // Login streak tracking
+      var todayDate = new Date().toISOString().split('T')[0];
+      var lastLoginDate = user.lastLoginDate || user.last_login_date || null;
+      var currentStreak = user.loginStreak || user.login_streak || 0;
+      var bestStreak = user.bestLoginStreak || user.best_login_streak || 0;
+      var streakReward = null;
+
+      if (lastLoginDate) {
+        var lastDate = new Date(lastLoginDate + 'T12:00:00');
+        var today = new Date(todayDate + 'T12:00:00');
+        var diffDays = Math.round((today - lastDate) / (24 * 60 * 60 * 1000));
+
+        if (diffDays === 1) {
+          // Consecutive day — extend streak
+          currentStreak++;
+        } else if (diffDays === 0) {
+          // Same day — no change
+        } else {
+          // Missed a day — reset streak
+          currentStreak = 1;
+        }
+      } else {
+        currentStreak = 1;
+      }
+      if (currentStreak > bestStreak) bestStreak = currentStreak;
+
+      // Award streak rewards
+      var streakMilestones = { 3: 1, 7: 3, 14: 5, 30: 10, 60: 20, 100: 50 };
+      if (streakMilestones[currentStreak] && (!user.streakRewardClaimed || user.streakRewardClaimed !== todayDate)) {
+        var reward = streakMilestones[currentStreak];
+        try {
+          await db.addCredits(user.id, reward, 'streak_reward', currentStreak + '-day login streak bonus');
+          streakReward = { days: currentStreak, credits: reward };
+          console.log('[Auth] Streak reward: +' + reward + ' credits for ' + currentStreak + '-day streak to ' + user.email);
+        } catch(e) {}
+      }
+
       await db.updateUser(user.id, {
         failedAttempts: 0,
         lockUntil: null,
@@ -210,7 +247,11 @@ module.exports = function(deps) {
         lastLogin: loginEntry,
         loginHistory,
         trustedDevices,
-        flagged
+        flagged,
+        loginStreak: currentStreak,
+        lastLoginDate: todayDate,
+        bestLoginStreak: bestStreak,
+        streakRewardClaimed: streakMilestones[currentStreak] ? todayDate : (user.streakRewardClaimed || null),
       });
 
       const token = jwt.sign(
@@ -221,8 +262,11 @@ module.exports = function(deps) {
       res.json({
         token,
         tokenExpiry,
-        user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, joined: user.joined, subscriptionExpiry: user.subscriptionExpiry, trialActive: user.trialActive, trialEnd: user.trialEnd },
-        isNewDevice
+        user: { id: user.id, email: user.email, name: user.name, role: user.role, subscription: user.subscription, joined: user.joined, subscriptionExpiry: user.subscriptionExpiry, trialActive: user.trialActive, trialEnd: user.trialEnd, credits: user.credits },
+        isNewDevice,
+        loginStreak: currentStreak,
+        bestStreak: bestStreak,
+        streakReward: streakReward,
       });
     } catch (err) {
       res.status(500).json({ error: err.message });

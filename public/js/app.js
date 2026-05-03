@@ -559,16 +559,29 @@ const App = {
       } else {
         localStorage.removeItem('ee_remembered_email');
       }
+      // Store streak data
+      this._loginStreak = data.loginStreak || 0;
+      this._bestStreak = data.bestStreak || 0;
+
       this.updateAuthUI();
       this.closeModal();
       trackEvent('auth', 'login', email);
+
+      // Show streak reward popup if earned
+      if (data.streakReward) {
+        setTimeout(function() { App.showStreakRewardPopup(data.streakReward, data.loginStreak); }, 800);
+      } else if (data.loginStreak >= 3) {
+        // Show streak counter toast
+        setTimeout(function() { App.showToast('Login streak: ' + data.loginStreak + ' days! Keep it going.', 'success'); }, 800);
+      }
+
       // Show onboarding on first login (Feature #10)
       if (!localStorage.getItem('onboardingDone')) {
         this.showOnboarding();
       }
       // Show free trial offer for free users who haven't tried yet
       if (this.user && this.user.subscription === 'free' && !this.user.trialStart) {
-        setTimeout(() => this.showTrialOffer(), 1500);
+        setTimeout(() => this.showTrialOffer(), 3000);
       }
       this.route();
     } catch (err) {
@@ -2629,6 +2642,7 @@ const App = {
             </div>
             ${creditHtml}
           </div>
+          ${this._loginStreak >= 2 ? '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:18px;">&#128293;</span><span style="font-weight:800;color:#d4a843;">' + this._loginStreak + '-day streak</span>' + (this._loginStreak >= 7 ? '<span style="font-size:11px;color:#22c55e;font-weight:600;">Best: ' + (this._bestStreak || this._loginStreak) + '</span>' : '') + '</div>' : ''}
         </div>
 
         <!-- 2. NAP OF THE DAY — Hero product, first thing you see -->
@@ -9513,6 +9527,40 @@ const App = {
         '<button onclick="document.getElementById(\'trial-expired-overlay\').remove()" style="width:100%;padding:10px;background:transparent;color:#8b8d93;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:13px;cursor:pointer;">Continue on Free Plan</button>' +
       '</div>';
     document.body.appendChild(overlay);
+  },
+
+  showStreakRewardPopup(reward, streak) {
+    var existing = document.getElementById('streak-reward-popup');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'streak-reward-popup';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+    var milestones = [3, 7, 14, 30, 60, 100];
+    var nextMilestone = milestones.find(function(m) { return m > streak; }) || 'MAX';
+    var daysToNext = typeof nextMilestone === 'number' ? (nextMilestone - streak) : 0;
+
+    overlay.innerHTML =
+      '<div style="background:#141828;border:2px solid rgba(212,168,67,0.5);border-radius:16px;padding:36px;max-width:400px;width:100%;text-align:center;animation:celebrateIn 0.4s ease-out;box-shadow:0 0 60px rgba(212,168,67,0.2);">' +
+        '<div style="font-size:56px;margin-bottom:12px;">&#128293;</div>' +
+        '<h3 style="color:#d4a843;font-size:22px;margin-bottom:8px;">' + streak + '-Day Streak!</h3>' +
+        '<p style="color:#22c55e;font-size:18px;font-weight:800;margin-bottom:4px;">+' + reward.credits + ' Free Credit' + (reward.credits !== 1 ? 's' : '') + ' Earned!</p>' +
+        '<p style="color:#94a3b8;font-size:14px;margin-bottom:20px;">You\'ve logged in ' + streak + ' days in a row. Don\'t break the streak!</p>' +
+        (daysToNext > 0 ? '<div style="background:rgba(212,168,67,0.08);border-radius:8px;padding:12px;margin-bottom:16px;"><div style="font-size:12px;color:#94a3b8;">Next reward at <strong style="color:#d4a843;">' + nextMilestone + ' days</strong> — only ' + daysToNext + ' more day' + (daysToNext !== 1 ? 's' : '') + '!</div></div>' : '') +
+        '<div style="display:flex;gap:6px;justify-content:center;margin-bottom:8px;">' +
+          milestones.map(function(m) {
+            var reached = streak >= m;
+            return '<div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;' + (reached ? 'background:#d4a843;color:#0a0e1a;' : 'background:rgba(255,255,255,0.05);color:#475569;border:1px solid #2a2d45;') + '">' + m + '</div>';
+          }).join('') +
+        '</div>' +
+        '<button onclick="document.getElementById(\'streak-reward-popup\').remove();" style="margin-top:12px;background:#d4a843;color:#0a0e1a;border:none;padding:10px 28px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">Awesome!</button>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) overlay.remove();
+    });
   },
 
   showTelegramPopup() {
