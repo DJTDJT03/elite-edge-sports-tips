@@ -49,7 +49,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css?v=20260502b">
+  <link rel="stylesheet" href="/css/style.css?v=20260503a">
 
   <!-- Google Analytics 4 — Uncomment and replace GA_ID when ready
   <script async src="https://www.googletagmanager.com/gtag/js?id=GA_ID"></script>
@@ -157,9 +157,9 @@
           <span id="fmt-frac" class="fmt-active">Frac</span><span class="fmt-sep">|</span><span id="fmt-dec">Dec</span>
         </span>
         <button class="theme-toggle" id="theme-toggle" onclick="App.toggleTheme()" title="Toggle Light/Dark Mode">&#9790;</button>
-        <div id="nav-auth-guest">
-          <button class="btn btn-outline btn-sm" onclick="App.showModal('login')">Log In</button>
-          <button class="btn btn-gold btn-sm" onclick="App.showModal('register')">Sign Up</button>
+        <div id="nav-auth-guest" style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-outline" style="padding:8px 20px;font-size:14px;font-weight:700;" onclick="App.showModal('login')">Log In</button>
+          <button class="btn btn-gold" style="padding:8px 20px;font-size:14px;font-weight:700;" onclick="App.showModal('register')">Sign Up</button>
         </div>
         <div id="nav-auth-user" style="display:none;">
           <span class="user-badge" id="user-badge"></span>
@@ -556,7 +556,7 @@
   <div id="onboarding-container"></div>
 
   <script src="/js/calculators.js?v=20260501c"></script>
-  <script src="/js/app.js?v=20260502b"></script>
+  <script src="/js/app.js?v=20260503a"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
