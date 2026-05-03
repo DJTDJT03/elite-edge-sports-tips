@@ -111,82 +111,19 @@
       <!-- Content body -->
       <main class="content-body">
 
-        <!-- Dashboard -->
-        <div id="sec-dashboard" class="section active">
-          <div class="loading-state" id="dashboardLoading">
-            <div class="spinner"></div>
-            Loading dashboard&hellip;
-          </div>
-          <div id="dashboardContent" class="hidden"></div>
-        </div>
+        <!-- Shared content container — all page modules render here -->
+        <div id="admin-content"></div>
 
-        <!-- Tips Management -->
-        <div id="sec-tips" class="section">
-          <div class="loading-state" id="tipsLoading">
-            <div class="spinner"></div>
-            Loading tips&hellip;
-          </div>
-          <div id="tipsContent" class="hidden"></div>
-        </div>
-
-        <!-- Results & Analytics -->
-        <div id="sec-results" class="section">
-          <div class="loading-state" id="resultsLoading">
-            <div class="spinner"></div>
-            Loading results&hellip;
-          </div>
-          <div id="resultsContent" class="hidden"></div>
-        </div>
-
-        <!-- Users -->
-        <div id="sec-users" class="section">
-          <div class="loading-state" id="usersLoading">
-            <div class="spinner"></div>
-            Loading users&hellip;
-          </div>
-          <div id="usersContent" class="hidden"></div>
-        </div>
-
-        <!-- Email Centre -->
-        <div id="sec-email" class="section">
-          <div class="loading-state" id="emailLoading">
-            <div class="spinner"></div>
-            Loading email centre&hellip;
-          </div>
-          <div id="emailContent" class="hidden"></div>
-        </div>
-
-        <!-- Support Tickets -->
-        <div id="sec-support" class="section">
-          <div class="loading-state" id="supportLoading">
-            <div class="spinner"></div>
-            Loading support tickets&hellip;
-          </div>
-          <div id="supportContent" class="hidden"></div>
-        </div>
-
-        <!-- Live Data -->
-        <div id="sec-livedata" class="section">
-          <div class="loading-state" id="livedataLoading">
-            <div class="spinner"></div>
-            Loading live data&hellip;
-          </div>
-          <div id="livedataContent" class="hidden"></div>
-        </div>
-
-        <!-- Audit Log -->
-        <div id="sec-audit" class="section">
-          <div class="loading-state" id="auditLoading">
-            <div class="spinner"></div>
-            Loading audit log&hellip;
-          </div>
-          <div id="auditContent" class="hidden"></div>
-        </div>
-
-        <!-- Selection Analytics -->
-        <div id="sec-analytics" class="section">
-          <div id="admin-content"></div>
-        </div>
+        <!-- Section containers for routing (show/hide managed by admin.js) -->
+        <div id="sec-dashboard" class="section active"></div>
+        <div id="sec-tips" class="section"></div>
+        <div id="sec-results" class="section"></div>
+        <div id="sec-users" class="section"></div>
+        <div id="sec-email" class="section"></div>
+        <div id="sec-support" class="section"></div>
+        <div id="sec-livedata" class="section"></div>
+        <div id="sec-audit" class="section"></div>
+        <div id="sec-analytics" class="section"></div>
 
       </main>
     </div>

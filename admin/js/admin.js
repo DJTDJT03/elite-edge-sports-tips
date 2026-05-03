@@ -211,12 +211,16 @@
       var hash = window.location.hash || '#/dashboard';
       var handler = routes[hash];
 
+      // Normalise hash — #dashboard and #/dashboard should both work
+      var sectionId = hash.replace('#/', '').replace('#', '');
+      if (!sectionId) sectionId = 'dashboard';
+
       // Update sidebar active state
       var links = document.querySelectorAll('.admin-sidebar a[data-route], .admin-sidebar a[data-section]');
       for (var i = 0; i < links.length; i++) {
         var link = links[i];
         var routeMatch = link.getAttribute('data-route') === hash;
-        var sectionMatch = link.getAttribute('data-section') && ('#' + link.getAttribute('data-section') === hash || '#/' + link.getAttribute('data-section') === hash);
+        var sectionMatch = link.getAttribute('data-section') === sectionId;
         if (routeMatch || sectionMatch) {
           link.classList.add('active');
         } else {
@@ -224,25 +228,45 @@
         }
       }
 
-      // Show/hide sections — only manage analytics section, leave others to original system
-      var analyticsSection = document.getElementById('sec-analytics');
-      if (hash === '#/analytics') {
-        // Hide all other sections, show analytics
-        var sections = document.querySelectorAll('.section');
-        for (var s = 0; s < sections.length; s++) {
-          sections[s].classList.remove('active');
-          sections[s].style.display = 'none';
-        }
-        if (analyticsSection) analyticsSection.style.display = 'block';
-      } else {
-        // Hide analytics, let original system handle other sections
-        if (analyticsSection) analyticsSection.style.display = 'none';
-      }
+      // Update page title and subtitle
+      var titles = {
+        dashboard: ['Dashboard', 'Overview of your platform at a glance'],
+        tips: ['Tips Management', 'Create, edit, and manage tip selections'],
+        results: ['Results & Analytics', 'Performance tracking and analysis'],
+        users: ['Users', 'Manage subscribers and accounts'],
+        email: ['Email Centre', 'Compose and send bulletins'],
+        support: ['Support Tickets', 'Manage customer enquiries'],
+        livedata: ['Live Data', 'API status and data refresh'],
+        audit: ['Audit Log', 'System activity history'],
+        analytics: ['Selection Analytics', 'Performance by sport, analyst, and market'],
+      };
+      var pageTitle = document.getElementById('pageTitle');
+      var pageSubtitle = document.getElementById('pageSubtitle');
+      if (pageTitle) pageTitle.textContent = (titles[sectionId] || ['Dashboard'])[0];
+      if (pageSubtitle) pageSubtitle.textContent = (titles[sectionId] || ['', ''])[1] || '';
+
+      // Show loading state
+      var content = document.getElementById('admin-content');
+      if (content) content.innerHTML = '<div class="admin-loading"><div class="spinner"></div> Loading...</div>';
+
+      // All pages render into #admin-content
+      var allHandlers = {
+        'dashboard': function() { if (window.DashboardPage) DashboardPage.render(); },
+        'tips': function() { if (window.TipsPage) TipsPage.render(); },
+        'results': function() { if (window.ResultsPage) ResultsPage.render(); },
+        'users': function() { if (window.UsersPage) UsersPage.render(); },
+        'email': function() { if (window.EmailPage) EmailPage.render(); },
+        'support': function() { if (window.SupportPage) SupportPage.render(); },
+        'livedata': function() { if (window.LiveDataPage) LiveDataPage.render(); },
+        'audit': function() { if (window.AuditPage) AuditPage.render(); },
+        'analytics': function() { if (window.AnalyticsPage) AnalyticsPage.render(); },
+      };
 
       if (handler) {
         handler();
+      } else if (allHandlers[sectionId]) {
+        allHandlers[sectionId]();
       } else {
-        // Default to dashboard for unknown routes
         window.location.hash = '#/dashboard';
       }
     },
