@@ -23,16 +23,19 @@ window.ResultsPage = {
     container.innerHTML = '<div class="admin-loading"><div class="spinner"></div> Loading results data...</div>';
 
     try {
+      var selectedDate = this._selectedDate || new Date().toISOString().split('T')[0];
       var data = await Promise.all([
         AdminAPI.get('/results/performance'),
         AdminAPI.get('/results'),
         AdminAPI.get('/tips'),
         AdminAPI.get('/results/by-confidence'),
+        AdminAPI.get('/analytics/shadow-scoring?date=' + selectedDate).catch(function() { return { candidates: [] }; }),
       ]);
       this._performance = data[0];
       this._results = data[1];
       this._tips = data[2];
       this._byConfidence = data[3];
+      this._candidates = (data[4] && data[4].candidates) ? data[4].candidates : [];
     } catch (err) {
       container.innerHTML = '<div class="admin-error">Failed to load results data: ' + (err.message || err) + '</div>';
       return;
@@ -89,11 +92,12 @@ window.ResultsPage = {
       return '<button class="btn btn-sm ' + (isActive ? 'btn-gold' : 'btn-outline') + ' daily-nav-btn" data-date="' + d + '" style="font-size:11px;padding:6px 10px;">' + dayLabel + '</button>';
     }).join('');
 
-    // Get tips for selected date
+    // Get tips AND scored candidates for selected date
     var selectedDate = this._selectedDate;
     var dayTips = this._tips.filter(function(t) {
       return self._extractDate(t.date || t.createdAt) === selectedDate;
     });
+    var dayCandidates = (this._candidates || []);
 
     // Match results to tips
     var resultMap = {};
@@ -101,64 +105,102 @@ window.ResultsPage = {
       if (r.tipId) resultMap[r.tipId] = r;
     });
 
-    // Build stats for the day
-    var dayWins = 0, dayLosses = 0, dayPending = 0, dayVoid = 0, dayPlaced = 0;
-    var dayPnL = 0;
+    // Build unified list: merge published tips + unpublished candidates
+    var allPicks = [];
+    var usedSelections = {};
+
+    // Add published tips first
     dayTips.forEach(function(t) {
       var r = resultMap[t.id];
-      if (!r) { dayPending++; return; }
-      if (r.result === 'won') { dayWins++; dayPnL += (r.pnl || 0); }
-      else if (r.result === 'lost') { dayLosses++; dayPnL += (r.pnl || 0); }
-      else if (r.result === 'placed') { dayPlaced++; dayPnL += (r.pnl || 0); }
-      else if (r.result === 'void') { dayVoid++; }
+      var key = (t.selection || '').toLowerCase() + '|' + (t.event || '').toLowerCase();
+      usedSelections[key] = true;
+      allPicks.push({
+        sport: t.sport, selection: t.selection, event: t.event || t.meeting,
+        market: t.market, odds: t.odds, confidence: t.confidence,
+        edge: t.edge, time: t.raceTime || t.kickoff || '',
+        result: r ? r.result : null, pnl: r ? (r.pnl || 0) : 0,
+        outcome: t.actualOutcome || (r && r.actualOutcome) || '',
+        wasPublished: true, settled: !!r,
+      });
+    });
+
+    // Add unpublished candidates (shadow scoring picks not sent to users)
+    dayCandidates.forEach(function(c) {
+      var key = (c.selection || '').toLowerCase() + '|' + (c.event || '').toLowerCase();
+      if (usedSelections[key]) return; // skip if already shown as a published tip
+      allPicks.push({
+        sport: c.sport, selection: c.selection, event: c.event || c.meeting,
+        market: c.market, odds: c.odds, confidence: c.confidence,
+        edge: c.edge, time: c.kickoff || '',
+        result: c.result || null, pnl: c.pnl || 0,
+        outcome: '', wasPublished: c.wasPublished, settled: c.settled,
+      });
+    });
+
+    // Build stats for the day — ALL picks
+    var dayWins = 0, dayLosses = 0, dayPending = 0, dayVoid = 0, dayPlaced = 0;
+    var dayPnL = 0;
+    var pubWins = 0, pubTotal = 0, unpubWins = 0, unpubTotal = 0;
+    allPicks.forEach(function(p) {
+      if (!p.result) { dayPending++; return; }
+      if (p.result === 'won') { dayWins++; dayPnL += p.pnl; if (p.wasPublished) { pubWins++; pubTotal++; } else { unpubWins++; unpubTotal++; } }
+      else if (p.result === 'lost') { dayLosses++; dayPnL += p.pnl; if (p.wasPublished) pubTotal++; else unpubTotal++; }
+      else if (p.result === 'placed') { dayPlaced++; dayPnL += p.pnl; if (p.wasPublished) { pubWins++; pubTotal++; } else { unpubWins++; unpubTotal++; } }
+      else if (p.result === 'void') { dayVoid++; }
       else { dayPending++; }
     });
     var daySettled = dayWins + dayLosses + dayPlaced + dayVoid;
-    var dayStrikeRate = daySettled > 0 ? Math.round(((dayWins + dayPlaced) / (daySettled - dayVoid)) * 1000) / 10 : 0;
+    var dayStrikeRate = (daySettled - dayVoid) > 0 ? Math.round(((dayWins + dayPlaced) / (daySettled - dayVoid)) * 1000) / 10 : 0;
     dayPnL = Math.round(dayPnL * 100) / 100;
 
     var dt = new Date(selectedDate + 'T12:00:00');
     var dateLabel = dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-    // Build tip rows
+    // Sort by sport then time
+    allPicks.sort(function(a, b) {
+      if (a.sport !== b.sport) return (a.sport || '').localeCompare(b.sport || '');
+      return (a.time || '').localeCompare(b.time || '');
+    });
+
+    // Build rows
     var tipRows = '';
-    if (dayTips.length === 0) {
-      tipRows = '<tr><td colspan="9" style="text-align:center;color:#64748b;padding:20px;">No tips published on this date.</td></tr>';
+    if (allPicks.length === 0) {
+      tipRows = '<tr><td colspan="10" style="text-align:center;color:#64748b;padding:20px;">No picks scored on this date.</td></tr>';
     } else {
-      // Sort by sport then time
-      dayTips.sort(function(a, b) {
-        if (a.sport !== b.sport) return (a.sport || '').localeCompare(b.sport || '');
-        return (a.raceTime || a.kickoff || '').localeCompare(b.raceTime || b.kickoff || '');
-      });
-      dayTips.forEach(function(t) {
-        var r = resultMap[t.id];
+      allPicks.forEach(function(p) {
         var resultBadge, pnlCell, outcomeCell;
-        // Get actual outcome from tip or result
-        var outcome = t.actualOutcome || (r && r.actualOutcome) || '';
-        if (r) {
-          var badgeClass = r.result === 'won' ? 'badge-result-won' : r.result === 'lost' ? 'badge-result-lost' : r.result === 'placed' ? 'badge-result-placed' : 'badge-result-void';
-          resultBadge = '<span class="badge ' + badgeClass + '">' + self._ucFirst(r.result) + '</span>';
-          var pnl = r.pnl || 0;
-          pnlCell = '<span class="' + (pnl > 0 ? 'stat-green' : pnl < 0 ? 'stat-red' : '') + '">' + (pnl > 0 ? '+' : '') + pnl.toFixed(2) + '</span>';
+        if (p.settled && p.result) {
+          var badgeClass = p.result === 'won' ? 'badge-result-won' : p.result === 'lost' ? 'badge-result-lost' : p.result === 'placed' ? 'badge-result-placed' : 'badge-result-void';
+          resultBadge = '<span class="badge ' + badgeClass + '">' + self._ucFirst(p.result) + '</span>';
+          pnlCell = '<span class="' + (p.pnl > 0 ? 'stat-green' : p.pnl < 0 ? 'stat-red' : '') + '">' + (p.pnl > 0 ? '+' : '') + p.pnl.toFixed(2) + '</span>';
         } else {
           resultBadge = '<span class="badge" style="background:rgba(148,163,184,0.15);color:#94a3b8;">Pending</span>';
           pnlCell = '<span style="color:#64748b;">—</span>';
         }
-        outcomeCell = outcome ? '<span style="font-size:11px;color:#cbd5e1;">' + outcome + '</span>' : '<span style="color:#64748b;font-size:11px;">—</span>';
+        outcomeCell = p.outcome ? '<span style="font-size:11px;color:#cbd5e1;">' + p.outcome + '</span>' : '<span style="color:#64748b;font-size:11px;">—</span>';
 
-        var sportIcon = t.sport === 'racing' ? '&#127943;' : t.sport === 'football' ? '&#9917;' : t.sport === 'basketball' ? '&#127936;' : t.sport === 'tennis' ? '&#127934;' : t.sport === 'rugby' ? '&#127945;' : t.sport === 'american-football' ? '&#127944;' : '&#128200;';
-        var confColor = (t.confidence || 0) >= 8 ? '#22c55e' : (t.confidence || 0) >= 6 ? '#d4a843' : '#94a3b8';
-        var time = t.raceTime || t.kickoff || '';
+        var sportIcon = p.sport === 'racing' ? '&#127943;' : p.sport === 'football' ? '&#9917;' : p.sport === 'basketball' ? '&#127936;' : p.sport === 'tennis' ? '&#127934;' : p.sport === 'rugby' ? '&#127945;' : p.sport === 'american-football' ? '&#127944;' : '&#128200;';
+        var confColor = (p.confidence || 0) >= 8 ? '#22c55e' : (p.confidence || 0) >= 6 ? '#d4a843' : '#94a3b8';
+        var time = p.time || '';
         if (time && time.length > 5) time = time.substring(0, 5);
 
-        tipRows += '<tr>'
+        var pubBadge = p.wasPublished
+          ? '<span style="background:rgba(212,168,67,0.2);color:#d4a843;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;">PUBLISHED</span>'
+          : '<span style="background:rgba(100,116,139,0.2);color:#94a3b8;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;">SHADOW</span>';
+
+        var edgeVal = p.edge ? (p.edge > 1 ? p.edge.toFixed(1) : (p.edge * 100).toFixed(1)) : '—';
+
+        var rowBg = p.wasPublished ? '' : 'background:rgba(100,116,139,0.03);';
+
+        tipRows += '<tr style="' + rowBg + '">'
           + '<td>' + sportIcon + '</td>'
           + '<td style="font-size:12px;color:#94a3b8;">' + time + '</td>'
-          + '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (t.event || t.meeting || '-') + '</td>'
-          + '<td><strong>' + (t.selection || '-') + '</strong><br><span style="font-size:11px;color:#64748b;">' + (t.market || 'Win') + '</span></td>'
-          + '<td style="font-weight:700;color:#d4a843;">' + (t.odds || '-') + '</td>'
-          + '<td style="text-align:center;"><span style="color:' + confColor + ';font-weight:700;">' + (t.confidence || '-') + '</span></td>'
-          + '<td>' + outcomeCell + '</td>'
+          + '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (p.event || '-') + '</td>'
+          + '<td><strong>' + (p.selection || '-') + '</strong><br><span style="font-size:11px;color:#64748b;">' + (p.market || 'Win') + '</span></td>'
+          + '<td style="font-weight:700;color:#d4a843;">' + (p.odds || '-') + '</td>'
+          + '<td style="text-align:center;"><span style="color:' + confColor + ';font-weight:700;">' + (p.confidence || '-') + '</span></td>'
+          + '<td style="text-align:center;">' + edgeVal + '%</td>'
+          + '<td>' + pubBadge + '</td>'
           + '<td>' + resultBadge + '</td>'
           + '<td>' + pnlCell + '</td>'
           + '</tr>';
@@ -166,9 +208,11 @@ window.ResultsPage = {
     }
 
     var pnlClass = dayPnL > 0 ? 'stat-green' : dayPnL < 0 ? 'stat-red' : '';
+    var pubSR = pubTotal > 0 ? Math.round((pubWins / pubTotal) * 1000) / 10 : 0;
+    var unpubSR = unpubTotal > 0 ? Math.round((unpubWins / unpubTotal) * 1000) / 10 : 0;
 
     return ''
-      + '<h2 class="admin-section-title">Daily Review</h2>'
+      + '<h2 class="admin-section-title">Daily Review — All Picks</h2>'
       + '<div style="margin-bottom:16px;">'
       +   '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">'
       +     '<input type="date" id="daily-date-picker" value="' + selectedDate + '" style="padding:8px 12px;background:var(--admin-bg-card,#1e2235);border:1px solid var(--admin-border,#2a2e3d);border-radius:6px;color:#fff;font-size:14px;" />'
@@ -178,24 +222,41 @@ window.ResultsPage = {
       + '</div>'
 
       // Day summary cards
-      + '<div class="admin-stat-cards" style="margin-bottom:20px;">'
-      +   '<div class="stat-card"><div class="stat-label">Tips</div><div class="stat-value">' + dayTips.length + '</div></div>'
+      + '<div class="admin-stat-cards" style="margin-bottom:12px;">'
+      +   '<div class="stat-card"><div class="stat-label">All Picks</div><div class="stat-value">' + allPicks.length + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Published</div><div class="stat-value" style="color:#d4a843;">' + dayTips.length + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Shadow</div><div class="stat-value" style="color:#94a3b8;">' + (allPicks.length - dayTips.length) + '</div></div>'
       +   '<div class="stat-card"><div class="stat-label">Winners</div><div class="stat-value stat-green">' + dayWins + '</div></div>'
       +   '<div class="stat-card"><div class="stat-label">Losers</div><div class="stat-value stat-red">' + dayLosses + '</div></div>'
-      +   '<div class="stat-card"><div class="stat-label">Placed</div><div class="stat-value">' + dayPlaced + '</div></div>'
       +   '<div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value" style="color:#f59e0b;">' + dayPending + '</div></div>'
       +   '<div class="stat-card"><div class="stat-label">Strike Rate</div><div class="stat-value ' + (dayStrikeRate > 50 ? 'stat-green' : dayStrikeRate >= 30 ? 'stat-amber' : 'stat-red') + '">' + (daySettled > dayVoid ? dayStrikeRate + '%' : '—') + '</div></div>'
       +   '<div class="stat-card"><div class="stat-label">P/L</div><div class="stat-value ' + pnlClass + '">' + (dayPnL > 0 ? '+' : '') + dayPnL.toFixed(2) + '</div></div>'
       + '</div>'
 
-      // Tips table
+      // Published vs Shadow accuracy comparison
+      + (pubTotal > 0 || unpubTotal > 0 ? '<div style="display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap;">'
+      +   (pubTotal > 0 ? '<div style="flex:1;min-width:200px;background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.2);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#d4a843;margin-bottom:4px;">Published Accuracy</div><div style="font-size:24px;font-weight:900;color:#d4a843;">' + pubSR + '%</div><div style="font-size:11px;color:#94a3b8;">' + pubWins + '/' + pubTotal + ' settled</div></div>' : '')
+      +   (unpubTotal > 0 ? '<div style="flex:1;min-width:200px;background:rgba(100,116,139,0.06);border:1px solid rgba(100,116,139,0.2);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:4px;">Shadow Accuracy</div><div style="font-size:24px;font-weight:900;color:#94a3b8;">' + unpubSR + '%</div><div style="font-size:11px;color:#94a3b8;">' + unpubWins + '/' + unpubTotal + ' settled</div></div>' : '')
+      + '</div>' : '')
+
+      // All picks table
       + '<div class="admin-table-wrap">'
       +   '<table class="admin-table">'
-      +     '<thead><tr><th></th><th>Time</th><th>Event</th><th>Our Pick</th><th>Odds</th><th>Conf</th><th>Actual Outcome</th><th>Result</th><th>P/L</th></tr></thead>'
+      +     '<thead><tr><th></th><th>Time</th><th>Event</th><th>Our Pick</th><th>Odds</th><th>Conf</th><th>Edge</th><th>Status</th><th>Result</th><th>P/L</th></tr></thead>'
       +     '<tbody>' + tipRows + '</tbody>'
       +   '</table>'
       + '</div>'
       + '<hr style="border:none;border-top:1px solid #2a2e3d;margin:32px 0;">';
+  },
+
+  async _fetchCandidatesAndRerender(container) {
+    try {
+      var data = await AdminAPI.get('/analytics/shadow-scoring?date=' + this._selectedDate);
+      this._candidates = (data && data.candidates) ? data.candidates : [];
+    } catch (e) {
+      this._candidates = [];
+    }
+    this._renderPage(container);
   },
 
   _extractDate(dateVal) {
@@ -453,12 +514,12 @@ window.ResultsPage = {
   _bindEvents(container) {
     var self = this;
 
-    // Daily review date picker
+    // Daily review date picker — re-fetch candidates for new date
     var datePicker = document.getElementById('daily-date-picker');
     if (datePicker) {
       datePicker.addEventListener('change', function() {
         self._selectedDate = this.value;
-        self._renderPage(container);
+        self._fetchCandidatesAndRerender(container);
       });
     }
 
@@ -467,7 +528,7 @@ window.ResultsPage = {
     for (var d = 0; d < dayBtns.length; d++) {
       dayBtns[d].addEventListener('click', function() {
         self._selectedDate = this.getAttribute('data-date');
-        self._renderPage(container);
+        self._fetchCandidatesAndRerender(container);
       });
     }
 

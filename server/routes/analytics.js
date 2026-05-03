@@ -271,8 +271,10 @@ module.exports = function(deps) {
     try {
       var days = parseInt(req.query.days) || 7;
       var sport = req.query.sport || null;
+      var date = req.query.date || null;
       var filters = { settled: undefined };
       if (sport) filters.sport = sport;
+      if (date) filters.date = date;
       var candidates = await db.getScoredCandidates(filters);
       var stats = await db.getCandidateStats(days);
       res.json({ candidates: candidates, stats: stats });
