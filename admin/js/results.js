@@ -11,6 +11,7 @@ window.ResultsPage = {
   _byConfidence: null,
   _sortField: 'date',
   _sortDir: -1,
+  _selectedDate: null, // for daily review picker
 
   // ---------------------------------------------------------------------------
   // RENDER — main entry point
@@ -47,6 +48,7 @@ window.ResultsPage = {
     var self = this;
 
     container.innerHTML = ''
+      + this._renderDailyReview()
       + this._renderPerformanceOverview()
       + this._renderSportBreakdown()
       + this._renderByConfidence()
@@ -54,6 +56,150 @@ window.ResultsPage = {
       + this._renderRecentResults();
 
     this._bindEvents(container);
+  },
+
+  // ---------------------------------------------------------------------------
+  // 0. DAILY REVIEW — pick a date, see all tips + outcomes for that day
+  // ---------------------------------------------------------------------------
+  _renderDailyReview() {
+    var self = this;
+    // Default to today
+    if (!this._selectedDate) {
+      var now = new Date();
+      this._selectedDate = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    }
+
+    // Find all dates that have tips or results for quick-nav buttons
+    var dateSet = {};
+    this._tips.forEach(function(t) {
+      var d = self._extractDate(t.date || t.createdAt);
+      if (d) dateSet[d] = true;
+    });
+    this._results.forEach(function(r) {
+      var d = self._extractDate(r.date);
+      if (d) dateSet[d] = true;
+    });
+    var allDates = Object.keys(dateSet).sort().reverse();
+
+    // Quick-nav: last 7 days with data
+    var quickBtns = allDates.slice(0, 7).map(function(d) {
+      var isActive = d === self._selectedDate;
+      var dt = new Date(d + 'T12:00:00');
+      var dayLabel = dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+      return '<button class="btn btn-sm ' + (isActive ? 'btn-gold' : 'btn-outline') + ' daily-nav-btn" data-date="' + d + '" style="font-size:11px;padding:6px 10px;">' + dayLabel + '</button>';
+    }).join('');
+
+    // Get tips for selected date
+    var selectedDate = this._selectedDate;
+    var dayTips = this._tips.filter(function(t) {
+      return self._extractDate(t.date || t.createdAt) === selectedDate;
+    });
+
+    // Match results to tips
+    var resultMap = {};
+    this._results.forEach(function(r) {
+      if (r.tipId) resultMap[r.tipId] = r;
+    });
+
+    // Build stats for the day
+    var dayWins = 0, dayLosses = 0, dayPending = 0, dayVoid = 0, dayPlaced = 0;
+    var dayPnL = 0;
+    dayTips.forEach(function(t) {
+      var r = resultMap[t.id];
+      if (!r) { dayPending++; return; }
+      if (r.result === 'won') { dayWins++; dayPnL += (r.pnl || 0); }
+      else if (r.result === 'lost') { dayLosses++; dayPnL += (r.pnl || 0); }
+      else if (r.result === 'placed') { dayPlaced++; dayPnL += (r.pnl || 0); }
+      else if (r.result === 'void') { dayVoid++; }
+      else { dayPending++; }
+    });
+    var daySettled = dayWins + dayLosses + dayPlaced + dayVoid;
+    var dayStrikeRate = daySettled > 0 ? Math.round(((dayWins + dayPlaced) / (daySettled - dayVoid)) * 1000) / 10 : 0;
+    dayPnL = Math.round(dayPnL * 100) / 100;
+
+    var dt = new Date(selectedDate + 'T12:00:00');
+    var dateLabel = dt.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+    // Build tip rows
+    var tipRows = '';
+    if (dayTips.length === 0) {
+      tipRows = '<tr><td colspan="7" style="text-align:center;color:#64748b;padding:20px;">No tips published on this date.</td></tr>';
+    } else {
+      // Sort by sport then time
+      dayTips.sort(function(a, b) {
+        if (a.sport !== b.sport) return (a.sport || '').localeCompare(b.sport || '');
+        return (a.raceTime || a.kickoff || '').localeCompare(b.raceTime || b.kickoff || '');
+      });
+      dayTips.forEach(function(t) {
+        var r = resultMap[t.id];
+        var resultBadge, pnlCell;
+        if (r) {
+          var badgeClass = r.result === 'won' ? 'badge-result-won' : r.result === 'lost' ? 'badge-result-lost' : r.result === 'placed' ? 'badge-result-placed' : 'badge-result-void';
+          resultBadge = '<span class="badge ' + badgeClass + '">' + self._ucFirst(r.result) + '</span>';
+          var pnl = r.pnl || 0;
+          pnlCell = '<span class="' + (pnl > 0 ? 'stat-green' : pnl < 0 ? 'stat-red' : '') + '">' + (pnl > 0 ? '+' : '') + pnl.toFixed(2) + '</span>';
+        } else {
+          resultBadge = '<span class="badge" style="background:rgba(148,163,184,0.15);color:#94a3b8;">Pending</span>';
+          pnlCell = '<span style="color:#64748b;">—</span>';
+        }
+
+        var sportIcon = t.sport === 'racing' ? '&#127943;' : t.sport === 'football' ? '&#9917;' : t.sport === 'basketball' ? '&#127936;' : t.sport === 'tennis' ? '&#127934;' : t.sport === 'rugby' ? '&#127945;' : t.sport === 'american-football' ? '&#127944;' : '&#128200;';
+        var confColor = (t.confidence || 0) >= 8 ? '#22c55e' : (t.confidence || 0) >= 6 ? '#d4a843' : '#94a3b8';
+        var time = t.raceTime || t.kickoff || '';
+        if (time && time.length > 5) time = time.substring(0, 5);
+
+        tipRows += '<tr>'
+          + '<td>' + sportIcon + '</td>'
+          + '<td style="font-size:12px;color:#94a3b8;">' + time + '</td>'
+          + '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (t.event || t.meeting || '-') + '</td>'
+          + '<td><strong>' + (t.selection || '-') + '</strong><br><span style="font-size:11px;color:#64748b;">' + (t.market || 'Win') + '</span></td>'
+          + '<td style="font-weight:700;color:#d4a843;">' + (t.odds || '-') + '</td>'
+          + '<td style="text-align:center;"><span style="color:' + confColor + ';font-weight:700;">' + (t.confidence || '-') + '</span></td>'
+          + '<td>' + resultBadge + '</td>'
+          + '<td>' + pnlCell + '</td>'
+          + '</tr>';
+      });
+    }
+
+    var pnlClass = dayPnL > 0 ? 'stat-green' : dayPnL < 0 ? 'stat-red' : '';
+
+    return ''
+      + '<h2 class="admin-section-title">Daily Review</h2>'
+      + '<div style="margin-bottom:16px;">'
+      +   '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">'
+      +     '<input type="date" id="daily-date-picker" value="' + selectedDate + '" style="padding:8px 12px;background:var(--admin-bg-card,#1e2235);border:1px solid var(--admin-border,#2a2e3d);border-radius:6px;color:#fff;font-size:14px;" />'
+      +     '<span style="font-size:14px;color:#cbd5e1;font-weight:600;">' + dateLabel + '</span>'
+      +   '</div>'
+      +   '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;">' + quickBtns + '</div>'
+      + '</div>'
+
+      // Day summary cards
+      + '<div class="admin-stat-cards" style="margin-bottom:20px;">'
+      +   '<div class="stat-card"><div class="stat-label">Tips</div><div class="stat-value">' + dayTips.length + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Winners</div><div class="stat-value stat-green">' + dayWins + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Losers</div><div class="stat-value stat-red">' + dayLosses + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Placed</div><div class="stat-value">' + dayPlaced + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value" style="color:#f59e0b;">' + dayPending + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Strike Rate</div><div class="stat-value ' + (dayStrikeRate > 50 ? 'stat-green' : dayStrikeRate >= 30 ? 'stat-amber' : 'stat-red') + '">' + (daySettled > dayVoid ? dayStrikeRate + '%' : '—') + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">P/L</div><div class="stat-value ' + pnlClass + '">' + (dayPnL > 0 ? '+' : '') + dayPnL.toFixed(2) + '</div></div>'
+      + '</div>'
+
+      // Tips table
+      + '<div class="admin-table-wrap">'
+      +   '<table class="admin-table">'
+      +     '<thead><tr><th></th><th>Time</th><th>Event</th><th>Selection</th><th>Odds</th><th>Conf</th><th>Result</th><th>P/L</th></tr></thead>'
+      +     '<tbody>' + tipRows + '</tbody>'
+      +   '</table>'
+      + '</div>'
+      + '<hr style="border:none;border-top:1px solid #2a2e3d;margin:32px 0;">';
+  },
+
+  _extractDate(dateVal) {
+    if (!dateVal) return null;
+    var str = String(dateVal);
+    // Handle ISO strings and date-only strings
+    if (str.length >= 10) return str.substring(0, 10);
+    return null;
   },
 
   // ---------------------------------------------------------------------------
@@ -299,6 +445,24 @@ window.ResultsPage = {
   // ---------------------------------------------------------------------------
   _bindEvents(container) {
     var self = this;
+
+    // Daily review date picker
+    var datePicker = document.getElementById('daily-date-picker');
+    if (datePicker) {
+      datePicker.addEventListener('change', function() {
+        self._selectedDate = this.value;
+        self._renderPage(container);
+      });
+    }
+
+    // Quick-nav day buttons
+    var dayBtns = container.querySelectorAll('.daily-nav-btn');
+    for (var d = 0; d < dayBtns.length; d++) {
+      dayBtns[d].addEventListener('click', function() {
+        self._selectedDate = this.getAttribute('data-date');
+        self._renderPage(container);
+      });
+    }
 
     // Settle buttons
     var settleBtns = container.querySelectorAll('.settle-btn');
