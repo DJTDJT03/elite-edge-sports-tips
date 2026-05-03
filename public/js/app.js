@@ -974,6 +974,7 @@ const App = {
       case 'results': this.renderResults(); break;
       case 'pricing': this.renderPricing(); break;
       case 'analysts': this.renderAnalysts(); break;
+      case 'my-roi': this.renderMyROI(); break;
       case 'support': this.renderSupport(); break;
       case 'admin': this.renderAdmin(); break;
       case 'account': this.renderAccount(); break;
@@ -1012,7 +1013,8 @@ const App = {
       'premier-league': 'Premier League Weekend Preview — Analyst Verdicts | Elite Edge',
       'results': 'Verified Results & Performance Track Record | Elite Edge',
       'pricing': 'Pricing — Premium & VIP Subscription Plans | Elite Edge',
-      'analysts': 'Our Analysts — The Professor, The Scout, The Edge | Elite Edge',
+      'analysts': 'Our Analysts — Professor, Scout, Clocker, Edge | Elite Edge',
+      'my-roi': 'My ROI Dashboard — Personal Performance Tracking | Elite Edge',
       'support': 'Help & Support — FAQ & Contact | Elite Edge',
       'blog': 'Blog — Weekly Reviews & Betting Insights | Elite Edge',
       'how-it-works': 'How It Works — Our Scoring Model Explained | Elite Edge',
@@ -1435,16 +1437,29 @@ const App = {
     localStorage.setItem(key, JSON.stringify(bets));
   },
 
-  toggleBacked(tipId, selection, odds, result) {
+  toggleBacked(tipId, selection, odds, result, tipData) {
     const bets = this.getMyBets();
     const idx = bets.findIndex(b => b.tipId === tipId);
     var added = false;
+    var td = tipData || {};
     if (idx >= 0) {
       bets.splice(idx, 1);
+      // Sync unback to server
+      if (this.token) this.api('/user/bets/back/' + tipId, { method: 'DELETE' }).catch(function() {});
     } else {
-      bets.push({ tipId, selection, odds, result: result || null, date: new Date().toISOString() });
+      bets.push({ tipId, selection, odds, result: result || null, date: new Date().toISOString(),
+        sport: td.sport || '', event: td.event || '', market: td.market || '',
+        confidence: td.confidence || 7, analyst: td.tipsterProfile || 'The Edge' });
       trackEvent('betting', 'bet_placed', selection);
       added = true;
+      // Sync back to server
+      if (this.token) {
+        this.api('/user/bets/back', { method: 'POST', body: JSON.stringify({
+          tipId: tipId, selection: selection, event: td.event || '', sport: td.sport || '',
+          market: td.market || '', odds: odds, confidence: td.confidence || 7,
+          analyst: td.tipsterProfile || 'The Edge', date: td.date || new Date().toISOString().split('T')[0],
+        })}).catch(function() {});
+      }
     }
     this.saveMyBets(bets);
     // Update button state
@@ -8332,6 +8347,165 @@ const App = {
   // -----------------------------------------------------------------------
   // ANALYSTS PAGE (Feature #1)
   // -----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // PERSONAL ROI DASHBOARD — your tracked bets, your results, your profit
+  // -----------------------------------------------------------------------
+  async renderMyROI() {
+    var app = document.getElementById('app');
+    if (!this.user || !this.token) {
+      app.innerHTML = '<div class="container" style="padding-top:60px;text-align:center;"><h2>Log in to view your Personal ROI Dashboard</h2><p class="text-muted">Track your bets and see your personal strike rate, ROI, and analyst performance.</p><button class="btn btn-gold" onclick="App.showModal(\'login\')">Log In</button></div>';
+      return;
+    }
+
+    app.innerHTML = '<div class="container" style="padding-top:40px;"><div class="admin-loading"><div class="spinner"></div> Loading your performance data...</div></div>';
+
+    // Sync localStorage bets to server on first load
+    var localBets = this.getMyBets();
+    if (localBets.length > 0) {
+      try { await this.api('/user/bets/sync', { method: 'POST', body: JSON.stringify({ bets: localBets }) }); } catch(e) {}
+    }
+
+    var roi;
+    try {
+      roi = await this.api('/user/bets/roi');
+    } catch(e) {
+      app.innerHTML = '<div class="container" style="padding-top:60px;text-align:center;"><h2>Start Tracking Your Bets</h2><p class="text-muted">Click "Back This Tip" on any selection to start building your personal performance record.</p><a href="#/dashboard" class="btn btn-gold">Go to Dashboard</a></div>';
+      return;
+    }
+
+    if (!roi || roi.totalBets === 0) {
+      app.innerHTML = '<div class="container" style="padding-top:60px;text-align:center;"><div style="font-size:48px;margin-bottom:16px;">&#128202;</div><h2>Your Personal ROI Dashboard</h2><p class="text-muted" style="max-width:500px;margin:12px auto 24px;">You haven\'t backed any tips yet. Click "Back This Tip" on any selection and we\'ll track the result, calculate your P/L, and show you which analysts and confidence levels work best for you.</p><a href="#/dashboard" class="btn btn-gold">View Today\'s Tips</a></div>';
+      return;
+    }
+
+    var self = this;
+    var pnlClass = roi.totalPnl > 0 ? 'color:#22c55e;' : roi.totalPnl < 0 ? 'color:#ef4444;' : '';
+    var roiClass = roi.roi > 0 ? 'color:#22c55e;' : roi.roi < 0 ? 'color:#ef4444;' : '';
+    var srClass = roi.strikeRate >= 50 ? 'color:#22c55e;' : roi.strikeRate >= 30 ? 'color:#d4a843;' : 'color:#ef4444;';
+
+    // Analyst performance cards
+    var analystCards = '';
+    var analystNames = ['The Professor', 'The Scout', 'The Clocker', 'The Edge'];
+    var analystColors = { 'The Professor': '#3b82f6', 'The Scout': '#22c55e', 'The Clocker': '#a855f7', 'The Edge': '#d4a843' };
+    analystNames.forEach(function(name) {
+      var a = roi.byAnalyst[name] || { total: 0, wins: 0, pnl: 0 };
+      if (a.total === 0) return;
+      var aSR = a.total > 0 ? Math.round((a.wins / a.total) * 100) : 0;
+      var aROI = a.total > 0 ? Math.round((a.pnl / a.total) * 100) : 0;
+      var col = analystColors[name] || '#d4a843';
+      analystCards += '<div style="background:rgba(255,255,255,0.03);border:1px solid ' + col + '33;border-radius:10px;padding:16px;flex:1;min-width:140px;">' +
+        '<div style="font-size:13px;font-weight:800;color:' + col + ';margin-bottom:8px;">' + name + '</div>' +
+        '<div style="font-size:24px;font-weight:900;' + (a.pnl > 0 ? 'color:#22c55e;' : a.pnl < 0 ? 'color:#ef4444;' : '') + '">' + (a.pnl > 0 ? '+' : '') + a.pnl.toFixed(2) + 'u</div>' +
+        '<div style="font-size:11px;color:#94a3b8;">' + a.wins + '/' + a.total + ' (' + aSR + '%) &bull; ROI: ' + aROI + '%</div>' +
+      '</div>';
+    });
+
+    // Confidence tier cards
+    var confCards = '';
+    var confTiers = [
+      { key: 'elite', label: 'Elite (9-10)', col: '#22c55e' },
+      { key: 'strong', label: 'Strong (7-8)', col: '#d4a843' },
+      { key: 'other', label: 'Other (<7)', col: '#94a3b8' },
+    ];
+    confTiers.forEach(function(tier) {
+      var c = roi.byConfidence[tier.key] || { total: 0, wins: 0, pnl: 0 };
+      if (c.total === 0) return;
+      var cSR = c.total > 0 ? Math.round((c.wins / c.total) * 100) : 0;
+      confCards += '<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;flex:1;min-width:140px;">' +
+        '<div style="font-size:13px;font-weight:800;color:' + tier.col + ';margin-bottom:8px;">' + tier.label + '</div>' +
+        '<div style="font-size:24px;font-weight:900;' + (c.pnl > 0 ? 'color:#22c55e;' : c.pnl < 0 ? 'color:#ef4444;' : '') + '">' + (c.pnl > 0 ? '+' : '') + c.pnl.toFixed(2) + 'u</div>' +
+        '<div style="font-size:11px;color:#94a3b8;">' + c.wins + '/' + c.total + ' (' + cSR + '%)</div>' +
+      '</div>';
+    });
+
+    // "What If" comparison
+    var whatIfHtml = '';
+    if (roi.whatIf && roi.whatIf.totalTips > 0) {
+      var wPnlDiff = roi.whatIf.pnl - roi.totalPnl;
+      whatIfHtml = '<div style="background:linear-gradient(135deg,rgba(59,130,246,0.06),rgba(59,130,246,0.02));border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:20px;margin-bottom:24px;">' +
+        '<div style="font-size:14px;font-weight:800;color:#60a5fa;margin-bottom:12px;">What If You Followed Every Tip?</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">' +
+          '<div style="text-align:center;"><div style="font-size:10px;color:#94a3b8;text-transform:uppercase;">All Tips P/L</div><div style="font-size:22px;font-weight:900;' + (roi.whatIf.pnl > 0 ? 'color:#22c55e;' : 'color:#ef4444;') + '">' + (roi.whatIf.pnl > 0 ? '+' : '') + roi.whatIf.pnl.toFixed(2) + 'u</div></div>' +
+          '<div style="text-align:center;"><div style="font-size:10px;color:#94a3b8;text-transform:uppercase;">Your P/L</div><div style="font-size:22px;font-weight:900;' + pnlClass + '">' + (roi.totalPnl > 0 ? '+' : '') + roi.totalPnl.toFixed(2) + 'u</div></div>' +
+          '<div style="text-align:center;"><div style="font-size:10px;color:#94a3b8;text-transform:uppercase;">Difference</div><div style="font-size:22px;font-weight:900;' + (wPnlDiff > 0 ? 'color:#f59e0b;' : 'color:#22c55e;') + '">' + (wPnlDiff > 0 ? '+' + wPnlDiff.toFixed(2) + 'u missed' : 'You\'re ahead!') + '</div></div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // Streak
+    var streakHtml = '';
+    if (roi.streak && roi.streak.count >= 2) {
+      var sCol = roi.streak.type === 'win' ? '#22c55e' : '#ef4444';
+      var sIcon = roi.streak.type === 'win' ? '&#128293;' : '&#10060;';
+      streakHtml = '<div style="background:' + sCol + '15;border:1px solid ' + sCol + '33;border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
+        '<span style="font-size:24px;">' + sIcon + '</span>' +
+        '<span style="font-size:15px;font-weight:700;color:' + sCol + ';">' + roi.streak.count + '-bet ' + roi.streak.type + ' streak</span>' +
+        (roi.bestRun > 2 ? '<span style="font-size:12px;color:#94a3b8;margin-left:auto;">Best run: ' + roi.bestRun + ' winners</span>' : '') +
+      '</div>';
+    }
+
+    // Recent bets table
+    var recentBets = '';
+    if (roi.chart && roi.chart.length > 0) {
+      var rows = roi.chart.slice(-15).reverse().map(function(b) {
+        var rBadge = b.result === 'won' ? '<span style="color:#22c55e;font-weight:700;">Won</span>' : b.result === 'placed' ? '<span style="color:#d4a843;font-weight:700;">Placed</span>' : '<span style="color:#ef4444;font-weight:700;">Lost</span>';
+        return '<tr><td style="font-size:12px;color:#94a3b8;">' + (b.date || '') + '</td><td>' + (b.selection || '') + '</td><td>' + rBadge + '</td><td style="font-weight:700;' + (b.pnl >= 0 ? 'color:#22c55e;' : 'color:#ef4444;') + '">' + (b.pnl >= 0 ? '+' : '') + b.pnl.toFixed(2) + '</td></tr>';
+      }).join('');
+      recentBets = '<div style="margin-top:24px;"><div style="font-size:14px;font-weight:800;color:#d4a843;margin-bottom:12px;">Recent Bet History</div>' +
+        '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;"><thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Date</th><th style="text-align:left;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Selection</th><th style="text-align:left;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Result</th><th style="text-align:left;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Running P/L</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+    }
+
+    app.innerHTML = '<div class="container" style="padding-top:40px;">' +
+      '<div style="text-align:center;margin-bottom:24px;">' +
+        '<h1>Your <span style="color:#d4a843;">Personal ROI</span> Dashboard</h1>' +
+        '<p style="color:#94a3b8;">Every bet you\'ve backed, tracked and analysed. This data is yours — it stays as long as you do.</p>' +
+      '</div>' +
+
+      // Hero stats
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">' +
+        '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;text-align:center;">' +
+          '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:6px;">Your P/L</div>' +
+          '<div style="font-size:32px;font-weight:900;' + pnlClass + '">' + (roi.totalPnl > 0 ? '+' : '') + roi.totalPnl.toFixed(2) + '</div>' +
+          '<div style="font-size:11px;color:#64748b;">units</div>' +
+        '</div>' +
+        '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:20px;text-align:center;">' +
+          '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:6px;">Your ROI</div>' +
+          '<div style="font-size:32px;font-weight:900;' + roiClass + '">' + (roi.roi > 0 ? '+' : '') + roi.roi + '%</div>' +
+        '</div>' +
+        '<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:20px;text-align:center;">' +
+          '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:6px;">Strike Rate</div>' +
+          '<div style="font-size:32px;font-weight:900;' + srClass + '">' + roi.strikeRate + '%</div>' +
+        '</div>' +
+        '<div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:12px;padding:20px;text-align:center;">' +
+          '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:6px;">Bets Tracked</div>' +
+          '<div style="font-size:32px;font-weight:900;color:#a855f7;">' + roi.totalBets + '</div>' +
+          '<div style="font-size:11px;color:#64748b;">' + roi.wins + 'W ' + roi.losses + 'L ' + roi.pending + ' pending</div>' +
+        '</div>' +
+      '</div>' +
+
+      // Streak
+      (streakHtml ? '<div style="margin-bottom:20px;">' + streakHtml + '</div>' : '') +
+
+      // What If
+      whatIfHtml +
+
+      // Analyst breakdown
+      (analystCards ? '<div style="margin-bottom:24px;"><div style="font-size:14px;font-weight:800;color:#d4a843;margin-bottom:12px;">Your Results by Analyst</div><div style="display:flex;gap:12px;flex-wrap:wrap;">' + analystCards + '</div></div>' : '') +
+
+      // Confidence breakdown
+      (confCards ? '<div style="margin-bottom:24px;"><div style="font-size:14px;font-weight:800;color:#d4a843;margin-bottom:12px;">Your Results by Confidence</div><div style="display:flex;gap:12px;flex-wrap:wrap;">' + confCards + '</div></div>' : '') +
+
+      // Recent bets
+      recentBets +
+
+      // Export
+      '<div style="text-align:center;margin-top:24px;padding-bottom:40px;">' +
+        '<button class="btn btn-outline btn-sm" onclick="App.exportMyBetsCSV()">Export as CSV</button>' +
+        '<p style="font-size:11px;color:#64748b;margin-top:8px;">Your personal data. Synced across devices. Updated every time a result comes in.</p>' +
+      '</div>' +
+    '</div>';
+  },
+
   async renderAnalysts() {
     const app = document.getElementById('app');
     app.innerHTML = this.renderSkeleton('tips');

@@ -1227,4 +1227,142 @@ module.exports = {
   createTipEnrichment, getTipEnrichment, getEnrichmentQualityStats,
   // Quality Loop
   upsertQualitySnapshot, getQualitySnapshots, getLatestQualitySnapshot,
+  // User Bets (Personal ROI)
+  backTip, unbackTip, getUserBets, settleUserBets, getUserROI,
 };
+
+// ---------------------------------------------------------------------------
+// USER BETS — server-side bet tracking for Personal ROI Dashboard
+// ---------------------------------------------------------------------------
+async function backTip(userId, data) {
+  if (!pool) return null;
+  var { rows } = await query(
+    `INSERT INTO user_bets (user_id, tip_id, selection, event, sport, market, odds, confidence, analyst, date, stake)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     ON CONFLICT (user_id, tip_id) DO NOTHING RETURNING id`,
+    [userId, data.tipId, data.selection, data.event, data.sport, data.market,
+     data.odds, data.confidence, data.analyst, data.date, data.stake || 1]
+  );
+  return rows.length > 0 ? rows[0].id : null;
+}
+
+async function unbackTip(userId, tipId) {
+  if (!pool) return;
+  await query('DELETE FROM user_bets WHERE user_id = $1 AND tip_id = $2', [userId, tipId]);
+}
+
+async function getUserBets(userId, limit) {
+  if (!pool) return [];
+  var lim = limit || 200;
+  var { rows } = await query(
+    'SELECT * FROM user_bets WHERE user_id = $1 ORDER BY date DESC, backed_at DESC LIMIT $2',
+    [userId, lim]
+  );
+  return rows.map(function(r) {
+    return {
+      id: r.id, tipId: r.tip_id, selection: r.selection, event: r.event,
+      sport: r.sport, market: r.market, odds: parseFloat(r.odds) || 0,
+      confidence: r.confidence, analyst: r.analyst, result: r.result,
+      pnl: parseFloat(r.pnl) || 0, stake: parseFloat(r.stake) || 1,
+      settled: r.settled, date: r.date, backedAt: r.backed_at, settledAt: r.settled_at,
+    };
+  });
+}
+
+async function settleUserBets() {
+  if (!pool) return 0;
+  // Match unsettled user bets against the results table
+  var { rows } = await query(`
+    UPDATE user_bets ub SET
+      result = r.result,
+      pnl = CASE
+        WHEN r.result = 'won' THEN (ub.odds - 1) * ub.stake
+        WHEN r.result = 'placed' THEN ((ub.odds - 1) / 4) * ub.stake
+        WHEN r.result = 'lost' THEN -ub.stake
+        ELSE 0
+      END,
+      settled = true,
+      settled_at = NOW()
+    FROM results r
+    WHERE ub.tip_id = r.tip_id AND ub.settled = false AND r.result IS NOT NULL
+    RETURNING ub.id
+  `);
+  return rows.length;
+}
+
+async function getUserROI(userId) {
+  if (!pool) return {};
+  var { rows } = await query(`
+    SELECT
+      COUNT(*) as total_bets,
+      COUNT(*) FILTER (WHERE settled = true) as settled_bets,
+      COUNT(*) FILTER (WHERE result = 'won') as wins,
+      COUNT(*) FILTER (WHERE result = 'lost') as losses,
+      COUNT(*) FILTER (WHERE result = 'placed') as placed,
+      COUNT(*) FILTER (WHERE settled = false) as pending,
+      COALESCE(SUM(pnl) FILTER (WHERE settled = true), 0) as total_pnl,
+      COALESCE(SUM(stake) FILTER (WHERE settled = true), 0) as total_staked,
+      COALESCE(MAX(pnl) FILTER (WHERE result = 'won'), 0) as best_win_pnl,
+      -- By sport
+      COUNT(*) FILTER (WHERE sport = 'racing' AND settled = true) as racing_total,
+      COUNT(*) FILTER (WHERE sport = 'racing' AND result = 'won') as racing_wins,
+      COALESCE(SUM(pnl) FILTER (WHERE sport = 'racing' AND settled = true), 0) as racing_pnl,
+      COUNT(*) FILTER (WHERE sport = 'football' AND settled = true) as football_total,
+      COUNT(*) FILTER (WHERE sport = 'football' AND result = 'won') as football_wins,
+      COALESCE(SUM(pnl) FILTER (WHERE sport = 'football' AND settled = true), 0) as football_pnl,
+      -- By analyst
+      COUNT(*) FILTER (WHERE analyst = 'The Professor' AND settled = true) as prof_total,
+      COUNT(*) FILTER (WHERE analyst = 'The Professor' AND (result = 'won' OR result = 'placed')) as prof_wins,
+      COALESCE(SUM(pnl) FILTER (WHERE analyst = 'The Professor' AND settled = true), 0) as prof_pnl,
+      COUNT(*) FILTER (WHERE analyst = 'The Scout' AND settled = true) as scout_total,
+      COUNT(*) FILTER (WHERE analyst = 'The Scout' AND (result = 'won' OR result = 'placed')) as scout_wins,
+      COALESCE(SUM(pnl) FILTER (WHERE analyst = 'The Scout' AND settled = true), 0) as scout_pnl,
+      COUNT(*) FILTER (WHERE analyst = 'The Clocker' AND settled = true) as clocker_total,
+      COUNT(*) FILTER (WHERE analyst = 'The Clocker' AND (result = 'won' OR result = 'placed')) as clocker_wins,
+      COALESCE(SUM(pnl) FILTER (WHERE analyst = 'The Clocker' AND settled = true), 0) as clocker_pnl,
+      COUNT(*) FILTER (WHERE analyst = 'The Edge' AND settled = true) as edge_total,
+      COUNT(*) FILTER (WHERE analyst = 'The Edge' AND (result = 'won' OR result = 'placed')) as edge_wins,
+      COALESCE(SUM(pnl) FILTER (WHERE analyst = 'The Edge' AND settled = true), 0) as edge_pnl,
+      -- By confidence tier
+      COUNT(*) FILTER (WHERE confidence >= 9 AND settled = true) as elite_total,
+      COUNT(*) FILTER (WHERE confidence >= 9 AND (result = 'won' OR result = 'placed')) as elite_wins,
+      COALESCE(SUM(pnl) FILTER (WHERE confidence >= 9 AND settled = true), 0) as elite_pnl,
+      COUNT(*) FILTER (WHERE confidence >= 7 AND confidence < 9 AND settled = true) as strong_total,
+      COUNT(*) FILTER (WHERE confidence >= 7 AND confidence < 9 AND (result = 'won' OR result = 'placed')) as strong_wins,
+      COALESCE(SUM(pnl) FILTER (WHERE confidence >= 7 AND confidence < 9 AND settled = true), 0) as strong_pnl,
+      COUNT(*) FILTER (WHERE confidence < 7 AND settled = true) as other_total,
+      COUNT(*) FILTER (WHERE confidence < 7 AND (result = 'won' OR result = 'placed')) as other_wins,
+      COALESCE(SUM(pnl) FILTER (WHERE confidence < 7 AND settled = true), 0) as other_pnl
+    FROM user_bets WHERE user_id = $1
+  `, [userId]);
+
+  if (rows.length === 0) return {};
+  var r = rows[0];
+  var totalStaked = parseFloat(r.total_staked) || 0;
+  var totalPnl = parseFloat(r.total_pnl) || 0;
+  return {
+    totalBets: parseInt(r.total_bets), settledBets: parseInt(r.settled_bets),
+    wins: parseInt(r.wins), losses: parseInt(r.losses), placed: parseInt(r.placed), pending: parseInt(r.pending),
+    totalPnl: Math.round(totalPnl * 100) / 100,
+    totalStaked: Math.round(totalStaked * 100) / 100,
+    roi: totalStaked > 0 ? Math.round((totalPnl / totalStaked) * 10000) / 100 : 0,
+    strikeRate: (parseInt(r.settled_bets) - parseInt(r.pending)) > 0
+      ? Math.round(((parseInt(r.wins) + parseInt(r.placed)) / (parseInt(r.settled_bets))) * 1000) / 10 : 0,
+    bestWinPnl: parseFloat(r.best_win_pnl) || 0,
+    bySport: {
+      racing: { total: parseInt(r.racing_total), wins: parseInt(r.racing_wins), pnl: parseFloat(r.racing_pnl) || 0 },
+      football: { total: parseInt(r.football_total), wins: parseInt(r.football_wins), pnl: parseFloat(r.football_pnl) || 0 },
+    },
+    byAnalyst: {
+      'The Professor': { total: parseInt(r.prof_total), wins: parseInt(r.prof_wins), pnl: parseFloat(r.prof_pnl) || 0 },
+      'The Scout': { total: parseInt(r.scout_total), wins: parseInt(r.scout_wins), pnl: parseFloat(r.scout_pnl) || 0 },
+      'The Clocker': { total: parseInt(r.clocker_total), wins: parseInt(r.clocker_wins), pnl: parseFloat(r.clocker_pnl) || 0 },
+      'The Edge': { total: parseInt(r.edge_total), wins: parseInt(r.edge_wins), pnl: parseFloat(r.edge_pnl) || 0 },
+    },
+    byConfidence: {
+      elite: { total: parseInt(r.elite_total), wins: parseInt(r.elite_wins), pnl: parseFloat(r.elite_pnl) || 0 },
+      strong: { total: parseInt(r.strong_total), wins: parseInt(r.strong_wins), pnl: parseFloat(r.strong_pnl) || 0 },
+      other: { total: parseInt(r.other_total), wins: parseInt(r.other_wins), pnl: parseFloat(r.other_pnl) || 0 },
+    },
+  };
+}

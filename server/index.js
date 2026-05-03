@@ -158,6 +158,7 @@ app.use('/api', require('./routes/admin')(deps));
 app.use('/api', require('./routes/support')(deps));
 app.use('/api', require('./routes/analytics')(deps));
 app.use('/api', require('./routes/stripe')(deps));
+app.use('/api', require('./routes/userBets')(deps));
 app.use('/', require('./routes/public')(deps));
 
 // ---------------------------------------------------------------------------
@@ -190,6 +191,10 @@ app.use('/', require('./routes/public')(deps));
         'CREATE INDEX IF NOT EXISTS idx_sc_date ON scored_candidates(date DESC)',
         'CREATE INDEX IF NOT EXISTS idx_sc_sport ON scored_candidates(sport, date DESC)',
         'CREATE INDEX IF NOT EXISTS idx_sc_settled ON scored_candidates(settled, date DESC)',
+        // User bets — server-side persistence for Personal ROI Dashboard
+        "CREATE TABLE IF NOT EXISTS user_bets (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, tip_id TEXT NOT NULL, selection TEXT, event TEXT, sport TEXT, market TEXT, odds NUMERIC(8,2), confidence INTEGER, analyst TEXT, result TEXT, pnl NUMERIC(10,2), stake NUMERIC(8,2) DEFAULT 1, settled BOOLEAN DEFAULT FALSE, date DATE, backed_at TIMESTAMPTZ DEFAULT NOW(), settled_at TIMESTAMPTZ, UNIQUE(user_id, tip_id))",
+        'CREATE INDEX IF NOT EXISTS idx_ub_user ON user_bets(user_id, date DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_ub_settled ON user_bets(user_id, settled)',
         // User accas (shared/tracked)
         "CREATE TABLE IF NOT EXISTS user_accas (id SERIAL PRIMARY KEY, user_id TEXT, user_name TEXT, selections JSONB NOT NULL, combined_odds NUMERIC(10,2), stake NUMERIC(8,2), potential_return NUMERIC(10,2), status TEXT DEFAULT 'pending', result TEXT, pnl NUMERIC(10,2), shared BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW())",
         'CREATE INDEX IF NOT EXISTS idx_user_accas_created ON user_accas(created_at DESC)',
