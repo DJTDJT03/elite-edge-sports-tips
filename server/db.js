@@ -98,14 +98,14 @@ async function createUser(data) {
     `INSERT INTO users (id, email, password_hash, name, role, subscription, subscription_expiry,
      joined, bank, session_id, failed_attempts, lock_until, flagged, trusted_devices,
      email_prefs, alert_prefs, agreement_timestamp, agreement_text, login_history, reset_token, reset_token_expiry, expiry_warned,
-     trial_active, trial_start, trial_end, trial_warned, stripe_customer_id, stripe_subscription_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)`,
+     trial_active, trial_start, trial_end, trial_warned, stripe_customer_id, stripe_subscription_id, mobile)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)`,
     [u.id, u.email, u.password_hash, u.name, u.role, u.subscription, u.subscription_expiry,
      u.joined, u.bank, u.session_id, u.failed_attempts, u.lock_until, u.flagged,
      u.trusted_devices, u.email_prefs, u.alert_prefs, u.agreement_timestamp, u.agreement_text,
      u.login_history, u.reset_token, u.reset_token_expiry, u.expiry_warned,
      u.trial_active, u.trial_start, u.trial_end, u.trial_warned,
-     u.stripe_customer_id || null, u.stripe_subscription_id || null]
+     u.stripe_customer_id || null, u.stripe_subscription_id || null, data.mobile || null]
   );
   return data;
 }

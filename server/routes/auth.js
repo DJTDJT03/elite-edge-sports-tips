@@ -1,6 +1,6 @@
 module.exports = function(deps) {
   const router = require('express').Router();
-  const { db, authenticate, helpers, rateLimiterFns, emailService, JWT_SECRET } = deps;
+  const { db, authenticate, helpers, rateLimiterFns, emailService, smsService, JWT_SECRET } = deps;
   const bcrypt = require('bcryptjs');
   const jwt = require('jsonwebtoken');
   const crypto = require('crypto');
@@ -10,7 +10,7 @@ module.exports = function(deps) {
   // ---------------------------------------------------------------------------
   router.post('/register', async (req, res) => {
     try {
-      let { email, password, name, agreementTimestamp } = req.body;
+      let { email, password, name, mobile, agreementTimestamp } = req.body;
       if (!email || !password || !name) {
         return res.status(400).json({ error: 'Name, email, and password are required' });
       }
@@ -68,6 +68,7 @@ module.exports = function(deps) {
         referralCode: referralCode,
         referredBy: req.body.referralCode || null,
         referralCount: 0,
+        mobile: mobile ? String(mobile).replace(/[^\d\+]/g, '') : null,
       };
 
       const user = await db.createUser(userData);
@@ -100,6 +101,13 @@ module.exports = function(deps) {
       emailService.sendWelcomeWithVerification({ name: user.name, email: user.email, verifyUrl: verifyUrl }).catch(function(err) {
         console.error('[Email] Welcome email failed:', err.message);
       });
+
+      // Send welcome SMS with Telegram link (async, non-blocking)
+      if (mobile && smsService && smsService.isAvailable) {
+        smsService.sendWelcome(user.name, mobile).catch(function(err) {
+          console.error('[SMS] Welcome SMS failed:', err.message);
+        });
+      }
 
       // Send admin notification of new subscriber (async, non-blocking)
       var adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || 'darren@ecocleaningsystems.co.uk';

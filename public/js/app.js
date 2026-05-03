@@ -697,8 +697,11 @@ const App = {
       var refCode = new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('ee_ref') || '';
       if (refCode) localStorage.setItem('ee_ref', refCode);
 
+      var mobileInput = document.getElementById('reg-mobile');
+      var mobile = mobileInput ? mobileInput.value.trim() : '';
+
       const data = await this.api('/auth/register', {
-        method: 'POST', body: JSON.stringify({ name, email, password, agreementTimestamp, referralCode: refCode || undefined })
+        method: 'POST', body: JSON.stringify({ name, email, password, mobile: mobile || undefined, agreementTimestamp, referralCode: refCode || undefined })
       });
       this.token = data.token; this.user = data.user;
       localStorage.setItem('ee_token', data.token);
