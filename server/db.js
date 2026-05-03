@@ -1229,7 +1229,44 @@ module.exports = {
   upsertQualitySnapshot, getQualitySnapshots, getLatestQualitySnapshot,
   // User Bets (Personal ROI)
   backTip, unbackTip, getUserBets, settleUserBets, getUserROI,
+  // Push Subscriptions
+  savePushSubscription, removePushSubscription, getPushSubscriptions, getAllPushSubscriptions,
 };
+
+// ---------------------------------------------------------------------------
+// PUSH SUBSCRIPTIONS
+// ---------------------------------------------------------------------------
+async function savePushSubscription(userId, subscription) {
+  if (!pool) return null;
+  var { rows } = await query(
+    'INSERT INTO push_subscriptions (user_id, subscription) VALUES ($1, $2) ON CONFLICT (user_id, subscription) DO NOTHING RETURNING id',
+    [userId, JSON.stringify(subscription)]
+  );
+  return rows.length > 0 ? rows[0].id : null;
+}
+
+async function removePushSubscription(id) {
+  if (!pool) return;
+  await query('DELETE FROM push_subscriptions WHERE id = $1', [id]);
+}
+
+async function getPushSubscriptions(userId) {
+  if (!pool) return [];
+  var { rows } = await query('SELECT id, subscription FROM push_subscriptions WHERE user_id = $1', [userId]);
+  return rows.map(function(r) { return { id: r.id, subscription: r.subscription }; });
+}
+
+async function getAllPushSubscriptions(audience) {
+  if (!pool) return [];
+  var sql = 'SELECT ps.id, ps.subscription, ps.user_id FROM push_subscriptions ps';
+  if (audience === 'premium' || audience === 'vip') {
+    sql += " JOIN users u ON ps.user_id = u.id WHERE u.subscription IN ('premium', 'vip')";
+  } else if (audience === 'vip-only') {
+    sql += " JOIN users u ON ps.user_id = u.id WHERE u.subscription = 'vip'";
+  }
+  var { rows } = await query(sql);
+  return rows.map(function(r) { return { id: r.id, subscription: r.subscription, userId: r.user_id }; });
+}
 
 // ---------------------------------------------------------------------------
 // USER BETS — server-side bet tracking for Personal ROI Dashboard

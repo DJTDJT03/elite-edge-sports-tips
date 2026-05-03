@@ -2965,6 +2965,9 @@ const App = {
 
     // Render subscriber leaderboard
     this.renderLeaderboard();
+
+    // Prompt for push notifications (after 5s delay — don't overwhelm on first load)
+    setTimeout(function() { try { self.requestPushPermission(); } catch(e) {} }, 5000);
   },
 
   async renderLeaderboard() {
@@ -9595,6 +9598,86 @@ const App = {
         '<button onclick="document.getElementById(\'trial-expired-overlay\').remove()" style="width:100%;padding:10px;background:transparent;color:#8b8d93;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:13px;cursor:pointer;">Continue on Free Plan</button>' +
       '</div>';
     document.body.appendChild(overlay);
+  },
+
+  // -----------------------------------------------------------------------
+  // PUSH NOTIFICATIONS — request permission + subscribe
+  // -----------------------------------------------------------------------
+  async requestPushPermission() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (Notification.permission === 'granted' && localStorage.getItem('ee_push_subscribed')) return;
+    if (Notification.permission === 'denied') return;
+
+    // Don't ask on first visit — wait until they've logged in
+    if (!this.token) return;
+
+    // Show custom prompt first (better UX than raw browser dialog)
+    if (!localStorage.getItem('ee_push_asked')) {
+      this.showPushPrompt();
+      return;
+    }
+  },
+
+  showPushPrompt() {
+    if (localStorage.getItem('ee_push_asked')) return;
+    var existing = document.getElementById('push-prompt');
+    if (existing) existing.remove();
+
+    var bar = document.createElement('div');
+    bar.id = 'push-prompt';
+    bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,#141828,#1a1f35);border-top:2px solid rgba(212,168,67,0.3);padding:16px 20px;z-index:9998;display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;';
+    bar.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px;">' +
+        '<span style="font-size:24px;">&#128276;</span>' +
+        '<div><div style="font-weight:700;color:#fff;font-size:14px;">Never miss a winner</div><div style="font-size:12px;color:#94a3b8;">Get instant alerts when tips publish and when your backed tips win.</div></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;">' +
+        '<button onclick="App._subscribeToPush()" style="background:#d4a843;color:#0a0e1a;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">Enable Notifications</button>' +
+        '<button onclick="document.getElementById(\'push-prompt\').remove();localStorage.setItem(\'ee_push_asked\',\'later\');" style="background:none;border:1px solid #2a2d45;color:#64748b;padding:10px 14px;border-radius:8px;font-size:13px;cursor:pointer;">Not now</button>' +
+      '</div>';
+
+    document.body.appendChild(bar);
+  },
+
+  async _subscribeToPush() {
+    var promptEl = document.getElementById('push-prompt');
+    if (promptEl) promptEl.remove();
+    localStorage.setItem('ee_push_asked', 'yes');
+
+    try {
+      var permission = await Notification.requestPermission();
+      if (permission !== 'granted') return;
+
+      // Get VAPID key
+      var keyData = await this.api('/user/push/vapid-key');
+      if (!keyData.key) return;
+
+      var reg = await navigator.serviceWorker.ready;
+      var subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: this._urlBase64ToUint8Array(keyData.key),
+      });
+
+      // Send subscription to server
+      await this.api('/user/push/subscribe', {
+        method: 'POST',
+        body: JSON.stringify({ subscription: subscription.toJSON() }),
+      });
+
+      localStorage.setItem('ee_push_subscribed', 'true');
+      this.showToast('Notifications enabled! You\'ll get alerts for new tips and winners.', 'success');
+    } catch (err) {
+      console.error('[Push] Subscribe failed:', err.message);
+    }
+  },
+
+  _urlBase64ToUint8Array(base64String) {
+    var padding = '='.repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var rawData = window.atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; i++) { outputArray[i] = rawData.charCodeAt(i); }
+    return outputArray;
   },
 
   showStreakRewardPopup(reward, streak) {

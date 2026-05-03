@@ -22,7 +22,8 @@
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^8.0.5",
     "pg": "^8.20.0",
-    "stripe": "^22.0.2"
+    "stripe": "^22.0.2",
+    "web-push": "^3.6.7"
   },
   "keywords": [
     "sports",

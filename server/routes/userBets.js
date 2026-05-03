@@ -149,6 +149,35 @@ module.exports = function(deps) {
     }
   });
 
+  // POST /api/user/push/subscribe — save push subscription
+  router.post('/user/push/subscribe', authenticate, async function(req, res) {
+    try {
+      var sub = req.body.subscription;
+      if (!sub || !sub.endpoint) return res.status(400).json({ error: 'Invalid subscription' });
+      await db.savePushSubscription(req.user.id, sub);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to save subscription' });
+    }
+  });
+
+  // DELETE /api/user/push/unsubscribe — remove push subscription
+  router.delete('/user/push/unsubscribe', authenticate, async function(req, res) {
+    try {
+      var subs = await db.getPushSubscriptions(req.user.id);
+      for (var i = 0; i < subs.length; i++) { await db.removePushSubscription(subs[i].id); }
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to unsubscribe' });
+    }
+  });
+
+  // GET /api/user/push/vapid-key — public VAPID key for frontend
+  router.get('/user/push/vapid-key', function(req, res) {
+    var pushSvc = deps.pushService;
+    res.json({ key: pushSvc ? pushSvc.publicKey : '' });
+  });
+
   // GET /api/user/bets/leaderboard — anonymous subscriber leaderboard
   router.get('/user/bets/leaderboard', async function(req, res) {
     try {

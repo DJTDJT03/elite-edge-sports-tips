@@ -20,6 +20,7 @@ const db = require('./db');
 const scoringModel = require('./services/scoringModel');
 const emailService = require('./services/emailService');
 const smsService = require('./services/smsService');
+const pushService = require('./services/pushService');
 const dataIngestion = require('./services/dataIngestion');
 const aiReports = require('./services/aiReports');
 const alertEngine = require('./services/alertEngine');
@@ -135,6 +136,7 @@ const deps = {
   scoringModel,
   emailService,
   smsService,
+  pushService,
   dataIngestion,
   racingSource,
   footballSource,
@@ -219,6 +221,9 @@ app.use('/', require('./routes/public')(deps));
         'CREATE INDEX IF NOT EXISTS idx_sc_date ON scored_candidates(date DESC)',
         'CREATE INDEX IF NOT EXISTS idx_sc_sport ON scored_candidates(sport, date DESC)',
         'CREATE INDEX IF NOT EXISTS idx_sc_settled ON scored_candidates(settled, date DESC)',
+        // Push notification subscriptions
+        "CREATE TABLE IF NOT EXISTS push_subscriptions (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, subscription JSONB NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(user_id, subscription))",
+        'CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id)',
         // Login streak tracking
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS login_streak INTEGER DEFAULT 0',
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_date DATE',

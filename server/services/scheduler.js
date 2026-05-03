@@ -1749,6 +1749,18 @@ module.exports = function startScheduler(deps) {
     var premCount = newTips.filter(function(t) { return t.isPremium; }).length;
     console.log('[Auto-Tips] Summary: ' + freeCount + ' free, ' + premCount + ' premium');
 
+    // Push notification: tips published
+    var pushService = deps.pushService;
+    if (pushService && pushService.isAvailable) {
+      var napName = newTips.find(function(t) { return t.isNap; });
+      pushService.broadcast(db, {
+        title: newTips.length + ' tips published',
+        body: (napName ? 'NAP: ' + napName.selection + ' — ' : '') + 'Check your dashboard for today\'s selections.',
+        url: '/#/dashboard',
+        tag: 'daily-tips-' + today,
+      }, 'premium').catch(function(e) { console.log('[Push] Broadcast error:', e.message); });
+    }
+
     // --- Alert Engine: notify users with matching alert preferences ---
     if (alertEngine) {
       try {
