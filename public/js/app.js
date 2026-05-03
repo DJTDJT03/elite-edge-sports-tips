@@ -2510,136 +2510,52 @@ const App = {
       return '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:10px 16px;text-align:center;"><div style="font-size:20px;">' + icon + '</div><div style="font-size:18px;font-weight:900;color:var(--gold);">' + sportCounts[s] + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">' + label + '</div></div>';
     }).join('');
 
+    // --- Psychological ordering: Product > Proof > Engagement > Education ---
+    // Next race/match countdown
+    var nextEvent = todayTips.filter(function(t) {
+      var time = t.raceTime || t.kickoff || '';
+      if (!time) return false;
+      var now = new Date();
+      var parts = time.split(':');
+      var eventTime = new Date(now);
+      eventTime.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0, 0);
+      return eventTime > now;
+    }).sort(function(a, b) {
+      return (a.raceTime || a.kickoff || '').localeCompare(b.raceTime || b.kickoff || '');
+    });
+    var countdownHtml = '';
+    if (nextEvent.length > 0) {
+      var ne = nextEvent[0];
+      var neTime = ne.raceTime || ne.kickoff || '';
+      countdownHtml = '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;"><span style="background:#ef4444;color:#fff;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:800;animation:pulse 2s infinite;">LIVE</span><span style="font-size:13px;color:var(--text-secondary);">Next selection at <strong style="color:#fff;">' + neTime + '</strong> — ' + (ne.event || ne.selection || '') + '</span></div>';
+    }
+
+    // Personal win tracking
+    var personalWinHtml = '';
+    if (this.user && this.isPremium()) {
+      var myBets = this.getMyBets ? this.getMyBets() : [];
+      if (myBets.length >= 3) {
+        var lastSix = myBets.slice(-6);
+        var myWins = lastSix.filter(function(b) { return b.result === 'won'; }).length;
+        personalWinHtml = '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;"><span style="font-size:22px;">&#127942;</span><span style="font-size:14px;color:#cbd5e1;">Your last 6 backed tips: <strong style="color:#22c55e;">' + myWins + ' winners</strong></span></div>';
+      }
+    }
+
     app.innerHTML = `
       <div class="container">
-        <!-- HERO: Welcome + Date + Credits -->
-        <div style="margin-bottom:20px;">
+        <!-- 1. HEADER — Welcome + Date + Credits + Countdown -->
+        <div style="margin-bottom:16px;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
             <div>
               <h1 style="margin:0;">Welcome to <span class="accent">Elite Edge</span></h1>
               <p style="color:var(--text-secondary);margin:4px 0 0;">${new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}</p>
+              ${countdownHtml}
             </div>
             ${creditHtml}
           </div>
         </div>
 
-        <!-- TODAY'S TIPS OVERVIEW — what's been published across all sports -->
-        ${todayTips.length > 0 ? `
-        <div style="background:linear-gradient(135deg,rgba(212,168,67,0.08),rgba(212,168,67,0.02));border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;margin-bottom:20px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-            <div style="font-weight:800;font-size:16px;color:var(--gold);">Today's Selections</div>
-            <div style="font-size:13px;color:var(--text-secondary);">${todayTips.filter(t => !t.isWeeklyAcca).length} tips published</div>
-          </div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">${sportCountHtml}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <a href="#/selections" class="btn btn-gold btn-sm">View All Tips</a>
-            <a href="#/acca-generator" class="btn btn-outline btn-sm">Build Acca</a>
-            <a href="#/calculators" class="btn btn-outline btn-sm">Calculators</a>
-            ${this.user && this.user.referralCode ? '<a href="#/refer" class="btn btn-outline btn-sm">Refer &amp; Earn</a>' : ''}
-          </div>
-        </div>` : ''}
-
-        <!-- PERFORMANCE STATS — trust bar -->
-        <div class="trust-banner" style="margin-bottom:20px;">
-          <div class="trust-item"><div class="trust-value">+${perf.roi}%</div><div class="trust-label">Overall ROI</div></div>
-          <div class="trust-item"><div class="trust-value">${perf.strikeRate}%</div><div class="trust-label">Strike Rate</div></div>
-          <div class="trust-item"><div class="trust-value">${perf.runningBank}</div><div class="trust-label">Running Bank</div></div>
-          <div class="trust-item"><div class="trust-value">${perf.totalTips}</div><div class="trust-label">Tips</div></div>
-          <div class="trust-item"><div class="trust-value">${perf.wins}</div><div class="trust-label">Winners</div></div>
-          ${streak > 1 ? `<div class="trust-item"><div class="streak-badge">\ud83d\udd25 ${streak}-Tip Streak</div></div>` : ''}
-        </div>
-
-        <!-- Dynamic Big Winner Banner -->
-        <div id="big-winner-banner"></div>
-
-        <!-- NAP OF THE DAY — most prominent tip -->
-
-        <!-- Live Race Tracker -->
-        <div id="live-race-tracker"></div>
-
-        <!-- Streak Rewards -->
-        <div id="streak-rewards"></div>
-
-        <!-- Morning Brief (logged-in users only) -->
-        ${morningBriefHtml}
-
-        <!-- AI Morning Briefing (premium users only) -->
-        ${this.isPremium() ? `
-        <div class="card" id="ai-briefing-card" style="margin-bottom:20px;padding:20px;border:1px solid rgba(212,168,67,0.2);background:linear-gradient(135deg,rgba(212,168,67,0.06),rgba(212,168,67,0.01));">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-            <div style="font-size:24px;">&#129302;</div>
-            <div>
-              <div style="font-weight:800;font-size:15px;color:#d4a843;">AI Morning Briefing</div>
-              <div style="font-size:11px;color:var(--text-muted);">Powered by Claude + Perplexity — exclusive to subscribers</div>
-            </div>
-          </div>
-          <div id="ai-briefing-content">
-            <button class="btn btn-gold btn-sm" onclick="App.loadAIDailyBriefing()">Load AI Briefing</button>
-          </div>
-        </div>` : ''}
-
-        <!-- Your Elite Edge Stats (premium users only) -->
-        <div id="personal-stats-container"></div>
-
-        <!-- Would Have Won (non-premium users only) -->
-        ${wouldHaveWonHtml}
-
-        <!-- Bankroll Tracker (logged-in users only) -->
-        ${bankrollHtml}
-
-        <!-- Recovery Pick (premium, only on losing runs) -->
-        ${recoveryHtml}
-
-        <!-- Streak Badges -->
-        ${streakBadgesHtml}
-
-        <!-- Monthly Target Tracker -->
-        ${monthlyTargetHtml}
-
-        <!-- Breaking News & Team Updates -->
-        <div id="dashboard-news-section"></div>
-
-        <!-- Recent Wins Ticker -->
-        ${recentWins.length ? `
-        <div class="ticker-wrap">
-          <div class="ticker">
-            ${recentWins.concat(recentWins).map(w => `
-              <div class="ticker-item">
-                <span class="win-tag">WIN</span>
-                <span>${w.selection}</span>
-                <span class="odds-tag">@ ${this.formatOdds(w.odds)}</span>
-                <span class="text-muted">(+${w.pnl > 0 ? w.pnl.toFixed(2) : '0'} units)</span>
-                <button class="share-btn" onclick="event.stopPropagation();App.generateShareCard({selection:'${w.selection.replace(/'/g, "\\'")}',odds:${w.odds},pnl:${w.pnl || 0},sport:'${w.sport || 'racing'}',event:'${(w.event || '').replace(/'/g, "\\'")}'})">Share</button>
-              </div>
-            `).join('')}
-          </div>
-        </div>` : ''}
-
-        <!-- Recent Winners Grid (permanent, high visibility) -->
-        ${recentWins.length ? `
-        <div class="section" style="margin-bottom:24px;">
-          <div class="section-title"><span style="color:#22c55e;">&#10003;</span> Verified Recent Winners</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
-            ${recentWins.slice(0, 6).map(w => `
-              <div style="background:var(--card-bg);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                  <div style="font-weight:700;font-size:14px;color:#fff;">${w.selection}</div>
-                  <div style="font-size:12px;color:var(--text-secondary);">${w.event || ''}</div>
-                  <div style="font-size:11px;color:var(--text-muted);">${formatDateUK(w.date)}</div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-weight:800;font-size:18px;color:#22c55e;">@ ${this.formatOdds(w.odds)}</div>
-                  <div style="font-size:12px;color:#22c55e;font-weight:600;">+${w.pnl > 0 ? w.pnl.toFixed(2) : '0'} units</div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-          <div style="text-align:center;margin-top:12px;">
-            <a href="#/results" style="color:var(--accent);font-size:13px;font-weight:600;">View Full Results &amp; Performance History &rarr;</a>
-          </div>
-        </div>` : ''}
-
-        <!-- NAP OF THE DAY — Premium Only -->
+        <!-- 2. NAP OF THE DAY — Hero product, first thing you see -->
         ${napTip ? (this.isPremium() ? `
         <div class="nap-card-wrapper">
           <div class="nap-label"><span class="star">\u2605</span> NAP OF THE DAY — Our Strongest Selection <span class="star">\u2605</span></div>
@@ -2684,101 +2600,10 @@ const App = {
           </div>
         </div>`) : ''}
 
-        <!-- Market Intelligence Briefing (Free Users) -->
-        ${!this.isPremium() ? `
-        <div style="background:linear-gradient(135deg,#141828,#1a1f35);border:1px solid rgba(212,168,67,0.2);border-radius:14px;padding:24px;margin-bottom:24px;">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-            <div style="font-size:28px;">&#128200;</div>
-            <div>
-              <div style="font-size:16px;font-weight:800;color:#d4a843;">Today's Market Intelligence Briefing</div>
-              <div style="font-size:12px;color:#8a8fa0;">Free daily insight — what our model is watching today</div>
-            </div>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px;">
-            <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;">
-              <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Racing Selections</div>
-              <div style="font-size:22px;font-weight:800;color:#fff;">${todayTips.filter(t => t.sport === 'racing' && !t.isWeeklyAcca).length || 'None today'}</div>
-            </div>
-            <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;">
-              <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Football Selections</div>
-              <div style="font-size:22px;font-weight:800;color:#fff;">${todayTips.filter(t => t.sport === 'football' && !t.isWeeklyAcca).length || 'None today'}</div>
-            </div>
-            <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;">
-              <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Model Status</div>
-              <div style="font-size:22px;font-weight:800;color:#22c55e;">&#9679; Active</div>
-            </div>
-            <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px;">
-              <div style="font-size:11px;color:#8a8fa0;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Selections Published</div>
-              <div style="font-size:22px;font-weight:800;color:#d4a843;">${todayTips.filter(t => !t.isWeeklyAcca).length} tips</div>
-            </div>
-          </div>
-          <div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.15);border-radius:10px;padding:16px;margin-bottom:16px;">
-            <div style="font-size:13px;font-weight:600;color:#d4a843;margin-bottom:8px;">&#128161; Today's Free Insight</div>
-            <div style="font-size:13px;color:#c0c4d0;line-height:1.6;">Our model has identified <strong style="color:#fff;">${todayTips.filter(t => !t.isWeeklyAcca).length} edge opportunities</strong> today across racing and football. The strongest selection carries a confidence rating of <strong style="color:#d4a843;">${napTip ? napTip.confidence + '/10' : '—'}</strong> with an edge of <strong style="color:#22c55e;">${napTip ? ((napTip.edge||0)*100).toFixed(1) + '%' : '—'}</strong> against the market. Premium members have full access to all selections, analysis, and staking recommendations.</div>
-          </div>
-          <div style="text-align:center;">
-            <button onclick="App.showTrialOffer()" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;border:none;font-weight:700;font-size:14px;cursor:pointer;">Start 14-Day Free Trial — Full Premium Access</button>
-            <div style="font-size:11px;color:#6b7280;margin-top:8px;">Card stored securely. No charges on free tier. Cancel anytime. 18+ BeGambleAware.org</div>
-          </div>
-        </div>` : ''}
-
-        <!-- Premium Weekend Accumulator (premium users only) -->
-        ${this.isPremium() ? '<div id="premium-acca-container"></div>' : ''}
-
-        <!-- Yesterday's Best Winner Showcase (all users) -->
-        <div id="yesterday-winner-showcase"></div>
-
-        <!-- How It Works — Educational Section -->
-        <div style="background:linear-gradient(135deg,#141828,#1a1f35);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:24px;">
-          <div style="padding:24px;">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
-              <div style="font-size:28px;">&#127891;</div>
-              <div>
-                <div style="font-size:18px;font-weight:800;color:#d4a843;">How Elite Edge Works</div>
-                <div style="font-size:12px;color:#8a8fa0;">Understanding our system, scores, and how to use our tips</div>
-              </div>
-            </div>
-
-            <!-- Video placeholder -->
-            <div style="position:relative;background:#0a0e1a;border-radius:10px;padding:40px 20px;text-align:center;margin-bottom:20px;border:1px solid #2a2d45;cursor:pointer;" onclick="window.location.hash='#/how-it-works'">
-              <div style="font-size:48px;margin-bottom:12px;">&#9654;</div>
-              <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">Watch: How to Use Elite Edge</div>
-              <div style="font-size:13px;color:#8a8fa0;">3 minute guide — understanding our model, scores, and how to bet smarter</div>
-            </div>
-
-            <!-- Quick guide cards -->
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
-              <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
-                <div style="font-size:24px;margin-bottom:8px;">&#127919;</div>
-                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">Confidence Score (1-10)</div>
-                <div style="font-size:12px;color:#8a8fa0;line-height:1.5;">How strongly our model rates each selection. 7+ is strong, 9-10 is elite. We only publish tips rated 6 or higher.</div>
-              </div>
-              <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
-                <div style="font-size:24px;margin-bottom:8px;">&#128200;</div>
-                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">Edge Percentage</div>
-                <div style="font-size:12px;color:#8a8fa0;line-height:1.5;">The gap between what our model thinks the probability is vs what the bookmaker's odds imply. Higher edge = more value. We need 5%+ to publish.</div>
-              </div>
-              <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
-                <div style="font-size:24px;margin-bottom:8px;">&#128176;</div>
-                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">Staking & Units</div>
-                <div style="font-size:12px;color:#8a8fa0;line-height:1.5;">We stake in 'units' not pounds. 1 unit = 1% of your bankroll. If your bank is &pound;500, 1 unit = &pound;5. Our tips typically suggest 1-3 units based on confidence.</div>
-              </div>
-              <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
-                <div style="font-size:24px;margin-bottom:8px;">&#128202;</div>
-                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">ROI & Strike Rate</div>
-                <div style="font-size:12px;color:#8a8fa0;line-height:1.5;">ROI = Return on Investment (profit divided by total staked). Strike rate = percentage of winning tips. Both are tracked transparently on our Results page.</div>
-              </div>
-            </div>
-
-            <div style="text-align:center;margin-top:16px;">
-              <a href="#/how-it-works" style="color:#d4a843;font-size:13px;font-weight:600;text-decoration:none;">Read the Full Beginner's Guide &rarr;</a>
-            </div>
-          </div>
-        </div>
-
-        <!-- Today's Tips -->
-        <div class="section">
-          <div class="section-title"><span class="icon">&#9826;</span> Today's Selections (${todayTips.length} tips)</div>
+        <!-- 3. TODAY'S TIPS — the actual product, immediately after NAP -->
+        <div class="section" style="margin-bottom:20px;">
+          <div class="section-title"><span class="icon">&#9826;</span> Today's Selections (${todayTips.filter(t => !t.isWeeklyAcca).length} tips across ${Object.keys(sportCounts).length} sports)</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">${sportCountHtml}</div>
           <div class="date-tabs">
             <button class="date-tab active" onclick="App.filterDashDate('today',this)">Today</button>
             ${tomorrowTips.length ? '<button class="date-tab" onclick="App.filterDashDate(\'tomorrow\',this)">Tomorrow (' + tomorrowTips.length + ')</button>' : ''}
@@ -2798,9 +2623,198 @@ const App = {
               return html;
             }).join('')}
           </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+            <a href="#/selections" class="btn btn-gold btn-sm">View All Tips</a>
+            <a href="#/acca-generator" class="btn btn-outline btn-sm">Build Acca</a>
+            <a href="#/calculators" class="btn btn-outline btn-sm">Calculators</a>
+          </div>
         </div>
 
-        <!-- Testimonials -->
+        <!-- 4. TRUST BAR — proof that the system works -->
+        <div class="trust-banner" style="margin-bottom:20px;">
+          <div class="trust-item"><div class="trust-value">+${perf.roi}%</div><div class="trust-label">Overall ROI</div></div>
+          <div class="trust-item"><div class="trust-value">${perf.strikeRate}%</div><div class="trust-label">Strike Rate</div></div>
+          <div class="trust-item"><div class="trust-value">${perf.runningBank}</div><div class="trust-label">Running Bank</div></div>
+          <div class="trust-item"><div class="trust-value">${perf.totalTips}</div><div class="trust-label">Tips</div></div>
+          <div class="trust-item"><div class="trust-value">${perf.wins}</div><div class="trust-label">Winners</div></div>
+          ${streak > 1 ? `<div class="trust-item"><div class="streak-badge">\ud83d\udd25 ${streak}-Tip Streak</div></div>` : ''}
+        </div>
+
+        <!-- 5. RECENT WINS TICKER — constant social proof -->
+        ${recentWins.length ? `
+        <div class="ticker-wrap">
+          <div class="ticker">
+            ${recentWins.concat(recentWins).map(w => `
+              <div class="ticker-item">
+                <span class="win-tag">WIN</span>
+                <span>${w.selection}</span>
+                <span class="odds-tag">@ ${this.formatOdds(w.odds)}</span>
+                <span class="text-muted">(+${w.pnl > 0 ? w.pnl.toFixed(2) : '0'} units)</span>
+                <button class="share-btn" onclick="event.stopPropagation();App.generateShareCard({selection:'${w.selection.replace(/'/g, "\\'")}',odds:${w.odds},pnl:${w.pnl || 0},sport:'${w.sport || 'racing'}',event:'${(w.event || '').replace(/'/g, "\\'")}'})">Share</button>
+              </div>
+            `).join('')}
+          </div>
+        </div>` : ''}
+
+        <!-- 6. DYNAMIC ELEMENTS — Big Winner + Live Tracker + Streak -->
+        <div id="big-winner-banner"></div>
+        <div id="live-race-tracker"></div>
+        <div id="streak-rewards"></div>
+
+        <!-- 7. PERSONAL TRACKING — "your" results, not just ours -->
+        ${personalWinHtml}
+        <div id="personal-stats-container"></div>
+
+        <!-- 8. AI BRIEFING + MORNING BRIEF — premium engagement -->
+        ${this.isPremium() ? `
+        <div class="card" id="ai-briefing-card" style="margin-bottom:20px;padding:20px;border:1px solid rgba(212,168,67,0.2);background:linear-gradient(135deg,rgba(212,168,67,0.06),rgba(212,168,67,0.01));">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <div style="font-size:24px;">&#129302;</div>
+            <div>
+              <div style="font-weight:800;font-size:15px;color:#d4a843;">AI Morning Briefing</div>
+              <div style="font-size:11px;color:var(--text-muted);">Powered by Claude + Perplexity — exclusive to subscribers</div>
+            </div>
+          </div>
+          <div id="ai-briefing-content">
+            <button class="btn btn-gold btn-sm" onclick="App.loadAIDailyBriefing()">Load AI Briefing</button>
+          </div>
+        </div>` : ''}
+        ${morningBriefHtml}
+
+        <!-- 9. FOMO SECTION — what free users missed (conversion driver) -->
+        ${wouldHaveWonHtml}
+
+        <!-- 10. FREE USER INTELLIGENCE BRIEFING — taste of premium -->
+        ${!this.isPremium() ? `
+        <div style="background:linear-gradient(135deg,#141828,#1a1f35);border:1px solid rgba(212,168,67,0.2);border-radius:14px;padding:24px;margin-bottom:24px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+            <div style="font-size:28px;">&#128200;</div>
+            <div>
+              <div style="font-size:16px;font-weight:800;color:#d4a843;">Today's Market Intelligence</div>
+              <div style="font-size:12px;color:#8a8fa0;">Free daily insight — what our model is watching</div>
+            </div>
+          </div>
+          <div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.15);border-radius:10px;padding:16px;margin-bottom:16px;">
+            <div style="font-size:13px;color:#c0c4d0;line-height:1.6;">Our model has identified <strong style="color:#fff;">${todayTips.filter(t => !t.isWeeklyAcca).length} edge opportunities</strong> today. The strongest carries a confidence of <strong style="color:#d4a843;">${napTip ? napTip.confidence + '/10' : '—'}</strong> with <strong style="color:#22c55e;">${napTip ? ((napTip.edge||0)*100).toFixed(1) + '%' : '—'}</strong> edge. Premium members have full access.</div>
+          </div>
+          <div style="text-align:center;">
+            <button onclick="App.showTrialOffer()" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;border:none;font-weight:700;font-size:14px;cursor:pointer;">Start 14-Day Free Trial</button>
+            <div style="font-size:11px;color:#6b7280;margin-top:8px;">Card stored securely. Cancel anytime. 18+ BeGambleAware.org</div>
+          </div>
+        </div>` : ''}
+
+        <!-- 11. PREMIUM ACCA + YESTERDAY'S WINNER -->
+        ${this.isPremium() ? '<div id="premium-acca-container"></div>' : ''}
+        <div id="yesterday-winner-showcase"></div>
+
+        <!-- 12. ENGAGEMENT TOOLS — bankroll, recovery, streaks, targets -->
+        ${bankrollHtml}
+        ${recoveryHtml}
+        ${streakBadgesHtml}
+        ${monthlyTargetHtml}
+
+        <!-- 13. VERIFIED WINNERS GRID — permanent proof -->
+        ${recentWins.length ? `
+        <div class="section" style="margin-bottom:24px;">
+          <div class="section-title"><span style="color:#22c55e;">&#10003;</span> Verified Recent Winners</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+            ${recentWins.slice(0, 6).map(w => `
+              <div style="background:var(--card-bg);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                  <div style="font-weight:700;font-size:14px;color:#fff;">${w.selection}</div>
+                  <div style="font-size:12px;color:var(--text-secondary);">${w.event || ''}</div>
+                  <div style="font-size:11px;color:var(--text-muted);">${formatDateUK(w.date)}</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-weight:800;font-size:18px;color:#22c55e;">@ ${this.formatOdds(w.odds)}</div>
+                  <div style="font-size:12px;color:#22c55e;font-weight:600;">+${w.pnl > 0 ? w.pnl.toFixed(2) : '0'} units</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div style="text-align:center;margin-top:12px;">
+            <a href="#/results" style="color:var(--accent);font-size:13px;font-weight:600;">View Full Results &amp; Performance History &rarr;</a>
+          </div>
+        </div>` : ''}
+
+        <!-- 14. NEWS + REFERRAL — community & growth -->
+        <div id="dashboard-news-section"></div>
+
+        ${this.user ? `
+        <div class="card" style="margin-bottom:24px;border-color:rgba(212,168,67,0.2);">
+          <div style="display:flex;align-items:flex-start;gap:16px;">
+            <div style="font-size:32px;flex-shrink:0;">&#127873;</div>
+            <div style="flex:1;">
+              <h3 style="font-size:18px;font-weight:800;margin-bottom:6px;">Refer a Friend — Earn Free Credits</h3>
+              <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;line-height:1.5;">Share your code. You both earn credits when they sign up.</p>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <div style="background:var(--bg-elevated);border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:8px 16px;font-family:monospace;font-size:16px;font-weight:700;color:var(--gold);letter-spacing:1px;" id="dash-referral-code">${this.getReferralCode()}</div>
+                <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();var code=document.getElementById('dash-referral-code').textContent;navigator.clipboard.writeText(code).then(function(){App.showToast('Referral code copied!','success');}).catch(function(){});">Copy Code</button>
+                <button class="btn btn-ghost btn-sm" onclick="App.showReferral()">Full Details</button>
+              </div>
+            </div>
+          </div>
+        </div>` : ''}
+
+        <!-- 15. TELEGRAM + SOCIAL -->
+        <div class="card text-center mb-32" style="padding:24px;">
+          <h3 class="mb-8">Join Our Telegram Channel</h3>
+          <p class="text-muted mb-16">Instant tip alerts, live updates, and community discussion.</p>
+          <a href="https://t.me/EliteEdgeTips" target="_blank" rel="noopener" class="telegram-cta">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+            Join our Telegram
+          </a>
+        </div>
+
+        <!-- 16. CONVERSION CTA — bottom of page for free users -->
+        ${!this.isPremium() ? `
+        <div class="card card-premium text-center" style="padding:40px;">
+          <h2 style="margin-bottom:8px;">Stop Missing Winners</h2>
+          <p class="text-muted mb-24">Every day you wait is another edge opportunity gone. Get full access to all selections, analysis, and staking.</p>
+          <a href="#/pricing" class="btn btn-gold btn-lg">Start 14-Day Free Trial</a>
+          <p class="text-xs text-muted mt-16">Then &pound;19.99/month. Cancel anytime. No commitment.</p>
+        </div>` : ''}
+
+        <!-- 17. HOW IT WORKS — education last, only visible to newer users -->
+        ${!this.isPremium() || (perf.totalTips || 0) < 20 ? `
+        <div style="background:linear-gradient(135deg,#141828,#1a1f35);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:24px;">
+          <div style="padding:24px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+              <div style="font-size:28px;">&#127891;</div>
+              <div>
+                <div style="font-size:18px;font-weight:800;color:#d4a843;">How Elite Edge Works</div>
+                <div style="font-size:12px;color:#8a8fa0;">Understanding our system and how to use our tips</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+              <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
+                <div style="font-size:24px;margin-bottom:8px;">&#127919;</div>
+                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">Confidence (1-10)</div>
+                <div style="font-size:12px;color:#8a8fa0;line-height:1.5;">How strongly our model rates each pick. 7+ is strong, 9-10 is elite.</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
+                <div style="font-size:24px;margin-bottom:8px;">&#128200;</div>
+                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">Edge %</div>
+                <div style="font-size:12px;color:#8a8fa0;line-height:1.5;">The gap between our model's probability and the bookmaker's price. Higher = more value.</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
+                <div style="font-size:24px;margin-bottom:8px;">&#128176;</div>
+                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">Units</div>
+                <div style="font-size:12px;color:#8a8fa0;line-height:1.5;">1 unit = 1% of your bankroll. &pound;500 bank = &pound;5 per unit. We suggest 1-3 units per tip.</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
+                <div style="font-size:24px;margin-bottom:8px;">&#128202;</div>
+                <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;">ROI</div>
+                <div style="font-size:12px;color:#8a8fa0;line-height:1.5;">Profit divided by total staked. Tracked transparently on our Results page.</div>
+              </div>
+            </div>
+            <div style="text-align:center;margin-top:16px;">
+              <a href="#/how-it-works" style="color:#d4a843;font-size:13px;font-weight:600;text-decoration:none;">Full Beginner's Guide &rarr;</a>
+            </div>
+          </div>
+        </div>` : ''}
+
+        <!-- 18. TESTIMONIALS — social proof anchor -->
         <div class="section">
           <div class="section-title"><span class="icon">&#9733;</span> What Our Members Say</div>
           <div class="grid grid-3">
@@ -2813,42 +2827,6 @@ const App = {
             `).join('')}
           </div>
         </div>
-
-        <!-- Telegram CTA (Feature #8) -->
-        <div class="card text-center mb-32" style="padding:32px;">
-          <h3 class="mb-8">Join Our Telegram Channel</h3>
-          <p class="text-muted mb-16">Get instant tip alerts, live updates, and community discussion in our Telegram group.</p>
-          <a href="https://t.me/EliteEdgeTips" target="_blank" rel="noopener" class="telegram-cta">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-            Join our Telegram
-          </a>
-        </div>
-
-        <!-- CTA -->
-        ${!this.isPremium() ? `
-        <div class="card card-premium text-center" style="padding:40px;">
-          <h2 style="margin-bottom:8px;">Unlock Premium Tips</h2>
-          <p class="text-muted mb-24">Join thousands of winning bettors. Get full access to all selections, deep analysis, and priority alerts.</p>
-          <a href="#/pricing" class="btn btn-gold btn-lg">View Premium Plans</a>
-          <p class="text-xs text-muted mt-16">14-Day Free Trial, then &pound;19.99/month. Cancel anytime.</p>
-        </div>` : ''}
-
-        ${this.user ? `
-        <!-- Referral Card -->
-        <div class="card" style="margin-top:24px;border-color:rgba(212,168,67,0.2);">
-          <div style="display:flex;align-items:flex-start;gap:16px;">
-            <div style="font-size:32px;flex-shrink:0;">&#127873;</div>
-            <div style="flex:1;">
-              <h3 style="font-size:18px;font-weight:800;margin-bottom:6px;">Refer a Friend — Get 1 Month Free</h3>
-              <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;line-height:1.5;">Share your unique code with friends. When they subscribe to Premium, you both get a free month.</p>
-              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                <div style="background:var(--bg-elevated);border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:8px 16px;font-family:monospace;font-size:16px;font-weight:700;color:var(--gold);letter-spacing:1px;" id="dash-referral-code">${this.getReferralCode()}</div>
-                <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();var code=document.getElementById('dash-referral-code').textContent;navigator.clipboard.writeText(code).then(function(){App.showToast('Referral code copied!','success');}).catch(function(){});">Copy Code</button>
-                <button class="btn btn-ghost btn-sm" onclick="App.showReferral()">Full Details</button>
-              </div>
-            </div>
-          </div>
-        </div>` : ''}
       </div>
     `;
 
