@@ -1567,14 +1567,23 @@ class ScoringModel {
     if (analyst === 'clocker') {
       let parts = [];
 
-      // Trainer intent analysis
+      // Trainer intent analysis — use Sonar signal if available
       if (headgear) {
         const isFirstTime = headgear.toLowerCase().includes('1') || headgear.toLowerCase().includes('first');
         if (isFirstTime) {
-          parts.push(`TRAINER INTENT: First-time ${headgear.replace(/1|first/gi, '').trim() || 'headgear'} applied today. This is a deliberate tactical move by ${trainer} — trainers don't add equipment without believing it will produce improvement. Strike rates for first-time headgear at this level are typically 15-20% higher than the base rate.`);
+          let intentText = `TRAINER INTENT: First-time ${headgear.replace(/1|first/gi, '').trim() || 'headgear'} applied today. This is a deliberate tactical move by ${trainer} — trainers don't add equipment without believing it will produce improvement.`;
+          if (sig.headgear_change) intentText += ' ' + sv('headgear_change');
+          else intentText += ' Strike rates for first-time headgear at this level are typically 15-20% higher than the base rate.';
+          parts.push(intentText);
         } else {
-          parts.push(`EQUIPMENT: ${horseName} races in ${headgear}. This is a continuation of the current campaign setup — no change signals stability in the approach.`);
+          parts.push(`EQUIPMENT: ${horseName} races in ${headgear}. Continuation of current campaign setup.`);
         }
+      }
+      if (!headgear && sig.headgear_change) {
+        parts.push(`TRAINER INTENT: ${sv('headgear_change')}`);
+      }
+      if (sig.jockey_change) {
+        parts.push(`JOCKEY BOOKING: ${sv('jockey_change')}`);
       }
 
       // Pace scenario analysis
@@ -1601,21 +1610,30 @@ class ScoringModel {
         }
       }
 
-      // Going expertise — deeper than standard
+      // Going expertise — deeper than standard, use Sonar going_update + course_report
       if (factors.going >= 0.7) {
         const goingLower = going.toLowerCase();
+        let goingDeep = '';
         if (goingLower.includes('soft') || goingLower.includes('heavy')) {
-          parts.push(`GOING SPECIALIST: ${horseName} transforms on an ease in the ground. This is the key angle — our going analysis shows a dramatic uptick in performance on ${going}. Many rivals in this field have inferior soft-ground profiles.`);
+          goingDeep = `GOING SPECIALIST: ${horseName} transforms on an ease in the ground. This is the key angle — our going analysis shows a dramatic uptick in performance on ${going}. Many rivals in this field have inferior soft-ground profiles.`;
         } else if (goingLower.includes('firm') || goingLower.includes('fast')) {
-          parts.push(`GOING SPECIALIST: ${horseName} has a strong record on quick ground. ${going} plays directly to strengths. Fast-ground specialists at ${meeting} have an enhanced strike rate.`);
+          goingDeep = `GOING SPECIALIST: ${horseName} has a strong record on quick ground. ${going} plays directly to strengths.`;
         }
+        if (sig.going_update) goingDeep += ' ' + sv('going_update');
+        if (sig.course_report) goingDeep += ' ' + sv('course_report');
+        if (sig.rail_movement) goingDeep += ' ' + sv('rail_movement');
+        if (goingDeep) parts.push(goingDeep);
       }
 
-      // Stable/yard form
+      // Stable/yard form — use Sonar stable_form signal
       if (factors.trainerJockey >= 0.7) {
-        parts.push(`YARD FORM: ${trainer}'s stable is firing. When a yard is in this kind of form, it typically means the horses are healthy, well-prepared, and the trainer is placing them to win. ${jockey} being booked adds further conviction.`);
+        let yardText = `YARD FORM: ${trainer}'s stable is firing. When a yard is in this kind of form, it typically means the horses are healthy, well-prepared, and the trainer is placing them to win. ${jockey} being booked adds further conviction.`;
+        if (sig.stable_form) yardText += ' ' + sv('stable_form');
+        parts.push(yardText);
       } else if (factors.trainerJockey <= 0.4) {
-        parts.push(`YARD FORM NOTE: ${trainer}'s yard has been quiet recently. However, cold stables can produce runners at bigger prices when they do strike — and the horse's individual form outweighs the yard's general run.`);
+        let coldText = `YARD FORM NOTE: ${trainer}'s yard has been quiet recently. Cold stables can produce runners at bigger prices when they do strike — the horse's individual form outweighs the yard's general run.`;
+        if (sig.stable_form) coldText += ' ' + sv('stable_form');
+        parts.push(coldText);
       }
 
       if (parts.length > 0) {

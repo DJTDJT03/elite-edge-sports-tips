@@ -4215,7 +4215,7 @@ module.exports = function startScheduler(deps) {
     var tipMap = {};
     allTips.forEach(function(t) { tipMap[t.id] = t; });
 
-    var analysts = ['The Professor', 'The Scout', 'The Edge'];
+    var analysts = ['The Professor', 'The Scout', 'The Clocker', 'The Edge'];
     var tuningReport = [];
 
     for (var ai = 0; ai < analysts.length; ai++) {
@@ -4284,6 +4284,33 @@ module.exports = function startScheduler(deps) {
         }
       }
 
+      // LOSS PATTERN ANALYSIS — identify why "bankers" lose
+      var bankerLosses = losses.filter(function(r) {
+        var tip = tipMap[r.tipId] || {};
+        return (tip.confidence || 0) >= 8 && (r.odds || 0) < 4.0;
+      });
+      if (bankerLosses.length >= 2) {
+        // Analyse common factors in high-confidence losses
+        var lossFactors = { goingFailed: 0, drawFailed: 0, longAbsence: 0, shortOdds: 0 };
+        bankerLosses.forEach(function(r) {
+          var tip = tipMap[r.tipId] || {};
+          var factors = (tip.analysis && typeof tip.analysis === 'object') ? tip.analysis : {};
+          if (r.odds < 2.5) lossFactors.shortOdds++;
+          // Check if going was flagged as a concern
+          if (factors.goingSuitability && (factors.goingSuitability.indexOf('uncertain') !== -1 || factors.goingSuitability.indexOf('risk') !== -1 || factors.goingSuitability.indexOf('prove') !== -1)) {
+            lossFactors.goingFailed++;
+          }
+        });
+        var patterns = [];
+        if (lossFactors.shortOdds >= 2) patterns.push(lossFactors.shortOdds + ' high-confidence losses were at very short odds (<2.5) — odds too short to recover from occasional defeats');
+        if (lossFactors.goingFailed >= 2) patterns.push(lossFactors.goingFailed + ' losses had going flagged as uncertain — model should weight going concerns higher for this analyst');
+        if (patterns.length > 0) {
+          actions.push('LOSS PATTERNS (confidence 8+ losses): ' + patterns.join('; '));
+        } else {
+          actions.push('BANKER LOSSES: ' + bankerLosses.length + ' high-confidence tip(s) lost — no clear pattern identified, likely variance');
+        }
+      }
+
       // Overall assessment
       if (roi < -10 && analystResults.length >= 10) {
         actions.push('WARNING: negative ROI (' + roi + '%) — needs significant adjustment');
@@ -4294,6 +4321,58 @@ module.exports = function startScheduler(deps) {
 
       if (actions.length === 0) {
         actions.push('PERFORMING OK — SR: ' + sr + '%, ROI: ' + roi + '%, P/L: ' + pnl.toFixed(2) + 'u');
+      }
+
+      // --- ACTIVE TUNING: actually apply adjustments based on loss patterns ---
+      var analystKey = name === 'The Professor' ? 'professor' : name === 'The Scout' ? 'scout' : name === 'The Clocker' ? 'clocker' : 'edge';
+      var profile = analystProfiles.profiles[analystKey];
+      if (profile) {
+        var adjustmentsMade = [];
+
+        // If low-confidence tips are losing, narrow the odds range minimum
+        if (lowConfPnl < -3 && lowConfTotal >= 3) {
+          profile.oddsRange.min = Math.min(profile.oddsRange.min + 0.3, 3.0);
+          adjustmentsMade.push('Raised min odds to ' + profile.oddsRange.min.toFixed(1));
+        }
+
+        // If big-price tips are losing badly, cap the max odds
+        if (bigOdds.length >= 3 && rangePnl(bigOdds) < -5) {
+          profile.oddsRange.max = Math.max(profile.oddsRange.max - 1.0, 8.0);
+          adjustmentsMade.push('Lowered max odds to ' + profile.oddsRange.max.toFixed(1));
+        }
+
+        // If short-odds tips are losing, raise minimum
+        if (shortOdds.length >= 3 && rangePnl(shortOdds) < -3) {
+          profile.oddsRange.min = Math.min(profile.oddsRange.min + 0.5, 2.5);
+          adjustmentsMade.push('Raised min odds to ' + profile.oddsRange.min.toFixed(1) + ' (short odds losing)');
+        }
+
+        // If a specific market is consistently losing, remove it from preferred
+        for (var pmkt in byMarket) {
+          if (byMarket[pmkt].total >= 5 && byMarket[pmkt].pnl < -3) {
+            var sportKeys = ['racing', 'football'];
+            sportKeys.forEach(function(sk) {
+              if (profile.preferredMarkets[sk]) {
+                var idx = profile.preferredMarkets[sk].indexOf(pmkt);
+                if (idx !== -1) {
+                  profile.preferredMarkets[sk].splice(idx, 1);
+                  adjustmentsMade.push('Removed ' + pmkt + ' from ' + sk + ' preferred markets');
+                }
+              }
+            });
+          }
+        }
+
+        // If ROI is strongly positive, slightly widen the range (reward success)
+        if (roi > 20 && analystResults.length >= 10) {
+          profile.oddsRange.max = Math.min(profile.oddsRange.max + 0.5, 25.0);
+          adjustmentsMade.push('Widened max odds to ' + profile.oddsRange.max.toFixed(1) + ' (strong ROI)');
+        }
+
+        if (adjustmentsMade.length > 0) {
+          actions.push('APPLIED: ' + adjustmentsMade.join(', '));
+          console.log('[AutoTune] ' + name + ' adjustments: ' + adjustmentsMade.join(', '));
+        }
       }
 
       tuningReport.push({
