@@ -1173,6 +1173,57 @@ module.exports = function startScheduler(deps) {
     // Sort all candidates by edge descending
     allCandidates.sort(function(a, b) { return b.edge - a.edge; });
 
+    // Shadow scoring: save ALL scored candidates to DB for tracking
+    try {
+      var savedShadow = 0;
+      for (var sci = 0; sci < allCandidates.length; sci++) {
+        var sc = allCandidates[sci];
+        var scScored = sc.scored || {};
+        var scSport = sc.type || 'unknown';
+        var scSelection = '', scEvent = '', scMeeting = '', scLeague = '', scMarket = '', scOdds = 0, scKickoff = '';
+
+        if (scSport === 'racing') {
+          var scRunner = scScored.runner || {};
+          var scRace = scScored.race || {};
+          scSelection = scRunner.horseName || '';
+          scEvent = (scRace.meeting || '') + ' ' + (scRace.time || '');
+          scMeeting = scRace.meeting || '';
+          scMarket = sc._isOutsider ? 'Each-Way' : 'Win';
+          scOdds = scScored.odds || 0;
+          scKickoff = scRace.time || '';
+        } else {
+          scSelection = scScored.selectedSelection || '';
+          var scFixture = scScored.fixture || {};
+          scEvent = (scFixture.homeTeam || '') + ' vs ' + (scFixture.awayTeam || '');
+          scLeague = scFixture.league || '';
+          scMarket = scScored.selectedMarket || '';
+          scOdds = scScored.selectedOdds || 0;
+          scKickoff = scFixture.kickoff || scFixture.time || '';
+        }
+
+        if (scSelection) {
+          try {
+            await db.saveScoredCandidate({
+              sport: scSport, selection: scSelection, event: scEvent, meeting: scMeeting,
+              league: scLeague, market: scMarket, odds: scOdds,
+              confidence: sc.confidence || scScored.confidence || 0,
+              modelProbability: scScored.modelProbability || 0,
+              impliedProbability: scScored.impliedProbability || 0,
+              edge: sc.edge || scScored.edge || 0,
+              analyst: scScored.tipsterProfile || '', date: today, kickoff: scKickoff,
+              wasPublished: false,
+            });
+            savedShadow++;
+          } catch (scErr) { /* skip duplicates or errors */ }
+        }
+      }
+      if (savedShadow > 0) {
+        console.log('[Shadow Scoring] Saved ' + savedShadow + ' scored candidate(s) for ' + today);
+      }
+    } catch (shadowErr) {
+      console.log('[Shadow Scoring] Error:', shadowErr.message);
+    }
+
     // If no value found, log and exit
     if (allCandidates.length === 0) {
       console.log('[Auto-Tips] No value found today — 0 tips generated');
@@ -1596,6 +1647,14 @@ module.exports = function startScheduler(deps) {
       await db.createTip(nt);
       savedCount++;
 
+      // Mark this candidate as published in shadow scoring
+      try {
+        await db.query(
+          "UPDATE scored_candidates SET was_published = true, tip_id = $1 WHERE date = $2 AND selection = $3 AND sport = $4 AND was_published = false LIMIT 1",
+          [nt.id, today, nt.selection, nt.sport]
+        );
+      } catch (e) { /* non-fatal */ }
+
       // Now tip exists in DB — write tip_enrichment (FK-safe) and link enrichment_id
       var enrichResult = enrichmentResults.get(nt.id);
       if (enrichResult && enrichResult.enrichmentData) {
@@ -1722,6 +1781,129 @@ module.exports = function startScheduler(deps) {
   // =========================================================================
   // 4. AUTO-SETTLE RESULTS (runs every 5 minutes)
   // =========================================================================
+  // =========================================================================
+  // SHADOW CANDIDATE SETTLEMENT — settle ALL scored candidates, not just tips
+  // =========================================================================
+  async function settleShadowCandidates() {
+    try {
+      var today = new Date().toISOString().split('T')[0];
+      var threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0];
+
+      // Get unsettled candidates from last 3 days
+      var unsettled = await db.getScoredCandidates({ settled: false });
+      unsettled = unsettled.filter(function(c) {
+        var d = c.date ? (typeof c.date === 'string' ? c.date.split('T')[0] : new Date(c.date).toISOString().split('T')[0]) : '';
+        return d >= threeDaysAgo && d <= today;
+      });
+
+      if (unsettled.length === 0) return;
+
+      // Get all results for matching
+      var allResults = await db.getResults();
+      var settledCount = 0;
+
+      for (var i = 0; i < unsettled.length; i++) {
+        var cand = unsettled[i];
+        var candSel = (cand.selection || '').toLowerCase().trim();
+        var candDate = cand.date ? (typeof cand.date === 'string' ? cand.date.split('T')[0] : new Date(cand.date).toISOString().split('T')[0]) : '';
+
+        // Check if a published tip with the same selection+date has a result
+        var matchingResult = allResults.find(function(r) {
+          var rSel = (r.selection || '').toLowerCase().trim();
+          var rDate = normDate(r.date);
+          return rSel === candSel && rDate === candDate;
+        });
+
+        if (matchingResult) {
+          await db.settleCandidate(cand.id, matchingResult.result, matchingResult.pnl || 0);
+          settledCount++;
+          continue;
+        }
+
+        // For football candidates, try to match by event to finished fixtures
+        if (cand.sport === 'football' && footballSource && process.env.API_FOOTBALL_KEY) {
+          try {
+            var fbRaw = await footballSource.fetchFixturesByDate(candDate);
+            var dayFixtures = footballSource.normalise(fbRaw).filter(function(f) { return f.status === 'FT'; });
+            var candEvent = (cand.event || '').toLowerCase();
+
+            var fmatch = dayFixtures.find(function(f) {
+              return candEvent.indexOf(f.homeTeam.toLowerCase()) !== -1 || candEvent.indexOf(f.awayTeam.toLowerCase()) !== -1;
+            });
+
+            if (fmatch) {
+              var homeGoals = fmatch.homeGoals || 0;
+              var awayGoals = fmatch.awayGoals || 0;
+              var totalGoals = homeGoals + awayGoals;
+              var won = false;
+              var market = (cand.market || '').toLowerCase();
+              var selection = candSel;
+
+              if (market.indexOf('result') !== -1 || market.indexOf('match') !== -1 || market.indexOf('win') !== -1) {
+                if (selection.indexOf(fmatch.homeTeam.toLowerCase()) !== -1) won = homeGoals > awayGoals;
+                else if (selection.indexOf(fmatch.awayTeam.toLowerCase()) !== -1) won = awayGoals > homeGoals;
+                else if (selection.indexOf('draw') !== -1) won = homeGoals === awayGoals;
+              } else if (market.indexOf('btts') !== -1 || market.indexOf('both teams') !== -1) {
+                won = selection.indexOf('yes') !== -1 ? (homeGoals > 0 && awayGoals > 0) : !(homeGoals > 0 && awayGoals > 0);
+              } else if (market.indexOf('over') !== -1) {
+                if (selection.indexOf('2.5') !== -1) won = totalGoals > 2;
+                else if (selection.indexOf('1.5') !== -1) won = totalGoals > 1;
+                else if (selection.indexOf('3.5') !== -1) won = totalGoals > 3;
+              } else if (market.indexOf('under') !== -1) {
+                if (selection.indexOf('2.5') !== -1) won = totalGoals < 3;
+              }
+
+              var resultVal = won ? 'won' : 'lost';
+              var stake = 2;
+              var pnl = won ? ((cand.odds - 1) * stake) : -stake;
+              await db.settleCandidate(cand.id, resultVal, Math.round(pnl * 100) / 100);
+              settledCount++;
+            }
+          } catch (e) { /* skip individual errors */ }
+        }
+
+        // For racing candidates, match via racing results
+        if (cand.sport === 'racing' && racingSource && process.env.RACING_API_KEY) {
+          try {
+            var raceResults = await racingSource.fetchResults(candDate);
+            if (raceResults && raceResults.results) {
+              var normHorse = function(name) {
+                if (!name) return '';
+                return name.toLowerCase().replace(/\s*\([a-z]{2,4}\)\s*$/i, '').trim();
+              };
+              var horseName = normHorse(cand.selection);
+              var candMeeting = (cand.meeting || '').toLowerCase().trim();
+
+              var match = raceResults.results.find(function(r) {
+                var raceCourse = (r.course || r.meeting || '').toLowerCase().trim();
+                var courseMatch = !candMeeting || raceCourse.indexOf(candMeeting) !== -1 || candMeeting.indexOf(raceCourse) !== -1;
+                return courseMatch && r.runners && r.runners.some(function(runner) {
+                  return normHorse(runner.horse) === horseName;
+                });
+              });
+
+              if (match) {
+                var winner = match.runners.find(function(r) { return parseInt(r.position, 10) === 1; });
+                var tipWon = winner && normHorse(winner.horse) === horseName;
+                var rResult = tipWon ? 'won' : 'lost';
+                var rStake = 2;
+                var rPnl = tipWon ? ((cand.odds - 1) * rStake) : -rStake;
+                await db.settleCandidate(cand.id, rResult, Math.round(rPnl * 100) / 100);
+                settledCount++;
+              }
+            }
+          } catch (e) { /* skip */ }
+        }
+      }
+
+      if (settledCount > 0) {
+        console.log('[Shadow Settle] Settled ' + settledCount + ' candidate(s) from ' + unsettled.length + ' unsettled');
+      }
+    } catch (err) {
+      console.error('[Shadow Settle] Error:', err.message);
+    }
+  }
+
   async function autoSettleResults() {
     try {
       var tips = await db.getTips();
@@ -2403,6 +2585,13 @@ module.exports = function startScheduler(deps) {
 
         // Run strike rate monitor after each settle
         try { await maintainStrikeRate(); } catch (e) { console.error('[StrikeMonitor] Error:', e.message); }
+
+        // Shadow scoring: settle ALL unsettled candidates against today's results
+        try {
+          await settleShadowCandidates();
+        } catch (shadowSettleErr) {
+          console.error('[Shadow Settle] Error:', shadowSettleErr.message);
+        }
 
         // Send big win emails for tips that just won at odds >= 6.0
         var freshResults = await db.getResults();

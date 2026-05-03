@@ -185,6 +185,11 @@ app.use('/', require('./routes/public')(deps));
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS drips_sent JSONB DEFAULT \'[]\'',
         'ALTER TABLE results ADD COLUMN IF NOT EXISTS voided_by_monitor BOOLEAN DEFAULT FALSE',
         'ALTER TABLE results ADD COLUMN IF NOT EXISTS replay_analysis JSONB',
+        // Shadow scoring — ALL scored candidates, not just published tips
+        "CREATE TABLE IF NOT EXISTS scored_candidates (id SERIAL PRIMARY KEY, sport TEXT NOT NULL, selection TEXT NOT NULL, event TEXT, meeting TEXT, league TEXT, market TEXT, odds NUMERIC(8,2), confidence INTEGER, model_probability NUMERIC(6,4), implied_probability NUMERIC(6,4), edge NUMERIC(6,4), analyst TEXT, date DATE NOT NULL, kickoff TEXT, was_published BOOLEAN DEFAULT FALSE, tip_id TEXT, result TEXT, pnl NUMERIC(10,2), settled BOOLEAN DEFAULT FALSE, settled_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW())",
+        'CREATE INDEX IF NOT EXISTS idx_sc_date ON scored_candidates(date DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_sc_sport ON scored_candidates(sport, date DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_sc_settled ON scored_candidates(settled, date DESC)',
         // User accas (shared/tracked)
         "CREATE TABLE IF NOT EXISTS user_accas (id SERIAL PRIMARY KEY, user_id TEXT, user_name TEXT, selections JSONB NOT NULL, combined_odds NUMERIC(10,2), stake NUMERIC(8,2), potential_return NUMERIC(10,2), status TEXT DEFAULT 'pending', result TEXT, pnl NUMERIC(10,2), shared BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW())",
         'CREATE INDEX IF NOT EXISTS idx_user_accas_created ON user_accas(created_at DESC)',

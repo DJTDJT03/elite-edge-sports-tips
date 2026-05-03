@@ -264,5 +264,66 @@ module.exports = function(deps) {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // GET /api/analytics/shadow-scoring — all scored candidates + stats
+  // -------------------------------------------------------------------------
+  router.get('/analytics/shadow-scoring', authenticate, requireAdmin, async (req, res) => {
+    try {
+      var days = parseInt(req.query.days) || 7;
+      var sport = req.query.sport || null;
+      var filters = { settled: undefined };
+      if (sport) filters.sport = sport;
+      var candidates = await db.getScoredCandidates(filters);
+      var stats = await db.getCandidateStats(days);
+      res.json({ candidates: candidates, stats: stats });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch shadow scoring data' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/analytics/selection-outcome/:selection — check if a specific selection won
+  // -------------------------------------------------------------------------
+  router.get('/analytics/selection-outcome', async (req, res) => {
+    try {
+      var selection = req.query.selection || '';
+      var date = req.query.date || new Date().toISOString().split('T')[0];
+      if (!selection) return res.status(400).json({ error: 'Selection required' });
+
+      // Check scored candidates first
+      var candidates = await db.getScoredCandidates({ date: date });
+      var match = candidates.find(function(c) {
+        return c.selection.toLowerCase() === selection.toLowerCase();
+      });
+
+      if (match) {
+        return res.json({
+          found: true, selection: match.selection, event: match.event,
+          market: match.market, odds: match.odds, result: match.result,
+          settled: match.settled, wasPublished: match.wasPublished,
+          confidence: match.confidence, edge: match.edge,
+        });
+      }
+
+      // Check published results
+      var results = await db.getResults({ date: date });
+      var resultMatch = results.find(function(r) {
+        return r.selection.toLowerCase() === selection.toLowerCase();
+      });
+
+      if (resultMatch) {
+        return res.json({
+          found: true, selection: resultMatch.selection, event: resultMatch.event,
+          market: resultMatch.market, odds: resultMatch.odds, result: resultMatch.result,
+          settled: true, wasPublished: true, pnl: resultMatch.pnl,
+        });
+      }
+
+      res.json({ found: false, selection: selection, date: date });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to check selection outcome' });
+    }
+  });
+
   return router;
 };

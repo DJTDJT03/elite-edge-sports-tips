@@ -815,6 +815,79 @@ async function getAnalystSnapshots(analystKey, limit) {
 }
 
 // ---------------------------------------------------------------------------
+// SCORED CANDIDATES (shadow scoring)
+// ---------------------------------------------------------------------------
+async function saveScoredCandidate(data) {
+  if (!pool) return;
+  await query(
+    `INSERT INTO scored_candidates (sport, selection, event, meeting, league, market, odds, confidence,
+     model_probability, implied_probability, edge, analyst, date, kickoff, was_published, tip_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+    [data.sport, data.selection, data.event || null, data.meeting || null, data.league || null,
+     data.market || null, data.odds || null, data.confidence || null,
+     data.modelProbability || null, data.impliedProbability || null, data.edge || null,
+     data.analyst || null, data.date, data.kickoff || null,
+     data.wasPublished || false, data.tipId || null]
+  );
+}
+
+async function getScoredCandidates(filters) {
+  if (!pool) return [];
+  var sql = 'SELECT * FROM scored_candidates';
+  var conditions = [];
+  var values = [];
+  var idx = 1;
+  if (filters) {
+    if (filters.date) { conditions.push('date = $' + idx); values.push(filters.date); idx++; }
+    if (filters.sport) { conditions.push('sport = $' + idx); values.push(filters.sport); idx++; }
+    if (filters.settled !== undefined) { conditions.push('settled = $' + idx); values.push(filters.settled); idx++; }
+  }
+  if (conditions.length > 0) sql += ' WHERE ' + conditions.join(' AND ');
+  sql += ' ORDER BY date DESC, confidence DESC LIMIT 500';
+  var { rows } = await query(sql, values);
+  return rows.map(function(r) {
+    return {
+      id: r.id, sport: r.sport, selection: r.selection, event: r.event, meeting: r.meeting,
+      league: r.league, market: r.market, odds: parseFloat(r.odds) || 0,
+      confidence: r.confidence, modelProbability: parseFloat(r.model_probability) || 0,
+      impliedProbability: parseFloat(r.implied_probability) || 0, edge: parseFloat(r.edge) || 0,
+      analyst: r.analyst, date: r.date, kickoff: r.kickoff,
+      wasPublished: r.was_published, tipId: r.tip_id,
+      result: r.result, pnl: parseFloat(r.pnl) || 0, settled: r.settled, settledAt: r.settled_at,
+    };
+  });
+}
+
+async function settleCandidate(id, result, pnl) {
+  if (!pool) return;
+  await query(
+    'UPDATE scored_candidates SET result = $2, pnl = $3, settled = true, settled_at = NOW() WHERE id = $1',
+    [id, result, pnl]
+  );
+}
+
+async function getCandidateStats(days) {
+  if (!pool) return {};
+  var d = days || 30;
+  var { rows } = await query(`
+    SELECT
+      sport,
+      was_published,
+      COUNT(*) as total,
+      COUNT(*) FILTER (WHERE result = 'won') as wins,
+      COUNT(*) FILTER (WHERE result = 'lost') as losses,
+      COUNT(*) FILTER (WHERE settled = true) as settled_count,
+      AVG(odds) FILTER (WHERE result = 'won') as avg_winner_odds,
+      SUM(pnl) FILTER (WHERE settled = true) as total_pnl
+    FROM scored_candidates
+    WHERE date >= CURRENT_DATE - $1
+    GROUP BY sport, was_published
+    ORDER BY sport, was_published DESC
+  `, [d]);
+  return rows;
+}
+
+// ---------------------------------------------------------------------------
 // CREDIT TRANSACTIONS
 // ---------------------------------------------------------------------------
 async function recordCreditTransaction(data) {
@@ -1140,6 +1213,8 @@ module.exports = {
   createPriceSnapshot, getPriceHistory,
   // Analyst Snapshots
   createAnalystSnapshot, getAnalystSnapshots,
+  // Scored Candidates (shadow scoring)
+  saveScoredCandidate, getScoredCandidates, settleCandidate, getCandidateStats,
   // Credits
   recordCreditTransaction, getCreditHistory, deductCredits, addCredits,
   // Sonar Cache
