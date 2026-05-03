@@ -2717,7 +2717,7 @@ const App = {
             <div style="font-size:13px;color:#c0c4d0;line-height:1.6;">Our model has identified <strong style="color:#fff;">${todayTips.filter(t => !t.isWeeklyAcca).length} edge opportunities</strong> today across racing and football. The strongest selection carries a confidence rating of <strong style="color:#d4a843;">${napTip ? napTip.confidence + '/10' : '—'}</strong> with an edge of <strong style="color:#22c55e;">${napTip ? ((napTip.edge||0)*100).toFixed(1) + '%' : '—'}</strong> against the market. Premium members have full access to all selections, analysis, and staking recommendations.</div>
           </div>
           <div style="text-align:center;">
-            <button onclick="App.showTrialOffer()" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;border:none;font-weight:700;font-size:14px;cursor:pointer;">Start 7-Day Free Trial — Full Premium Access</button>
+            <button onclick="App.showTrialOffer()" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;border:none;font-weight:700;font-size:14px;cursor:pointer;">Start 14-Day Free Trial — Full Premium Access</button>
             <div style="font-size:11px;color:#6b7280;margin-top:8px;">Card stored securely. No charges on free tier. Cancel anytime. 18+ BeGambleAware.org</div>
           </div>
         </div>` : ''}
@@ -5850,7 +5850,7 @@ const App = {
       (!isPremium ? '<div style="text-align:center;margin-top:24px;margin-bottom:24px;">' +
         '<div style="font-size:18px;font-weight:800;color:#d4a843;margin-bottom:8px;">Unlock All 15+ Festival Selections</div>' +
         '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Full analysis, staking plans, and live updates for every race across all 3 days.</div>' +
-        '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:14px 36px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">Subscribe Now &mdash; First Month FREE</a>' +
+        '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:14px 36px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">Subscribe Now &mdash; 14-Day Free Trial</a>' +
         '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;19.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>' +
       '</div>' : '') +
 
@@ -6103,7 +6103,7 @@ const App = {
         (!isPremium ? '<div style="text-align:center;margin-top:24px;margin-bottom:24px;">' +
           '<div style="font-size:18px;font-weight:800;color:#d4a843;margin-bottom:8px;">Unlock All Festival Selections</div>' +
           '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Full analysis, staking plans, and live updates for every festival race.</div>' +
-          '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:14px 36px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">Subscribe Now &mdash; First Month FREE</a>' +
+          '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:14px 36px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">Subscribe Now &mdash; 14-Day Free Trial</a>' +
           '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;19.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>' +
         '</div>' : '') +
       '</div>';
@@ -6635,6 +6635,21 @@ const App = {
               isLoggedIn ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'vip-monthly\')">Subscribe — &pound;39.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'vip-annual\')">Annual — &pound;399.99/year (Save &pound;80)</button>' :
               '<button class="btn btn-outline btn-full" onclick="App.showModal(\'register\')">Sign Up Free First</button><p class="text-xs text-muted mt-8">Create your free account, then upgrade.</p>'}
           </div>
+        </div>
+
+        <!-- Payment Methods -->
+        <div class="text-center mb-32">
+          <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;padding:20px 0;">
+            <span style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);font-weight:600;">Secure Payments</span>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;">
+              <span style="background:#000;color:#fff;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:700;letter-spacing:-0.5px;">Apple Pay</span>
+              <span style="background:#fff;color:#333;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:700;border:1px solid #e0e0e0;">Google Pay</span>
+              <svg width="40" height="24" viewBox="0 0 40 24" style="border-radius:4px;"><rect width="40" height="24" fill="#1a1f71"/><circle cx="15" cy="12" r="7" fill="#ea001b"/><circle cx="25" cy="12" r="7" fill="#f79f1a"/><path d="M20 6.8a7 7 0 0 1 2.6 5.2 7 7 0 0 1-2.6 5.2 7 7 0 0 1-2.6-5.2A7 7 0 0 1 20 6.8z" fill="#ff5f01"/></svg>
+              <svg width="40" height="24" viewBox="0 0 40 24" style="border-radius:4px;"><rect width="40" height="24" fill="#1a1f71"/><text x="20" y="16" font-size="10" fill="#fff" font-weight="bold" text-anchor="middle" font-family="Arial">VISA</text></svg>
+              <svg width="40" height="24" viewBox="0 0 40 24" style="border-radius:4px;"><rect width="40" height="24" fill="#006fcf"/><text x="20" y="16" font-size="7" fill="#fff" font-weight="bold" text-anchor="middle" font-family="Arial">AMEX</text></svg>
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:4px;">All payments processed securely by Stripe. 256-bit SSL encryption. Cancel anytime.</p>
         </div>
 
         <!-- Social Proof -->
@@ -7706,7 +7721,7 @@ const App = {
           // CTA for free users
           (!isPremium ? '<div style="text-align:center;padding-top:8px;">' +
             '<p style="font-size:13px;color:#c0c4d0;margin-bottom:12px;">Premium members received these selections <strong style="color:#d4a843;">before kick-off</strong> with full analysis, staking plans, and AI previews.</p>' +
-            '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;">Start Your 7-Day Free Trial</a>' +
+            '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;">Start Your 14-Day Free Trial</a>' +
             '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Card stored securely. No charges on free tier. Cancel anytime. 18+</div>' +
           '</div>' : '') +
         '</div>';
@@ -9315,7 +9330,7 @@ const App = {
       { label: 'Profit Calendar Heatmap', key: 'calendar', elite: true },
       { label: 'Automated Email Drip Campaign', key: 'drip', elite: true },
       { label: 'Subscription Tiers (Free/Premium/VIP)', key: 'tiers', elite: '3' },
-      { label: '7-Day Free Trial', key: 'trial', elite: true },
+      { label: '14-Day Free Trial', key: 'trial', elite: true },
     ];
 
     function renderCell(val) {
@@ -9410,7 +9425,7 @@ const App = {
         '</div>' +
 
         '<div style="text-align:center;margin:48px 0 20px;">' +
-          '<a href="#/pricing" style="display:inline-block;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;padding:16px 48px;border-radius:10px;font-size:18px;font-weight:800;text-decoration:none;">Start Your 7-Day Free Trial</a>' +
+          '<a href="#/pricing" style="display:inline-block;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;padding:16px 48px;border-radius:10px;font-size:18px;font-weight:800;text-decoration:none;">Start Your 14-Day Free Trial</a>' +
           '<p style="color:#8b8d93;font-size:13px;margin-top:12px;">Card stored securely. No charges on free tier. Full premium access. Cancel anytime.</p>' +
         '</div>' +
 
