@@ -611,25 +611,42 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
     const today = this._formatDateUK(new Date());
     const subject = `Today's Elite Edge Selections \u2014 ${today}`;
 
-    const napHTML = nap ? `
+    const napHTML = nap ? (() => {
+      const napOdds = parseFloat(nap.odds) || 0;
+      const isNapValue = napOdds >= 8.0; // 7/1+
+      const isNapBigPrice = napOdds >= 10.0; // 9/1+
+      const napIsRacing = !nap.sport || nap.sport === 'racing';
+      const napEwAdvice = napIsRacing && napOdds >= 6.0; // 5/1+ suggest EW
+      return `
         <div style="background:#1e2235;padding:16px;border-radius:8px;margin:16px 0;border-left:3px solid #d4a843;">
           <p style="color:#d4a843;font-size:12px;font-weight:700;text-transform:uppercase;margin:0 0 8px;">&#127919; NAP OF THE DAY</p>
           <h3 style="color:#ffffff;margin:0 0 4px;font-size:18px;">${this._esc(nap.selection)} @ ${nap.odds}</h3>
           <p style="color:#94a3b8;font-size:13px;margin:0;">${this._esc(nap.event)} | Confidence: ${nap.confidence}/10</p>
-        </div>` : '';
+          ${isNapValue ? `<p style="color:#f59e0b;font-size:12px;font-weight:700;margin:8px 0 0;"><span style="background:#f59e0b;color:#0a0e1a;padding:2px 6px;border-radius:3px;font-size:10px;margin-right:6px;">VALUE PICK</span> This is a value selection at a bigger price &mdash; not a banker. Our model has identified a significant edge in the pricing.</p>` : ''}
+          ${napEwAdvice ? `<p style="color:#3b82f6;font-size:12px;font-weight:600;margin:${isNapValue ? '4' : '8'}px 0 0;">&#9432; Advised each-way (E/W) at this price</p>` : ''}
+        </div>`;
+    })() : '';
 
     let premiumHTML = '';
     if (premiumTips && premiumTips.length > 0) {
-      const tipRows = premiumTips.map((tip, i) => `
+      const tipRows = premiumTips.map((tip, i) => {
+        const tipOdds = parseFloat(tip.odds) || 0;
+        const isValue = tipOdds >= 8.0; // 7/1+
+        const tipIsRacing = !tip.sport || tip.sport === 'racing';
+        const ewAdvice = tipIsRacing && tipOdds >= 6.0; // 5/1+ suggest EW
+        return `
           <tr>
             <td style="padding:12px 0;border-bottom:1px solid #2a2e3d;">
               <span style="color:#d4a843;font-weight:700;">${i + 1}.</span>
               <span style="color:#ffffff;font-weight:600;">${this._esc(tip.selection)}</span>
               <span style="color:#22c55e;font-weight:700;"> @ ${tip.odds}</span>
+              ${ewAdvice ? '<span style="color:#3b82f6;font-weight:700;font-size:11px;"> E/W</span>' : ''}
               <span style="color:#94a3b8;"> &mdash; ${this._esc(tip.event)}</span>
+              ${isValue ? '<br><span style="background:#f59e0b;color:#0a0e1a;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;">VALUE PICK</span> <span style="color:#f59e0b;font-size:11px;">Bigger price &mdash; not a banker. Model edge identified in the pricing.</span>' : ''}
               ${tip.analysis && tip.analysis.summary ? `<br><span style="color:#94a3b8;font-size:12px;">${this._esc(tip.analysis.summary.substring(0, 120))}</span>` : ''}
             </td>
-          </tr>`).join('');
+          </tr>`;
+      }).join('');
 
       premiumHTML = `
         <div style="margin:20px 0;">
@@ -659,9 +676,18 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
     `, 'Today\'s selections are ready');
 
     // Plain text version
-    const napText = nap ? `NAP OF THE DAY\n${nap.selection} @ ${nap.odds}\n${nap.event} | Confidence: ${nap.confidence}/10\n` : '';
+    const napOddsVal = nap ? (parseFloat(nap.odds) || 0) : 0;
+    const napText = nap ? `NAP OF THE DAY\n${nap.selection} @ ${nap.odds}${(!nap.sport || nap.sport === 'racing') && napOddsVal >= 6.0 ? ' (Advised E/W)' : ''}\n${nap.event} | Confidence: ${nap.confidence}/10\n${napOddsVal >= 8.0 ? 'VALUE PICK — This is a value selection at a bigger price, not a banker. Our model has identified an edge in the pricing.\n' : ''}` : '';
     const premText = premiumTips && premiumTips.length > 0
-      ? 'PREMIUM SELECTIONS:\n' + premiumTips.map((t, i) => `${i + 1}. ${t.selection} @ ${t.odds} -- ${t.event}`).join('\n') + '\n'
+      ? 'PREMIUM SELECTIONS:\n' + premiumTips.map((t, i) => {
+          const tOdds = parseFloat(t.odds) || 0;
+          const isRacing = !t.sport || t.sport === 'racing';
+          let line = `${i + 1}. ${t.selection} @ ${t.odds}`;
+          if (isRacing && tOdds >= 6.0) line += ' (E/W)';
+          line += ` -- ${t.event}`;
+          if (tOdds >= 8.0) line += ' [VALUE PICK - not a banker, model edge in pricing]';
+          return line;
+        }).join('\n') + '\n'
       : '';
     const resText = yesterdayResults
       ? `Yesterday's Results: ${yesterdayResults.filter(r => r.result === 'won').length} won from ${yesterdayResults.length} tips | P/L: ${yesterdayResults.reduce((s, r) => s + (r.pnl || 0), 0).toFixed(2)} units\n`
