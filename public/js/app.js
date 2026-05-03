@@ -1527,6 +1527,62 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // DAILY STAKING PLAN — personalised staking based on bankroll + today's tips
+  // -----------------------------------------------------------------------
+  buildStakingPlan(tips) {
+    if (!this.user || !this.isPremium()) return '';
+    var settings = this.getBankrollSettings ? this.getBankrollSettings() : null;
+    if (!settings || !settings.startingBank) return '';
+
+    var bank = settings.currentBank || settings.startingBank;
+    var currency = settings.currency || '£';
+    var unitSize = settings.stakingMethod === 'percentage' ? Math.round(bank * 0.01 * 100) / 100 : (settings.stakeSize || Math.round(bank * 0.01 * 100) / 100);
+
+    var activeTips = (tips || []).filter(function(t) {
+      return t.status === 'active' && !t.isWeeklyAcca && (t.confidence || 0) >= 6;
+    });
+    if (activeTips.length === 0) return '';
+
+    var rows = activeTips.sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); }).map(function(t) {
+      // Stake units: confidence 9-10 = 3u, 8 = 2u, 7 = 1.5u, 6 = 1u
+      var conf = t.confidence || 7;
+      var units = conf >= 9 ? 3 : conf >= 8 ? 2 : conf >= 7 ? 1.5 : 1;
+      var stakeAmount = Math.round(units * unitSize * 100) / 100;
+      var potentialReturn = Math.round(stakeAmount * (t.odds || 2) * 100) / 100;
+      var sportIcon = t.sport === 'racing' ? '&#127943;' : t.sport === 'football' ? '&#9917;' : '&#127919;';
+
+      return '<tr>' +
+        '<td>' + sportIcon + ' ' + (t.selection || '') + '</td>' +
+        '<td style="text-align:center;"><span style="color:' + (conf >= 8 ? '#22c55e' : '#d4a843') + ';font-weight:700;">' + conf + '</span></td>' +
+        '<td style="text-align:center;">' + units + 'u</td>' +
+        '<td style="text-align:right;font-weight:700;color:var(--gold);">' + currency + stakeAmount.toFixed(2) + '</td>' +
+        '<td style="text-align:right;color:#22c55e;">' + currency + potentialReturn.toFixed(2) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    var totalStake = activeTips.reduce(function(s, t) {
+      var conf = t.confidence || 7;
+      var units = conf >= 9 ? 3 : conf >= 8 ? 2 : conf >= 7 ? 1.5 : 1;
+      return s + (units * unitSize);
+    }, 0);
+    var riskPct = Math.round((totalStake / bank) * 1000) / 10;
+    var riskColor = riskPct <= 5 ? '#22c55e' : riskPct <= 10 ? '#d4a843' : '#ef4444';
+
+    return '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.06),rgba(212,168,67,0.02));border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;margin-bottom:20px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+        '<div style="font-weight:800;font-size:15px;color:#d4a843;">Your Daily Staking Plan</div>' +
+        '<div style="font-size:12px;color:#94a3b8;">Bank: ' + currency + bank.toFixed(2) + ' | 1 unit = ' + currency + unitSize.toFixed(2) + '</div>' +
+      '</div>' +
+      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+        '<thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Selection</th><th style="text-align:center;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Conf</th><th style="text-align:center;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Units</th><th style="text-align:right;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Stake</th><th style="text-align:right;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Pot. Return</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+        '<tfoot><tr style="border-top:2px solid #2a2e3d;"><td colspan="3" style="padding:10px 8px;font-weight:700;">Total daily outlay</td><td style="text-align:right;padding:10px 8px;font-weight:800;color:var(--gold);">' + currency + totalStake.toFixed(2) + '</td><td style="text-align:right;padding:10px 8px;font-size:12px;color:' + riskColor + ';">' + riskPct + '% of bank</td></tr></tfoot>' +
+      '</table></div>' +
+      (riskPct > 10 ? '<div style="margin-top:8px;font-size:12px;color:#ef4444;">&#9888; Daily outlay exceeds 10% of your bank. Consider reducing stakes or skipping lower-confidence picks.</div>' : '') +
+    '</div>';
+  },
+
+  // -----------------------------------------------------------------------
   // BANKROLL TRACKER (Feature: Personal P/L Dashboard)
   // -----------------------------------------------------------------------
   getBankrollSettings() {
@@ -2624,12 +2680,19 @@ const App = {
             ${tomorrowTips.length ? '<button class="date-tab" onclick="App.filterDashDate(\'tomorrow\',this)">Tomorrow (' + tomorrowTips.length + ')</button>' : ''}
             ${upcomingTips.length ? '<button class="date-tab" onclick="App.filterDashDate(\'upcoming\',this)">Upcoming (' + upcomingTips.length + ')</button>' : ''}
           </div>
-          <div class="tabs">
+          <div class="tabs" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
             <button class="tab active" onclick="App.filterDashTips('all', this)">All</button>
             <button class="tab" onclick="App.filterDashTips('racing', this)">Racing</button>
             <button class="tab" onclick="App.filterDashTips('football', this)">Football</button>
             <button class="tab" onclick="App.filterDashTips('free', this)">Free</button>
             <button class="tab" onclick="App.filterDashTips('premium', this)">Premium</button>
+            <select id="conf-filter" onchange="App._confThreshold=parseInt(this.value);localStorage.setItem('ee_conf_threshold',this.value);App.filterDashTips(App._lastTipFilter||'all');" style="margin-left:auto;padding:6px 10px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:12px;font-weight:600;">
+              <option value="0" ${(this._confThreshold||0)===0?'selected':''}>All Confidence</option>
+              <option value="6" ${(this._confThreshold||0)===6?'selected':''}>6+ Only</option>
+              <option value="7" ${(this._confThreshold||0)===7?'selected':''}>7+ Strong</option>
+              <option value="8" ${(this._confThreshold||0)===8?'selected':''}>8+ High</option>
+              <option value="9" ${(this._confThreshold||0)===9?'selected':''}>9+ Elite</option>
+            </select>
           </div>
           <div class="grid grid-2" id="dash-tips">
             ${tips.filter(t => !t.isNap && !t.isWeeklyAcca).map((t, i) => {
@@ -2644,6 +2707,9 @@ const App = {
             <a href="#/calculators" class="btn btn-outline btn-sm">Calculators</a>
           </div>
         </div>
+
+        <!-- 3b. DAILY STAKING PLAN — personalised to their bankroll -->
+        ${this.buildStakingPlan(todayTips)}
 
         <!-- 4. TRUST BAR — proof that the system works -->
         <div class="trust-banner" style="margin-bottom:20px;">
@@ -3112,10 +3178,17 @@ const App = {
       : '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-muted);">No selections published for this period yet. Tips publish daily by 7:30am UK.</div>';
   },
 
+  _confThreshold: parseInt(localStorage.getItem('ee_conf_threshold') || '0') || 0,
+  _lastTipFilter: 'all',
+
   filterDashTips(filter, btn) {
-    document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
-    if (btn) btn.classList.add('active');
+    if (btn) {
+      document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+    }
+    this._lastTipFilter = filter || 'all';
     const container = document.getElementById('dash-tips');
+    if (!container) return;
     var today = this._getToday();
     var tomorrow = this._getTomorrow();
     var yesterday = this._getYesterday();
@@ -3130,9 +3203,15 @@ const App = {
     if (filter === 'football') filtered = filtered.filter(t => t.sport === 'football');
     if (filter === 'free') filtered = filtered.filter(t => !t.isPremium);
     if (filter === 'premium') filtered = filtered.filter(t => t.isPremium);
+    // Apply confidence threshold
+    var confMin = this._confThreshold || 0;
+    if (confMin > 0) {
+      filtered = filtered.filter(function(t) { return (t.confidence || 0) >= confMin; });
+    }
+    var confLabel = confMin > 0 ? ' (confidence ' + confMin + '+)' : '';
     container.innerHTML = filtered.length
       ? filtered.map(t => this.renderTipCard(t)).join('')
-      : '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-muted);">No selections match these filters.</div>';
+      : '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-muted);">No selections match these filters' + confLabel + '. Try lowering your confidence threshold.</div>';
   },
 
   // -----------------------------------------------------------------------
@@ -4317,8 +4396,16 @@ const App = {
       otherTips = todayTips.filter(function(t) { return t.id !== napTip.id; });
     }
 
+    // Apply confidence threshold filter
+    var confMin = this._confThreshold || 0;
+    if (confMin > 0) {
+      otherTips = otherTips.filter(function(t) { return (t.confidence || 0) >= confMin; });
+    }
+
     var otherRacing = otherTips.filter(function(t) { return t.sport === 'racing'; });
     var otherFootball = otherTips.filter(function(t) { return t.sport === 'football'; });
+    // Other sports (NBA, Tennis, Rugby, NFL)
+    var otherSports = otherTips.filter(function(t) { return t.sport !== 'racing' && t.sport !== 'football'; });
 
     // Format date
     var dateObj = new Date(today + 'T12:00:00');
@@ -4329,9 +4416,21 @@ const App = {
     var self = this;
 
     app.innerHTML = '<div class="container">' +
-      '<div class="page-header">' +
-        '<h1><span class="accent">Today\'s Selections</span></h1>' +
-        '<p>' + formattedDate + '</p>' +
+      '<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">' +
+        '<div>' +
+          '<h1><span class="accent">Today\'s Selections</span></h1>' +
+          '<p>' + formattedDate + '</p>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<label style="font-size:12px;color:var(--text-muted);white-space:nowrap;">Min Confidence:</label>' +
+          '<select onchange="App._confThreshold=parseInt(this.value);localStorage.setItem(\'ee_conf_threshold\',this.value);App.renderSelections();" style="padding:8px 12px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;font-weight:600;">' +
+            '<option value="0"' + (confMin === 0 ? ' selected' : '') + '>Show All</option>' +
+            '<option value="6"' + (confMin === 6 ? ' selected' : '') + '>6+ Only</option>' +
+            '<option value="7"' + (confMin === 7 ? ' selected' : '') + '>7+ Strong</option>' +
+            '<option value="8"' + (confMin === 8 ? ' selected' : '') + '>8+ High</option>' +
+            '<option value="9"' + (confMin === 9 ? ' selected' : '') + '>9+ Elite</option>' +
+          '</select>' +
+        '</div>' +
       '</div>' +
 
       // Summary bar
@@ -4381,10 +4480,21 @@ const App = {
         '</div>' +
       '</div>' : '') +
 
+      // Other sports section
+      (otherSports.length ? '<div class="section">' +
+        '<div class="section-title"><span class="icon">&#127919;</span> Other Sports <span class="selections-count-badge">' + otherSports.length + '</span></div>' +
+        '<div class="grid grid-2">' +
+          otherSports.map(function(t) { return self.renderTipCard(t); }).join('') +
+        '</div>' +
+      '</div>' : '') +
+
+      // Confidence filter info
+      (confMin > 0 ? '<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px;">Showing tips with confidence ' + confMin + '/10 or higher. <a href="#" onclick="App._confThreshold=0;localStorage.setItem(\'ee_conf_threshold\',\'0\');App.renderSelections();return false;" style="color:var(--gold);">Show all</a></div>' : '') +
+
       // Bottom links
       '<div class="selections-footer">' +
         '<a href="#/results" class="btn btn-outline">View Results</a>' +
-        '<a href="#/pricing" class="btn btn-outline">How It Works</a>' +
+        '<a href="#/my-roi" class="btn btn-outline">My ROI Dashboard</a>' +
       '</div>' +
 
     '</div>';
