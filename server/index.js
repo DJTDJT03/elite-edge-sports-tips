@@ -40,12 +40,23 @@ const oddsHelpers = require('./utils/oddsHelpers');
 
 // App setup
 const app = express();
+app.set('trust proxy', 1); // Railway runs behind a proxy — trust first hop for correct IP
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'elite-edge-secret-key-change-in-production';
-
-// Warn if using default JWT secret
+// SECURITY: Require critical env vars in production
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT;
+if (isProduction) {
+  var missing = [];
+  if (!process.env.JWT_SECRET) missing.push('JWT_SECRET');
+  if (!process.env.DATABASE_URL) missing.push('DATABASE_URL');
+  if (missing.length > 0) {
+    console.error('[SECURITY] FATAL: Missing required environment variables: ' + missing.join(', '));
+    console.error('[SECURITY] Set these in Railway dashboard before deploying.');
+    process.exit(1);
+  }
+}
+const JWT_SECRET = process.env.JWT_SECRET || 'elite-edge-dev-only-' + require('crypto').randomBytes(16).toString('hex');
 if (!process.env.JWT_SECRET) {
-  console.warn('[SECURITY] WARNING: JWT_SECRET not set — using default. Set JWT_SECRET in production!');
+  console.warn('[SECURITY] WARNING: JWT_SECRET not set — using random dev secret (sessions won\'t persist across restarts)');
 }
 
 // ---------------------------------------------------------------------------
@@ -55,7 +66,22 @@ const ALLOWED_ORIGINS = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',')
   : ['http://localhost:3000', 'https://eliteedgesports.co.uk', 'https://www.eliteedgesports.co.uk'];
 app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://js.stripe.com", "https://www.googletagmanager.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://api.stripe.com", "https://*.loom.com", "https://*.youtube.com"],
+      frameSrc: ["'self'", "https://js.stripe.com", "https://www.loom.com", "https://www.youtube.com", "https://player.vimeo.com"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 // Stripe webhook needs raw body — exclude from JSON parsing
 app.use('/api/stripe/webhook', require('express').raw({ type: 'application/json' }));
 app.use(express.json({ limit: '1mb' }));
@@ -565,7 +591,7 @@ app.use('/', require('./routes/public')(deps));
 // ---------------------------------------------------------------------------
 (async function ensureAdmin() {
   try {
-    var adminEmail = 'darren@ecocleaningsystems.co.uk';
+    var adminEmail = process.env.ADMIN_EMAIL || 'darren@ecocleaningsystems.co.uk';
     var user = await db.getUserByEmail(adminEmail);
     if (user && (user.role !== 'admin' || user.subscription !== 'vip')) {
       await db.updateUser(user.id, {

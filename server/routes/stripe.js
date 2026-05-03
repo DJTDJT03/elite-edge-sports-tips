@@ -79,6 +79,15 @@ module.exports = function(deps) {
         return res.redirect('/#/pricing?error=user_not_found');
       }
 
+      // Idempotency: check if this session was already processed
+      if (user.stripeSubscriptionId) {
+        var subId = typeof session.subscription === 'string' ? session.subscription : (session.subscription && session.subscription.id);
+        if (user.stripeSubscriptionId === subId) {
+          console.log('[Stripe] Success callback: session already processed for', user.email);
+          return res.redirect('/#/account?upgraded=true');
+        }
+      }
+
       // Determine subscription period from the Stripe subscription
       const subscription = session.subscription;
       let expiryDate = new Date();
@@ -187,8 +196,14 @@ module.exports = function(deps) {
           // This is handled by the success redirect, but also handle async payments
           const session = event.data.object;
           if (session.payment_status === 'paid' && session.metadata && session.metadata.userId) {
-            const tier = (session.metadata.tier === 'vip') ? 'vip' : 'premium';
+            const tier = (session.metadata.tier === 'vip') ? 'vip' : (session.metadata.tier === 'starter') ? 'starter' : 'premium';
             const user = await db.getUserById(session.metadata.userId);
+            // Idempotency: skip if already processed this subscription
+            var webhookSubId = typeof session.subscription === 'string' ? session.subscription : (session.subscription && session.subscription.id);
+            if (user && user.stripeSubscriptionId === webhookSubId) {
+              console.log('[Stripe] Webhook: checkout already processed for', user.email);
+              break;
+            }
             if (user && user.subscription !== tier) {
               const sub = session.subscription
                 ? await stripeService.getSubscription(

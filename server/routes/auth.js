@@ -144,20 +144,9 @@ module.exports = function(deps) {
         return res.status(423).json({ error: `Account temporarily locked. Please try again in ${mins} minute${mins !== 1 ? 's' : ''}.` });
       }
 
-      // Support both hashed and plain-text passwords for demo
+      // Verify password (bcrypt only — no plain-text fallback)
       let valid = false;
       try { valid = await bcrypt.compare(password, user.password); } catch {}
-
-      // Migrate any legacy plain-text passwords to bcrypt on first successful login
-      if (!valid && user.passwordPlain) {
-        valid = password === user.passwordPlain;
-        if (valid) {
-          await db.updateUser(user.id, {
-            password: await bcrypt.hash(password, 10),
-            passwordPlain: undefined
-          });
-        }
-      }
 
       if (!valid) {
         rateLimiterFns.recordAuthAttempt(ip);

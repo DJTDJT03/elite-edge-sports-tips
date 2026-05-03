@@ -26,10 +26,15 @@ module.exports = function(deps) {
       if (typeof subject !== 'string' || subject.length > 500) return res.status(400).json({ error: 'Subject too long (max 500 chars)' });
       if (typeof message !== 'string' || message.length > 5000) return res.status(400).json({ error: 'Message too long (max 5000 chars)' });
 
+      // Sanitize inputs to prevent stored XSS
+      function sanitize(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+      }
+
       const ticket = {
         id: `sup_${Date.now()}`,
         userId: null,
-        name, email, subject, message,
+        name: sanitize(name), email: email.trim().toLowerCase(), subject: sanitize(subject), message: sanitize(message),
         status: 'open',
         priority: 'medium',
         date: new Date().toISOString(),
