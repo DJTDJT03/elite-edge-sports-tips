@@ -1382,7 +1382,7 @@ module.exports = function startScheduler(deps) {
         ? enrichResult.signals : {};
 
       // Generate analysis — enrichment signals woven inline into template fields
-      var analysis = scoringModel.generateAnalysis(scored, sport, enrichSignals);
+      var analysis = scoringModel.generateAnalysis(scored, sport, enrichSignals, candidate._analystKey);
 
       // Odds movement explainer — if this selection has been shortening, ask Sonar why
       if (candidate._movement && candidate._movement.direction === 'shortening' && perplexityClient) {

@@ -2118,6 +2118,7 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
 }
 .analyst-avatar.professor { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
 .analyst-avatar.scout { background: linear-gradient(135deg, #22c55e, #15803d); }
+.analyst-avatar.clocker { background: linear-gradient(135deg, #a855f7, #7c3aed); }
 .analyst-avatar.edge { background: linear-gradient(135deg, #d4a843, #b8902f); }
 .analyst-name {
   font-size: 18px;
@@ -2171,6 +2172,7 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
 }
 .analyst-badge.professor { background: rgba(59,130,246,.15); color: #3b82f6; }
 .analyst-badge.scout { background: rgba(34,197,94,.15); color: #22c55e; }
+.analyst-badge.clocker { background: rgba(168,85,247,.15); color: #a855f7; }
 .analyst-badge.edge { background: rgba(212,168,67,.15); color: #d4a843; }
 
 /* =========================================================================
@@ -6309,10 +6311,12 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
 .pl-verdict-card { background: rgba(255,255,255,0.03); border-radius: 8px; padding: 14px; border-left: 3px solid var(--border); }
 .pl-verdict-card.professor { border-left-color: #a855f7; }
 .pl-verdict-card.scout { border-left-color: #22c55e; }
+.pl-verdict-card.clocker { border-left-color: #7c3aed; }
 .pl-verdict-card.edge { border-left-color: #d4a843; }
 .pl-verdict-analyst { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
 .pl-verdict-analyst.professor { color: #a855f7; }
 .pl-verdict-analyst.scout { color: #22c55e; }
+.pl-verdict-analyst.clocker { color: #7c3aed; }
 .pl-verdict-analyst.edge { color: #d4a843; }
 .pl-verdict-text { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 8px; }
 .pl-verdict-pick { font-size: 12px; font-weight: 700; color: var(--text-primary); }

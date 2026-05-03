@@ -3140,7 +3140,7 @@ const App = {
             <span class="tip-sport-badge ${tip.sport === 'racing' ? 'badge-racing' : 'badge-football'}">${tip.sport === 'racing' ? 'Racing' : tip.sport === 'basketball' ? 'NBA' : tip.sport === 'tennis' ? 'Tennis' : tip.sport === 'rugby' ? 'Rugby' : tip.sport === 'american-football' ? 'NFL' : 'Football'}</span>
             ${tip.isOutsider ? '<span class="badge-outsider">Outsider</span>' : `<span class="${tip.isPremium ? 'badge-premium' : 'badge-free'}">${tip.isPremium ? 'Premium' : 'Free'}</span>`}
             ${tip.valueRating ? `<span class="badge-premium">${tip.valueRating}</span>` : ''}
-            ${tip.tipsterProfile ? `<span class="analyst-badge ${tip.tipsterProfile === 'The Professor' ? 'professor' : tip.tipsterProfile === 'The Scout' ? 'scout' : 'edge'}">${tip.tipsterProfile}</span>` : ''}
+            ${tip.tipsterProfile ? `<span class="analyst-badge ${tip.tipsterProfile === 'The Professor' ? 'professor' : tip.tipsterProfile === 'The Scout' ? 'scout' : tip.tipsterProfile === 'The Clocker' ? 'clocker' : 'edge'}">${tip.tipsterProfile}</span>` : ''}
             ${tip.analysis && tip.analysis.dualAIVerified ? '<span style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;letter-spacing:0.5px;">DUAL AI VERIFIED</span>' : ''}
           </div>
           <div>
@@ -5741,6 +5741,7 @@ const App = {
               if (tip.analysis.goingSuitability) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Going:</strong> ' + tip.analysis.goingSuitability + '</div>';
               if (tip.analysis.courseRecord) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Course:</strong> ' + tip.analysis.courseRecord + '</div>';
               if (tip.analysis.trainerForm) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Trainer:</strong> ' + tip.analysis.trainerForm + '</div>';
+              if (tip.analysis.clockerInsight) tipsHtml += '<div style="margin-top:12px;padding:14px;background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.2);border-radius:8px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#d4a843;font-weight:800;margin-bottom:8px;">The Clocker — Deep Intelligence</div><div style="font-size:13px;color:#cbd5e1;line-height:1.6;">' + tip.analysis.clockerInsight + '</div></div>';
               if (tip.analysis.oddsMovement) tipsHtml += '<div style="margin-bottom:8px;background:rgba(34,197,94,0.08);border-left:3px solid #22c55e;padding:8px 12px;border-radius:4px;"><strong style="color:#22c55e;">Market Mover:</strong> ' + tip.analysis.oddsMovement + '</div>';
               if (tip.analysis.dualAIVerified) tipsHtml += '<div style="margin-bottom:8px;background:rgba(34,197,94,0.06);border-left:3px solid #22c55e;padding:8px 12px;border-radius:4px;"><strong style="color:#22c55e;">Dual AI Verified:</strong> GPT independently rates this ' + (tip.analysis.gptConfidence || '?') + '/10 confidence. ' + (tip.analysis.gptReasoning || '') + '</div>';
               if (tip.analysis.riskNotes) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#ef4444;">Risk:</strong> ' + tip.analysis.riskNotes + '</div>';
@@ -7536,6 +7537,7 @@ const App = {
         { icon: '\u26a0\ufe0f', title: 'Risk Assessment', body: '<p>Risk Level: <strong>' + (tip.riskLevel || 'Medium') + '</strong></p>' + (a.classMovement ? '<p>' + a.classMovement + '</p>' : '') + (a.weight ? '<p>' + a.weight + '</p>' : '') },
         { icon: '\ud83d\udca1', title: 'Why This Is Value', fields: ['valueReasoning', 'marketSupport'] },
         { icon: '\ud83c\udfaf', title: 'Staking Recommendation', body: '<p>Recommended stake: <strong>' + (tip.staking || '1 unit') + '</strong>. ' + (a.trainerJockeyStats ? 'Trainer/Jockey: ' + a.trainerJockeyStats : '') + '</p>' },
+        a.clockerInsight ? { icon: '\ud83d\udd0d', title: 'The Clocker — Deep Intelligence', body: '<div style="font-size:13px;line-height:1.7;color:#cbd5e1;">' + a.clockerInsight + '</div>' } : null,
       ];
     }
     return [
@@ -8351,6 +8353,13 @@ const App = {
         initials: 'TS',
         specialty: 'Value Hunter',
         desc: 'Value hunter. Finds prices the market has wrong. Weights course form, class drops, and motivation 30-40% higher. Actively goes against the crowd. Prefers bigger prices (3/1 to 20/1) where edges are largest.',
+      },
+      {
+        name: 'The Clocker',
+        key: 'clocker',
+        initials: 'TC',
+        specialty: 'Deep Racing Intelligence',
+        desc: 'Racing-only specialist. Reads between the lines — trainer intent (first-time headgear, jockey bookings), pace analysis, going expertise, and stable form. Covers all odds ranges. Finds angles the data alone cannot capture.',
       },
       {
         name: 'The Edge',

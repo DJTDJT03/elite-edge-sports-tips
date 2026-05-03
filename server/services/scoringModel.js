@@ -1277,9 +1277,9 @@ class ScoringModel {
    *   Football: {team_news, tactical_change, rotation_risk, motivation_context, manager_comments, injury_update}
    *   Each signal is {value: string, citation_index: number}. Woven inline into template fields.
    */
-  generateAnalysis(scored, sport, enrichment) {
+  generateAnalysis(scored, sport, enrichment, analyst) {
     if (sport === 'racing') {
-      return this._generateRacingAnalysis(scored, enrichment);
+      return this._generateRacingAnalysis(scored, enrichment, analyst);
     } else if (sport === 'basketball') {
       return this._generateBasketballAnalysis(scored, enrichment);
     } else if (sport === 'rugby') {
@@ -1427,7 +1427,7 @@ class ScoringModel {
     };
   }
 
-  _generateRacingAnalysis(scored, enrichment) {
+  _generateRacingAnalysis(scored, enrichment, analyst) {
     const runner = scored.runner || {};
     const race = scored.race || {};
     const horseName = runner.horseName || 'Selection';
@@ -1560,6 +1560,69 @@ class ScoringModel {
       riskText = `At ${odds.toFixed(2)}, this is a bigger-priced selection where the model has found significant value. The risk is higher — ${horseName} needs things to fall right — but the edge of ${edgePct}% justifies a smaller stake. Consider each-way to protect your investment.`;
     }
 
+    // ---------------------------------------------------------------
+    // THE CLOCKER — deep racing intelligence (only when assigned)
+    // ---------------------------------------------------------------
+    let clockerInsight = '';
+    if (analyst === 'clocker') {
+      let parts = [];
+
+      // Trainer intent analysis
+      if (headgear) {
+        const isFirstTime = headgear.toLowerCase().includes('1') || headgear.toLowerCase().includes('first');
+        if (isFirstTime) {
+          parts.push(`TRAINER INTENT: First-time ${headgear.replace(/1|first/gi, '').trim() || 'headgear'} applied today. This is a deliberate tactical move by ${trainer} — trainers don't add equipment without believing it will produce improvement. Strike rates for first-time headgear at this level are typically 15-20% higher than the base rate.`);
+        } else {
+          parts.push(`EQUIPMENT: ${horseName} races in ${headgear}. This is a continuation of the current campaign setup — no change signals stability in the approach.`);
+        }
+      }
+
+      // Pace scenario analysis
+      const runners2 = race.runners ? (Array.isArray(race.runners) ? race.runners.length : race.runners) : 0;
+      if (runners2 > 0) {
+        if (runners2 <= 6) {
+          parts.push(`PACE: Small field of ${runners2}. Likely to be a truly-run race which suits horses who handle a genuine test. In small fields, class and ability matter more than racing luck — the better horse has fewer excuses.`);
+        } else if (runners2 <= 12) {
+          parts.push(`PACE: Field of ${runners2} should ensure an honest pace. Mid-division runners who can pick up from the 2f pole tend to be favoured in races of this size at ${meeting}.`);
+        } else {
+          parts.push(`PACE: Large field of ${runners2} runners. Pace will be strong which can set it up for closers. Draw position and a clean passage through the field will be critical. Bigger fields increase variance but also increase each-way value.`);
+        }
+      }
+
+      // Trip suitability
+      if (distance) {
+        const distLower = distance.toLowerCase();
+        if (distLower.includes('1m') && !distLower.includes('1m2') && !distLower.includes('1m4')) {
+          parts.push(`TRIP: Flat mile at ${meeting}. The mile demands a blend of speed and stamina. ${horseName}'s form over this trip ${factors.course >= 0.6 ? 'is proven' : 'needs confirming'}.`);
+        } else if (distLower.includes('5f') || distLower.includes('6f')) {
+          parts.push(`TRIP: Sprint distance — this is all about speed and a clean break. ${factors.draw >= 0.6 ? 'Draw is favourable.' : 'Draw is a variable to consider.'} ${factors.speedRatings >= 0.7 ? 'Speed figures put this horse in the top tier.' : ''}`);
+        } else if (distLower.includes('2m') || distLower.includes('3m')) {
+          parts.push(`TRIP: Staying test over ${distance}. Stamina is the key question. ${formPositions.filter(p => p <= 3).length >= 2 ? 'Consistent form suggests genuine stamina.' : 'Trip is the main unknown.'}`);
+        }
+      }
+
+      // Going expertise — deeper than standard
+      if (factors.going >= 0.7) {
+        const goingLower = going.toLowerCase();
+        if (goingLower.includes('soft') || goingLower.includes('heavy')) {
+          parts.push(`GOING SPECIALIST: ${horseName} transforms on an ease in the ground. This is the key angle — our going analysis shows a dramatic uptick in performance on ${going}. Many rivals in this field have inferior soft-ground profiles.`);
+        } else if (goingLower.includes('firm') || goingLower.includes('fast')) {
+          parts.push(`GOING SPECIALIST: ${horseName} has a strong record on quick ground. ${going} plays directly to strengths. Fast-ground specialists at ${meeting} have an enhanced strike rate.`);
+        }
+      }
+
+      // Stable/yard form
+      if (factors.trainerJockey >= 0.7) {
+        parts.push(`YARD FORM: ${trainer}'s stable is firing. When a yard is in this kind of form, it typically means the horses are healthy, well-prepared, and the trainer is placing them to win. ${jockey} being booked adds further conviction.`);
+      } else if (factors.trainerJockey <= 0.4) {
+        parts.push(`YARD FORM NOTE: ${trainer}'s yard has been quiet recently. However, cold stables can produce runners at bigger prices when they do strike — and the horse's individual form outweighs the yard's general run.`);
+      }
+
+      if (parts.length > 0) {
+        clockerInsight = parts.join(' ');
+      }
+    }
+
     return {
       summary: summaryParts.join('. ') + '.',
       form: formText,
@@ -1567,6 +1630,7 @@ class ScoringModel {
       courseRecord: courseText,
       trainerForm: trainerText,
       riskNotes: riskText,
+      clockerInsight: clockerInsight || undefined,
     };
   }
 

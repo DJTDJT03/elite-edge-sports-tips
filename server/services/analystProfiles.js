@@ -87,6 +87,40 @@ var profiles = {
     aiPromptStyle: 'Focus on value and angles the market has missed: class drops, course specialists, motivation, injuries, trainer intent. Be bold and opinionated. Explain WHY the price is wrong.',
   },
 
+  clocker: {
+    name: 'The Clocker',
+    specialty: 'Deep Racing Intelligence',
+    description: 'Racing-only specialist. Reads between the lines — trainer intent, equipment changes, pace analysis, stable form.',
+
+    racingWeightModifiers: {
+      form: 1.1,
+      speedRatings: 1.2,
+      class: 1.3,          // +30% class (understands when a horse is being placed to win)
+      going: 1.5,          // +50% going (going specialist — knows which horses transform on their preferred surface)
+      trainerJockey: 1.5,  // +50% trainer/jockey (reads trainer intent: first-time headgear, booking changes, yard form)
+      course: 1.4,         // +40% course (track configuration specialists — left-handed, undulating, stiff finishes)
+      draw: 1.3,           // +30% draw (knows which courses have draw bias on specific ground)
+      weight: 1.2,         // +20% weight (identifies well-handicapped types)
+      marketSupport: 0.5,  // -50% market (often finds value BEFORE the market wakes up)
+    },
+
+    // Football: not used — racing only analyst
+    footballWeightModifiers: {
+      xG: 1.0, form: 1.0, h2h: 1.0, injuries: 1.0, homeAway: 1.0,
+      motivation: 1.0, shots: 1.0, scheduleCongestion: 1.0, marketMovement: 1.0,
+    },
+
+    preferredMarkets: {
+      racing: ['Win', 'Each-Way'],
+      football: [],
+    },
+
+    // Covers the full odds spectrum — finds value at any price
+    oddsRange: { min: 2.0, max: 25.0 },
+
+    aiPromptStyle: 'You are a deep racing analyst. Focus on the details casual punters miss: trainer intent (first-time headgear, equipment changes, stable form over last 14 days, jockey bookings), pace scenario (who makes the running, will the pace suit closers or front-runners), trip suitability (stepping up/down in distance, pedigree for the trip), course configuration (left/right-handed, undulating/flat, stiff/easy finish), and going expertise (which horses have dramatically better form on today\'s ground). Reference specific form figures, trainer strike rates, and course stats. Be authoritative and detailed — this is expert-level analysis that justifies a premium subscription.',
+  },
+
   edge: {
     name: 'The Edge',
     specialty: 'Balanced Analysis',
@@ -150,6 +184,28 @@ function assignAnalyst(scored, sport) {
   var odds = scored.odds || 3.0;
   var edge = scored.edge || 0;
   var factors = scored.factors || {};
+  var runner = scored.runner || {};
+
+  // THE CLOCKER — racing-only deep intelligence specialist
+  // Gets assignments when trainer intent or course/going expertise is the key angle
+  if (sport === 'racing') {
+    // First-time headgear / equipment change — trainer is making a deliberate move
+    var headgear = runner.headgear || '';
+    var hasEquipmentChange = headgear && (headgear.indexOf('1') !== -1 || headgear.indexOf('first') !== -1);
+    if (hasEquipmentChange) return 'clocker';
+
+    // Going specialist — horse has dramatically better form on today's ground
+    if (factors.going && factors.going >= 0.85) return 'clocker';
+
+    // Course specialist with strong course form
+    if (factors.course && factors.course >= 0.8 && factors.trainerJockey && factors.trainerJockey >= 0.7) return 'clocker';
+
+    // Well-handicapped + trainer/jockey booking signals intent
+    if (factors.weight && factors.weight >= 0.75 && factors.class && factors.class >= 0.7) return 'clocker';
+
+    // Strong draw bias play (specific courses where draw is crucial)
+    if (factors.draw && factors.draw >= 0.85) return 'clocker';
+  }
 
   // The Scout gets big-price value plays and class droppers
   if (odds >= 5.0) return 'scout';
