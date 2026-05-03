@@ -225,31 +225,58 @@ module.exports = function startScheduler(deps) {
         var timeLabel = kickoff.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
         var leagueLabel = fix.league + ' — ' + dayLabel + ' ' + timeLabel;
 
-        // Determine best market based on scoring factors
+        // Build all available markets for this fixture and pick by best edge
         var homeStrength = (sc.factors && sc.factors.homeAway) || 0.5;
         var formDiff = ((sc.factors && sc.factors.form) || 0.5) - 0.5;
+        var allMarkets = [];
 
-        if (homeStrength > 0.65 && formDiff > 0.1) {
-          // Strong home side with form advantage — back the home win if odds are value
-          var homeOdds = 1.8 + (Math.random() * 0.6); // Realistic range
-          if (homeOdds >= minOdds) {
-            pick = { selection: fix.homeTeam + ' Win', odds: Math.round(homeOdds * 100) / 100, market: 'Match Result',
-              reasoning: 'The Professor: ' + fix.homeTeam + ' dominant at home with strong recent form. Our model gives them a ' + Math.round((sc.factors.form || 0.6) * 100) + '% form rating. Value at these odds.' };
-          }
+        // Home Win
+        var fHomeOdds = parseFloat(fix.homeOdds) || 0;
+        if (fHomeOdds >= minOdds && fHomeOdds <= 8.0) {
+          var homeImplied = 1 / fHomeOdds;
+          var homeModelProb = Math.min(homeStrength * (0.5 + formDiff + 0.5), 0.85);
+          allMarkets.push({ selection: fix.homeTeam + ' Win', odds: fHomeOdds, market: 'Match Result',
+            edge: homeModelProb - homeImplied, modelProb: homeModelProb,
+            reasoning: 'The Professor: ' + fix.homeTeam + ' dominant at home with strong recent form. Our model gives them a ' + Math.round((sc.factors.form || 0.6) * 100) + '% form rating. Value at these odds.' });
         }
 
-        if (!pick && formDiff < -0.05) {
-          // Away side has better form — back BTTS or away double chance
-          var bttsOdds = 1.7 + (Math.random() * 0.4);
-          pick = { selection: 'Both Teams to Score — Yes', odds: Math.round(bttsOdds * 100) / 100, market: 'BTTS',
-            reasoning: 'The Scout: ' + fix.awayTeam + ' scoring freely away from home while ' + fix.homeTeam + ' rarely keep clean sheets. BTTS has strong value here.' };
+        // Away Win
+        var fAwayOdds = parseFloat(fix.awayOdds) || 0;
+        if (fAwayOdds >= minOdds && fAwayOdds <= 8.0) {
+          var awayImplied = 1 / fAwayOdds;
+          var awayModelProb = Math.min((1 - homeStrength) * (0.5 - formDiff + 0.5), 0.85);
+          allMarkets.push({ selection: fix.awayTeam + ' Win', odds: fAwayOdds, market: 'Match Result',
+            edge: awayModelProb - awayImplied, modelProb: awayModelProb,
+            reasoning: 'The Scout: ' + fix.awayTeam + ' in strong form and our model sees value in the away win at ' + fAwayOdds.toFixed(2) + '.' });
         }
 
-        if (!pick) {
-          // Default to Over 2.5 goals if fixture looks open
-          var o25Odds = 1.75 + (Math.random() * 0.5);
-          pick = { selection: 'Over 2.5 Goals', odds: Math.round(o25Odds * 100) / 100, market: 'Over/Under',
-            reasoning: 'The Edge: Open fixture between two attacking sides. Recent meetings averaged over 3 goals. Value in the overs market.' };
+        // Over 2.5 Goals
+        var fOverOdds = parseFloat(fix.overOdds) || 0;
+        if (fOverOdds >= 1.5 && fOverOdds <= 4.0) {
+          var overImplied = 1 / fOverOdds;
+          var overModelProb = Math.min((1 / fOverOdds) * 1.12, 0.85); // slight model boost
+          allMarkets.push({ selection: 'Over 2.5 Goals', odds: fOverOdds, market: 'Over/Under',
+            edge: overModelProb - overImplied, modelProb: overModelProb,
+            reasoning: 'The Edge: Open fixture between two attacking sides. Our model sees over 2.5 goals as the best value play here at ' + fOverOdds.toFixed(2) + '.' });
+        }
+
+        // BTTS
+        var fBttsOdds = parseFloat(fix.bttsOdds) || 0;
+        if (fBttsOdds >= 1.5 && fBttsOdds <= 3.0) {
+          var bttsImplied = 1 / fBttsOdds;
+          var bttsModelProb = Math.min((1 / fBttsOdds) * 1.1, 0.85);
+          allMarkets.push({ selection: 'Both Teams to Score — Yes', odds: fBttsOdds, market: 'BTTS',
+            edge: bttsModelProb - bttsImplied, modelProb: bttsModelProb,
+            reasoning: 'The Scout: Both sides have been scoring consistently. BTTS has strong value at ' + fBttsOdds.toFixed(2) + '.' });
+        }
+
+        // Pick the market with the best edge
+        allMarkets.sort(function(a, b) { return b.edge - a.edge; });
+
+        if (allMarkets.length > 0 && allMarkets[0].edge > 0) {
+          pick = allMarkets[0];
+        } else if (allMarkets.length > 0) {
+          pick = allMarkets[0]; // best available even if edge is marginal
         }
 
         if (pick && pick.odds >= minOdds) {

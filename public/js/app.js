@@ -10816,8 +10816,13 @@ const App = {
             markets.push({ sel: f.homeTeam + ' Win', market: 'Match Result', odds: 2.0, prob: 0.5 });
           }
 
-          // Pick the best value market (highest edge = highest model prob vs implied)
-          markets.sort(function(a, b) { return b.prob - a.prob; });
+          // Sort by edge (model prob vs implied) — pick the market with the best value, not just the most likely
+          markets.forEach(function(m) {
+            m.impliedProb = 1 / m.odds;
+            m.modelProb = Math.min(m.prob * 1.08, 0.85);
+            m.edge = m.modelProb - m.impliedProb;
+          });
+          markets.sort(function(a, b) { return b.edge - a.edge; });
           var bestMarket = markets[0];
 
           selections.push({
@@ -10825,9 +10830,12 @@ const App = {
             selection: bestMarket.sel, event: matchName,
             match: matchName, league: league, kickoff: kickoff,
             market: bestMarket.market, odds: bestMarket.odds,
-            modelProbability: Math.min(bestMarket.prob * 1.08, 0.85),
-            confidence: 6, edge: Math.max(0.03, bestMarket.prob * 0.08),
+            modelProbability: bestMarket.modelProb,
+            confidence: 6, edge: Math.max(0.03, bestMarket.edge),
             analyst: 'Elite Edge', sport: 'football', isPublishedTip: false,
+            _allMarkets: markets.map(function(m) {
+              return { sel: m.sel, market: m.market, odds: m.odds, modelProb: m.modelProb, edge: m.edge };
+            }),
           });
         });
       } catch (liveErr) { /* non-fatal — published tips still available */ }
@@ -10896,20 +10904,38 @@ const App = {
       filtered = filtered.filter(function(t) { return allowedSports.indexOf(t.sport) !== -1; });
     }
 
-    // Sort by modelProbability * confidence (highest combined score)
+    // Sort by edge (model prob vs implied) — surfaces the best value, not just bankers
     filtered.sort(function(a, b) {
-      var scoreA = (a.modelProbability || 0.5) * (a.confidence || 5);
-      var scoreB = (b.modelProbability || 0.5) * (b.confidence || 5);
+      var edgeA = (a.modelProbability || 0.5) - (1 / (a.odds || 2));
+      var edgeB = (b.modelProbability || 0.5) - (1 / (b.odds || 2));
+      // Weight by confidence too
+      var scoreA = edgeA * (a.confidence || 5);
+      var scoreB = edgeB * (b.confidence || 5);
       return scoreB - scoreA;
     });
 
     // Mode: auto (AI picks best) or manual (user picks)
     var isManual = this._accaManualMode || false;
     var manualPicks = this._accaManualPicks || {};
+    var marketOverrides = this._accaMarketOverrides || {};
     var selected;
 
+    // Apply market overrides to tips (user changed market via dropdown)
+    function applyMarketOverride(tip) {
+      if (tip._allMarkets && marketOverrides[tip.id] !== undefined) {
+        var mkt = tip._allMarkets[marketOverrides[tip.id]];
+        if (mkt) {
+          return Object.assign({}, tip, {
+            selection: mkt.sel, market: mkt.market, odds: mkt.odds,
+            modelProbability: mkt.modelProb, edge: mkt.edge,
+          });
+        }
+      }
+      return tip;
+    }
+
     if (isManual) {
-      selected = filtered.filter(function(t) { return manualPicks[t.id]; });
+      selected = filtered.filter(function(t) { return manualPicks[t.id]; }).map(applyMarketOverride);
       foldCount = selected.length || 2;
     } else {
       selected = filtered.slice(0, foldCount);
@@ -11113,14 +11139,40 @@ const App = {
         sportGroups[sport].forEach(function(t) {
           var checked = manualPicks[t.id] ? 'checked' : '';
           var eventName = t.event || t.match || '';
+          var hasMarkets = t._allMarkets && t._allMarkets.length > 1;
+          var selectedMarketIdx = (self._accaMarketOverrides && self._accaMarketOverrides[t.id] !== undefined) ? self._accaMarketOverrides[t.id] : 0;
+
+          // Market dropdown for fixtures with multiple markets
+          var marketDropdown = '';
+          if (hasMarkets) {
+            var opts = t._allMarkets.map(function(m, idx) {
+              var edgePctM = (m.edge * 100).toFixed(1);
+              var label = m.sel + ' @ ' + self.formatOdds(m.odds) + ' (edge: ' + (m.edge > 0 ? '+' : '') + edgePctM + '%)';
+              return '<option value="' + idx + '"' + (idx === selectedMarketIdx ? ' selected' : '') + '>' + label + '</option>';
+            }).join('');
+            marketDropdown = '<select onchange="event.stopPropagation();App._setAccaMarket(\'' + t.id + '\',parseInt(this.value));App._renderAccaPage();" onclick="event.stopPropagation();" style="width:100%;margin-top:6px;padding:6px 8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:11px;">' + opts + '</select>';
+          }
+
+          // Apply market override if user selected a different market
+          var displaySelection = t.selection || '';
+          var displayOdds = t.odds || '';
+          var displayMarket = t.market || '';
+          if (hasMarkets && selectedMarketIdx > 0) {
+            var chosenMkt = t._allMarkets[selectedMarketIdx];
+            displaySelection = chosenMkt.sel;
+            displayOdds = chosenMkt.odds;
+            displayMarket = chosenMkt.market;
+          }
+
           manualPickerHtml += '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:' + (manualPicks[t.id] ? 'rgba(212,168,67,0.08)' : 'var(--bg-card)') + ';border:1px solid ' + (manualPicks[t.id] ? 'rgba(212,168,67,0.3)' : 'var(--border)') + ';border-radius:8px;margin-bottom:4px;cursor:pointer;" onclick="event.preventDefault();App._toggleManualPick(\'' + t.id + '\');App._renderAccaPage();">' +
             '<input type="checkbox" ' + checked + ' style="pointer-events:none;" />' +
             '<div style="flex:1;">' +
               '<div style="font-size:12px;color:var(--gold);margin-bottom:2px;">' + eventName + '</div>' +
-              '<strong style="color:#fff;font-size:14px;">' + (t.selection || '') + '</strong>' +
-              '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + (t.market || '') + (t.confidence ? ' &bull; Conf: ' + t.confidence + '/10' : '') + (t.edge ? ' &bull; Edge: ' + ((t.edge || 0) * 100).toFixed(1) + '%' : '') + '</div>' +
+              '<strong style="color:#fff;font-size:14px;">' + displaySelection + '</strong>' +
+              '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + displayMarket + (t.confidence ? ' &bull; Conf: ' + t.confidence + '/10' : '') + (t.edge ? ' &bull; Edge: ' + ((t.edge || 0) * 100).toFixed(1) + '%' : '') + '</div>' +
+              marketDropdown +
             '</div>' +
-            '<div style="font-weight:800;color:var(--gold);font-size:16px;">' + (t.odds || '') + '</div>' +
+            '<div style="font-weight:800;color:var(--gold);font-size:16px;">' + self.formatOdds(displayOdds) + '</div>' +
           '</label>';
         });
         manualPickerHtml += '</div>';
@@ -11154,9 +11206,15 @@ const App = {
 
   _accaManualMode: false,
   _accaManualPicks: {},
+  _accaMarketOverrides: {},
   _accaSportToggles: { racing: true, football: true, basketball: true, tennis: true, rugby: true, 'american-football': true },
 
   _accaLeagueToggles: {},
+
+  _setAccaMarket(tipId, marketIdx) {
+    if (!this._accaMarketOverrides) this._accaMarketOverrides = {};
+    this._accaMarketOverrides[tipId] = marketIdx;
+  },
 
   _toggleAccaSport(sport) {
     this._accaSportToggles[sport] = !this._accaSportToggles[sport];
