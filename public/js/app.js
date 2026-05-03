@@ -3197,6 +3197,7 @@ const App = {
             <div class="tip-meta-item"><strong>Risk:</strong> ${tip.riskLevel || '-'}</div>
           </div>
           ${!isLocked ? this.renderBookmakerOdds(tip.bookmakerOdds) : ''}
+          ${!isLocked ? Bookmakers.renderOddsBar(tip) : ''}
           ${!isLocked ? this.renderOddsMovementDetail(tip) : ''}
           ${!isLocked ? this.renderFormGuide(tip.recentForm, tip.sport) : ''}
           <div class="tip-edge-bar">
@@ -3355,7 +3356,11 @@ const App = {
           <div class="card mb-24">
             <h4 class="text-gold text-xs mb-8" style="letter-spacing:1px;">LIVE ODDS COMPARISON</h4>
             ${this.renderBookmakerOdds(tip.bookmakerOdds)}
-          </div>` : ''}
+            ${Bookmakers.renderOddsBar(tip)}
+          </div>` : `
+          <div class="card mb-24">
+            ${Bookmakers.renderOddsBar(tip)}
+          </div>`}
 
           <!-- Probability comparison -->
           <div class="card mb-24">
