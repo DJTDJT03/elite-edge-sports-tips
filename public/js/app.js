@@ -1027,17 +1027,17 @@ const App = {
     };
 
     var descriptions = {
-      'dashboard': 'Premium UK horse racing and football betting intelligence. Data-driven tips with proven ROI.',
+      'dashboard': 'Premium multi-sport betting intelligence across 6 sports. AI-powered tips with proven ROI.',
       'racing': 'Live UK race cards with form, going forecasts, and AI-powered analysis. Expert selections daily.',
       'football': 'Football tips across Europe\'s top leagues with xG analysis, injury reports, and odds comparison.',
       'live': 'Real-time race day dashboard with countdown, live results, and instant P/L updates.',
       'value-bets': 'Scanner comparing 40+ UK bookmakers to find where odds disagree — genuine value opportunities.',
       'results': 'Fully transparent, verified results page. Every tip, every outcome. Track record you can trust.',
-      'pricing': 'Start free, upgrade to Premium (£19.99/mo) or VIP (£39.99/mo). 7-day free trial available.',
+      'pricing': 'Start free, upgrade to Premium (£19.99/mo) or VIP (£39.99/mo). 14-day free trial available.',
     };
 
     var title = titles[page] || 'Elite Edge Sports Tips — Premium UK Betting Intelligence';
-    var desc = descriptions[page] || 'Premium UK horse racing and football betting intelligence. Data-driven tips with proven ROI.';
+    var desc = descriptions[page] || 'Premium multi-sport betting intelligence across 6 sports. AI-powered tips with proven ROI.';
 
     document.title = title;
     var metaDesc = document.querySelector('meta[name="description"]');
@@ -1281,7 +1281,7 @@ const App = {
         '<div class="whw-total-value ' + totalClass + '">' + totalPnlStr + ' units</div>' +
       '</div>' +
       '<div class="whw-cta">' +
-        '<div class="whw-cta-text"><strong>Get tomorrow\'s picks before they happen.</strong> First month FREE.</div>' +
+        '<div class="whw-cta-text"><strong>Get tomorrow\'s picks before they happen.</strong> 14-Day Free Trial.</div>' +
         '<button class="btn btn-gold" onclick="App.showModal(\'register\')">Start Free Trial</button>' +
       '</div>' +
     '</div>';
@@ -2679,7 +2679,7 @@ const App = {
               </div>
               <div style="font-size:12px;color:#ef4444;margin-bottom:16px;">&#9200; Selection revealed after the event</div>
               <div style="background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:15px;">Get Tips Before Kick-Off — Free Trial</div>
-              <div style="font-size:11px;color:#555;margin-top:10px;">7 days free. No card required. Cancel anytime.</div>
+              <div style="font-size:11px;color:#555;margin-top:10px;">14 days free. Card stored securely. Cancel anytime.</div>
             </div>
           </div>
         </div>`) : ''}
@@ -2830,7 +2830,7 @@ const App = {
           <h2 style="margin-bottom:8px;">Unlock Premium Tips</h2>
           <p class="text-muted mb-24">Join thousands of winning bettors. Get full access to all selections, deep analysis, and priority alerts.</p>
           <a href="#/pricing" class="btn btn-gold btn-lg">View Premium Plans</a>
-          <p class="text-xs text-muted mt-16">First month FREE, then &pound;19.99/month. Cancel anytime.</p>
+          <p class="text-xs text-muted mt-16">14-Day Free Trial, then &pound;19.99/month. Cancel anytime.</p>
         </div>` : ''}
 
         ${this.user ? `
@@ -7378,7 +7378,7 @@ const App = {
         if (isGuest) {
           messages.innerHTML = '<div class="chat-msg bot">Hi! 👋 Welcome to <strong>Elite Edge Sports Tips</strong>.</div>' +
             '<div class="chat-msg bot">We\'re running at <strong>76.8% strike rate</strong> and <strong>+225% ROI</strong> this season — fully verified.</div>' +
-            '<div class="chat-msg bot">Want to see today\'s premium tips? <strong>Your first month is FREE</strong> 🎁</div>' +
+            '<div class="chat-msg bot">Want to see today\'s premium tips? <strong>Your 14-day free trial</strong> 🎁</div>' +
             '<div class="chat-suggestions" id="chat-suggestions">' +
               '<button onclick="App.chatSend(\'Show me today\\\'s tips\')">Show me today\'s tips</button>' +
               '<button onclick="App.closeChat();App.showModal(\'register\')">Start FREE month</button>' +
@@ -7387,7 +7387,7 @@ const App = {
         } else if (isFree) {
           messages.innerHTML = '<div class="chat-msg bot">Hi ' + (this.user.name || 'there') + '! 👋</div>' +
             '<div class="chat-msg bot">You\'re on the Free plan. Upgrade to Premium for <strong>2-4 daily picks</strong>, full analysis, and the daily bulletin email.</div>' +
-            '<div class="chat-msg bot"><strong>First month is FREE</strong> 🎁 then £19.99/mo. Cancel anytime.</div>' +
+            '<div class="chat-msg bot"><strong>14-day free trial</strong> 🎁 then £19.99/mo. Cancel anytime.</div>' +
             '<div class="chat-suggestions" id="chat-suggestions">' +
               '<button onclick="App.closeChat();window.location.hash=\'#/pricing\'">Upgrade to Premium</button>' +
               '<button onclick="App.chatSend(\'What\\\'s included?\')">What\'s included?</button>' +
@@ -7421,7 +7421,7 @@ const App = {
         tease.id = 'chat-tease';
         tease.className = 'chat-tease';
         tease.innerHTML = '<button class="chat-tease-close" onclick="App.dismissChatTease(event)">&times;</button>' +
-          '<div class="chat-tease-title">🎁 First month FREE</div>' +
+          '<div class="chat-tease-title">🎁 14-Day Free Trial</div>' +
           '<div class="chat-tease-text">Get 2-4 premium tips daily. 76.8% strike rate. Start your free month now.</div>' +
           '<button class="chat-tease-cta" onclick="App.dismissChatTease();App.toggleChat();">Tell me more</button>';
         document.body.appendChild(tease);
@@ -9375,7 +9375,7 @@ const App = {
             '<div style="font-size:28px;font-weight:900;color:#60a5fa;">9</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Daily Tips</div>' +
           '</div>' +
           '<div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:10px;padding:16px;text-align:center;">' +
-            '<div style="font-size:28px;font-weight:900;color:#a855f7;">2</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">AI Engines</div>' +
+            '<div style="font-size:28px;font-weight:900;color:#a855f7;">3</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">AI Engines</div>' +
           '</div>' +
         '</div>' +
 
@@ -10411,7 +10411,7 @@ const App = {
       { q: "What does 'edge' mean?", a: "Edge is the difference between our model's calculated probability and the bookmaker's implied probability (derived from the odds). For example, if we calculate a 50% chance of winning but the odds imply only 33%, we have a 17% edge. Positive edge means we believe the odds are in the bettor's favour." },
       { q: "How is ROI calculated?", a: "ROI (Return on Investment) = (Total Profit / Total Staked) x 100. For example, if we've staked 100 units total and our net profit is 15 units, our ROI is +15%. We track this across all published tips with full transparency." },
       { q: "What's included in Premium?", a: "Premium members get 2-4 carefully selected premium tips daily — we only publish when the edge is genuine. Full deep-dive analysis with probability calculations, staking recommendations, early morning access before 9am, daily email bulletins, and priority Telegram alerts. Quality over quantity — we never publish filler tips." },
-      { q: "Can I cancel my subscription?", a: "Yes, you can cancel anytime with no questions asked. We also offer a 7-day money-back guarantee on all new subscriptions. Simply contact support@eliteedgesports.co.uk to cancel." },
+      { q: "Can I cancel my subscription?", a: "Yes, you can cancel anytime with no questions asked. We also offer a 14-day money-back guarantee on all new subscriptions. Simply contact support@eliteedgesports.co.uk to cancel." },
       { q: "How do I know your results are real?", a: "All tips are published before the event starts with timestamped records. Our full results history is publicly available on the Results page, including every loss. We believe in complete transparency — that's why we show ROI, strike rate, and every individual result." },
       { q: "Do you cover all horse racing meetings?", a: "We cover all major UK and Irish meetings daily, including Ascot, Newmarket, York, Kempton, Cheltenham, Aintree, and more, plus selected midweek cards from every active racecourse. Our Racing API provides live data from every UK and Irish meeting." },
       { q: "What football leagues do you cover?", a: "We cover the Premier League, Champions League, La Liga, Serie A, Bundesliga, and Ligue 1. Our model performs best on leagues with rich statistical data. We plan to add Eredivisie, Liga Portugal, and select South American leagues." },

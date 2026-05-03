@@ -247,7 +247,7 @@ module.exports = function(deps) {
         '- Every tip includes full analysis: form, going/surface, H2H, statistical model probability, and risk assessment\n' +
         '- CLV tracking proves genuine edge over bookmakers\n' +
         '- Premium: £19.99/month or £199.99/year | VIP: £39.99/month or £399.99/year\n' +
-        '- 7-day free trial available for new users\n' +
+        '- 14-day free trial available for new users\n' +
         '- Features: Value Bet Scanner, Smart Acca Generator (2-8 fold, multi-sport), Steamer Alerts, AI Race Replays, Going Forecast\n\n' +
         'RULES:\n' +
         '- Be helpful, concise, and use British English\n' +

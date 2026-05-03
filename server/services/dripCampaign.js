@@ -450,7 +450,7 @@ class DripCampaign {
 
       '<div style="background:#1a2e1a;padding:20px;border-radius:8px;margin:20px 0;border-left:4px solid #22c55e;text-align:center;">' +
         '<p style="color:#22c55e;font-size:18px;font-weight:700;margin:0 0 8px;">YOUR FREE 7-DAY PREMIUM TRIAL IS WAITING</p>' +
-        '<p style="color:#cbd5e1;font-size:14px;margin:0;">No card required. Full access. Cancel any time.</p>' +
+        '<p style="color:#cbd5e1;font-size:14px;margin:0;">Card stored securely. Full access. Cancel any time.</p>' +
       '</div>' +
 
       '<p style="color:#cbd5e1;font-size:14px;line-height:1.6;font-weight:700;color:#ffffff;">What you\'ll unlock:</p>' +
@@ -466,7 +466,7 @@ class DripCampaign {
         '<a href="https://eliteedgesports.co.uk/#/pricing" style="display:inline-block;padding:16px 48px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;">Start Your Free Trial Now</a>' +
       '</div>' +
 
-      '<p style="color:#94a3b8;font-size:13px;line-height:1.5;">No commitment. No card details. Just 7 days of full premium access to see if it\'s for you.</p>' +
+      '<p style="color:#94a3b8;font-size:13px;line-height:1.5;">No commitment. No card details. Just 14 days of full premium access to see if it\'s for you.</p>' +
 
       '<div style="background:#1e2235;padding:14px;border-radius:8px;margin:20px 0;">' +
         '<p style="color:#94a3b8;font-size:12px;margin:0;">Remember: This is entertainment and statistical analysis only. Bet responsibly. 18+ | BeGambleAware.org</p>' +
@@ -478,7 +478,7 @@ class DripCampaign {
     var text = 'Hi ' + name + ',\n\n' +
       'You\'ve been with Elite Edge for two weeks. But you\'ve only seen a fraction of what we do.\n\n' +
       'YOUR FREE 7-DAY PREMIUM TRIAL IS WAITING\n' +
-      'No card required. Full access. Cancel any time.\n\n' +
+      'Card stored securely. Full access. Cancel any time.\n\n' +
       'What you\'ll unlock:\n' +
       '- 2-4 additional premium selections every day\n' +
       '- Deep statistical analysis and edge calculations\n' +

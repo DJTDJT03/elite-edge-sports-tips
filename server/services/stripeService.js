@@ -89,7 +89,7 @@ class StripeService {
     } else {
       const product = await stripe.products.create({
         name: 'Elite Edge Starter',
-        description: '3 daily tips from 2 sports with selection and odds',
+        description: '3 daily tips with selection and odds across multiple sports',
       });
       starterProductId = product.id;
       console.log('[Stripe] Created Starter product:', starterProductId);

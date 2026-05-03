@@ -3555,7 +3555,7 @@ module.exports = function startScheduler(deps) {
             await db.createNotification({
               id: 'trial_expired_' + user.id + '_' + Date.now(),
               type: 'trial',
-              message: 'Your 7-day free trial has ended. Upgrade to Premium to keep full access.',
+              message: 'Your 14-day free trial has ended. Upgrade to Premium to keep full access.',
               timestamp: now.toISOString(),
               audience: user.id,
             });
@@ -3567,7 +3567,7 @@ module.exports = function startScheduler(deps) {
               await emailService.sendGeneric({
                 to: user.email,
                 subject: 'Your Elite Edge free trial has ended',
-                html: '<p>Hi ' + user.name + ',</p><p>Your 7-day free trial has ended. You now have free-tier access.</p><p>Upgrade to Premium to continue enjoying full access to all tips, analysis, and features.</p><p>Best,<br>Elite Edge Sports Tips</p>',
+                html: '<p>Hi ' + user.name + ',</p><p>Your 14-day free trial has ended. You now have free-tier access.</p><p>Upgrade to Premium to continue enjoying full access to all tips, analysis, and features.</p><p>Best,<br>Elite Edge Sports Tips</p>',
               });
             } catch (e) { /* non-fatal */ }
           }
@@ -3597,7 +3597,7 @@ module.exports = function startScheduler(deps) {
               await emailService.sendGeneric({
                 to: user.email,
                 subject: 'Your Elite Edge free trial ends tomorrow',
-                html: '<p>Hi ' + user.name + ',</p><p>Your 7-day free trial ends tomorrow. Upgrade to Premium now to keep access to all premium features, tips, and analysis.</p><p>Best,<br>Elite Edge Sports Tips</p>',
+                html: '<p>Hi ' + user.name + ',</p><p>Your 14-day free trial ends tomorrow. Upgrade to Premium now to keep access to all premium features, tips, and analysis.</p><p>Best,<br>Elite Edge Sports Tips</p>',
               });
             } catch (e) { /* non-fatal */ }
           }

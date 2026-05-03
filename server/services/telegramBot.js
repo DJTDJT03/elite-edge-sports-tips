@@ -148,7 +148,7 @@ class TelegramBot {
         (result.event ? result.event + '\n' : '') +
         '\nP/L: <b>' + pnlStr + ' units</b>\n' +
         '\n\u2705 Our members had this selection BEFORE the off.\n' +
-        '\n\uD83D\uDC49 Start your 7-day FREE trial: eliteedgesports.co.uk\n' +
+        '\n\uD83D\uDC49 Start your 14-day FREE trial: eliteedgesports.co.uk\n' +
         '\n\uD83D\uDCCA Elite Edge Sports Tips\n' +
         '18+ | Entertainment only | BeGambleAware.org';
 
