@@ -6234,7 +6234,7 @@ const App = {
             <table class="results-table" id="results-table">
               <thead>
                 <tr>
-                  <th>Date</th><th>Sport</th><th>Event</th><th>Selection</th><th>Market</th><th>Odds</th><th>Stake</th><th>Result</th><th>P/L</th><th></th>
+                  <th>Date</th><th>Sport</th><th>Event</th><th>Selection</th><th>Market</th><th>Odds</th><th>Stake</th><th>Result</th><th>P/L</th><th>Actions</th>
                 </tr>
               </thead>
               <tbody>
