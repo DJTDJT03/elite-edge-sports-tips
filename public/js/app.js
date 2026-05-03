@@ -10761,58 +10761,90 @@ const App = {
           var kickoff = f.kickoff ? new Date(f.kickoff).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
           if (kickoff && !isUpcoming(kickoff, todayStr)) return;
 
-          // Add BTTS market as the default for live fixtures
+          // Build all possible markets for this fixture, pick the best value
+          var fxId = f.fixtureId || Math.random().toString(36).slice(2);
+          var markets = [];
+
+          // Home Win
+          var homeOdds = parseFloat(f.homeOdds) || 0;
+          if (homeOdds >= 1.8 && homeOdds <= 8.0) {
+            markets.push({ sel: f.homeTeam + ' Win', market: 'Match Result', odds: homeOdds, prob: 1 / homeOdds });
+          }
+          // Away Win
+          var awayOdds = parseFloat(f.awayOdds) || 0;
+          if (awayOdds >= 1.8 && awayOdds <= 8.0) {
+            markets.push({ sel: f.awayTeam + ' Win', market: 'Match Result', odds: awayOdds, prob: 1 / awayOdds });
+          }
+          // Draw
+          var drawOdds = parseFloat(f.drawOdds) || 0;
+          if (drawOdds >= 2.5 && drawOdds <= 6.0) {
+            markets.push({ sel: 'Draw', market: 'Match Result', odds: drawOdds, prob: 1 / drawOdds });
+          }
+          // Over 2.5
+          var overOdds = parseFloat(f.overOdds) || 0;
+          if (overOdds >= 1.5 && overOdds <= 4.0) {
+            markets.push({ sel: 'Over 2.5 Goals', market: 'Over/Under', odds: overOdds, prob: 1 / overOdds });
+          }
+          // BTTS
+          var bttsOdds = parseFloat(f.bttsOdds) || 0;
+          if (bttsOdds >= 1.5 && bttsOdds <= 3.0) {
+            markets.push({ sel: 'Both Teams to Score — Yes', market: 'BTTS', odds: bttsOdds, prob: 1 / bttsOdds });
+          }
+
+          // If no odds data available, add a generic home win
+          if (markets.length === 0) {
+            markets.push({ sel: f.homeTeam + ' Win', market: 'Match Result', odds: 2.0, prob: 0.5 });
+          }
+
+          // Pick the best value market (highest edge = highest model prob vs implied)
+          markets.sort(function(a, b) { return b.prob - a.prob; });
+          var bestMarket = markets[0];
+
           selections.push({
-            id: 'live_' + (f.fixtureId || Math.random().toString(36).slice(2)),
-            selection: 'Both Teams to Score — Yes', event: matchName,
+            id: 'live_' + fxId,
+            selection: bestMarket.sel, event: matchName,
             match: matchName, league: league, kickoff: kickoff,
-            market: 'BTTS', odds: parseFloat(f.bttsOdds) || 1.85,
-            modelProbability: 0.52, confidence: 6, edge: 0.04,
+            market: bestMarket.market, odds: bestMarket.odds,
+            modelProbability: Math.min(bestMarket.prob * 1.08, 0.85),
+            confidence: 6, edge: Math.max(0.03, bestMarket.prob * 0.08),
             analyst: 'Elite Edge', sport: 'football', isPublishedTip: false,
           });
-
-          // Add home win
-          if (f.homeOdds && parseFloat(f.homeOdds) >= 1.8) {
-            selections.push({
-              id: 'live_h_' + (f.fixtureId || Math.random().toString(36).slice(2)),
-              selection: f.homeTeam + ' Win', event: matchName,
-              match: matchName, league: league, kickoff: kickoff,
-              market: 'Match Result', odds: parseFloat(f.homeOdds) || 2.0,
-              modelProbability: 0.48, confidence: 6, edge: 0.03,
-              analyst: 'Elite Edge', sport: 'football', isPublishedTip: false,
-            });
-          }
         });
       } catch (liveErr) { /* non-fatal — published tips still available */ }
 
-      // 3. Racing tips from today's cards (if race hasn't started)
+      // 3. Racing from today's live cards (flat array of races, not nested meetings)
       try {
-        var racingData = await this.api('/racing/live-cards').catch(function() { return []; });
-        var meetings = racingData && racingData.meetings ? racingData.meetings : (Array.isArray(racingData) ? racingData : []);
-        meetings.forEach(function(meeting) {
-          var races = meeting.races || [];
-          races.forEach(function(race) {
-            if (!race.time || !isUpcoming(race.time, todayStr)) return;
-            var runners = race.runners || [];
-            // Only include favourites (top 3 in betting) as acca options
-            var topRunners = runners.filter(function(r) { return r.odds && parseFloat(r.odds) > 0; })
-              .sort(function(a, b) { return (parseFloat(a.odds) || 999) - (parseFloat(b.odds) || 999); })
-              .slice(0, 3);
+        var racingData = await this.api('/racing/live-cards').catch(function() { return { racecards: [] }; });
+        var racecards = racingData && racingData.racecards ? racingData.racecards : [];
 
-            topRunners.forEach(function(runner) {
-              var key = (runner.horseName + '|' + meeting.course).toLowerCase();
-              if (seenEvents[key]) return;
-              seenEvents[key] = true;
-              selections.push({
-                id: 'race_' + (runner.horseId || Math.random().toString(36).slice(2)),
-                selection: runner.horseName || '', event: (meeting.course || '') + ' ' + (race.time || '') + ' - ' + (race.raceName || ''),
-                match: (meeting.course || '') + ' ' + (race.time || ''), league: meeting.course || '',
-                kickoff: race.time || '', market: 'Win',
-                odds: parseFloat(runner.odds) || 3.0,
-                modelProbability: runner.odds ? Math.min(1 / parseFloat(runner.odds) * 1.1, 0.8) : 0.3,
-                confidence: 6, edge: 0.04,
-                analyst: 'Elite Edge', sport: 'racing', isPublishedTip: false,
-              });
+        racecards.forEach(function(race) {
+          if (!race.time || !isUpcoming(race.time, todayStr)) return;
+          var runners = race.runners || [];
+          if (runners.length === 0) return;
+
+          // Get top 3 by shortest odds (favourites) as acca options
+          var topRunners = runners.filter(function(r) { return r.odds && parseFloat(r.odds) > 1; })
+            .sort(function(a, b) { return (parseFloat(a.odds) || 999) - (parseFloat(b.odds) || 999); })
+            .slice(0, 3);
+
+          topRunners.forEach(function(runner) {
+            var key = ((runner.horseName || '') + '|' + (race.meeting || '')).toLowerCase();
+            if (seenEvents[key]) return;
+            seenEvents[key] = true;
+            var runnerOdds = parseFloat(runner.odds) || 3.0;
+            selections.push({
+              id: 'race_' + (runner.horseId || Math.random().toString(36).slice(2)),
+              selection: runner.horseName || '',
+              event: (race.meeting || '') + ' ' + (race.time || '') + ' - ' + (race.raceName || race.raceClass || ''),
+              match: (race.meeting || '') + ' ' + (race.time || ''),
+              league: race.meeting || '',
+              kickoff: race.time || '',
+              market: 'Win',
+              odds: runnerOdds,
+              modelProbability: Math.min(1 / runnerOdds * 1.1, 0.8),
+              confidence: 6,
+              edge: Math.max(0.02, (1 / runnerOdds * 1.1) - (1 / runnerOdds)),
+              analyst: 'Elite Edge', sport: 'racing', isPublishedTip: false,
             });
           });
         });
