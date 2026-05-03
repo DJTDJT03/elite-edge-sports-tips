@@ -713,8 +713,10 @@ const App = {
       this.showEmailVerificationMessage();
       this.showWelcomeEmailNotice();
       trackEvent('auth', 'register', email);
-      // Show free trial offer after registration
-      setTimeout(() => this.showTrialOffer(), 2000);
+      // Show Telegram join popup after registration
+      setTimeout(() => this.showTelegramPopup(), 1500);
+      // Show free trial offer after Telegram popup
+      setTimeout(() => this.showTrialOffer(), 6000);
       this.route();
     } catch (err) {
       document.getElementById('reg-error').textContent = err.message;
@@ -9511,6 +9513,38 @@ const App = {
         '<button onclick="document.getElementById(\'trial-expired-overlay\').remove()" style="width:100%;padding:10px;background:transparent;color:#8b8d93;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:13px;cursor:pointer;">Continue on Free Plan</button>' +
       '</div>';
     document.body.appendChild(overlay);
+  },
+
+  showTelegramPopup() {
+    // Don't show if already dismissed
+    if (localStorage.getItem('ee_tg_dismissed')) return;
+    var existing = document.getElementById('telegram-popup');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'telegram-popup';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML =
+      '<div style="background:#141828;border:2px solid rgba(59,130,246,0.4);border-radius:16px;padding:32px;max-width:420px;width:100%;text-align:center;position:relative;">' +
+        '<button onclick="document.getElementById(\'telegram-popup\').remove();localStorage.setItem(\'ee_tg_dismissed\',\'1\');" style="position:absolute;top:12px;right:16px;background:none;border:none;color:#64748b;font-size:24px;cursor:pointer;">&times;</button>' +
+        '<div style="font-size:48px;margin-bottom:16px;"><svg width="48" height="48" viewBox="0 0 24 24" fill="#229ED9"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg></div>' +
+        '<h3 style="color:#fff;font-size:20px;margin-bottom:8px;">Join Our Telegram Channel</h3>' +
+        '<p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:20px;">Get instant tip alerts, live winner notifications, and community chat — straight to your phone. Over 90% of our subscribers are on Telegram.</p>' +
+        '<div style="display:flex;flex-direction:column;gap:10px;">' +
+          '<a href="https://t.me/EliteEdgeTips" target="_blank" rel="noopener" onclick="localStorage.setItem(\'ee_tg_dismissed\',\'1\');trackEvent(\'engagement\',\'telegram_join\',\'post_register\');" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#229ED9;color:#fff;padding:14px 24px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">' +
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>' +
+            'Join Elite Edge on Telegram' +
+          '</a>' +
+          '<button onclick="document.getElementById(\'telegram-popup\').remove();localStorage.setItem(\'ee_tg_dismissed\',\'1\');" style="background:none;border:1px solid #2a2d45;color:#64748b;padding:10px;border-radius:8px;font-size:13px;cursor:pointer;">Maybe later</button>' +
+        '</div>' +
+        '<p style="font-size:11px;color:#475569;margin-top:12px;">You can always join from the dashboard or footer.</p>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+    // Close on background click
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) { overlay.remove(); localStorage.setItem('ee_tg_dismissed', '1'); }
+    });
   },
 
   showWelcomeEmailNotice() {

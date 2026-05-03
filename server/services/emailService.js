@@ -433,6 +433,13 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
 
         <p style="color:#cbd5e1;font-size:14px;line-height:1.6;"><strong>Your login details:</strong><br>Email: ${this._esc(email)}</p>
 
+        <div style="background:linear-gradient(135deg,rgba(34,158,217,0.1),rgba(34,158,217,0.03));border:2px solid rgba(34,158,217,0.3);border-radius:10px;padding:20px;margin:20px 0;text-align:center;">
+          <p style="color:#229ED9;font-weight:700;font-size:16px;margin:0 0 8px;">Step 3: Join Us on Telegram</p>
+          <p style="color:#cbd5e1;font-size:13px;margin:0 0 16px;">Get instant tip alerts, live winner notifications, and community chat — straight to your phone.</p>
+          <a href="https://t.me/EliteEdgeTips" style="display:inline-block;padding:12px 28px;background:#229ED9;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Join Elite Edge on Telegram</a>
+          <p style="color:#64748b;font-size:11px;margin:12px 0 0;">90%+ of our subscribers are on Telegram. Don't miss a winner.</p>
+        </div>
+
         <div style="background:#1e2235;padding:16px;border-radius:8px;margin:20px 0;border-left:3px solid #f59e0b;">
           <p style="color:#f59e0b;font-size:13px;font-weight:700;margin:0 0 8px;">IMPORTANT</p>
           <p style="color:#94a3b8;font-size:12px;margin:0;line-height:1.5;">This service provides statistical analysis and entertainment content ONLY. We do not provide financial or betting advice. All betting is at your own risk. Please gamble responsibly. 18+ | BeGambleAware.org</p>
@@ -463,6 +470,10 @@ Buy more credit packs from £1.99, or upgrade for more monthly credits.
 Earn free credits: refer a friend (+3), share on social (+1/day).
 
 Your login email: ${email}
+
+STEP 3: Join us on Telegram
+Get instant tip alerts and winner notifications: https://t.me/EliteEdgeTips
+90%+ of our subscribers are on Telegram.
 
 IMPORTANT: This service provides statistical analysis and entertainment content ONLY.
 18+ | BeGambleAware.org
