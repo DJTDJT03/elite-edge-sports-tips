@@ -375,9 +375,53 @@ function buildOddsExplainerPrompt(data) {
 }
 
 // ---------------------------------------------------------------------------
+// CLOCKER — Deep Racing Intelligence Prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Build enhanced Perplexity prompt for The Clocker's deep racing research.
+ * Asks for trainer intent signals, pace analysis context, and stable form
+ * data that the standard racing prompt doesn't cover.
+ */
+function buildClockerPrompt(scored) {
+  var runner = scored.runner || {};
+  var race = scored.race || {};
+  var uk = _ukNow();
+
+  var user =
+    'Today is ' + uk.date + ' at ' + uk.time + ' UK time.\n' +
+    'Race at ' + _slot('meeting', race.meeting) + ' ' + _optSlot(race.time, 'TBC') + ' today.\n' +
+    'Horse: ' + _slot('horseName', runner.horseName) + '\n' +
+    'Trainer: ' + _optSlot(runner.trainer, 'Unknown') + ' | Jockey: ' + _optSlot(runner.jockey, 'Unknown') + '\n' +
+    'Going: ' + _optSlot(race.going, 'N/A') + ' | Distance: ' + _optSlot(race.distance, 'N/A') + ' | Class: ' + _optSlot(race.raceClass, 'N/A') + '\n' +
+    'Headgear: ' + _optSlot(runner.headgear, 'None') + '\n\n' +
+    'You are a deep racing intelligence analyst. Search for the following specific data about this horse, trainer, and race. Return a JSON object with ONLY these keys (omit any without a citable fact):\n\n' +
+    '{\n' +
+    '  "trainer_strike_rate": {"value": "trainer wins/runs in last 14 days and percentage, e.g. 8 from 32 (25%)", "citation_index": 0},\n' +
+    '  "trainer_course_record": {"value": "trainer record at this specific course, e.g. 5 from 22 at Newbury", "citation_index": 1},\n' +
+    '  "jockey_booking_signal": {"value": "has the jockey been booked specifically for this ride, any notable switches from other mounts", "citation_index": 2},\n' +
+    '  "equipment_history": {"value": "headgear history for this horse — is today first-time, or a return to equipment that worked before", "citation_index": 3},\n' +
+    '  "going_form": {"value": "horse form specifically on today\'s going (e.g. 2 wins from 3 on soft ground)", "citation_index": 4},\n' +
+    '  "distance_form": {"value": "horse record at today\'s distance, any step up/down in trip, pedigree for the distance", "citation_index": 5},\n' +
+    '  "pace_context": {"value": "likely pace scenario — which runners are front-runners, is there pace on, will it suit hold-up or prominent runners", "citation_index": 6},\n' +
+    '  "course_config": {"value": "course characteristics that affect this race — left/right-handed, uphill/downhill finish, draw bias on today\'s ground", "citation_index": 7},\n' +
+    '  "stable_confidence": {"value": "any quoted comments from trainer or connections about this horse\'s chances, gallop/trial reports", "citation_index": 8}\n' +
+    '}\n\n' +
+    'Rules:\n' +
+    '- citation_index must be an integer referencing your citations array\n' +
+    '- Only cite Racing Post, Sporting Life, At The Races, BHA, Timeform, or official racecourse sites\n' +
+    '- Be specific with numbers — not "good record" but "3 from 7 (43%)"' +
+    '- Do not predict whether the horse will win\n' +
+    '- Do not include odds or form figures — we already have those';
+
+  return { system: SYSTEM_PER_TIP_JSON, user: user, callSiteKey: 'per-tip-clocker' };
+}
+
+// ---------------------------------------------------------------------------
 // EXPORTS
 // ---------------------------------------------------------------------------
 module.exports = {
+  buildClockerPrompt: buildClockerPrompt,
   buildRacingTipPrompt: buildRacingTipPrompt,
   buildFootballTipPrompt: buildFootballTipPrompt,
   buildBulletinRacingPrompt: buildBulletinRacingPrompt,

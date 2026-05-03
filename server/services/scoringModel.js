@@ -1586,15 +1586,17 @@ class ScoringModel {
         parts.push(`JOCKEY BOOKING: ${sv('jockey_change')}`);
       }
 
-      // Pace scenario analysis
+      // Pace scenario analysis — use Sonar pace_context if available
       const runners2 = race.runners ? (Array.isArray(race.runners) ? race.runners.length : race.runners) : 0;
-      if (runners2 > 0) {
+      if (sig.pace_context) {
+        parts.push(`PACE: ${sv('pace_context')}`);
+      } else if (runners2 > 0) {
         if (runners2 <= 6) {
-          parts.push(`PACE: Small field of ${runners2}. Likely to be a truly-run race which suits horses who handle a genuine test. In small fields, class and ability matter more than racing luck — the better horse has fewer excuses.`);
+          parts.push(`PACE: Small field of ${runners2}. Likely to be a truly-run race. Class and ability matter more than racing luck.`);
         } else if (runners2 <= 12) {
-          parts.push(`PACE: Field of ${runners2} should ensure an honest pace. Mid-division runners who can pick up from the 2f pole tend to be favoured in races of this size at ${meeting}.`);
+          parts.push(`PACE: Field of ${runners2} should ensure an honest pace. Mid-division runners who pick up from the 2f pole tend to be favoured at ${meeting}.`);
         } else {
-          parts.push(`PACE: Large field of ${runners2} runners. Pace will be strong which can set it up for closers. Draw position and a clean passage through the field will be critical. Bigger fields increase variance but also increase each-way value.`);
+          parts.push(`PACE: Large field of ${runners2} runners. Pace will be strong — sets it up for closers. Draw and clean passage critical.`);
         }
       }
 
@@ -1635,6 +1637,16 @@ class ScoringModel {
         if (sig.stable_form) coldText += ' ' + sv('stable_form');
         parts.push(coldText);
       }
+
+      // Clocker-specific Sonar signals (deep research from enhanced prompt)
+      if (sig.trainer_strike_rate) parts.push(`TRAINER STATS: ${sv('trainer_strike_rate')}`);
+      if (sig.trainer_course_record) parts.push(`TRAINER AT COURSE: ${sv('trainer_course_record')}`);
+      if (sig.distance_form) parts.push(`DISTANCE FORM: ${sv('distance_form')}`);
+      if (sig.going_form) parts.push(`GOING RECORD: ${sv('going_form')}`);
+      if (sig.course_config) parts.push(`COURSE PROFILE: ${sv('course_config')}`);
+      if (sig.stable_confidence) parts.push(`CONNECTIONS SAY: ${sv('stable_confidence')}`);
+      if (sig.equipment_history) parts.push(`EQUIPMENT RECORD: ${sv('equipment_history')}`);
+      if (sig.jockey_booking_signal) parts.push(`JOCKEY INTEL: ${sv('jockey_booking_signal')}`);
 
       if (parts.length > 0) {
         clockerInsight = parts.join(' ');

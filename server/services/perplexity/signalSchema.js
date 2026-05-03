@@ -20,6 +20,16 @@ var RACING_SIGNALS = [
   'jockey_change',
   'course_report',
   'rail_movement',
+  // Clocker-specific deep intelligence signals
+  'trainer_strike_rate',
+  'trainer_course_record',
+  'jockey_booking_signal',
+  'equipment_history',
+  'going_form',
+  'distance_form',
+  'pace_context',
+  'course_config',
+  'stable_confidence',
 ];
 
 var FOOTBALL_SIGNALS = [

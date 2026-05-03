@@ -1338,7 +1338,7 @@ module.exports = function startScheduler(deps) {
       cand._analystKey = analystProfiles.assignAnalyst(cand.scored, cand.type);
       cand._tipsterProfile = analystProfiles.profiles[cand._analystKey].name;
       cand._adjustedFactors = analystProfiles.applyAnalystWeights(cand.scored.factors || {}, cand._analystKey, cand.type);
-      enrichmentInputs.push({ scored: cand.scored, sport: cand.type, tipId: cand._tipId });
+      enrichmentInputs.push({ scored: cand.scored, sport: cand.type, tipId: cand._tipId, analyst: cand._analystKey });
     }
 
     // ---------------------------------------------------------------

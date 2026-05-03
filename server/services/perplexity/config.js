@@ -95,6 +95,7 @@ var FOOTBALL_WILDCARD_PATTERNS = [];
 // ---------------------------------------------------------------------------
 var TOKEN_BUDGET = {
   'per-tip-racing':   { maxInput: 800, maxOutput: 800 },
+  'per-tip-clocker':  { maxInput: 1000, maxOutput: 1200 },  // Larger budget for deep research
   'per-tip-football': { maxInput: 800, maxOutput: 600 },
   'bulletin':         { maxInput: 1000, maxOutput: 800 },
   'replay':           { maxInput: 600, maxOutput: 500 },
@@ -104,6 +105,7 @@ var TOKEN_BUDGET = {
 // Temperature per call site: 0 for structured JSON, 0.3 for prose
 var TEMPERATURE = {
   'per-tip-racing':   0,
+  'per-tip-clocker':  0,
   'per-tip-football': 0,
   'bulletin':         0.3,
   'replay':           0.3,

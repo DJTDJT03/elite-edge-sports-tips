@@ -9348,7 +9348,7 @@ const App = {
       { icon: '&#127760;', title: 'Live Web Intelligence (Perplexity AI)', desc: 'Real-time going updates, team news, stable form, and jockey changes scraped from Racing Post, BBC Sport, and Sporting Life — woven into every tip.' },
       { icon: '&#128201;', title: 'Market Mover Explainer', desc: 'When odds shorten, we tell you WHY. Gallop reports, connection money, non-runner reshuffles — cited from live racing press.' },
       { icon: '&#128200;', title: 'CLV Tracking', desc: 'We measure Closing Line Value on every tip. Positive CLV = genuine edge over bookmakers, not just luck. Full transparency.' },
-      { icon: '&#129302;', title: 'Dual AI Engine (Claude + Perplexity)', desc: 'Claude AI writes analysis. Perplexity AI feeds it live web context. Two AI models working together — no other tipping service does this.' },
+      { icon: '&#129302;', title: '3 AI Engines + 4 Analyst Profiles', desc: 'Claude writes analysis, Perplexity feeds live web intelligence, GPT-4o independently verifies every tip. Four AI analysts (Professor, Scout, Clocker, Edge) each with distinct strategies and auto-tuning that learns from losses.' },
       { icon: '&#128200;', title: 'Value Bet Scanner', desc: 'Compares odds across 40+ UK bookmakers in real-time. Finds where prices disagree.' },
       { icon: '&#9917;', title: 'Smart Acca Generator', desc: 'Scans every live fixture, ranks by probability, builds 2-8 fold accas automatically.' },
       { icon: '&#128202;', title: 'Real xG Data', desc: 'Understat xG fed directly into our model. Real expected goals, not estimates.' },
@@ -9367,7 +9367,7 @@ const App = {
       '<div class="container" style="max-width:1100px;">' +
         '<div style="text-align:center;margin-bottom:20px;">' +
           '<h1 style="font-size:32px;font-weight:900;">Why <span style="color:#d4a843;">Elite Edge</span> Is Different</h1>' +
-          '<p style="color:#8b8d93;font-size:16px;margin-bottom:24px;">The UK\'s most advanced multi-sport analysis platform — 14 live APIs, 6 sports, dual AI-powered, 60+ features</p>' +
+          '<p style="color:#8b8d93;font-size:16px;margin-bottom:24px;">The UK\'s most advanced multi-sport analysis platform — 14 live APIs, 6 sports, 3 AI engines, 4 analyst profiles, self-learning model</p>' +
         '</div>' +
 
         // Stats bar
@@ -9409,6 +9409,53 @@ const App = {
               '<p style="font-size:12px;color:#8b8d93;line-height:1.4;">' + e.desc + '</p>' +
             '</div>';
           }).join('') +
+        '</div>' +
+
+        // 4 ANALYST PROFILES
+        '<div style="text-align:center;margin-bottom:24px;">' +
+          '<h2 style="font-size:24px;font-weight:800;">4 AI Analysts. <span style="color:#d4a843;">4 Strategies.</span></h2>' +
+          '<p style="color:#8b8d93;font-size:14px;">Every tip is assigned to the analyst best suited for that selection — then independently verified by GPT-4o</p>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:40px;">' +
+          '<div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.25);border-radius:12px;padding:24px;">' +
+            '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
+              '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;color:#fff;">TP</div>' +
+              '<div><div style="font-size:16px;font-weight:800;color:#3b82f6;">The Professor</div><div style="font-size:11px;color:#8b8d93;">Data-Driven Analysis</div></div>' +
+            '</div>' +
+            '<p style="font-size:13px;color:#94a3b8;line-height:1.6;">Statistics-first. Trusts xG, speed ratings, and form figures over narrative. Prefers shorter prices (evens to 4/1) where data is most reliable. Weights numbers 30-40% higher than market sentiment.</p>' +
+            '<div style="font-size:11px;color:#3b82f6;font-weight:700;margin-top:8px;">SPORTS: All 6 &bull; ODDS: 1/2 to 4/1</div>' +
+          '</div>' +
+          '<div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.25);border-radius:12px;padding:24px;">' +
+            '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
+              '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#22c55e,#15803d);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;color:#fff;">TS</div>' +
+              '<div><div style="font-size:16px;font-weight:800;color:#22c55e;">The Scout</div><div style="font-size:11px;color:#8b8d93;">Value Hunter</div></div>' +
+            '</div>' +
+            '<p style="font-size:13px;color:#94a3b8;line-height:1.6;">Finds prices the market has wrong. Specialises in class droppers, course specialists, and motivation plays. Goes against the crowd. Bigger prices where edges are largest.</p>' +
+            '<div style="font-size:11px;color:#22c55e;font-weight:700;margin-top:8px;">SPORTS: All 6 &bull; ODDS: 3/1 to 20/1</div>' +
+          '</div>' +
+          '<div style="background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.25);border-radius:12px;padding:24px;">' +
+            '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
+              '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#a855f7,#7c3aed);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;color:#fff;">TC</div>' +
+              '<div><div style="font-size:16px;font-weight:800;color:#a855f7;">The Clocker</div><div style="font-size:11px;color:#8b8d93;">Deep Racing Intelligence</div></div>' +
+            '</div>' +
+            '<p style="font-size:13px;color:#94a3b8;line-height:1.6;">Racing-only specialist. Reads trainer intent (first-time headgear, jockey bookings), analyses pace scenarios, identifies going specialists, and tracks stable form. Powered by Perplexity live research.</p>' +
+            '<div style="font-size:11px;color:#a855f7;font-weight:700;margin-top:8px;">SPORTS: Racing only &bull; ODDS: Evens to 25/1</div>' +
+          '</div>' +
+          '<div style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.25);border-radius:12px;padding:24px;">' +
+            '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
+              '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#d4a843,#b8902f);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;color:#0a0e1a;">TE</div>' +
+              '<div><div style="font-size:16px;font-weight:800;color:#d4a843;">The Edge</div><div style="font-size:11px;color:#8b8d93;">Balanced Analysis</div></div>' +
+            '</div>' +
+            '<p style="font-size:13px;color:#94a3b8;line-height:1.6;">Weighs all factors equally. No bias. Looks for the clearest overall edge across every metric. The generalist who catches what the specialists miss.</p>' +
+            '<div style="font-size:11px;color:#d4a843;font-weight:700;margin-top:8px;">SPORTS: All 6 &bull; ODDS: 2/1 to 10/1</div>' +
+          '</div>' +
+        '</div>' +
+
+        // Self-learning callout
+        '<div style="background:linear-gradient(135deg,rgba(168,85,247,0.08),rgba(34,197,94,0.08));border:2px solid rgba(168,85,247,0.25);border-radius:14px;padding:24px;margin-bottom:40px;text-align:center;">' +
+          '<div style="font-size:28px;margin-bottom:8px;">&#129504;</div>' +
+          '<h3 style="font-size:18px;font-weight:800;color:#fff;margin-bottom:8px;">Self-Learning Model</h3>' +
+          '<p style="font-size:14px;color:#94a3b8;line-height:1.6;max-width:600px;margin:0 auto;">Every 14 days, the system reviews each analyst\'s performance. Losing patterns are identified. Odds ranges tighten. Weak markets are dropped. Successful strategies expand. The model gets sharper with every result.</p>' +
         '</div>' +
 
         '<div style="text-align:center;margin:48px 0 20px;">' +

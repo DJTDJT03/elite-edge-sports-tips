@@ -97,7 +97,7 @@ module.exports = function createPerplexityClient(db) {
    * @param {string} tipId - The tip ID for ledger/enrichment linking
    * @returns {Promise<{signals: object, citations: Array, skipped: boolean, reason?: string, enrichmentId?: number}>}
    */
-  async function enrichTip(scored, sport, tipId) {
+  async function enrichTip(scored, sport, tipId, analyst) {
     // Check suppression
     if (_suppressionState === 'open') {
       return _skipResult('suppression_open', 'per-tip', tipId);
@@ -140,7 +140,7 @@ module.exports = function createPerplexityClient(db) {
     var promptObj;
     try {
       promptObj = sport === 'racing'
-        ? prompts.buildRacingTipPrompt(scored)
+        ? (analyst === 'clocker' ? prompts.buildClockerPrompt(scored) : prompts.buildRacingTipPrompt(scored))
         : prompts.buildFootballTipPrompt(scored);
     } catch (promptErr) {
       return _skipResult('prompt_build_error: ' + promptErr.message, 'per-tip', tipId);
@@ -213,7 +213,7 @@ module.exports = function createPerplexityClient(db) {
 
     // Launch all enrichments in parallel
     var promises = items.map(function(item) {
-      return enrichTip(item.scored, item.sport, item.tipId)
+      return enrichTip(item.scored, item.sport, item.tipId, item.analyst)
         .then(function(result) {
           // Only store if budget hasn't expired yet for this tip.
           // After budget expires, late-arriving results are discarded
