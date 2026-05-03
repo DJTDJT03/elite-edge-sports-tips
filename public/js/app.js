@@ -10698,54 +10698,125 @@ const App = {
 
     app.innerHTML = this.renderSkeleton('tips');
 
-    // Fetch ALL published tips across all sports for the acca generator
+    // Fetch published tips + live fixtures for the acca generator
     var selections = [];
     try {
-      var tips = [];
-      try { tips = await this.api('/tips'); } catch(e) {}
-      if (!Array.isArray(tips)) tips = tips.tips || [];
-
-      // Use all active, unlocked tips — filter out games that have already kicked off
       var now = new Date();
       var nowStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/London' });
       var todayStr = now.toISOString().split('T')[0];
 
-      var allActiveTips = tips.filter(function(t) {
-        if (t.locked || t.status !== 'active' || t.isWeeklyAcca) return false;
-        // Filter out tips where kickoff/raceTime has passed
-        var tipTime = t.kickoff || t.raceTime || '';
-        var tipDate = t.date ? App._normDate(t.date) : todayStr;
-        if (tipDate < todayStr) return false; // past date
-        if (tipDate > todayStr) return true; // future date — always include
-        // Same day — check time
+      // Helper: check if a time is in the future
+      var isUpcoming = function(tipTime, tipDate) {
+        var d = tipDate ? App._normDate(tipDate) : todayStr;
+        if (d < todayStr) return false;
+        if (d > todayStr) return true;
         if (tipTime && tipTime.match(/^\d{1,2}:\d{2}/)) {
-          // Pad to HH:MM for comparison
           var parts = tipTime.split(':');
-          var tipHHMM = (parts[0].length === 1 ? '0' : '') + parts[0] + ':' + parts[1];
-          if (tipHHMM <= nowStr) return false; // already kicked off
+          var hhmm = (parts[0].length === 1 ? '0' : '') + parts[0] + ':' + parts[1];
+          return hhmm > nowStr;
         }
         return true;
-      });
+      };
 
-      // Build selections from ALL published tips across all sports
-      allActiveTips.forEach(function(t) {
+      // 1. Published tips (AI-scored selections)
+      var tips = [];
+      try { tips = await this.api('/tips'); } catch(e) {}
+      if (!Array.isArray(tips)) tips = tips.tips || [];
+
+      var seenEvents = {};
+      tips.filter(function(t) {
+        return !t.locked && t.status === 'active' && !t.isWeeklyAcca && isUpcoming(t.kickoff || t.raceTime, t.date);
+      }).forEach(function(t) {
+        var key = (t.selection + '|' + t.event).toLowerCase();
+        if (seenEvents[key]) return;
+        seenEvents[key] = true;
         selections.push({
-          id: t.id,
-          selection: t.selection || '',
-          event: t.event || '',
-          match: t.event || t.meeting || '',
-          league: t.league || t.meeting || '',
-          kickoff: t.kickoff || t.raceTime || '',
-          market: t.market || 'Win',
-          odds: t.odds || 2.0,
-          modelProbability: t.modelProbability || 0.5,
-          confidence: t.confidence || 7,
-          edge: t.edge || 0.05,
-          analyst: t.tipsterProfile || 'Elite Edge',
-          sport: t.sport || 'football',
+          id: t.id, selection: t.selection || '', event: t.event || '',
+          match: t.event || t.meeting || '', league: t.league || t.meeting || '',
+          kickoff: t.kickoff || t.raceTime || '', market: t.market || 'Win',
+          odds: t.odds || 2.0, modelProbability: t.modelProbability || 0.5,
+          confidence: t.confidence || 7, edge: t.edge || 0.05,
+          analyst: t.tipsterProfile || 'Elite Edge', sport: t.sport || 'football',
           isPublishedTip: true,
         });
       });
+
+      // 2. Live football fixtures (upcoming games not yet published as tips)
+      try {
+        var liveData = await this.fetchLiveFootball();
+        var fixtures = liveData && liveData.fixtures ? liveData.fixtures : [];
+        fixtures.forEach(function(f) {
+          if (!f.homeTeam || !f.awayTeam) return;
+          if (f.status === 'FT' || f.status === 'LIVE') return; // skip finished/live
+          var matchName = f.homeTeam + ' vs ' + f.awayTeam;
+          var key = matchName.toLowerCase();
+
+          // Skip if we already have a published tip for this fixture
+          var alreadyHave = selections.some(function(s) {
+            return s.event && s.event.toLowerCase().indexOf(f.homeTeam.toLowerCase()) !== -1;
+          });
+          if (alreadyHave) return;
+
+          var league = f.league || '';
+          var kickoff = f.kickoff ? new Date(f.kickoff).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+          if (kickoff && !isUpcoming(kickoff, todayStr)) return;
+
+          // Add BTTS market as the default for live fixtures
+          selections.push({
+            id: 'live_' + (f.fixtureId || Math.random().toString(36).slice(2)),
+            selection: 'Both Teams to Score — Yes', event: matchName,
+            match: matchName, league: league, kickoff: kickoff,
+            market: 'BTTS', odds: parseFloat(f.bttsOdds) || 1.85,
+            modelProbability: 0.52, confidence: 6, edge: 0.04,
+            analyst: 'Elite Edge', sport: 'football', isPublishedTip: false,
+          });
+
+          // Add home win
+          if (f.homeOdds && parseFloat(f.homeOdds) >= 1.8) {
+            selections.push({
+              id: 'live_h_' + (f.fixtureId || Math.random().toString(36).slice(2)),
+              selection: f.homeTeam + ' Win', event: matchName,
+              match: matchName, league: league, kickoff: kickoff,
+              market: 'Match Result', odds: parseFloat(f.homeOdds) || 2.0,
+              modelProbability: 0.48, confidence: 6, edge: 0.03,
+              analyst: 'Elite Edge', sport: 'football', isPublishedTip: false,
+            });
+          }
+        });
+      } catch (liveErr) { /* non-fatal — published tips still available */ }
+
+      // 3. Racing tips from today's cards (if race hasn't started)
+      try {
+        var racingData = await this.api('/racing/live-cards').catch(function() { return []; });
+        var meetings = racingData && racingData.meetings ? racingData.meetings : (Array.isArray(racingData) ? racingData : []);
+        meetings.forEach(function(meeting) {
+          var races = meeting.races || [];
+          races.forEach(function(race) {
+            if (!race.time || !isUpcoming(race.time, todayStr)) return;
+            var runners = race.runners || [];
+            // Only include favourites (top 3 in betting) as acca options
+            var topRunners = runners.filter(function(r) { return r.odds && parseFloat(r.odds) > 0; })
+              .sort(function(a, b) { return (parseFloat(a.odds) || 999) - (parseFloat(b.odds) || 999); })
+              .slice(0, 3);
+
+            topRunners.forEach(function(runner) {
+              var key = (runner.horseName + '|' + meeting.course).toLowerCase();
+              if (seenEvents[key]) return;
+              seenEvents[key] = true;
+              selections.push({
+                id: 'race_' + (runner.horseId || Math.random().toString(36).slice(2)),
+                selection: runner.horseName || '', event: (meeting.course || '') + ' ' + (race.time || '') + ' - ' + (race.raceName || ''),
+                match: (meeting.course || '') + ' ' + (race.time || ''), league: meeting.course || '',
+                kickoff: race.time || '', market: 'Win',
+                odds: parseFloat(runner.odds) || 3.0,
+                modelProbability: runner.odds ? Math.min(1 / parseFloat(runner.odds) * 1.1, 0.8) : 0.3,
+                confidence: 6, edge: 0.04,
+                analyst: 'Elite Edge', sport: 'racing', isPublishedTip: false,
+              });
+            });
+          });
+        });
+      } catch (racingErr) { /* non-fatal */ }
 
     } catch (e) {
       app.innerHTML = '<div class="container">' + this.renderApiError('Acca Generator', e.message) + '</div>';
