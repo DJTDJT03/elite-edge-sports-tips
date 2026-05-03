@@ -2507,7 +2507,30 @@ const App = {
         '</div>' +
         '<div class="monthly-target-status ' + roiStatus.cls + '">' + roiStatus.label + '</div>' +
       '</div>' +
-      (allHit ? '<div class="monthly-target-all-hit">&#127942; ALL TARGETS HIT &#127942;</div>' : '') +
+      (allHit ? '<div class="monthly-target-all-hit">&#127942; ALL TARGETS HIT — 10 BONUS CREDITS &#127942;</div>' : '') +
+
+      // Login check-in calendar
+      '<div style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.05);">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+          '<span style="font-size:12px;font-weight:700;color:#d4a843;">Daily Check-In</span>' +
+          '<span style="font-size:11px;color:#94a3b8;">' + (this._loginStreak || 0) + '-day streak &#128293;</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:3px;flex-wrap:wrap;">' +
+          (function() {
+            var daysInMonth = new Date(year, month + 1, 0).getDate();
+            var today = now.getDate();
+            var dots = '';
+            for (var d = 1; d <= daysInMonth; d++) {
+              var isPast = d < today;
+              var isToday = d === today;
+              var col = isToday ? '#d4a843' : isPast ? (daysTracked[year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0')] ? '#22c55e' : '#1e2235') : '#0f1320';
+              dots += '<div style="width:12px;height:12px;border-radius:2px;background:' + col + ';' + (isToday ? 'box-shadow:0 0 4px #d4a843;' : '') + '" title="' + d + '/' + (month + 1) + '"></div>';
+            }
+            return dots;
+          })() +
+        '</div>' +
+        '<div style="font-size:10px;color:#475569;margin-top:6px;">Green = active day. Check in 20+ days this month for bonus credits.</div>' +
+      '</div>' +
     '</div>';
   },
 
