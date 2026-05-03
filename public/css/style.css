@@ -77,14 +77,13 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
   max-width: 1400px; margin: 0 auto;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 20px; height: 56px; gap: 8px;
-  overflow: hidden;
 }
 .nav-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; flex-shrink: 0; }
 .logo-icon { font-size: 24px; color: var(--gold); filter: drop-shadow(0 0 8px rgba(212,168,67,.3)); }
 .logo-text { font-size: 16px; font-weight: 800; color: var(--text-primary); letter-spacing: -.3px; line-height: 1.1; }
 .logo-sub { display: block; font-size: 9px; font-weight: 600; color: var(--gold); text-transform: uppercase; letter-spacing: 1.5px; }
-.nav-links { display: flex; gap: 1px; align-items: center; flex-wrap: nowrap; overflow: hidden; }
+.nav-links { display: flex; gap: 1px; align-items: center; flex-wrap: nowrap; }
 .nav-link {
   padding: 6px 12px; border-radius: var(--radius-sm);
   font-size: 13px; font-weight: 500; color: var(--text-secondary);
