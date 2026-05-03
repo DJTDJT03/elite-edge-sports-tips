@@ -149,5 +149,51 @@ module.exports = function(deps) {
     }
   });
 
+  // GET /api/user/bets/leaderboard — anonymous subscriber leaderboard
+  router.get('/user/bets/leaderboard', async function(req, res) {
+    try {
+      var period = req.query.period || 'week'; // week, month, all
+      var dateFilter = '';
+      if (period === 'week') dateFilter = "AND ub.date >= CURRENT_DATE - 7";
+      else if (period === 'month') dateFilter = "AND ub.date >= CURRENT_DATE - 30";
+
+      var result = await db.query(`
+        SELECT
+          u.name,
+          COUNT(*) FILTER (WHERE ub.settled = true) as total_bets,
+          COUNT(*) FILTER (WHERE ub.result = 'won' OR ub.result = 'placed') as wins,
+          COALESCE(SUM(ub.pnl) FILTER (WHERE ub.settled = true), 0) as total_pnl,
+          ROUND(COALESCE(SUM(ub.pnl) FILTER (WHERE ub.settled = true), 0) / NULLIF(SUM(ub.stake) FILTER (WHERE ub.settled = true), 0) * 100, 1) as roi
+        FROM user_bets ub
+        JOIN users u ON ub.user_id = u.id
+        WHERE ub.settled = true ${dateFilter}
+        GROUP BY u.id, u.name
+        HAVING COUNT(*) FILTER (WHERE ub.settled = true) >= 5
+        ORDER BY total_pnl DESC
+        LIMIT 20
+      `);
+
+      // Anonymise names: "Darren T." format
+      var leaderboard = (result.rows || []).map(function(r, i) {
+        var nameParts = (r.name || 'User').split(' ');
+        var displayName = nameParts[0] + (nameParts.length > 1 ? ' ' + nameParts[1].charAt(0) + '.' : '');
+        return {
+          rank: i + 1,
+          name: displayName,
+          bets: parseInt(r.total_bets),
+          wins: parseInt(r.wins),
+          pnl: parseFloat(r.total_pnl) || 0,
+          roi: parseFloat(r.roi) || 0,
+          strikeRate: parseInt(r.total_bets) > 0 ? Math.round((parseInt(r.wins) / parseInt(r.total_bets)) * 100) : 0,
+        };
+      });
+
+      res.json({ period: period, leaderboard: leaderboard });
+    } catch (err) {
+      console.error('[Leaderboard] Error:', err.message);
+      res.json({ period: req.query.period || 'week', leaderboard: [] });
+    }
+  });
+
   return router;
 };

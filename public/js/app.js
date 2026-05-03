@@ -2837,6 +2837,9 @@ const App = {
           </div>
         </div>` : ''}
 
+        <!-- 13b. SUBSCRIBER LEADERBOARD — competition + social proof -->
+        <div id="subscriber-leaderboard"></div>
+
         <!-- 14. NEWS + REFERRAL — community & growth -->
         <div id="dashboard-news-section"></div>
 
@@ -2959,6 +2962,71 @@ const App = {
 
     // Render Streak Rewards (Feature 4)
     this.renderStreakRewards();
+
+    // Render subscriber leaderboard
+    this.renderLeaderboard();
+  },
+
+  async renderLeaderboard() {
+    var container = document.getElementById('subscriber-leaderboard');
+    if (!container) return;
+
+    try {
+      var data = await this.api('/user/bets/leaderboard?period=week');
+      var lb = data.leaderboard || [];
+      if (lb.length < 3) {
+        // Try monthly if not enough weekly data
+        data = await this.api('/user/bets/leaderboard?period=month');
+        lb = data.leaderboard || [];
+      }
+      if (lb.length < 3) return; // Don't show with fewer than 3 entries
+
+      var rows = lb.slice(0, 10).map(function(entry) {
+        var medal = entry.rank === 1 ? '&#129351;' : entry.rank === 2 ? '&#129352;' : entry.rank === 3 ? '&#129353;' : '<span style="color:#64748b;">' + entry.rank + '</span>';
+        var pnlColor = entry.pnl > 0 ? '#22c55e' : entry.pnl < 0 ? '#ef4444' : '#94a3b8';
+        return '<tr>' +
+          '<td style="padding:10px 8px;text-align:center;font-size:18px;">' + medal + '</td>' +
+          '<td style="padding:10px 8px;font-weight:700;color:#fff;">' + entry.name + '</td>' +
+          '<td style="padding:10px 8px;text-align:center;color:#94a3b8;">' + entry.bets + '</td>' +
+          '<td style="padding:10px 8px;text-align:center;color:#94a3b8;">' + entry.strikeRate + '%</td>' +
+          '<td style="padding:10px 8px;text-align:right;font-weight:800;font-size:16px;color:' + pnlColor + ';">' + (entry.pnl > 0 ? '+' : '') + entry.pnl.toFixed(2) + 'u</td>' +
+        '</tr>';
+      }).join('');
+
+      var periodLabel = data.period === 'week' ? 'This Week' : data.period === 'month' ? 'This Month' : 'All Time';
+
+      container.innerHTML =
+        '<div class="section" style="margin-bottom:24px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+            '<div class="section-title" style="margin:0;"><span style="color:#d4a843;">&#127942;</span> Subscriber Leaderboard</div>' +
+            '<div style="display:flex;gap:4px;">' +
+              '<button class="tab' + (data.period === 'week' ? ' active' : '') + '" onclick="App._loadLeaderboard(\'week\')" style="font-size:11px;padding:4px 10px;">Week</button>' +
+              '<button class="tab' + (data.period === 'month' ? ' active' : '') + '" onclick="App._loadLeaderboard(\'month\')" style="font-size:11px;padding:4px 10px;">Month</button>' +
+              '<button class="tab' + (data.period === 'all' ? ' active' : '') + '" onclick="App._loadLeaderboard(\'all\')" style="font-size:11px;padding:4px 10px;">All</button>' +
+            '</div>' +
+          '</div>' +
+          '<div style="overflow-x:auto;">' +
+            '<table style="width:100%;border-collapse:collapse;">' +
+              '<thead><tr><th style="padding:8px;text-align:center;font-size:11px;color:#64748b;border-bottom:1px solid #2a2e3d;"></th><th style="padding:8px;text-align:left;font-size:11px;color:#64748b;border-bottom:1px solid #2a2e3d;">Subscriber</th><th style="padding:8px;text-align:center;font-size:11px;color:#64748b;border-bottom:1px solid #2a2e3d;">Bets</th><th style="padding:8px;text-align:center;font-size:11px;color:#64748b;border-bottom:1px solid #2a2e3d;">SR%</th><th style="padding:8px;text-align:right;font-size:11px;color:#64748b;border-bottom:1px solid #2a2e3d;">P/L</th></tr></thead>' +
+              '<tbody>' + rows + '</tbody>' +
+            '</table>' +
+          '</div>' +
+          '<p style="font-size:11px;color:#475569;text-align:center;margin-top:10px;">Minimum 5 settled bets to qualify. Names anonymised. <a href="#/my-roi" style="color:#d4a843;">Track your bets to join &rarr;</a></p>' +
+        '</div>';
+    } catch (e) { /* non-fatal */ }
+  },
+
+  async _loadLeaderboard(period) {
+    try {
+      var data = await this.api('/user/bets/leaderboard?period=' + period);
+      // Re-render with new data
+      var container = document.getElementById('subscriber-leaderboard');
+      if (container) {
+        // Store period and re-render
+        this._leaderboardPeriod = period;
+        this.renderLeaderboard();
+      }
+    } catch(e) {}
   },
 
   // -----------------------------------------------------------------------
