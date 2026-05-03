@@ -5448,7 +5448,20 @@ const App = {
       // If no today tips, show all upcoming
       if (displayTips.length === 0) displayTips = tips;
     }
-    var displayLeagues = [...new Set(displayTips.map(t => t.league))];
+    // Sort: Premier League first, then alphabetically by league
+    displayTips.sort(function(a, b) {
+      var aIsPL = (a.league || '').toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
+      var bIsPL = (b.league || '').toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
+      if (aIsPL !== bIsPL) return aIsPL - bIsPL;
+      return (a.league || '').localeCompare(b.league || '');
+    });
+    // Sort leagues: Premier League always first
+    var displayLeagues = [...new Set(displayTips.map(t => t.league))].sort(function(a, b) {
+      var aIsPL = (a || '').toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
+      var bIsPL = (b || '').toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
+      if (aIsPL !== bIsPL) return aIsPL - bIsPL;
+      return (a || '').localeCompare(b || '');
+    });
 
     app.innerHTML = `
       <div class="container">
@@ -5477,7 +5490,12 @@ const App = {
               </button>
             </div>
           </div>
-          ${Object.keys(fixturesByLeague).map(function(leagueName) {
+          ${Object.keys(fixturesByLeague).sort(function(a, b) {
+            var aIsPL = a.toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
+            var bIsPL = b.toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
+            if (aIsPL !== bIsPL) return aIsPL - bIsPL;
+            return a.localeCompare(b);
+          }).map(function(leagueName) {
             var leagueFixtures = fixturesByLeague[leagueName];
             return '<div class="meeting-card"><h3>\u26bd ' + leagueName + '</h3><div style="display:grid;gap:8px;">' +
               leagueFixtures.map(function(f) {
@@ -5545,7 +5563,11 @@ const App = {
               });
               return '<div class="mb-16">' +
                 '<h4 style="color:var(--text-primary);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px;">' + dayLabel + ' ' + dateKey.split('-').reverse().join('/') + ' — ' + dayFixtures.length + ' fixtures</h4>' +
-                Object.keys(byLeague).map(function(lg) {
+                Object.keys(byLeague).sort(function(a, b) {
+                  var aIsPL = a.toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
+                  var bIsPL = b.toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
+                  return aIsPL !== bIsPL ? aIsPL - bIsPL : a.localeCompare(b);
+                }).map(function(lg) {
                   return '<div class="mb-8"><span class="text-gold text-xs" style="font-weight:600;letter-spacing:0.5px;">' + lg + '</span>' +
                     '<div style="display:grid;gap:4px;margin-top:4px;">' +
                     byLeague[lg].map(function(f) {
