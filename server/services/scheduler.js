@@ -1704,6 +1704,25 @@ module.exports = function startScheduler(deps) {
       try { await db.updateTip(lowestConf.id, { isPremium: false }); } catch(e) {}
     }
 
+    // Mark published candidates in the scored_candidates table
+    try {
+      for (var pi = 0; pi < newTips.length; pi++) {
+        var pubTip = newTips[pi];
+        // Save published tip as a candidate too (wasPublished = true)
+        await db.saveScoredCandidate({
+          sport: pubTip.sport, selection: pubTip.selection,
+          event: pubTip.event || pubTip.meeting || '', meeting: pubTip.meeting || '',
+          league: pubTip.league || '', market: pubTip.market || 'Win',
+          odds: pubTip.odds || 0, confidence: pubTip.confidence || 0,
+          modelProbability: pubTip.modelProbability || 0,
+          impliedProbability: pubTip.impliedProbability || 0,
+          edge: pubTip.edge || 0, analyst: pubTip.tipsterProfile || '',
+          date: today, kickoff: pubTip.raceTime || pubTip.kickoff || '',
+          wasPublished: true, tipId: pubTip.id,
+        }).catch(function() { /* skip if duplicate */ });
+      }
+    } catch (pubErr) { /* non-fatal */ }
+
     lastAutoTipDate = today;
 
     // Log summary
