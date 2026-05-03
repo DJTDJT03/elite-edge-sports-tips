@@ -10731,46 +10731,58 @@ const App = {
   // =========================================================================
   // WIN CELEBRATIONS — Gold confetti animation for new wins
   // =========================================================================
-  showWinCelebration(tipData) {
+  showWinCelebration(tipData, isPersonal) {
     var self = this;
-    // Create overlay
     var overlay = document.createElement('div');
     overlay.className = 'win-celebration-overlay';
 
-    // Create confetti particles
-    var confettiColors = ['#d4a843', '#22c55e', '#ffffff', '#f5d77a', '#4ade80'];
-    for (var i = 0; i < 30; i++) {
+    // More confetti for personal wins
+    var confettiCount = isPersonal ? 60 : 30;
+    var confettiColors = ['#d4a843', '#22c55e', '#ffffff', '#f5d77a', '#4ade80', '#3b82f6'];
+    for (var i = 0; i < confettiCount; i++) {
       var particle = document.createElement('div');
       particle.className = 'confetti-particle';
       particle.style.left = (Math.random() * 100) + 'vw';
       particle.style.backgroundColor = confettiColors[Math.floor(Math.random() * confettiColors.length)];
-      particle.style.animationDelay = (Math.random() * 1.5) + 's';
-      particle.style.width = (6 + Math.random() * 6) + 'px';
-      particle.style.height = (6 + Math.random() * 6) + 'px';
+      particle.style.animationDelay = (Math.random() * 2) + 's';
+      particle.style.animationDuration = (2 + Math.random() * 1.5) + 's';
+      particle.style.width = (5 + Math.random() * 8) + 'px';
+      particle.style.height = (5 + Math.random() * 8) + 'px';
       particle.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
       overlay.appendChild(particle);
     }
 
-    // Create card
     var oddsStr = this.formatOdds(tipData.odds);
-    var pnlStr = (tipData.pnl > 0 ? '+' : '') + tipData.pnl.toFixed(2);
+    var pnl = tipData.pnl || 0;
+    var pnlStr = (pnl > 0 ? '+' : '') + pnl.toFixed(2);
+    var bankSettings = this.getBankrollSettings ? this.getBankrollSettings() : null;
+    var unitSize = bankSettings ? (bankSettings.stakeSize || Math.round((bankSettings.startingBank || 100) * 0.01 * 100) / 100) : null;
+    var pnlMoney = unitSize ? (pnl * unitSize).toFixed(2) : null;
+    var analystName = tipData.tipsterProfile || tipData.analyst || '';
+
     var card = document.createElement('div');
     card.className = 'win-celebration-card';
     card.innerHTML =
-      '<div class="win-celebration-trophy">&#127942;</div>' +
-      '<div class="win-celebration-title">WINNER!</div>' +
+      '<div class="win-celebration-trophy">' + (isPersonal ? '&#127881;' : '&#127942;') + '</div>' +
+      '<div class="win-celebration-title">' + (isPersonal ? 'YOUR TIP WON!' : 'WINNER!') + '</div>' +
       '<div class="win-celebration-selection">' + (tipData.selection || '') + '</div>' +
-      '<div class="win-celebration-odds">at ' + oddsStr + '</div>' +
-      '<div class="win-celebration-pnl">' + pnlStr + ' units</div>';
+      '<div class="win-celebration-odds">' + (tipData.event || '') + ' &mdash; ' + oddsStr + '</div>' +
+      (analystName ? '<div style="font-size:12px;margin:6px 0;"><span style="background:rgba(212,168,67,0.15);color:#d4a843;padding:2px 8px;border-radius:4px;font-weight:700;">' + analystName + '</span></div>' : '') +
+      '<div class="win-celebration-pnl">' + pnlStr + ' units' + (pnlMoney ? ' (&pound;' + pnlMoney + ')' : '') + '</div>' +
+      (isPersonal ? '<div style="margin-top:16px;display:flex;gap:8px;justify-content:center;">' +
+        '<button onclick="event.stopPropagation();App.generateShareCard({selection:\'' + (tipData.selection || '').replace(/'/g, "\\'") + '\',odds:' + (tipData.odds || 0) + ',pnl:' + pnl + ',sport:\'' + (tipData.sport || 'racing') + '\',event:\'' + (tipData.event || '').replace(/'/g, "\\'") + '\'});" style="background:#d4a843;color:#0a0e1a;border:none;padding:8px 20px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">Share This Win</button>' +
+        '<button onclick="event.stopPropagation();window.location.hash=\'#/my-roi\';" style="background:rgba(255,255,255,0.1);color:#fff;border:1px solid #2a2d45;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;">My ROI</button>' +
+      '</div>' : '') +
+      '<div style="font-size:11px;color:#475569;margin-top:12px;">Tap to close</div>';
     overlay.appendChild(card);
-
     document.body.appendChild(overlay);
 
-    // Pulse the daily stats P/L if visible
-    var pnlEls = document.querySelectorAll('.pnl-positive, .stat-value.positive');
+    // Pulse P/L elements
+    var pnlEls = document.querySelectorAll('.pnl-positive, .stat-value.positive, .trust-value');
     pnlEls.forEach(function(el) { el.classList.add('win-pulse'); });
 
-    // Dismiss on click or after 3 seconds
+    // Dismiss on click or after 5 seconds (longer for personal)
+    var dismissTime = isPersonal ? 8000 : 4000;
     var dismiss = function() {
       overlay.classList.add('win-celebration-out');
       pnlEls.forEach(function(el) { el.classList.remove('win-pulse'); });
@@ -10778,8 +10790,10 @@ const App = {
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
       }, 400);
     };
-    overlay.addEventListener('click', dismiss);
-    setTimeout(dismiss, 3000);
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) dismiss();
+    });
+    setTimeout(dismiss, dismissTime);
   },
 
   checkForNewWins() {
@@ -10790,9 +10804,9 @@ const App = {
     this.api('/results').then(function(results) {
       if (!results || !results.length) return;
 
-      // Filter to won results from today or yesterday
+      // Filter to won/placed results from today or yesterday
       var recentWins = results.filter(function(r) {
-        return r.result === 'won' && (App._normDate(r.date) === today || App._normDate(r.date) === yesterday);
+        return (r.result === 'won' || r.result === 'placed') && (App._normDate(r.date) === today || App._normDate(r.date) === yesterday);
       });
 
       if (!recentWins.length) return;
@@ -10810,21 +10824,36 @@ const App = {
 
       if (!unseenWins.length) return;
 
+      // Check which wins the user personally backed
+      var myBets = self.getMyBets();
+      var backedTipIds = {};
+      myBets.forEach(function(b) { backedTipIds[b.tipId] = true; });
+
       // Mark all as seen
       var allIds = seenWins.slice();
       unseenWins.forEach(function(w) {
         var winId = w.id || (w.selection + '_' + w.date + '_' + w.odds);
         allIds.push(winId);
       });
-      // Keep only last 100 IDs to avoid localStorage bloat
       if (allIds.length > 100) allIds = allIds.slice(-100);
       localStorage.setItem('ee_last_seen_wins', JSON.stringify(allIds));
 
-      // Queue celebrations sequentially
-      unseenWins.forEach(function(win, index) {
+      // Personal wins first (bigger celebration), then general wins
+      var personalWins = unseenWins.filter(function(w) { return backedTipIds[w.tipId]; });
+      var generalWins = unseenWins.filter(function(w) { return !backedTipIds[w.tipId]; });
+      var ordered = personalWins.concat(generalWins);
+
+      // Only show max 3 celebrations to avoid fatigue
+      ordered.slice(0, 3).forEach(function(win, index) {
+        var isPersonal = backedTipIds[win.tipId];
+        var delay = isPersonal ? 9000 : 5000;
+        var startDelay = 0;
+        for (var d = 0; d < index; d++) {
+          startDelay += backedTipIds[ordered[d].tipId] ? 9000 : 5000;
+        }
         setTimeout(function() {
-          self.showWinCelebration(win);
-        }, index * 4000); // 3s display + 1s gap
+          self.showWinCelebration(win, isPersonal);
+        }, startDelay);
       });
     }).catch(function() {});
   },
