@@ -7505,7 +7505,7 @@ const App = {
             '<div class="chat-msg bot">Want to see today\'s premium tips? <strong>Your 14-day free trial</strong> 🎁</div>' +
             '<div class="chat-suggestions" id="chat-suggestions">' +
               '<button onclick="App.chatSend(\'Show me today\\\'s tips\')">Show me today\'s tips</button>' +
-              '<button onclick="App.closeChat();App.showModal(\'register\')">Start FREE month</button>' +
+              '<button onclick="App.closeChat();App.showModal(\'register\')">Start 14-Day Free Trial</button>' +
               '<button onclick="App.chatSend(\'How does it work?\')">How does it work?</button>' +
             '</div>';
         } else if (isFree) {
@@ -7546,7 +7546,7 @@ const App = {
         tease.className = 'chat-tease';
         tease.innerHTML = '<button class="chat-tease-close" onclick="App.dismissChatTease(event)">&times;</button>' +
           '<div class="chat-tease-title">🎁 14-Day Free Trial</div>' +
-          '<div class="chat-tease-text">Get 2-4 premium tips daily. 76.8% strike rate. Start your free month now.</div>' +
+          '<div class="chat-tease-text">Up to 9 daily tips across 6 sports. 3 AI engines. Start your 14-day free trial.</div>' +
           '<button class="chat-tease-cta" onclick="App.dismissChatTease();App.toggleChat();">Tell me more</button>';
         document.body.appendChild(tease);
         setTimeout(() => tease.classList.add('show'), 50);
@@ -9638,7 +9638,7 @@ const App = {
       { icon: '&#128202;', title: 'Real xG Data', desc: 'Understat xG fed directly into our model. Real expected goals, not estimates.' },
       { icon: '&#128293;', title: 'Steamer & Drifter Alerts', desc: 'Know when the market moves on our selections. Shortening = market agrees.' },
       { icon: '&#127793;', title: 'Going Forecast', desc: 'OpenWeather data for every racecourse. Predicted going changes before bookmakers adjust.' },
-      { icon: '&#127942;', title: 'AI Race Replay', desc: 'After every result, dual AI explains WHY it happened. Live press reports + statistical analysis combined.' },
+      { icon: '&#127942;', title: 'AI Race Replay', desc: 'After every result, our AI explains WHY it happened. Live press reports + statistical analysis combined by Claude and Perplexity.' },
       { icon: '&#128276;', title: '5 Custom Alert Types', desc: 'Elite confidence, steamers, pre-race, big price, all tips. You control what you receive.' },
       { icon: '&#128274;', title: 'Anti-Sharing Protection', desc: 'One device per account. No password sharing. Every subscription = one person.' },
       { icon: '&#127934;', title: '6 Sports, One Platform', desc: 'Racing, Football, NBA, Tennis, Rugby League, NFL — all powered by the same AI scoring model. No other UK service covers this range with this depth.' },
@@ -9851,6 +9851,8 @@ const App = {
             <li><strong style="color:#fff;">Form</strong> — recent finishing positions (1 = won, 2 = second, etc.)</li>
             <li><strong style="color:#fff;">Going</strong> — the ground conditions and whether the horse suits them</li>
             <li><strong style="color:#fff;">Analysis</strong> — our full reasoning, every factor considered</li>
+            <li><strong style="color:#fff;">Analyst</strong> — which AI analyst produced this tip (Professor, Scout, Clocker, or Edge)</li>
+            <li><strong style="color:#fff;">Deep Intelligence</strong> — The Clocker tips include trainer strike rates, pace analysis, and going expertise from live Perplexity research</li>
           </ul>
           <p><strong>Each-Way explained:</strong> Your stake is split in half — one half on the horse to win, the other on it to place (usually top 3). If it wins, both halves pay out. If it places but doesn't win, the place half pays at a fraction (usually 1/4 or 1/5) of the win odds.</p>
 
@@ -9871,15 +9873,26 @@ const App = {
             <li><strong style="color:#d4a843;">Double Chance (1X)</strong> — Wins if the home team wins OR draws. Only loses if the away team wins.</li>
           </ul>
 
+          <h2>&#128202; Our 4 AI Analysts</h2>
+          <p>Every tip is assigned to the analyst best suited for that selection:</p>
+          <ul style="font-size:14px;line-height:2;color:var(--text-secondary);">
+            <li><strong style="color:#3b82f6;">The Professor</strong> — Data-driven. Trusts xG, speed ratings, and form figures. Prefers shorter prices.</li>
+            <li><strong style="color:#22c55e;">The Scout</strong> — Value hunter. Finds overlooked prices. Class droppers, course specialists, motivation plays.</li>
+            <li><strong style="color:#a855f7;">The Clocker</strong> — Racing-only deep intelligence. Trainer intent, pace analysis, going expertise, stable form. Powered by live Perplexity research.</li>
+            <li><strong style="color:#d4a843;">The Edge</strong> — Balanced. Weighs all factors equally. Catches what the specialists miss.</li>
+          </ul>
+          <p>Every 14 days, the system reviews each analyst's performance and <strong style="color:#fff;">auto-adjusts</strong> their odds ranges and preferred markets based on what's winning and losing.</p>
+
           <h2>&#128640; Getting Started</h2>
           <ol style="font-size:14px;line-height:2.2;color:var(--text-secondary);">
-            <li>Set your <strong style="color:#fff;">bankroll</strong> — the total amount you're comfortable using (e.g. &pound;500)</li>
-            <li>Calculate <strong style="color:#fff;">1 unit</strong> — that's 1% of your bankroll (e.g. &pound;5)</li>
+            <li>Set your <strong style="color:#fff;">bankroll</strong> in the Bankroll Tracker (e.g. &pound;500)</li>
+            <li>Your <strong style="color:#fff;">daily staking plan</strong> auto-calculates on the dashboard — shows exact &pound; amounts per tip</li>
+            <li>Set your <strong style="color:#fff;">confidence filter</strong> — only see tips rated 7+ or 8+ if you want fewer, stronger picks</li>
             <li>Check the <strong style="color:#fff;">dashboard every morning</strong> for today's selections</li>
-            <li>Read the <strong style="color:#fff;">full analysis</strong> before backing anything</li>
-            <li>Stake according to <strong style="color:#fff;">our recommendation</strong> (1-3 units per tip)</li>
-            <li>Track your <strong style="color:#fff;">results</strong> using the My Bets feature or a spreadsheet</li>
-            <li><strong style="color:#ef4444;">Never chase losses</strong> — stick to the staking plan</li>
+            <li>Click <strong style="color:#fff;">"Back This Tip"</strong> on any selection to track it in your <a href="#/my-roi" style="color:#d4a843;">Personal ROI Dashboard</a></li>
+            <li>Read the <strong style="color:#fff;">full analysis</strong> — especially The Clocker's deep intelligence on racing tips</li>
+            <li>Your <strong style="color:#fff;">ROI Dashboard</strong> shows your personal strike rate, P/L by analyst, and what you'd have made following all tips</li>
+            <li><strong style="color:#ef4444;">Never chase losses</strong> — the staking plan does the thinking for you</li>
           </ol>
 
           <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:20px;margin:24px 0;">
