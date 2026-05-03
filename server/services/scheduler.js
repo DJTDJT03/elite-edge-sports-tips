@@ -2048,13 +2048,19 @@ module.exports = function startScheduler(deps) {
                 tip.result = resultVal;
 
                 var resultId = 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                var racingOutcome = tipRunner ? (tip.selection + ' finished ' + (tipRunner.position === '1' ? '1st' : tipRunner.position === '2' ? '2nd' : tipRunner.position === '3' ? '3rd' : tipRunner.position + 'th') + (tipRunner.sp ? ' (SP ' + tipRunner.sp + ')' : '')) : '';
+                if (winner && normHorse(winner.horse) !== tipName) {
+                  racingOutcome += ' — Winner: ' + winner.horse + (winner.sp ? ' (SP ' + winner.sp + ')' : '');
+                }
+                await db.updateTip(tip.id, { actualOutcome: racingOutcome });
+
                 await db.createResult({
                   id: resultId,
                   tipId: tip.id, sport: 'racing', event: tip.event, selection: tip.selection,
                   market: tip.market, odds: tip.odds, stake: stake,
                   result: resultVal, pnl: Math.round(pnl * 100) / 100,
                   date: tip.date, isPremium: tip.isPremium, tipsterProfile: tip.tipsterProfile || 'The Edge',
-                  confidence: tip.confidence,
+                  confidence: tip.confidence, actualOutcome: racingOutcome,
                 });
                 tip._resultId = resultId;
                 updated++;
@@ -2241,17 +2247,20 @@ module.exports = function startScheduler(deps) {
               ftip.status = 'settled';
               ftip.result = fResultVal;
 
+              var actualOutcome = fmatch.homeTeam + ' ' + homeGoals + '-' + awayGoals + ' ' + fmatch.awayTeam;
+              await db.updateTip(ftip.id, { actualOutcome: actualOutcome });
+
               await db.createResult({
                 id: 'auto_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
                 tipId: ftip.id, sport: 'football', event: ftip.event, selection: ftip.selection,
                 market: ftip.market, odds: ftip.odds, stake: fStake,
                 result: fResultVal, pnl: Math.round(fPnl * 100) / 100,
                 date: ftip.date, isPremium: ftip.isPremium, tipsterProfile: ftip.tipsterProfile || 'The Edge',
-                confidence: ftip.confidence,
+                confidence: ftip.confidence, actualOutcome: actualOutcome,
               });
               updated++;
               var fClvLabel = fClvPct !== null ? ' CLV: ' + fClvPct.toFixed(2) + '%' : '';
-              console.log('[Auto-Settle] Football: ' + ftip.selection + ' (' + fmatch.homeTeam + ' ' + homeGoals + '-' + awayGoals + ' ' + fmatch.awayTeam + ') = ' + fResultVal + ' (' + fPnl.toFixed(2) + 'u)' + fClvLabel + ' [' + ftip.date + ']');
+              console.log('[Auto-Settle] Football: ' + ftip.selection + ' (' + actualOutcome + ') = ' + fResultVal + ' (' + fPnl.toFixed(2) + 'u)' + fClvLabel + ' [' + ftip.date + ']');
 
               // Log notification for wins
               try {
@@ -2338,8 +2347,9 @@ module.exports = function startScheduler(deps) {
                 continue;
               }
 
+              var nbOutcome = nbMatch.homeTeam + ' ' + nbHomeScore + '-' + nbAwayScore + ' ' + nbMatch.awayTeam;
               await db.updateTip(nbTip.id, {
-                status: 'settled', result: nbResultVal,
+                status: 'settled', result: nbResultVal, actualOutcome: nbOutcome,
                 settledAt: new Date().toISOString(),
                 settlementSource: 'auto-basketball-api',
               });
@@ -2350,7 +2360,7 @@ module.exports = function startScheduler(deps) {
                 market: nbTip.market, odds: nbTip.odds, stake: nbStake,
                 result: nbResultVal, pnl: Math.round(nbPnl * 100) / 100,
                 date: nbTip.date, isPremium: nbTip.isPremium, tipsterProfile: nbTip.tipsterProfile || 'The Edge',
-                confidence: nbTip.confidence,
+                confidence: nbTip.confidence, actualOutcome: nbOutcome,
               });
               updated++;
               console.log('[Auto-Settle] NBA: ' + nbTip.selection + ' (' + nbMatch.homeTeam + ' ' + nbHomeScore + '-' + nbAwayScore + ' ' + nbMatch.awayTeam + ') = ' + nbResultVal + ' (' + nbPnl.toFixed(2) + 'u)');
@@ -2424,8 +2434,9 @@ module.exports = function startScheduler(deps) {
                 continue;
               }
 
+              var rgOutcome = rgMatch.homeTeam + ' ' + rgHomeScore + '-' + rgAwayScore + ' ' + rgMatch.awayTeam;
               await db.updateTip(rgTip.id, {
-                status: 'settled', result: rgResultVal,
+                status: 'settled', result: rgResultVal, actualOutcome: rgOutcome,
                 settledAt: new Date().toISOString(),
                 settlementSource: 'auto-rugby-api',
               });
@@ -2436,7 +2447,7 @@ module.exports = function startScheduler(deps) {
                 market: rgTip.market, odds: rgTip.odds, stake: rgStake,
                 result: rgResultVal, pnl: Math.round(rgPnl * 100) / 100,
                 date: rgTip.date, isPremium: rgTip.isPremium, tipsterProfile: rgTip.tipsterProfile || 'The Edge',
-                confidence: rgTip.confidence,
+                confidence: rgTip.confidence, actualOutcome: rgOutcome,
               });
               updated++;
               console.log('[Auto-Settle] Rugby: ' + rgTip.selection + ' (' + rgMatch.homeTeam + ' ' + rgHomeScore + '-' + rgAwayScore + ' ' + rgMatch.awayTeam + ') = ' + rgResultVal + ' (' + rgPnl.toFixed(2) + 'u)');
@@ -2509,8 +2520,9 @@ module.exports = function startScheduler(deps) {
                 continue;
               }
 
+              var nfOutcome = nfMatch.homeTeam + ' ' + nfHomeScore + '-' + nfAwayScore + ' ' + nfMatch.awayTeam;
               await db.updateTip(nfTip.id, {
-                status: 'settled', result: nfResultVal,
+                status: 'settled', result: nfResultVal, actualOutcome: nfOutcome,
                 settledAt: new Date().toISOString(),
                 settlementSource: 'auto-nfl-api',
               });
@@ -2521,7 +2533,7 @@ module.exports = function startScheduler(deps) {
                 market: nfTip.market, odds: nfTip.odds, stake: nfStake,
                 result: nfResultVal, pnl: Math.round(nfPnl * 100) / 100,
                 date: nfTip.date, isPremium: nfTip.isPremium, tipsterProfile: nfTip.tipsterProfile || 'The Edge',
-                confidence: nfTip.confidence,
+                confidence: nfTip.confidence, actualOutcome: nfOutcome,
               });
               updated++;
               console.log('[Auto-Settle] NFL: ' + nfTip.selection + ' (' + nfMatch.homeTeam + ' ' + nfHomeScore + '-' + nfAwayScore + ' ' + nfMatch.awayTeam + ') = ' + nfResultVal + ' (' + nfPnl.toFixed(2) + 'u)');
@@ -2580,8 +2592,9 @@ module.exports = function startScheduler(deps) {
                 continue;
               }
 
+              var tnOutcome = (tnMatch.finalResult || tnMatch.winner || '');
               await db.updateTip(tnTip.id, {
-                status: 'settled', result: tnResultVal,
+                status: 'settled', result: tnResultVal, actualOutcome: tnOutcome,
                 settledAt: new Date().toISOString(),
                 settlementSource: 'auto-tennis-api',
               });
@@ -2592,7 +2605,7 @@ module.exports = function startScheduler(deps) {
                 market: tnTip.market, odds: tnTip.odds, stake: tnStake,
                 result: tnResultVal, pnl: Math.round(tnPnl * 100) / 100,
                 date: tnTip.date, isPremium: tnTip.isPremium, tipsterProfile: tnTip.tipsterProfile || 'The Edge',
-                confidence: tnTip.confidence,
+                confidence: tnTip.confidence, actualOutcome: tnOutcome,
               });
               updated++;
               console.log('[Auto-Settle] Tennis: ' + tnTip.selection + ' = ' + tnResultVal + ' (' + tnPnl.toFixed(2) + 'u) [' + tnMatch.finalResult + ']');

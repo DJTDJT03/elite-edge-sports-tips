@@ -151,7 +151,7 @@ module.exports = function(deps) {
   router.post('/admin/results', authenticate, requireAdmin, async (req, res) => {
     const results = await db.getResults();
     const tips = await db.getTips();
-    const { tipId, result } = req.body;
+    const { tipId, result, actualOutcome } = req.body;
 
     const tip = tips.find(t => t.id === tipId);
     if (!tip) return res.status(404).json({ error: 'Tip not found' });
@@ -163,6 +163,11 @@ module.exports = function(deps) {
     else if (result === 'placed') pnl = ((tip.odds - 1) / 4) * stake;
     else if (result === 'lost') pnl = -stake;
     // void = 0
+
+    // Store actual outcome on the tip
+    if (actualOutcome) {
+      await db.updateTip(tip.id, { actualOutcome });
+    }
 
     const newResult = {
       id: `res_${Date.now()}`,
@@ -177,6 +182,7 @@ module.exports = function(deps) {
       pnl: Math.round(pnl * 100) / 100,
       date: tip.date,
       isPremium: tip.isPremium,
+      actualOutcome: actualOutcome || null,
     };
 
     results.push(newResult);

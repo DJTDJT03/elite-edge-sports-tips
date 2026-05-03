@@ -123,7 +123,7 @@ window.ResultsPage = {
     // Build tip rows
     var tipRows = '';
     if (dayTips.length === 0) {
-      tipRows = '<tr><td colspan="7" style="text-align:center;color:#64748b;padding:20px;">No tips published on this date.</td></tr>';
+      tipRows = '<tr><td colspan="9" style="text-align:center;color:#64748b;padding:20px;">No tips published on this date.</td></tr>';
     } else {
       // Sort by sport then time
       dayTips.sort(function(a, b) {
@@ -132,7 +132,9 @@ window.ResultsPage = {
       });
       dayTips.forEach(function(t) {
         var r = resultMap[t.id];
-        var resultBadge, pnlCell;
+        var resultBadge, pnlCell, outcomeCell;
+        // Get actual outcome from tip or result
+        var outcome = t.actualOutcome || (r && r.actualOutcome) || '';
         if (r) {
           var badgeClass = r.result === 'won' ? 'badge-result-won' : r.result === 'lost' ? 'badge-result-lost' : r.result === 'placed' ? 'badge-result-placed' : 'badge-result-void';
           resultBadge = '<span class="badge ' + badgeClass + '">' + self._ucFirst(r.result) + '</span>';
@@ -142,6 +144,7 @@ window.ResultsPage = {
           resultBadge = '<span class="badge" style="background:rgba(148,163,184,0.15);color:#94a3b8;">Pending</span>';
           pnlCell = '<span style="color:#64748b;">—</span>';
         }
+        outcomeCell = outcome ? '<span style="font-size:11px;color:#cbd5e1;">' + outcome + '</span>' : '<span style="color:#64748b;font-size:11px;">—</span>';
 
         var sportIcon = t.sport === 'racing' ? '&#127943;' : t.sport === 'football' ? '&#9917;' : t.sport === 'basketball' ? '&#127936;' : t.sport === 'tennis' ? '&#127934;' : t.sport === 'rugby' ? '&#127945;' : t.sport === 'american-football' ? '&#127944;' : '&#128200;';
         var confColor = (t.confidence || 0) >= 8 ? '#22c55e' : (t.confidence || 0) >= 6 ? '#d4a843' : '#94a3b8';
@@ -151,10 +154,11 @@ window.ResultsPage = {
         tipRows += '<tr>'
           + '<td>' + sportIcon + '</td>'
           + '<td style="font-size:12px;color:#94a3b8;">' + time + '</td>'
-          + '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (t.event || t.meeting || '-') + '</td>'
+          + '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (t.event || t.meeting || '-') + '</td>'
           + '<td><strong>' + (t.selection || '-') + '</strong><br><span style="font-size:11px;color:#64748b;">' + (t.market || 'Win') + '</span></td>'
           + '<td style="font-weight:700;color:#d4a843;">' + (t.odds || '-') + '</td>'
           + '<td style="text-align:center;"><span style="color:' + confColor + ';font-weight:700;">' + (t.confidence || '-') + '</span></td>'
+          + '<td>' + outcomeCell + '</td>'
           + '<td>' + resultBadge + '</td>'
           + '<td>' + pnlCell + '</td>'
           + '</tr>';
@@ -187,7 +191,7 @@ window.ResultsPage = {
       // Tips table
       + '<div class="admin-table-wrap">'
       +   '<table class="admin-table">'
-      +     '<thead><tr><th></th><th>Time</th><th>Event</th><th>Selection</th><th>Odds</th><th>Conf</th><th>Result</th><th>P/L</th></tr></thead>'
+      +     '<thead><tr><th></th><th>Time</th><th>Event</th><th>Our Pick</th><th>Odds</th><th>Conf</th><th>Actual Outcome</th><th>Result</th><th>P/L</th></tr></thead>'
       +     '<tbody>' + tipRows + '</tbody>'
       +   '</table>'
       + '</div>'
@@ -353,10 +357,13 @@ window.ResultsPage = {
     var rows = '';
     for (var i = 0; i < unsettled.length; i++) {
       var t = unsettled[i];
+      var sportIcon = t.sport === 'racing' ? '&#127943;' : t.sport === 'football' ? '&#9917;' : t.sport === 'basketball' ? '&#127936;' : t.sport === 'tennis' ? '&#127934;' : t.sport === 'rugby' ? '&#127945;' : '&#127944;';
+      var outcomePlaceholder = t.sport === 'racing' ? 'e.g. 1st, 3rd, fell' : t.sport === 'football' ? 'e.g. 2-1' : 'e.g. score/result';
       rows += '<tr data-tip-id="' + t.id + '">'
-        + '<td>' + (t.event || '-') + '</td>'
-        + '<td>' + (t.selection || '-') + '</td>'
+        + '<td>' + sportIcon + ' ' + (t.event || '-') + '</td>'
+        + '<td><strong>' + (t.selection || '-') + '</strong><br><span style="font-size:11px;color:#64748b;">' + (t.market || 'Win') + '</span></td>'
         + '<td>' + (t.odds || '-') + '</td>'
+        + '<td><input type="text" class="settle-outcome-input" data-tip-id="' + t.id + '" placeholder="' + outcomePlaceholder + '" style="padding:4px 8px;background:var(--admin-bg-card,#1e2235);border:1px solid var(--admin-border,#2a2e3d);border-radius:4px;color:#fff;font-size:12px;width:120px;" /></td>'
         + '<td class="col-settle-actions">'
         +   '<button class="btn btn-sm btn-green settle-btn" data-tip-id="' + t.id + '" data-result="won">Won</button>'
         +   '<button class="btn btn-sm btn-red settle-btn" data-tip-id="' + t.id + '" data-result="lost">Lost</button>'
@@ -370,7 +377,7 @@ window.ResultsPage = {
       + '<h2 class="admin-section-title">Settle Results</h2>'
       + '<div class="admin-table-wrap">'
       +   '<table class="admin-table settle-table">'
-      +     '<thead><tr><th>Event</th><th>Selection</th><th>Odds</th><th>Mark Result</th></tr></thead>'
+      +     '<thead><tr><th>Event</th><th>Our Pick</th><th>Odds</th><th>Actual Outcome</th><th>Mark Result</th></tr></thead>'
       +     '<tbody>' + rows + '</tbody>'
       +   '</table>'
       + '</div>';
@@ -503,7 +510,10 @@ window.ResultsPage = {
     }
 
     try {
-      await AdminAPI.post('/admin/results', { tipId: tipId, result: result });
+      // Get the outcome input value from the same row
+      var outcomeInput = row ? row.querySelector('.settle-outcome-input') : null;
+      var actualOutcome = outcomeInput ? outcomeInput.value.trim() : '';
+      await AdminAPI.post('/admin/results', { tipId: tipId, result: result, actualOutcome: actualOutcome || undefined });
       AdminApp.toast('Tip settled as ' + this._ucFirst(result) + '.', 'success');
       await this.render();
     } catch (err) {
