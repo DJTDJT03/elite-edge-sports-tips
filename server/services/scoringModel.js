@@ -1289,7 +1289,7 @@ class ScoringModel {
     } else if (sport === 'tennis') {
       return this._generateTennisAnalysis(scored, enrichment);
     } else {
-      return this._generateFootballAnalysis(scored, enrichment);
+      return this._generateFootballAnalysis(scored, enrichment, analyst);
     }
   }
 
@@ -1664,7 +1664,7 @@ class ScoringModel {
     };
   }
 
-  _generateFootballAnalysis(scored, enrichment) {
+  _generateFootballAnalysis(scored, enrichment, analyst) {
     const fixture = scored.fixture || {};
     const home = fixture.homeTeam || 'Home';
     const away = fixture.awayTeam || 'Away';
@@ -1736,6 +1736,32 @@ class ScoringModel {
       h2hText += ' ' + sv('manager_comments');
     }
 
+    // THE TACTICIAN — deep football intelligence (only when assigned)
+    let tacticianInsight = '';
+    if (analyst === 'tactician') {
+      let parts = [];
+
+      if (sig.manager_quotes) parts.push(`MANAGER SAYS: ${sv('manager_quotes')}`);
+      if (sig.expected_lineup) parts.push(`EXPECTED XI: ${sv('expected_lineup')}`);
+      if (sig.tactical_setup) parts.push(`TACTICAL SETUP: ${sv('tactical_setup')}`);
+      if (sig.motivation_context) parts.push(`WHAT'S AT STAKE: ${sv('motivation_context')}`);
+      if (sig.rotation_risk) parts.push(`ROTATION RISK: ${sv('rotation_risk')}`);
+      if (sig.referee_record) parts.push(`REFEREE: ${sv('referee_record')}`);
+      if (sig.h2h_tactical) parts.push(`H2H PATTERN: ${sv('h2h_tactical')}`);
+      if (sig.xg_trend) parts.push(`xG TREND: ${sv('xg_trend')}`);
+      if (sig.injury_update) parts.push(`INJURY INTEL: ${sv('injury_update')}`);
+
+      // Template fallbacks for key sections when Sonar has no data
+      if (!sig.motivation_context && factors.motivation >= 0.6) {
+        parts.push(`WHAT'S AT STAKE: ${home} and ${away} both have something to play for in ${league}. Motivation factor rated ${(factors.motivation * 100).toFixed(0)}% by our model.`);
+      }
+      if (!sig.referee_record) {
+        parts.push(`REFEREE: Check the appointed official closer to kick-off — card and penalty tendencies can affect BTTS and over/under markets.`);
+      }
+
+      if (parts.length > 0) tacticianInsight = parts.join(' ');
+    }
+
     return {
       summary: `${home} vs ${away} in ${league}. Our model gives ${selection} a ${modelPct}% probability against the market's ${impliedPct}%. ${keyReason}.${summaryExtra}`,
       form: formText,
@@ -1743,6 +1769,7 @@ class ScoringModel {
       injuries: injuryText,
       headToHead: h2hText,
       riskNotes: riskNotes,
+      tacticianInsight: tacticianInsight || undefined,
     };
   }
   _generateBasketballAnalysis(scored, enrichment) {

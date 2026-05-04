@@ -141,7 +141,7 @@ module.exports = function createPerplexityClient(db) {
     try {
       promptObj = sport === 'racing'
         ? (analyst === 'clocker' ? prompts.buildClockerPrompt(scored) : prompts.buildRacingTipPrompt(scored))
-        : prompts.buildFootballTipPrompt(scored);
+        : (analyst === 'tactician' ? prompts.buildTacticianPrompt(scored) : prompts.buildFootballTipPrompt(scored));
     } catch (promptErr) {
       return _skipResult('prompt_build_error: ' + promptErr.message, 'per-tip', tipId);
     }

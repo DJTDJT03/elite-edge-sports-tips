@@ -420,7 +420,43 @@ function buildClockerPrompt(scored) {
 // ---------------------------------------------------------------------------
 // EXPORTS
 // ---------------------------------------------------------------------------
+// TACTICIAN — Deep Football Intelligence Prompt
+// ---------------------------------------------------------------------------
+
+function buildTacticianPrompt(scored) {
+  var fixture = scored.fixture || {};
+  var uk = _ukNow();
+
+  var user =
+    'Today is ' + uk.date + ' at ' + uk.time + ' UK time.\n' +
+    'Match: ' + _slot('homeTeam', fixture.homeTeam) + ' vs ' + _slot('awayTeam', fixture.awayTeam) + '\n' +
+    'League: ' + _optSlot(fixture.league, 'Unknown') + ' | Kickoff: ' + _optSlot(fixture.kickoff, 'TBC') + '\n' +
+    'Venue: ' + _optSlot(fixture.venue, 'TBC') + '\n' +
+    'Our market: ' + _optSlot(scored.selectedMarket, 'Match Result') + ' | Selection: ' + _optSlot(scored.selectedSelection, 'TBC') + '\n\n' +
+    'You are a deep football intelligence analyst. Search for the following specific data about this match. Return a JSON object with ONLY these keys (omit any without a citable fact):\n\n' +
+    '{\n' +
+    '  "manager_quotes": {"value": "pre-match press conference quotes from both managers about team selection, tactics, or injury updates", "citation_index": 0},\n' +
+    '  "expected_lineup": {"value": "confirmed or expected starting XI changes, formation, notable inclusions or omissions", "citation_index": 1},\n' +
+    '  "injury_update": {"value": "confirmed injuries/suspensions for both teams with expected return dates", "citation_index": 2},\n' +
+    '  "tactical_setup": {"value": "expected formation and tactical approach for both sides, any recent system changes", "citation_index": 3},\n' +
+    '  "motivation_context": {"value": "what is at stake for each team — league position, relegation, title, European qualification, cup progression, derby rivalry", "citation_index": 4},\n' +
+    '  "rotation_risk": {"value": "upcoming fixtures that might cause rotation, midweek European ties, fixture congestion", "citation_index": 5},\n' +
+    '  "referee_record": {"value": "assigned referee, average cards per game, penalties awarded this season, tendency for home/away bias", "citation_index": 6},\n' +
+    '  "h2h_tactical": {"value": "recent head-to-head results with scorelines, any tactical pattern (e.g. always high-scoring, one side dominates)", "citation_index": 7},\n' +
+    '  "xg_trend": {"value": "xG performance trend for both teams over last 5 matches — overperforming or underperforming expected goals", "citation_index": 8}\n' +
+    '}\n\n' +
+    'Rules:\n' +
+    '- citation_index must be an integer referencing your citations array\n' +
+    '- Only cite BBC Sport, Sky Sports, The Athletic, Guardian, official club sites, FBRef, Understat, Transfermarkt\n' +
+    '- Be specific with numbers — not "good form" but "W4 D1 L0 in last 5, xG 2.1 per game"\n' +
+    '- Do not predict the result or recommend a bet';
+
+  return { system: SYSTEM_PER_TIP_JSON, user: user, callSiteKey: 'per-tip-tactician' };
+}
+
+// ---------------------------------------------------------------------------
 module.exports = {
+  buildTacticianPrompt: buildTacticianPrompt,
   buildClockerPrompt: buildClockerPrompt,
   buildRacingTipPrompt: buildRacingTipPrompt,
   buildFootballTipPrompt: buildFootballTipPrompt,

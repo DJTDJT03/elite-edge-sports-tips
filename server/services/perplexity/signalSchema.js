@@ -39,6 +39,13 @@ var FOOTBALL_SIGNALS = [
   'motivation_context',
   'manager_comments',
   'injury_update',
+  // Tactician-specific deep intelligence signals
+  'manager_quotes',
+  'expected_lineup',
+  'tactical_setup',
+  'h2h_tactical',
+  'xg_trend',
+  'referee_record',
 ];
 
 // ---------------------------------------------------------------------------

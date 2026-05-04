@@ -121,6 +121,39 @@ var profiles = {
     aiPromptStyle: 'You are a deep racing analyst. Focus on the details casual punters miss: trainer intent (first-time headgear, equipment changes, stable form over last 14 days, jockey bookings), pace scenario (who makes the running, will the pace suit closers or front-runners), trip suitability (stepping up/down in distance, pedigree for the trip), course configuration (left/right-handed, undulating/flat, stiff/easy finish), and going expertise (which horses have dramatically better form on today\'s ground). Reference specific form figures, trainer strike rates, and course stats. Be authoritative and detailed — this is expert-level analysis that justifies a premium subscription.',
   },
 
+  tactician: {
+    name: 'The Tactician',
+    specialty: 'Deep Football Intelligence',
+    description: 'Football-only specialist. Reads manager intent, tactical setups, motivation, and referee tendencies before the game starts.',
+
+    // Racing: not used — football only analyst
+    racingWeightModifiers: {
+      form: 1.0, speedRatings: 1.0, class: 1.0, going: 1.0, trainerJockey: 1.0,
+      course: 1.0, draw: 1.0, weight: 1.0, marketSupport: 1.0,
+    },
+
+    footballWeightModifiers: {
+      xG: 1.4,               // +40% xG (deep shot quality analysis, not just the headline number)
+      form: 1.1,
+      h2h: 1.3,              // +30% H2H (historical patterns between these exact teams)
+      injuries: 1.5,          // +50% injuries (key player absence is the biggest market inefficiency)
+      homeAway: 1.3,          // +30% home/away (fortress records, poor travellers)
+      motivation: 1.5,        // +50% motivation (relegation battles, title deciders, dead rubbers)
+      shots: 1.2,             // +20% shots (chance creation quality)
+      scheduleCongestion: 1.4, // +40% congestion (midweek European sides, rotation risk)
+      marketMovement: 0.5,    // -50% market (finds value before the market adjusts)
+    },
+
+    preferredMarkets: {
+      racing: [],
+      football: ['Match Result', 'Both Teams to Score', 'Over/Under', 'Asian Handicap'],
+    },
+
+    oddsRange: { min: 1.5, max: 12.0 },
+
+    aiPromptStyle: 'You are a deep football analyst. Focus on tactical and contextual angles the casual punter misses: manager press conference quotes and team news, expected lineup and formation changes, injury/suspension impact on team structure (not just quality), fixture congestion and rotation risk, motivation context (what is at stake for each side), referee tendencies (cards per game, penalties awarded), head-to-head tactical patterns, and xG quality (shot locations, big chances, not just volume). Reference specific stats, quotes, and tactical setups. Be authoritative — this is expert-level preview analysis.',
+  },
+
   edge: {
     name: 'The Edge',
     specialty: 'Balanced Analysis',
@@ -207,10 +240,27 @@ function assignAnalyst(scored, sport) {
     if (factors.draw && factors.draw >= 0.85) return 'clocker';
   }
 
+  // THE TACTICIAN — football-only deep intelligence specialist
+  if (sport === 'football') {
+    // Injury-driven plays — key player absence changes the market
+    if (factors.injuries && factors.injuries >= 0.8) return 'tactician';
+
+    // Motivation plays — relegation, title, derby, nothing to play for
+    if (factors.motivation && factors.motivation >= 0.75) return 'tactician';
+
+    // Schedule congestion — midweek European sides, rotation risk
+    if (factors.scheduleCongestion && factors.scheduleCongestion >= 0.8) return 'tactician';
+
+    // Strong xG + H2H combination — tactical pattern play
+    if (factors.xG && factors.xG >= 0.75 && factors.h2h && factors.h2h >= 0.65) return 'tactician';
+
+    // Home/away specialist — fortress record or terrible travellers
+    if (factors.homeAway && factors.homeAway >= 0.85) return 'tactician';
+  }
+
   // The Scout gets big-price value plays and class droppers
   if (odds >= 5.0) return 'scout';
-  if (factors.class && factors.class >= 0.8 && odds >= 3.0) return 'scout'; // class dropper
-  if (sport === 'football' && factors.motivation && factors.motivation >= 0.7) return 'scout'; // motivation play
+  if (factors.class && factors.class >= 0.8 && odds >= 3.0) return 'scout';
 
   // The Professor gets data-strong, shorter-priced selections
   if (odds <= 3.0 && factors.form && factors.form >= 0.7) return 'professor';

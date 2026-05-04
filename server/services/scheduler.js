@@ -4237,7 +4237,7 @@ module.exports = function startScheduler(deps) {
     var tipMap = {};
     allTips.forEach(function(t) { tipMap[t.id] = t; });
 
-    var analysts = ['The Professor', 'The Scout', 'The Clocker', 'The Edge'];
+    var analysts = ['The Professor', 'The Scout', 'The Clocker', 'The Tactician', 'The Edge'];
     var tuningReport = [];
 
     for (var ai = 0; ai < analysts.length; ai++) {
@@ -4346,7 +4346,7 @@ module.exports = function startScheduler(deps) {
       }
 
       // --- ACTIVE TUNING: actually apply adjustments based on loss patterns ---
-      var analystKey = name === 'The Professor' ? 'professor' : name === 'The Scout' ? 'scout' : name === 'The Clocker' ? 'clocker' : 'edge';
+      var analystKey = name === 'The Professor' ? 'professor' : name === 'The Scout' ? 'scout' : name === 'The Clocker' ? 'clocker' : name === 'The Tactician' ? 'tactician' : 'edge';
       var profile = analystProfiles.profiles[analystKey];
       if (profile) {
         var adjustmentsMade = [];

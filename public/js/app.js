@@ -1031,7 +1031,7 @@ const App = {
       'premier-league': 'Premier League Weekend Preview — Analyst Verdicts | Elite Edge',
       'results': 'Verified Results & Performance Track Record | Elite Edge',
       'pricing': 'Pricing — Premium & VIP Subscription Plans | Elite Edge',
-      'analysts': 'Our Analysts — Professor, Scout, Clocker, Edge | Elite Edge',
+      'analysts': 'Our Analysts — Professor, Scout, Clocker, Tactician, Edge | Elite Edge',
       'my-roi': 'My ROI Dashboard — Personal Performance Tracking | Elite Edge',
       'support': 'Help & Support — FAQ & Contact | Elite Edge',
       'blog': 'Blog — Weekly Reviews & Betting Insights | Elite Edge',
@@ -3348,7 +3348,7 @@ const App = {
             <span class="tip-sport-badge ${tip.sport === 'racing' ? 'badge-racing' : 'badge-football'}">${tip.sport === 'racing' ? 'Racing' : tip.sport === 'basketball' ? 'NBA' : tip.sport === 'tennis' ? 'Tennis' : tip.sport === 'rugby' ? 'Rugby' : tip.sport === 'american-football' ? 'NFL' : 'Football'}</span>
             ${tip.isOutsider ? '<span class="badge-outsider">Outsider</span>' : `<span class="${tip.isPremium ? 'badge-premium' : 'badge-free'}">${tip.isPremium ? 'Premium' : 'Free'}</span>`}
             ${tip.valueRating ? `<span class="badge-premium">${tip.valueRating}</span>` : ''}
-            ${tip.tipsterProfile ? `<span class="analyst-badge ${tip.tipsterProfile === 'The Professor' ? 'professor' : tip.tipsterProfile === 'The Scout' ? 'scout' : tip.tipsterProfile === 'The Clocker' ? 'clocker' : 'edge'}">${tip.tipsterProfile}</span>` : ''}
+            ${tip.tipsterProfile ? `<span class="analyst-badge ${tip.tipsterProfile === 'The Professor' ? 'professor' : tip.tipsterProfile === 'The Scout' ? 'scout' : tip.tipsterProfile === 'The Clocker' ? 'clocker' : tip.tipsterProfile === 'The Tactician' ? 'tactician' : 'edge'}">${tip.tipsterProfile}</span>` : ''}
             ${tip.analysis && tip.analysis.dualAIVerified ? '<span style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;letter-spacing:0.5px;">DUAL AI VERIFIED</span>' : ''}
           </div>
           <div>
@@ -6003,6 +6003,7 @@ const App = {
               if (tip.analysis.courseRecord) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Course:</strong> ' + tip.analysis.courseRecord + '</div>';
               if (tip.analysis.trainerForm) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Trainer:</strong> ' + tip.analysis.trainerForm + '</div>';
               if (tip.analysis.clockerInsight) tipsHtml += '<div style="margin-top:12px;padding:14px;background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.2);border-radius:8px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#d4a843;font-weight:800;margin-bottom:8px;">The Clocker — Deep Intelligence</div><div style="font-size:13px;color:#cbd5e1;line-height:1.6;">' + tip.analysis.clockerInsight + '</div></div>';
+              if (tip.analysis.tacticianInsight) tipsHtml += '<div style="margin-top:12px;padding:14px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.2);border-radius:8px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#ef4444;font-weight:800;margin-bottom:8px;">The Tactician — Deep Intelligence</div><div style="font-size:13px;color:#cbd5e1;line-height:1.6;">' + tip.analysis.tacticianInsight + '</div></div>';
               if (tip.analysis.oddsMovement) tipsHtml += '<div style="margin-bottom:8px;background:rgba(34,197,94,0.08);border-left:3px solid #22c55e;padding:8px 12px;border-radius:4px;"><strong style="color:#22c55e;">Market Mover:</strong> ' + tip.analysis.oddsMovement + '</div>';
               if (tip.analysis.dualAIVerified) tipsHtml += '<div style="margin-bottom:8px;background:rgba(34,197,94,0.06);border-left:3px solid #22c55e;padding:8px 12px;border-radius:4px;"><strong style="color:#22c55e;">Dual AI Verified:</strong> GPT independently rates this ' + (tip.analysis.gptConfidence || '?') + '/10 confidence. ' + (tip.analysis.gptReasoning || '') + '</div>';
               if (tip.analysis.riskNotes) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#ef4444;">Risk:</strong> ' + tip.analysis.riskNotes + '</div>';
@@ -7808,6 +7809,7 @@ const App = {
       { icon: '\u26a0\ufe0f', title: 'Risk Assessment', body: '<p>Risk Level: <strong>' + (tip.riskLevel || 'Medium') + '</strong></p>' + (a.injuries ? '<p>' + a.injuries + '</p>' : '') + (a.scheduleCongestion ? '<p>' + a.scheduleCongestion + '</p>' : '') },
       { icon: '\ud83d\udca1', title: 'Why This Is Value', fields: ['valueReasoning', 'motivationContext'] },
       { icon: '\ud83c\udfaf', title: 'Staking Recommendation', body: '<p>Recommended stake: <strong>' + (tip.staking || '1 unit') + '</strong>. ' + (a.h2h ? 'H2H: ' + a.h2h : '') + '</p>' },
+      a.tacticianInsight ? { icon: '\u26bd', title: 'The Tactician — Deep Intelligence', body: '<div style="font-size:13px;line-height:1.7;color:#cbd5e1;">' + a.tacticianInsight + '</div>' } : null,
     ];
   },
 
@@ -8631,8 +8633,8 @@ const App = {
 
     // Analyst performance cards
     var analystCards = '';
-    var analystNames = ['The Professor', 'The Scout', 'The Clocker', 'The Edge'];
-    var analystColors = { 'The Professor': '#3b82f6', 'The Scout': '#22c55e', 'The Clocker': '#a855f7', 'The Edge': '#d4a843' };
+    var analystNames = ['The Professor', 'The Scout', 'The Clocker', 'The Tactician', 'The Edge'];
+    var analystColors = { 'The Professor': '#3b82f6', 'The Scout': '#22c55e', 'The Clocker': '#a855f7', 'The Tactician': '#ef4444', 'The Edge': '#d4a843' };
     analystNames.forEach(function(name) {
       var a = roi.byAnalyst[name] || { total: 0, wins: 0, pnl: 0 };
       if (a.total === 0) return;
@@ -8780,6 +8782,13 @@ const App = {
         initials: 'TC',
         specialty: 'Deep Racing Intelligence',
         desc: 'Racing-only specialist. Reads between the lines — trainer intent (first-time headgear, jockey bookings), pace analysis, going expertise, and stable form. Covers all odds ranges. Finds angles the data alone cannot capture.',
+      },
+      {
+        name: 'The Tactician',
+        key: 'tactician',
+        initials: 'TT',
+        specialty: 'Deep Football Intelligence',
+        desc: 'Football-only specialist. Reads manager intent, tactical setups, injury impact, motivation context, referee tendencies, and xG trends. Powered by live Perplexity research from BBC Sport, The Athletic, and FBRef.',
       },
       {
         name: 'The Edge',
@@ -9914,7 +9923,7 @@ const App = {
       { icon: '&#127760;', title: 'Live Web Intelligence (Perplexity AI)', desc: 'Real-time going updates, team news, stable form, and jockey changes scraped from Racing Post, BBC Sport, and Sporting Life — woven into every tip.' },
       { icon: '&#128201;', title: 'Market Mover Explainer', desc: 'When odds shorten, we tell you WHY. Gallop reports, connection money, non-runner reshuffles — cited from live racing press.' },
       { icon: '&#128200;', title: 'CLV Tracking', desc: 'We measure Closing Line Value on every tip. Positive CLV = genuine edge over bookmakers, not just luck. Full transparency.' },
-      { icon: '&#129302;', title: '3 AI Engines + 4 Analyst Profiles', desc: 'Claude writes analysis, Perplexity feeds live web intelligence, GPT-4o independently verifies every tip. Four AI analysts (Professor, Scout, Clocker, Edge) each with distinct strategies and auto-tuning that learns from losses.' },
+      { icon: '&#129302;', title: '3 AI Engines + 5 Analyst Profiles', desc: 'Claude writes analysis, Perplexity feeds live web intelligence, GPT-4o independently verifies every tip. Five AI analysts (Professor, Scout, Clocker, Tactician, Edge) — racing and football each have dedicated deep-research specialists with weekly self-tuning.' },
       { icon: '&#128200;', title: 'Value Bet Scanner', desc: 'Compares odds across 40+ UK bookmakers in real-time. Finds where prices disagree.' },
       { icon: '&#9917;', title: 'Smart Acca Generator', desc: 'Scans every live fixture, ranks by probability, builds 2-8 fold accas automatically.' },
       { icon: '&#128202;', title: 'Real xG Data', desc: 'Understat xG fed directly into our model. Real expected goals, not estimates.' },
@@ -9979,7 +9988,7 @@ const App = {
 
         // 4 ANALYST PROFILES
         '<div style="text-align:center;margin-bottom:24px;">' +
-          '<h2 style="font-size:24px;font-weight:800;">4 AI Analysts. <span style="color:#d4a843;">4 Strategies.</span></h2>' +
+          '<h2 style="font-size:24px;font-weight:800;">5 AI Analysts. <span style="color:#d4a843;">5 Strategies.</span></h2>' +
           '<p style="color:#8b8d93;font-size:14px;">Every tip is assigned to the analyst best suited for that selection — then independently verified by GPT-4o</p>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:40px;">' +
@@ -10006,6 +10015,14 @@ const App = {
             '</div>' +
             '<p style="font-size:13px;color:#94a3b8;line-height:1.6;">Racing-only specialist. Reads trainer intent (first-time headgear, jockey bookings), analyses pace scenarios, identifies going specialists, and tracks stable form. Powered by Perplexity live research.</p>' +
             '<div style="font-size:11px;color:#a855f7;font-weight:700;margin-top:8px;">SPORTS: Racing only &bull; ODDS: Evens to 25/1</div>' +
+          '</div>' +
+          '<div style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.25);border-radius:12px;padding:24px;">' +
+            '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
+              '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#ef4444,#dc2626);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;color:#fff;">TT</div>' +
+              '<div><div style="font-size:16px;font-weight:800;color:#ef4444;">The Tactician</div><div style="font-size:11px;color:#8b8d93;">Deep Football Intelligence</div></div>' +
+            '</div>' +
+            '<p style="font-size:13px;color:#94a3b8;line-height:1.6;">Football-only specialist. Manager press conference analysis, tactical setup changes, injury impact, motivation context, referee tendencies, and xG trend analysis. Powered by live Perplexity research.</p>' +
+            '<div style="font-size:11px;color:#ef4444;font-weight:700;margin-top:8px;">SPORTS: Football only &bull; ODDS: 1/2 to 12/1</div>' +
           '</div>' +
           '<div style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.25);border-radius:12px;padding:24px;">' +
             '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
@@ -10136,7 +10153,7 @@ const App = {
             <li><strong style="color:#fff;">Form</strong> — recent finishing positions (1 = won, 2 = second, etc.)</li>
             <li><strong style="color:#fff;">Going</strong> — the ground conditions and whether the horse suits them</li>
             <li><strong style="color:#fff;">Analysis</strong> — our full reasoning, every factor considered</li>
-            <li><strong style="color:#fff;">Analyst</strong> — which AI analyst produced this tip (Professor, Scout, Clocker, or Edge)</li>
+            <li><strong style="color:#fff;">Analyst</strong> — which AI analyst produced this tip (Professor, Scout, Clocker, Tactician, or Edge)</li>
             <li><strong style="color:#fff;">Deep Intelligence</strong> — The Clocker tips include trainer strike rates, pace analysis, and going expertise from live Perplexity research</li>
           </ul>
           <p><strong>Each-Way explained:</strong> Your stake is split in half — one half on the horse to win, the other on it to place (usually top 3). If it wins, both halves pay out. If it places but doesn't win, the place half pays at a fraction (usually 1/4 or 1/5) of the win odds.</p>
