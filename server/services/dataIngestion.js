@@ -855,7 +855,8 @@ class RacingCardsSource extends DataSource {
             allOdds: allOdds,
             sex: r.sex_restriction || '',
             silkUrl: r.silk_url,
-            ownerName: r.owner
+            ownerName: r.owner,
+            isNonRunner: !!(r.is_non_runner || r.nonRunner || r.non_runner || r.status === 'NR' || r.status === 'Withdrawn' || r.scratched)
           };
         })
       };

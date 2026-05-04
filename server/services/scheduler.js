@@ -438,6 +438,9 @@ module.exports = function startScheduler(deps) {
 
           race.runners.forEach(function(runner) {
             try {
+              // Skip non-runners
+              if (runner.isNonRunner || runner.is_non_runner || runner.nonRunner || runner.status === 'NR' || runner.scratched) return;
+
               var scored = scoringModel.scoreRunner(runner, race, null, raceWeather);
               if (!scored) return;
               // Festival meetings get a 15% edge boost — ensures premium meetings are covered
@@ -3542,17 +3545,23 @@ module.exports = function startScheduler(deps) {
 
         if (!matchedCard || !matchedCard.runners || matchedCard.runners.length === 0) continue;
 
-        // Check if the tipped horse is still among the runners (fuzzy match)
+        // Check if the tipped horse is still among the runners AND not flagged as non-runner
         var found = false;
+        var isNR = false;
         for (var r = 0; r < matchedCard.runners.length; r++) {
-          var runnerName = (matchedCard.runners[r].name || matchedCard.runners[r].horse || '').toLowerCase().trim();
+          var runner = matchedCard.runners[r];
+          var runnerName = (runner.name || runner.horse || runner.horseName || '').toLowerCase().trim();
           if (runnerName === selectionName || runnerName.indexOf(selectionName) !== -1 || selectionName.indexOf(runnerName) !== -1) {
             found = true;
+            // Check if runner is flagged as non-runner even though still in the list
+            if (runner.isNonRunner || runner.is_non_runner || runner.nonRunner || runner.status === 'NR' || runner.status === 'Withdrawn' || runner.scratched) {
+              isNR = true;
+            }
             break;
           }
         }
 
-        if (!found) {
+        if (!found || isNR) {
           // Horse is a non-runner — void the tip
           voidedNonRunnerTips.add(tip.id);
 
@@ -4028,8 +4037,8 @@ module.exports = function startScheduler(deps) {
   setTimeout(safeRun('PreRaceAlerts', checkPreRaceAlerts), 90000);
 
   // Non-runner detection: check every 5 minutes
-  setInterval(safeRun('NonRunners', checkNonRunners), 5 * 60 * 1000);
-  setTimeout(safeRun('NonRunners', checkNonRunners), 90000); // 90s after startup
+  setInterval(safeRun('NonRunners', checkNonRunners), 2 * 60 * 1000); // Every 2 minutes
+  setTimeout(safeRun('NonRunners', checkNonRunners), 60000); // 60s after startup
 
   // Trial expiry checker: run every 15 minutes
   setInterval(safeRun('TrialExpiry', checkTrialExpiries), 15 * 60 * 1000);
