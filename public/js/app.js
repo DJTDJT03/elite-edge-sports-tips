@@ -990,6 +990,7 @@ const App = {
       case 'festival': this.renderFestival(); break;
       case 'festivals': this.renderFestivalHub(); break;
       case 'results': this.renderResults(); break;
+      case 'track-record': this.renderTrackRecord(); break;
       case 'pricing': this.renderPricing(); break;
       case 'analysts': this.renderAnalysts(); break;
       case 'my-roi': this.renderMyROI(); break;
@@ -1033,6 +1034,7 @@ const App = {
       'pricing': 'Pricing — Premium & VIP Subscription Plans | Elite Edge',
       'analysts': 'Our Analysts — Professor, Scout, Clocker, Tactician, Edge | Elite Edge',
       'my-roi': 'My ROI Dashboard — Personal Performance Tracking | Elite Edge',
+      'track-record': 'Verified Track Record — Every Tip, Every Result | Elite Edge',
       'support': 'Help & Support — FAQ & Contact | Elite Edge',
       'blog': 'Blog — Weekly Reviews & Betting Insights | Elite Edge',
       'how-it-works': 'How It Works — Our Scoring Model Explained | Elite Edge',
@@ -8751,6 +8753,173 @@ const App = {
         '<button class="btn btn-outline btn-sm" onclick="App.exportMyBetsCSV()">Export as CSV</button>' +
         '<p style="font-size:11px;color:#64748b;margin-top:8px;">Your personal data. Synced across devices. Updated every time a result comes in.</p>' +
       '</div>' +
+    '</div>';
+  },
+
+  // -----------------------------------------------------------------------
+  // VERIFIED TRACK RECORD — public proof page for marketing
+  // -----------------------------------------------------------------------
+  async renderTrackRecord() {
+    var app = document.getElementById('app');
+    app.innerHTML = '<div class="container" style="padding-top:40px;"><div style="text-align:center;"><div class="spinner"></div><p class="text-muted" style="margin-top:12px;">Loading verified track record...</p></div></div>';
+
+    var data;
+    try {
+      data = await this.api('/track-record');
+    } catch(e) {
+      app.innerHTML = '<div class="container" style="padding-top:60px;text-align:center;"><h2>Track Record Unavailable</h2><p class="text-muted">Please try again later.</p></div>';
+      return;
+    }
+
+    var o = data.overview || {};
+    var self = this;
+    var pnlClass = o.totalPnl > 0 ? 'color:#22c55e;' : 'color:#ef4444;';
+    var roiClass = o.roi > 0 ? 'color:#22c55e;' : 'color:#ef4444;';
+    var srClass = o.strikeRate >= 50 ? 'color:#22c55e;' : o.strikeRate >= 30 ? 'color:#d4a843;' : 'color:#ef4444;';
+
+    // Sport cards
+    var sportCards = Object.keys(data.bySport || {}).map(function(s) {
+      var d = data.bySport[s];
+      var icon = s === 'racing' ? '&#127943;' : s === 'football' ? '&#9917;' : s === 'basketball' ? '&#127936;' : s === 'tennis' ? '&#127934;' : s === 'rugby' ? '&#127945;' : '&#127944;';
+      return '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;min-width:140px;">' +
+        '<div style="font-size:22px;">' + icon + '</div>' +
+        '<div style="font-size:13px;font-weight:700;color:#fff;margin:4px 0;">' + s.charAt(0).toUpperCase() + s.slice(1) + '</div>' +
+        '<div style="font-size:20px;font-weight:900;' + (d.pnl > 0 ? 'color:#22c55e;' : 'color:#ef4444;') + '">' + (d.pnl > 0 ? '+' : '') + d.pnl.toFixed(2) + 'u</div>' +
+        '<div style="font-size:11px;color:#94a3b8;">' + d.wins + '/' + d.total + ' (' + d.strikeRate + '%) | ROI ' + (d.roi > 0 ? '+' : '') + d.roi + '%</div>' +
+      '</div>';
+    }).join('');
+
+    // Analyst cards
+    var analystCards = Object.keys(data.byAnalyst || {}).map(function(a) {
+      var d = data.byAnalyst[a];
+      var col = a === 'The Professor' ? '#3b82f6' : a === 'The Scout' ? '#22c55e' : a === 'The Clocker' ? '#a855f7' : a === 'The Tactician' ? '#ef4444' : '#d4a843';
+      return '<div style="background:rgba(255,255,255,0.03);border-left:3px solid ' + col + ';border-radius:8px;padding:14px 16px;">' +
+        '<div style="font-size:13px;font-weight:800;color:' + col + ';">' + a + '</div>' +
+        '<div style="font-size:18px;font-weight:900;' + (d.pnl > 0 ? 'color:#22c55e;' : 'color:#ef4444;') + '">' + (d.pnl > 0 ? '+' : '') + d.pnl.toFixed(2) + 'u</div>' +
+        '<div style="font-size:11px;color:#94a3b8;">' + d.wins + '/' + d.total + ' (' + d.strikeRate + '%)</div>' +
+      '</div>';
+    }).join('');
+
+    // Confidence tier cards
+    var confLabels = { elite: 'Elite (9-10)', strong: 'Strong (7-8)', other: 'Standard (<7)' };
+    var confCards = Object.keys(data.byConfidence || {}).map(function(t) {
+      var d = data.byConfidence[t];
+      if (d.total === 0) return '';
+      return '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px 16px;flex:1;min-width:140px;text-align:center;">' +
+        '<div style="font-size:13px;font-weight:700;color:#d4a843;">' + (confLabels[t] || t) + '</div>' +
+        '<div style="font-size:18px;font-weight:900;' + (d.pnl > 0 ? 'color:#22c55e;' : 'color:#ef4444;') + '">' + (d.pnl > 0 ? '+' : '') + d.pnl.toFixed(2) + 'u</div>' +
+        '<div style="font-size:11px;color:#94a3b8;">' + d.wins + '/' + d.total + ' (' + d.strikeRate + '%)</div>' +
+      '</div>';
+    }).join('');
+
+    // Monthly table
+    var months = Object.keys(data.monthly || {}).sort().reverse();
+    var monthlyRows = months.map(function(m) {
+      var d = data.monthly[m];
+      var total = d.wins + d.losses;
+      var sr = total > 0 ? Math.round((d.wins / total) * 100) : 0;
+      return '<tr>' +
+        '<td style="font-weight:600;">' + m + '</td>' +
+        '<td>' + total + '</td>' +
+        '<td style="color:#22c55e;">' + d.wins + '</td>' +
+        '<td style="color:#ef4444;">' + d.losses + '</td>' +
+        '<td>' + sr + '%</td>' +
+        '<td style="font-weight:700;' + (d.pnl > 0 ? 'color:#22c55e;' : 'color:#ef4444;') + '">' + (d.pnl > 0 ? '+' : '') + d.pnl.toFixed(2) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    // Best winners
+    var bestRows = (data.bestWinners || []).map(function(w) {
+      return '<tr>' +
+        '<td>' + (w.selection || '') + '</td>' +
+        '<td style="font-size:12px;color:#94a3b8;">' + (w.event || '') + '</td>' +
+        '<td style="font-weight:700;color:#d4a843;">' + self.formatOdds(w.odds) + '</td>' +
+        '<td style="font-weight:700;color:#22c55e;">+' + w.pnl.toFixed(2) + '</td>' +
+        '<td style="font-size:12px;color:#94a3b8;">' + formatDateUK(w.date) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    app.innerHTML = '<div class="container" style="padding-top:40px;max-width:900px;">' +
+
+      // Header
+      '<div style="text-align:center;margin-bottom:32px;">' +
+        '<h1 style="font-size:28px;">Verified <span style="color:#d4a843;">Track Record</span></h1>' +
+        '<p style="color:#94a3b8;font-size:14px;">Every tip. Every result. Full transparency. Auto-verified via live API data.</p>' +
+        '<p style="font-size:12px;color:#475569;margin-top:8px;">Tracking since ' + (o.firstTipDate || '—') + ' | Last updated: ' + (data.generatedAt ? new Date(data.generatedAt).toLocaleString('en-GB') : '—') + '</p>' +
+      '</div>' +
+
+      // Hero stats
+      '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;">' +
+        '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;text-align:center;">' +
+          '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:6px;">Total P/L</div>' +
+          '<div style="font-size:28px;font-weight:900;' + pnlClass + '">' + (o.totalPnl > 0 ? '+' : '') + o.totalPnl.toFixed(2) + '</div>' +
+          '<div style="font-size:11px;color:#64748b;">units</div>' +
+        '</div>' +
+        '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:20px;text-align:center;">' +
+          '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:6px;">ROI</div>' +
+          '<div style="font-size:28px;font-weight:900;' + roiClass + '">' + (o.roi > 0 ? '+' : '') + o.roi + '%</div>' +
+        '</div>' +
+        '<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:20px;text-align:center;">' +
+          '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:6px;">Strike Rate</div>' +
+          '<div style="font-size:28px;font-weight:900;' + srClass + '">' + o.strikeRate + '%</div>' +
+        '</div>' +
+        '<div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:12px;padding:20px;text-align:center;">' +
+          '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:6px;">Verified Tips</div>' +
+          '<div style="font-size:28px;font-weight:900;color:#a855f7;">' + o.totalTips + '</div>' +
+          '<div style="font-size:11px;color:#64748b;">' + o.wins + 'W ' + o.losses + 'L | Best run: ' + o.longestStreak + '</div>' +
+        '</div>' +
+      '</div>' +
+
+      // By sport
+      '<div style="margin-bottom:28px;">' +
+        '<h2 style="font-size:18px;font-weight:800;margin-bottom:12px;">Performance by Sport</h2>' +
+        '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + sportCards + '</div>' +
+      '</div>' +
+
+      // By analyst
+      '<div style="margin-bottom:28px;">' +
+        '<h2 style="font-size:18px;font-weight:800;margin-bottom:12px;">Performance by Analyst</h2>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">' + analystCards + '</div>' +
+      '</div>' +
+
+      // By confidence
+      '<div style="margin-bottom:28px;">' +
+        '<h2 style="font-size:18px;font-weight:800;margin-bottom:12px;">Performance by Confidence Tier</h2>' +
+        '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + confCards + '</div>' +
+      '</div>' +
+
+      // Monthly breakdown
+      (monthlyRows ? '<div style="margin-bottom:28px;">' +
+        '<h2 style="font-size:18px;font-weight:800;margin-bottom:12px;">Monthly Breakdown</h2>' +
+        '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+          '<thead><tr><th style="text-align:left;padding:10px 8px;border-bottom:1px solid #2a2e3d;color:#64748b;">Month</th><th style="padding:10px 8px;border-bottom:1px solid #2a2e3d;color:#64748b;">Tips</th><th style="padding:10px 8px;border-bottom:1px solid #2a2e3d;color:#64748b;">Won</th><th style="padding:10px 8px;border-bottom:1px solid #2a2e3d;color:#64748b;">Lost</th><th style="padding:10px 8px;border-bottom:1px solid #2a2e3d;color:#64748b;">SR%</th><th style="padding:10px 8px;border-bottom:1px solid #2a2e3d;color:#64748b;">P/L</th></tr></thead>' +
+          '<tbody>' + monthlyRows + '</tbody>' +
+        '</table></div>' +
+      '</div>' : '') +
+
+      // Best winners
+      (bestRows ? '<div style="margin-bottom:28px;">' +
+        '<h2 style="font-size:18px;font-weight:800;margin-bottom:12px;">Top 10 Winners</h2>' +
+        '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+          '<thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #2a2e3d;color:#64748b;">Selection</th><th style="text-align:left;padding:8px;border-bottom:1px solid #2a2e3d;color:#64748b;">Event</th><th style="padding:8px;border-bottom:1px solid #2a2e3d;color:#64748b;">Odds</th><th style="padding:8px;border-bottom:1px solid #2a2e3d;color:#64748b;">P/L</th><th style="padding:8px;border-bottom:1px solid #2a2e3d;color:#64748b;">Date</th></tr></thead>' +
+          '<tbody>' + bestRows + '</tbody>' +
+        '</table></div>' +
+      '</div>' : '') +
+
+      // Verification statement
+      '<div style="background:rgba(34,197,94,0.06);border:2px solid rgba(34,197,94,0.2);border-radius:12px;padding:24px;text-align:center;margin-bottom:28px;">' +
+        '<div style="font-size:24px;margin-bottom:8px;">&#9989;</div>' +
+        '<h3 style="color:#22c55e;font-size:16px;margin-bottom:8px;">Independently Verified</h3>' +
+        '<p style="font-size:13px;color:#94a3b8;line-height:1.6;max-width:600px;margin:0 auto;">All tips are timestamped before the event starts. Results are settled automatically via live API data from official sources — Racing API, Football-Data.org, and API-Sports. No results are entered manually. No losses are hidden. This is the complete, unedited record.</p>' +
+      '</div>' +
+
+      // CTA
+      '<div style="text-align:center;margin-bottom:40px;">' +
+        '<a href="#/pricing" class="btn btn-gold btn-lg">Start Your 14-Day Free Trial</a>' +
+        '<p style="font-size:12px;color:#475569;margin-top:8px;">See these results for yourself. Cancel anytime.</p>' +
+      '</div>' +
+
+      '<p style="text-align:center;font-size:10px;color:#334155;">Elite Edge Sports Tips Ltd. Company No. 17138566. Statistical analysis and entertainment only. Past performance does not guarantee future results. 18+ BeGambleAware.org</p>' +
     '</div>';
   },
 

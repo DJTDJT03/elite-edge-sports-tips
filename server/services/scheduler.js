@@ -4492,7 +4492,22 @@ module.exports = function startScheduler(deps) {
         reportHtml += '</div>';
       });
 
-      reportHtml += '<p style="font-size:12px;color:#64748b;margin-top:20px;">This report is generated automatically every Monday at 3am. Review recommendations and adjust analyst profiles if needed.</p>';
+      // Add marketing-ready stats summary
+      var allResults = await db.getResults();
+      var counted = allResults.filter(function(r) { return r.result && r.result !== 'void'; });
+      var allWins = counted.filter(function(r) { return r.result === 'won' || r.result === 'placed'; });
+      var allPnl = counted.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+      var allStaked = counted.reduce(function(s, r) { return s + (r.stake || 1); }, 0);
+      var allROI = allStaked > 0 ? Math.round((allPnl / allStaked) * 100) : 0;
+      var allSR = counted.length > 0 ? Math.round((allWins.length / counted.length) * 100) : 0;
+
+      reportHtml += '<div style="background:#0a0e1a;border:2px solid #d4a843;padding:20px;margin:20px 0;border-radius:8px;">';
+      reportHtml += '<h2 style="color:#d4a843;margin-bottom:12px;">Marketing-Ready Stats (copy/paste)</h2>';
+      reportHtml += '<p style="color:#22c55e;font-size:18px;font-weight:800;">+' + allROI + '% ROI | ' + allSR + '% Strike Rate | ' + counted.length + ' Verified Tips | +' + allPnl.toFixed(2) + ' units profit</p>';
+      reportHtml += '<p style="color:#94a3b8;font-size:13px;margin-top:8px;">Full track record: https://eliteedgesports.co.uk/#/track-record</p>';
+      reportHtml += '</div>';
+
+      reportHtml += '<p style="font-size:12px;color:#64748b;margin-top:20px;">This report is generated automatically every Monday at 3am.</p>';
       reportHtml += '</div>';
 
       emailService._sendEmail({

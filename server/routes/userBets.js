@@ -178,6 +178,121 @@ module.exports = function(deps) {
     res.json({ key: pushSvc ? pushSvc.publicKey : '' });
   });
 
+  // GET /api/track-record — public verified track record stats (no auth required)
+  router.get('/track-record', async function(req, res) {
+    try {
+      var results = await db.getResults();
+      var tips = await db.getTips();
+      var counted = results.filter(function(r) { return r.result && r.result !== 'void'; });
+      var wins = counted.filter(function(r) { return r.result === 'won' || r.result === 'placed'; });
+      var losses = counted.filter(function(r) { return r.result === 'lost'; });
+      var totalPnl = counted.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+      var totalStaked = counted.reduce(function(s, r) { return s + (r.stake || 1); }, 0);
+      var roi = totalStaked > 0 ? Math.round((totalPnl / totalStaked) * 10000) / 100 : 0;
+      var strikeRate = counted.length > 0 ? Math.round((wins.length / counted.length) * 1000) / 10 : 0;
+
+      // By sport
+      var sports = {};
+      counted.forEach(function(r) {
+        var s = r.sport || 'other';
+        if (!sports[s]) sports[s] = { total: 0, wins: 0, pnl: 0, staked: 0 };
+        sports[s].total++;
+        if (r.result === 'won' || r.result === 'placed') sports[s].wins++;
+        sports[s].pnl += r.pnl || 0;
+        sports[s].staked += r.stake || 1;
+      });
+      Object.keys(sports).forEach(function(s) {
+        sports[s].pnl = Math.round(sports[s].pnl * 100) / 100;
+        sports[s].strikeRate = sports[s].total > 0 ? Math.round((sports[s].wins / sports[s].total) * 1000) / 10 : 0;
+        sports[s].roi = sports[s].staked > 0 ? Math.round((sports[s].pnl / sports[s].staked) * 10000) / 100 : 0;
+      });
+
+      // By analyst
+      var analysts = {};
+      counted.forEach(function(r) {
+        var a = r.tipsterProfile || 'Unknown';
+        if (!analysts[a]) analysts[a] = { total: 0, wins: 0, pnl: 0 };
+        analysts[a].total++;
+        if (r.result === 'won' || r.result === 'placed') analysts[a].wins++;
+        analysts[a].pnl += r.pnl || 0;
+      });
+      Object.keys(analysts).forEach(function(a) {
+        analysts[a].pnl = Math.round(analysts[a].pnl * 100) / 100;
+        analysts[a].strikeRate = analysts[a].total > 0 ? Math.round((analysts[a].wins / analysts[a].total) * 1000) / 10 : 0;
+      });
+
+      // By confidence tier
+      var tipMap = {};
+      tips.forEach(function(t) { if (t.id) tipMap[t.id] = t; });
+      var confTiers = { elite: { min: 9, wins: 0, total: 0, pnl: 0 }, strong: { min: 7, wins: 0, total: 0, pnl: 0 }, other: { min: 0, wins: 0, total: 0, pnl: 0 } };
+      counted.forEach(function(r) {
+        var tip = tipMap[r.tipId] || {};
+        var conf = tip.confidence || r.confidence || 5;
+        var tier = conf >= 9 ? 'elite' : conf >= 7 ? 'strong' : 'other';
+        confTiers[tier].total++;
+        if (r.result === 'won' || r.result === 'placed') confTiers[tier].wins++;
+        confTiers[tier].pnl += r.pnl || 0;
+      });
+      Object.keys(confTiers).forEach(function(t) {
+        confTiers[t].pnl = Math.round(confTiers[t].pnl * 100) / 100;
+        confTiers[t].strikeRate = confTiers[t].total > 0 ? Math.round((confTiers[t].wins / confTiers[t].total) * 1000) / 10 : 0;
+      });
+
+      // Monthly breakdown
+      var monthly = {};
+      counted.forEach(function(r) {
+        var d = (r.date || '').toString().substring(0, 7); // YYYY-MM
+        if (!d) return;
+        if (!monthly[d]) monthly[d] = { wins: 0, losses: 0, pnl: 0 };
+        if (r.result === 'won' || r.result === 'placed') monthly[d].wins++;
+        else monthly[d].losses++;
+        monthly[d].pnl += r.pnl || 0;
+      });
+      Object.keys(monthly).forEach(function(m) { monthly[m].pnl = Math.round(monthly[m].pnl * 100) / 100; });
+
+      // Best winners
+      var bestWinners = counted.filter(function(r) { return r.result === 'won' && r.pnl > 0; })
+        .sort(function(a, b) { return b.pnl - a.pnl; }).slice(0, 10)
+        .map(function(r) { return { selection: r.selection, event: r.event, odds: r.odds, pnl: Math.round(r.pnl * 100) / 100, date: r.date, sport: r.sport }; });
+
+      // Longest winning streak
+      var sorted = counted.slice().sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+      var maxStreak = 0, currentStreak = 0;
+      sorted.forEach(function(r) {
+        if (r.result === 'won' || r.result === 'placed') { currentStreak++; if (currentStreak > maxStreak) maxStreak = currentStreak; }
+        else currentStreak = 0;
+      });
+
+      // Match prediction stats
+      var matchPredStats = {};
+      try { matchPredStats = await db.getMatchPredictionStats(365); } catch(e) {}
+
+      // First and latest tip dates
+      var dates = counted.map(function(r) { return r.date || ''; }).filter(Boolean).sort();
+
+      res.json({
+        overview: {
+          totalTips: counted.length, wins: wins.length, losses: losses.length,
+          strikeRate: strikeRate, roi: roi,
+          totalPnl: Math.round(totalPnl * 100) / 100,
+          totalStaked: Math.round(totalStaked * 100) / 100,
+          longestStreak: maxStreak,
+          firstTipDate: dates[0] || null,
+          latestTipDate: dates[dates.length - 1] || null,
+        },
+        bySport: sports,
+        byAnalyst: analysts,
+        byConfidence: confTiers,
+        monthly: monthly,
+        bestWinners: bestWinners,
+        matchPredictions: matchPredStats,
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to generate track record' });
+    }
+  });
+
   // GET /api/user/race-predictions — race prediction accuracy
   router.get('/user/race-predictions', authenticate, async function(req, res) {
     try {
