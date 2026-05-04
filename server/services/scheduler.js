@@ -4204,7 +4204,7 @@ module.exports = function startScheduler(deps) {
   setTimeout(safeRun('PriceHistory', logPriceHistory), 3 * 60 * 1000);
 
   // =========================================================================
-  // AUTO-TUNE ANALYST WEIGHTS (every 14 days)
+  // AUTO-TUNE ANALYST WEIGHTS (every Monday 3am)
   // Reviews performance data, adjusts weight modifiers for each analyst
   // =========================================================================
 
@@ -4214,11 +4214,12 @@ module.exports = function startScheduler(deps) {
     var dateStr = uk.toISOString().split('T')[0];
     var day = uk.getDate();
 
-    // Run on 1st and 15th at 3am
-    if ((day !== 1 && day !== 15) || hour !== 3 || lastAutoTuneDate === dateStr) return;
+    // Run every Monday at 3am (weekly tuning cycle)
+    var dayOfWeek = uk.getDay();
+    if (dayOfWeek !== 1 || hour !== 3 || lastAutoTuneDate === dateStr) return;
     lastAutoTuneDate = dateStr;
 
-    console.log('[AutoTune] Starting 14-day analyst performance review...');
+    console.log('[AutoTune] Starting weekly analyst performance review...');
 
     var allResults = await db.getResults();
     var allTips = await db.getTips();
@@ -4414,7 +4415,7 @@ module.exports = function startScheduler(deps) {
     try {
       var adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || 'darren@ecocleaningsystems.co.uk';
       var reportHtml = '<div style="font-family:Inter,sans-serif;background:#0a0e1a;color:#e8e6e3;padding:32px;">';
-      reportHtml += '<h1 style="color:#d4a843;">14-Day Analyst Performance Review</h1>';
+      reportHtml += '<h1 style="color:#d4a843;">Weekly Analyst Performance Review</h1>';
       reportHtml += '<p style="color:#8b8d93;">' + dateStr + '</p>';
 
       tuningReport.forEach(function(r) {
@@ -4436,12 +4437,12 @@ module.exports = function startScheduler(deps) {
         reportHtml += '</div>';
       });
 
-      reportHtml += '<p style="font-size:12px;color:#64748b;margin-top:20px;">This report is generated automatically every 14 days. Review recommendations and adjust analyst profiles if needed.</p>';
+      reportHtml += '<p style="font-size:12px;color:#64748b;margin-top:20px;">This report is generated automatically every Monday at 3am. Review recommendations and adjust analyst profiles if needed.</p>';
       reportHtml += '</div>';
 
       emailService._sendEmail({
         to: adminEmail,
-        subject: '📊 Elite Edge — 14-Day Analyst Review',
+        subject: '📊 Elite Edge — Weekly Analyst Review',
         html: reportHtml,
         emailType: 'admin_report'
       }).catch(function(e) { console.log('[AutoTune] Admin email failed:', e.message); });

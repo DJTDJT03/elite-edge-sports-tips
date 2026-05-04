@@ -10021,7 +10021,7 @@ const App = {
         '<div style="background:linear-gradient(135deg,rgba(168,85,247,0.08),rgba(34,197,94,0.08));border:2px solid rgba(168,85,247,0.25);border-radius:14px;padding:24px;margin-bottom:40px;text-align:center;">' +
           '<div style="font-size:28px;margin-bottom:8px;">&#129504;</div>' +
           '<h3 style="font-size:18px;font-weight:800;color:#fff;margin-bottom:8px;">Self-Learning Model</h3>' +
-          '<p style="font-size:14px;color:#94a3b8;line-height:1.6;max-width:600px;margin:0 auto;">Every 14 days, the system reviews each analyst\'s performance. Losing patterns are identified. Odds ranges tighten. Weak markets are dropped. Successful strategies expand. The model gets sharper with every result.</p>' +
+          '<p style="font-size:14px;color:#94a3b8;line-height:1.6;max-width:600px;margin:0 auto;">Every week, the system reviews each analyst\'s performance. Losing patterns are identified. Odds ranges tighten. Weak markets are dropped. Successful strategies expand. The model gets sharper with every result.</p>' +
         '</div>' +
 
         '<div style="text-align:center;margin:48px 0 20px;">' +
@@ -10166,7 +10166,7 @@ const App = {
             <li><strong style="color:#a855f7;">The Clocker</strong> — Racing-only deep intelligence. Trainer intent, pace analysis, going expertise, stable form. Powered by live Perplexity research.</li>
             <li><strong style="color:#d4a843;">The Edge</strong> — Balanced. Weighs all factors equally. Catches what the specialists miss.</li>
           </ul>
-          <p>Every 14 days, the system reviews each analyst's performance and <strong style="color:#fff;">auto-adjusts</strong> their odds ranges and preferred markets based on what's winning and losing.</p>
+          <p>Every Monday, the system reviews each analyst's performance and <strong style="color:#fff;">auto-adjusts</strong> their odds ranges and preferred markets based on what's winning and losing.</p>
 
           <h2>&#128640; Getting Started</h2>
           <ol style="font-size:14px;line-height:2.2;color:var(--text-secondary);">
