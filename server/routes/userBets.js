@@ -181,8 +181,8 @@ module.exports = function(deps) {
   // GET /api/track-record — public verified track record stats (no auth required)
   router.get('/track-record', async function(req, res) {
     try {
-      var results = await db.getResults();
-      var tips = await db.getTips();
+      var results = await db.getResults() || [];
+      var tips = await db.getTips() || [];
       var counted = results.filter(function(r) { return r.result && r.result !== 'void'; });
       var wins = counted.filter(function(r) { return r.result === 'won' || r.result === 'placed'; });
       var losses = counted.filter(function(r) { return r.result === 'lost'; });
@@ -263,9 +263,9 @@ module.exports = function(deps) {
         else currentStreak = 0;
       });
 
-      // Match prediction stats
+      // Match prediction stats (table may not exist yet)
       var matchPredStats = {};
-      try { matchPredStats = await db.getMatchPredictionStats(365); } catch(e) {}
+      try { if (db.getMatchPredictionStats) matchPredStats = await db.getMatchPredictionStats(365); } catch(e) {}
 
       // First and latest tip dates
       var dates = counted.map(function(r) { return r.date || ''; }).filter(Boolean).sort();
@@ -289,7 +289,8 @@ module.exports = function(deps) {
         generatedAt: new Date().toISOString(),
       });
     } catch (err) {
-      res.status(500).json({ error: 'Failed to generate track record' });
+      console.error('[TrackRecord] Error:', err.message, err.stack);
+      res.status(500).json({ error: 'Failed to generate track record: ' + err.message });
     }
   });
 
