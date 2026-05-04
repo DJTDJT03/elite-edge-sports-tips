@@ -800,9 +800,34 @@ class ScoringModel {
     const awayImplied = 1 / awayOdds;
     const xgScore = Math.max(homeImplied, awayImplied) > 0.5 ? 0.7 : 0.5;
 
-    // --- Form factor ---
-    // Without detailed form data from additional API calls, use odds as proxy
-    const formScore = homeImplied > awayImplied ? 0.65 : 0.45;
+    // --- Form factor with cycle detection ---
+    let formScore = homeImplied > awayImplied ? 0.65 : 0.45;
+    // If fixture has actual form data (W/D/L strings), detect trend
+    if (fixture.homeForm || fixture.awayForm) {
+      var hForm = (fixture.homeForm || '').split('').filter(function(c) { return 'WDL'.indexOf(c) !== -1; });
+      var aForm = (fixture.awayForm || '').split('').filter(function(c) { return 'WDL'.indexOf(c) !== -1; });
+      // Score form with cycle detection
+      function formCycleScore(form) {
+        if (form.length < 3) return 0.5;
+        var pts = form.map(function(r) { return r === 'W' ? 3 : r === 'D' ? 1 : 0; });
+        var total = pts.reduce(function(s, p) { return s + p; }, 0);
+        var base = Math.min(total / (form.length * 3), 1.0);
+        // Detect trend: are recent results better or worse than older?
+        var recentPts = pts.slice(0, 3).reduce(function(s, p) { return s + p; }, 0);
+        var olderPts = pts.slice(-3).reduce(function(s, p) { return s + p; }, 0);
+        var trend = 0;
+        if (recentPts > olderPts + 2) trend = 0.10; // improving
+        if (recentPts < olderPts - 2) trend = -0.10; // declining
+        // Winning streak boost
+        if (pts[0] === 3 && pts[1] === 3 && pts[2] === 3) trend += 0.08;
+        // Losing streak penalty
+        if (pts[0] === 0 && pts[1] === 0 && pts[2] === 0) trend -= 0.10;
+        return Math.min(Math.max(base + trend, 0.05), 1.0);
+      }
+      var hScore = hForm.length >= 3 ? formCycleScore(hForm) : 0.5;
+      var aScore = aForm.length >= 3 ? formCycleScore(aForm) : 0.5;
+      formScore = Math.max(hScore, aScore); // Use the stronger form team's score
+    }
 
     // --- H2H factor ---
     const h2hScore = 0.5; // neutral without data; would need fetchH2H call

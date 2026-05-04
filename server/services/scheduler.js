@@ -836,6 +836,22 @@ module.exports = function startScheduler(deps) {
             edge: scored.edge,
             confidence: scored.confidence,
           });
+
+          // Store "Our Take" prediction for EVERY scored fixture
+          if (scored.selectedSelection && scored.fixture) {
+            try {
+              db.saveMatchPrediction({
+                fixtureId: scored.fixture.id || Math.random().toString(36).slice(2),
+                homeTeam: scored.fixture.homeTeam || '', awayTeam: scored.fixture.awayTeam || '',
+                league: scored.fixture.league || '', kickoff: scored.fixture.kickoff || '',
+                market: scored.selectedMarket || 'Match Result',
+                pick: scored.selectedSelection || '',
+                confidence: scored.confidence || 5,
+                reason: 'Model edge: ' + ((scored.edge || 0) * 100).toFixed(1) + '%',
+                date: today,
+              }).catch(function() {}); // non-fatal, skip duplicates
+            } catch(e) {}
+          }
         }
 
         // --- Odds movement analysis for scored football fixtures ---
@@ -1353,7 +1369,16 @@ module.exports = function startScheduler(deps) {
       selectedRacing.push(c);
       if (meeting) usedMeetings[meeting] = true;
     });
-    var selectedFootball = footballMain.slice(0, 2);
+    // One tip per league for football (prevent correlated league results)
+    var usedLeagues = {};
+    var selectedFootball = [];
+    footballMain.forEach(function(c) {
+      var league = c.scored && c.scored.fixture ? (c.scored.fixture.league || '').toLowerCase() : '';
+      if (league && usedLeagues[league]) return; // 1 per league
+      if (selectedFootball.length >= 3) return; // max 3 football tips
+      selectedFootball.push(c);
+      if (league) usedLeagues[league] = true;
+    });
     var selected = selectedRacing.concat(selectedFootball);
 
     // Add one EW Outsider of the Day (if available, mark it specially)
@@ -4405,11 +4430,97 @@ module.exports = function startScheduler(deps) {
     }
   }
 
-  // Run pre-race validation every 5 minutes during racing hours (10am-7pm UK)
+  // PRE-MATCH VALIDATION — same as pre-race but for football
+  async function preMatchValidation() {
+    try {
+      var tips = await db.getTips({ sport: 'football', status: 'active' });
+      if (!tips || tips.length === 0) return;
+
+      var now = new Date();
+      var ukNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/London' }));
+      var currentMins = ukNow.getHours() * 60 + ukNow.getMinutes();
+
+      for (var i = 0; i < tips.length; i++) {
+        var tip = tips[i];
+        if (validatedTips.has(tip.id)) continue;
+
+        // Parse kickoff time
+        var kickoff = tip.kickoff || '';
+        if (!kickoff) continue;
+        var koParts = kickoff.split(':');
+        var koMins = parseInt(koParts[0]) * 60 + parseInt(koParts[1] || 0);
+        var minsUntilKO = koMins - currentMins;
+        if (minsUntilKO < 15 || minsUntilKO > 60) continue;
+
+        validatedTips.add(tip.id);
+        var warnings = [];
+        var shouldPull = false;
+
+        // Odds drift check
+        if (tip.bookmakerOdds && Object.keys(tip.bookmakerOdds).length > 0) {
+          var prices = Object.values(tip.bookmakerOdds).filter(function(v) { return v > 0; });
+          if (prices.length > 0) {
+            var avgNow = prices.reduce(function(s, v) { return s + v; }, 0) / prices.length;
+            var pubOdds = tip.odds || 0;
+            if (pubOdds > 0 && avgNow > 0) {
+              var drift = ((avgNow - pubOdds) / pubOdds) * 100;
+              await db.updateTip(tip.id, { oddsDrift: Math.round(drift * 10) / 10, currentOdds: Math.round(avgNow * 100) / 100 });
+
+              if (drift > 30) {
+                warnings.push('ODDS DRIFTED ' + Math.round(drift) + '% — late team news may have changed the picture');
+                shouldPull = true;
+              } else if (drift > 15) {
+                warnings.push('Odds drifted ' + Math.round(drift) + '% — possible late lineup change');
+              } else if (drift < -10) {
+                warnings.push('Odds shortened ' + Math.abs(Math.round(drift)) + '% — market backs our selection');
+              }
+            }
+          }
+        }
+
+        // Edge recalculation
+        var curOdds = tip.currentOdds || tip.odds;
+        if (curOdds > 0 && tip.modelProbability > 0) {
+          var curEdge = tip.modelProbability - (1 / curOdds);
+          if (curEdge < 0.02 && (tip.edge || 0) >= 0.05) {
+            warnings.push('Edge eroded to ' + (curEdge * 100).toFixed(1) + '% — value may have gone');
+            if (curEdge < 0) shouldPull = true;
+          }
+        }
+
+        // Confidence decay for football
+        var fDrift = tip.oddsDrift || 0;
+        if (fDrift > 15) {
+          var newConf = Math.max((tip.confidence || 7) - 1, 4);
+          if (fDrift > 30) newConf = Math.max((tip.confidence || 7) - 2, 3);
+          if (newConf !== tip.confidence) {
+            await db.updateTip(tip.id, { confidence: newConf, preRaceAdjusted: true });
+            warnings.push('Confidence adjusted to ' + newConf + ' (market drift)');
+          }
+        }
+
+        if (warnings.length > 0) {
+          await db.updateTip(tip.id, { preRaceWarnings: warnings });
+          console.log('[PreMatch] ' + tip.selection + ': ' + warnings.join(' | '));
+        }
+
+        if (shouldPull) {
+          await db.updateTip(tip.id, { status: 'voided', preRacePulled: true });
+          await db.createNotification({ type: 'warning', message: 'TIP PULLED: ' + tip.selection + ' — ' + warnings[0], tipId: tip.id });
+          console.log('[PreMatch] PULLED: ' + tip.selection);
+        }
+      }
+    } catch (err) {
+      console.error('[PreMatch] Validation error:', err.message);
+    }
+  }
+
+  // Run pre-race + pre-match validation every 5 minutes during active hours
   setInterval(function() {
     var uk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
-    if (uk.getHours() >= 10 && uk.getHours() <= 19) {
+    if (uk.getHours() >= 10 && uk.getHours() <= 22) {
       safeRun('PreRace', preRaceValidation)();
+      safeRun('PreMatch', preMatchValidation)();
     }
   }, 5 * 60 * 1000);
 
