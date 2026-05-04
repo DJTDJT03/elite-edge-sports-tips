@@ -1232,6 +1232,8 @@ module.exports = {
   // Match Predictions (Our Take) + Race Predictions (Our Pick)
   saveMatchPrediction, getMatchPredictions, settleMatchPredictions, getMatchPredictionStats,
   saveRacePrediction, getRacePredictions, settleRacePredictions,
+  // Loss Analysis
+  saveLossAnalysis, getLossAnalysis, getLossPatterns,
   // Push Subscriptions
   savePushSubscription, removePushSubscription, getPushSubscriptions, getAllPushSubscriptions,
 };
@@ -1346,6 +1348,57 @@ async function getMatchPredictionStats(days) {
       goals: { correct: parseInt(r.goals_correct) || 0, total: parseInt(r.goals_total) || 0 },
     }
   };
+}
+
+// ---------------------------------------------------------------------------
+// LOSS ANALYSIS — causal reasons for failed predictions
+// ---------------------------------------------------------------------------
+async function saveLossAnalysis(data) {
+  if (!pool) return;
+  await query(
+    `INSERT INTO loss_analysis (tip_id, sport, selection, event, analyst, odds, confidence, loss_reason, loss_category, factors, lesson, date)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+    [data.tipId, data.sport, data.selection, data.event, data.analyst,
+     data.odds, data.confidence, data.lossReason, data.lossCategory,
+     JSON.stringify(data.factors || {}), data.lesson, data.date]
+  );
+}
+
+async function getLossAnalysis(filters) {
+  if (!pool) return [];
+  var sql = 'SELECT * FROM loss_analysis';
+  var conditions = [];
+  var values = [];
+  var idx = 1;
+  if (filters) {
+    if (filters.sport) { conditions.push('sport = $' + idx); values.push(filters.sport); idx++; }
+    if (filters.analyst) { conditions.push('analyst = $' + idx); values.push(filters.analyst); idx++; }
+    if (filters.category) { conditions.push('loss_category = $' + idx); values.push(filters.category); idx++; }
+  }
+  if (conditions.length > 0) sql += ' WHERE ' + conditions.join(' AND ');
+  sql += ' ORDER BY date DESC LIMIT 200';
+  var { rows } = await query(sql, values);
+  return rows;
+}
+
+async function getLossPatterns() {
+  if (!pool) return [];
+  var { rows } = await query(`
+    SELECT loss_category, sport, analyst, COUNT(*) as count,
+      AVG(odds) as avg_odds, AVG(confidence) as avg_confidence
+    FROM loss_analysis
+    GROUP BY loss_category, sport, analyst
+    HAVING COUNT(*) >= 3
+    ORDER BY count DESC
+    LIMIT 50
+  `);
+  return rows.map(function(r) {
+    return {
+      category: r.loss_category, sport: r.sport, analyst: r.analyst,
+      count: parseInt(r.count), avgOdds: parseFloat(r.avg_odds) || 0,
+      avgConfidence: parseFloat(r.avg_confidence) || 0,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------

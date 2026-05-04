@@ -4259,6 +4259,159 @@ module.exports = function startScheduler(deps) {
   setTimeout(safeRun('PriceHistory', logPriceHistory), 3 * 60 * 1000);
 
   // =========================================================================
+  // =========================================================================
+  // POST-RESULT LOSS ANALYSIS — determines WHY each loss happened
+  // Runs after auto-settle. Compares pre-race/match conditions to outcomes.
+  // =========================================================================
+  async function analyseLosses() {
+    try {
+      var allResults = await db.getResults();
+      var allTips = await db.getTips();
+      var tipMap = {};
+      allTips.forEach(function(t) { tipMap[t.id] = t; });
+
+      // Only analyse recent losses not yet analysed
+      var recentLosses = allResults.filter(function(r) {
+        if (r.result !== 'lost') return false;
+        var d = new Date(r.date);
+        var dayAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+        return d >= dayAgo;
+      });
+
+      // Check which have already been analysed
+      var existing = [];
+      try { existing = await db.getLossAnalysis({}); } catch(e) {}
+      var analysedTipIds = {};
+      existing.forEach(function(la) { if (la.tip_id) analysedTipIds[la.tip_id] = true; });
+
+      var newAnalyses = 0;
+      for (var i = 0; i < recentLosses.length; i++) {
+        var result = recentLosses[i];
+        if (analysedTipIds[result.tipId]) continue;
+
+        var tip = tipMap[result.tipId] || {};
+        var analysis = tip.analysis || {};
+        var factors = {};
+        try { factors = typeof analysis === 'string' ? JSON.parse(analysis) : analysis; } catch(e) {}
+
+        var lossReason = '';
+        var lossCategory = 'unknown';
+        var lesson = '';
+
+        if (result.sport === 'racing') {
+          // Racing loss analysis
+          var goingText = (factors.goingSuitability || '').toLowerCase();
+          var riskText = (factors.riskNotes || '').toLowerCase();
+          var actualOutcome = (tip.actualOutcome || result.actualOutcome || '').toLowerCase();
+
+          // Going change
+          if (goingText.indexOf('uncertain') !== -1 || goingText.indexOf('prove') !== -1 || goingText.indexOf('risk') !== -1) {
+            lossCategory = 'going_uncertainty';
+            lossReason = 'Going suitability was flagged as uncertain in the analysis — the ground may not have suited.';
+            lesson = 'When going is flagged as uncertain, reduce confidence by 1 point or skip unless going factor is 0.8+.';
+          }
+          // Short-priced favourite beaten
+          else if ((result.odds || 0) < 2.5) {
+            lossCategory = 'short_price_beaten';
+            lossReason = 'Short-priced selection (odds ' + (result.odds || 0).toFixed(2) + ') beaten — limited value at this price with no margin for error.';
+            lesson = 'Short-priced favourites offer poor risk/reward. Consider minimum odds of 2.5 for racing tips.';
+          }
+          // Big field randomness
+          else if (actualOutcome && (actualOutcome.indexOf('12th') !== -1 || actualOutcome.indexOf('15th') !== -1 || actualOutcome.indexOf('last') !== -1)) {
+            lossCategory = 'field_size_variance';
+            lossReason = 'Selection finished well back in a large field — racing luck and field size increase variance.';
+            lesson = 'Large field races (14+ runners) carry inherent variance. Consider each-way to protect.';
+          }
+          // Narrowly beaten (placed but not won)
+          else if (actualOutcome && (actualOutcome.indexOf('2nd') !== -1 || actualOutcome.indexOf('3rd') !== -1)) {
+            lossCategory = 'narrowly_beaten';
+            lossReason = 'Selection placed but did not win — the analysis was directionally correct.';
+            lesson = 'Narrow defeats are part of racing. Consider each-way markets for selections rated 7+ confidence.';
+          }
+          // Trainer form cold
+          else if (factors.trainerForm && factors.trainerForm.toLowerCase().indexOf('quiet') !== -1) {
+            lossCategory = 'trainer_form_cold';
+            lossReason = 'Trainer yard was flagged as quiet in the analysis — cold stables have lower strike rates.';
+            lesson = 'Reduce confidence by 1 point when trainer form factor is below 0.5.';
+          }
+          else {
+            lossCategory = 'standard_variance';
+            lossReason = 'No clear causal factor identified — likely standard racing variance.';
+            lesson = 'Some losses are inevitable. Focus on long-term ROI, not individual results.';
+          }
+        } else if (result.sport === 'football') {
+          // Football loss analysis
+          var injText = (factors.injuries || '').toLowerCase();
+          var market = (result.market || '').toLowerCase();
+
+          // Late team news / injury impact
+          if (injText.indexOf('late') !== -1 || injText.indexOf('check') !== -1 || injText.indexOf('doubt') !== -1) {
+            lossCategory = 'late_team_news';
+            lossReason = 'Team news was uncertain at time of selection — late changes may have affected the outcome.';
+            lesson = 'When injury status is uncertain, reduce confidence or wait for confirmed team news.';
+          }
+          // Draw when we backed a win
+          else if (market.indexOf('result') !== -1 && result.actualOutcome && result.actualOutcome.match(/\b(\d+)-\1\b/)) {
+            lossCategory = 'draw_not_predicted';
+            lossReason = 'Match ended in a draw — our Match Result pick for a win was wrong.';
+            lesson = 'When H2H shows 3+ draws, consider Double Chance instead of Match Result.';
+          }
+          // Low-scoring game when we backed goals
+          else if ((market.indexOf('over') !== -1 || market.indexOf('btts') !== -1) && result.actualOutcome) {
+            var scoreMatch = result.actualOutcome.match(/(\d+)\s*-\s*(\d+)/);
+            if (scoreMatch) {
+              var goals = parseInt(scoreMatch[1]) + parseInt(scoreMatch[2]);
+              if (goals <= 1) {
+                lossCategory = 'low_scoring_upset';
+                lossReason = 'Match produced ' + goals + ' goal(s) — defensive display contradicted the data.';
+                lesson = 'Low-scoring upsets happen. If clean sheet % is above 30% for either side, goals markets are riskier.';
+              }
+            }
+          }
+          // High-scoring when we backed under
+          else if (market.indexOf('under') !== -1) {
+            lossCategory = 'high_scoring_upset';
+            lossReason = 'More goals than expected — attacking output exceeded defensive expectations.';
+            lesson = 'Under markets are fragile. One red card or penalty changes everything.';
+          }
+          // Short odds beaten
+          else if ((result.odds || 0) < 1.8) {
+            lossCategory = 'heavy_favourite_beaten';
+            lossReason = 'Heavy favourite lost — odds of ' + (result.odds || 0).toFixed(2) + ' offered no value.';
+            lesson = 'Avoid odds below 1.8 for football — upsets happen too often at these prices.';
+          }
+          else {
+            lossCategory = 'standard_variance';
+            lossReason = 'No clear causal factor — likely standard football variance.';
+            lesson = 'Football is unpredictable by nature. The model identifies edges, not certainties.';
+          }
+        } else {
+          lossCategory = 'standard_variance';
+          lossReason = 'Standard result variance.';
+          lesson = 'Focus on long-term ROI across all sports.';
+        }
+
+        await db.saveLossAnalysis({
+          tipId: result.tipId, sport: result.sport, selection: result.selection,
+          event: result.event, analyst: result.tipsterProfile || tip.tipsterProfile || '',
+          odds: result.odds, confidence: tip.confidence || result.confidence || 0,
+          lossReason: lossReason, lossCategory: lossCategory,
+          factors: factors, lesson: lesson,
+          date: result.date || new Date().toISOString().split('T')[0],
+        });
+        newAnalyses++;
+      }
+
+      if (newAnalyses > 0) console.log('[LossAnalysis] Analysed ' + newAnalyses + ' new loss(es)');
+    } catch (err) {
+      console.error('[LossAnalysis] Error:', err.message);
+    }
+  }
+
+  // Run loss analysis 2 minutes after auto-settle (gives settle time to complete)
+  setInterval(function() { setTimeout(safeRun('LossAnalysis', analyseLosses), 2 * 60 * 1000); }, 10 * 60 * 1000);
+  setTimeout(safeRun('LossAnalysis', analyseLosses), 5 * 60 * 1000);
+
   // AUTO-TUNE ANALYST WEIGHTS (every Monday 3am)
   // Reviews performance data, adjusts weight modifiers for each analyst
   // =========================================================================
@@ -4517,6 +4670,51 @@ module.exports = function startScheduler(deps) {
           }
         }
 
+        // All analysts: learn from LOSS PATTERNS (causal analysis)
+        try {
+          var analystLosses = await db.getLossAnalysis({ analyst: name });
+          if (analystLosses.length >= 3) {
+            // Count loss categories
+            var catCounts = {};
+            analystLosses.forEach(function(la) {
+              var cat = la.loss_category || 'unknown';
+              catCounts[cat] = (catCounts[cat] || 0) + 1;
+            });
+            var topCats = Object.keys(catCounts).sort(function(a, b) { return catCounts[b] - catCounts[a]; }).slice(0, 3);
+            actions.push('LOSS PATTERNS: ' + topCats.map(function(c) { return c.replace(/_/g, ' ') + ' (' + catCounts[c] + 'x)'; }).join(', '));
+
+            // Apply causal lessons
+            if (catCounts['going_uncertainty'] >= 3 && profile.racingWeightModifiers) {
+              profile.racingWeightModifiers.going = Math.min(profile.racingWeightModifiers.going + 0.15, 2.0);
+              adjustmentsMade.push('Going weight +0.15 (going uncertainty caused ' + catCounts['going_uncertainty'] + ' losses)');
+            }
+            if (catCounts['short_price_beaten'] >= 3) {
+              profile.oddsRange.min = Math.min(profile.oddsRange.min + 0.5, 3.0);
+              adjustmentsMade.push('Min odds raised (short prices beaten ' + catCounts['short_price_beaten'] + 'x)');
+            }
+            if (catCounts['late_team_news'] >= 3 && profile.footballWeightModifiers) {
+              profile.footballWeightModifiers.injuries = Math.min(profile.footballWeightModifiers.injuries + 0.15, 2.0);
+              adjustmentsMade.push('Injury weight +0.15 (late team news caused ' + catCounts['late_team_news'] + ' losses)');
+            }
+            if (catCounts['heavy_favourite_beaten'] >= 3) {
+              profile.oddsRange.min = Math.max(profile.oddsRange.min, 1.8);
+              adjustmentsMade.push('Min odds floor at 1.8 (heavy favourites beaten ' + catCounts['heavy_favourite_beaten'] + 'x)');
+            }
+            if (catCounts['draw_not_predicted'] >= 3 && profile.preferredMarkets && profile.preferredMarkets.football) {
+              if (profile.preferredMarkets.football.indexOf('Double Chance') === -1) {
+                profile.preferredMarkets.football.push('Double Chance');
+                adjustmentsMade.push('Added Double Chance to preferred markets (draws causing losses)');
+              }
+            }
+            if (catCounts['narrowly_beaten'] >= 5 && profile.preferredMarkets && profile.preferredMarkets.racing) {
+              if (profile.preferredMarkets.racing.indexOf('Each-Way') === -1) {
+                profile.preferredMarkets.racing.push('Each-Way');
+                adjustmentsMade.push('Added Each-Way to preferred markets (narrowly beaten ' + catCounts['narrowly_beaten'] + 'x)');
+              }
+            }
+          }
+        } catch(e) {}
+
         // All analysts: learn from shadow candidates
         if (scTotal.length >= 20) {
           var scAnalystPicks = shadowCandidates.filter(function(c) { return c.analyst === name; });
@@ -4582,6 +4780,20 @@ module.exports = function startScheduler(deps) {
         }
         reportHtml += '</div>';
       });
+
+      // Loss pattern intelligence
+      try {
+        var lossPatterns = await db.getLossPatterns();
+        if (lossPatterns.length > 0) {
+          reportHtml += '<div style="background:#2a1a1a;border:1px solid #ef4444;padding:20px;margin:20px 0;border-radius:8px;">';
+          reportHtml += '<h2 style="color:#ef4444;margin-bottom:12px;">Loss Pattern Intelligence</h2>';
+          reportHtml += '<p style="color:#94a3b8;font-size:13px;margin-bottom:12px;">Top recurring loss causes — the model is actively learning from these:</p>';
+          lossPatterns.slice(0, 8).forEach(function(lp) {
+            reportHtml += '<p style="color:#cbd5e1;font-size:13px;margin:4px 0;"><strong style="color:#f59e0b;">' + lp.category.replace(/_/g, ' ') + '</strong> — ' + lp.count + 'x (' + lp.sport + ', ' + lp.analyst + ') avg odds: ' + lp.avgOdds.toFixed(2) + ', avg conf: ' + Math.round(lp.avgConfidence) + '</p>';
+          });
+          reportHtml += '</div>';
+        }
+      } catch(e) {}
 
       // All-selections accuracy section
       reportHtml += '<div style="background:#0a0e1a;border:1px solid #2a2d45;padding:20px;margin:20px 0;border-radius:8px;">';
