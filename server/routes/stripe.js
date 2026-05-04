@@ -407,9 +407,9 @@ module.exports = function(deps) {
   // POST /api/stripe/buy-credits — one-time credit pack purchase
   // ---------------------------------------------------------------------------
   var CREDIT_PACKS = [
-    { id: 'credits-5', credits: 5, amount: 199, label: '5 Credits — £1.99' },
-    { id: 'credits-15', credits: 15, amount: 499, label: '15 Credits — £4.99' },
-    { id: 'credits-40', credits: 40, amount: 899, label: '40 Credits — £8.99' },
+    { id: 'credits-3', credits: 3, amount: 199, label: '3 Credits — £1.99' },
+    { id: 'credits-10', credits: 10, amount: 499, label: '10 Credits — £4.99' },
+    { id: 'credits-25', credits: 25, amount: 899, label: '25 Credits — £8.99' },
   ];
 
   router.post('/stripe/buy-credits', authenticate, async (req, res) => {
