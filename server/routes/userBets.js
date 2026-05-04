@@ -178,6 +178,28 @@ module.exports = function(deps) {
     res.json({ key: pushSvc ? pushSvc.publicKey : '' });
   });
 
+  // GET /api/user/race-predictions — race prediction accuracy
+  router.get('/user/race-predictions', authenticate, async function(req, res) {
+    try {
+      var date = req.query.date || null;
+      var predictions = date ? await db.getRacePredictions({ date: date }) : [];
+      var correct = predictions.filter(function(p) { return p.correct === true; }).length;
+      var incorrect = predictions.filter(function(p) { return p.correct === false; }).length;
+      var placed = predictions.filter(function(p) { return p.finish_position && p.finish_position <= 3 && !p.correct; }).length;
+      var settled = correct + incorrect;
+      res.json({
+        predictions: predictions,
+        stats: {
+          total: predictions.length, correct: correct, incorrect: incorrect, placed: placed,
+          winRate: settled > 0 ? Math.round((correct / settled) * 1000) / 10 : 0,
+          placeRate: settled > 0 ? Math.round(((correct + placed) / settled) * 1000) / 10 : 0,
+        }
+      });
+    } catch (err) {
+      res.json({ predictions: [], stats: {} });
+    }
+  });
+
   // GET /api/user/match-predictions — match prediction accuracy stats
   router.get('/user/match-predictions', authenticate, async function(req, res) {
     try {

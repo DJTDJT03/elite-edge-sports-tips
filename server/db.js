@@ -1229,8 +1229,9 @@ module.exports = {
   upsertQualitySnapshot, getQualitySnapshots, getLatestQualitySnapshot,
   // User Bets (Personal ROI)
   backTip, unbackTip, getUserBets, settleUserBets, getUserROI,
-  // Match Predictions (Our Take)
+  // Match Predictions (Our Take) + Race Predictions (Our Pick)
   saveMatchPrediction, getMatchPredictions, settleMatchPredictions, getMatchPredictionStats,
+  saveRacePrediction, getRacePredictions, settleRacePredictions,
   // Push Subscriptions
   savePushSubscription, removePushSubscription, getPushSubscriptions, getAllPushSubscriptions,
 };
@@ -1345,6 +1346,87 @@ async function getMatchPredictionStats(days) {
       goals: { correct: parseInt(r.goals_correct) || 0, total: parseInt(r.goals_total) || 0 },
     }
   };
+}
+
+// ---------------------------------------------------------------------------
+// RACE PREDICTIONS — "Our Pick" in every race
+// ---------------------------------------------------------------------------
+async function saveRacePrediction(data) {
+  if (!pool) return null;
+  var { rows } = await query(
+    `INSERT INTO race_predictions (meeting, race_time, race_name, selection, odds, confidence, edge, runners, date)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (meeting, race_time, date) DO NOTHING RETURNING id`,
+    [data.meeting, data.raceTime, data.raceName, data.selection, data.odds,
+     data.confidence, data.edge, data.runners, data.date || new Date().toISOString().split('T')[0]]
+  );
+  return rows.length > 0 ? rows[0].id : null;
+}
+
+async function getRacePredictions(filters) {
+  if (!pool) return [];
+  var sql = 'SELECT * FROM race_predictions';
+  var conditions = [];
+  var values = [];
+  var idx = 1;
+  if (filters) {
+    if (filters.date) { conditions.push('date = $' + idx); values.push(filters.date); idx++; }
+  }
+  if (conditions.length > 0) sql += ' WHERE ' + conditions.join(' AND ');
+  sql += ' ORDER BY date DESC, race_time ASC LIMIT 500';
+  var { rows } = await query(sql, values);
+  return rows;
+}
+
+async function settleRacePredictions(raceResults) {
+  if (!pool || !raceResults || raceResults.length === 0) return 0;
+  var settled = 0;
+  var normHorse = function(name) {
+    if (!name) return '';
+    return name.toLowerCase().replace(/\s*\([a-z]{2,4}\)\s*$/i, '').trim();
+  };
+
+  for (var i = 0; i < raceResults.length; i++) {
+    var race = raceResults[i];
+    if (!race.runners || race.runners.length === 0) continue;
+
+    var winner = race.runners.find(function(r) { return parseInt(r.position, 10) === 1; });
+    if (!winner) continue;
+
+    var meeting = (race.course || race.meeting || '').toLowerCase().trim();
+    var raceTime = race.time || race.off_time || '';
+
+    // Find matching prediction
+    var { rows } = await query(
+      "SELECT * FROM race_predictions WHERE result IS NULL AND LOWER(meeting) = $1 AND race_time = $2",
+      [meeting, raceTime]
+    );
+    if (rows.length === 0) {
+      // Try partial match on meeting name
+      var { rows: rows2 } = await query(
+        "SELECT * FROM race_predictions WHERE result IS NULL AND (LOWER(meeting) LIKE $1 OR $1 LIKE '%' || LOWER(meeting) || '%') AND date = CURRENT_DATE",
+        ['%' + meeting + '%']
+      );
+      if (rows2.length > 0) rows = rows2;
+    }
+    if (rows.length === 0) continue;
+
+    var pred = rows[0];
+    var predSelection = normHorse(pred.selection);
+    var winnerName = normHorse(winner.horse);
+    var correct = predSelection === winnerName;
+
+    // Check if placed (top 3)
+    var tipRunner = race.runners.find(function(r) { return normHorse(r.horse) === predSelection; });
+    var finishPos = tipRunner ? parseInt(tipRunner.position, 10) : null;
+
+    await query(
+      'UPDATE race_predictions SET result = $2, finish_position = $3, winner = $4, winner_odds = $5, correct = $6 WHERE id = $1',
+      [pred.id, winner.horse + (winner.sp ? ' (SP ' + winner.sp + ')' : ''), finishPos, winner.horse, winner.sp ? parseFloat(winner.sp) : null, correct]
+    );
+    settled++;
+  }
+  return settled;
 }
 
 // ---------------------------------------------------------------------------

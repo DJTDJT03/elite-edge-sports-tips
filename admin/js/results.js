@@ -31,6 +31,7 @@ window.ResultsPage = {
         AdminAPI.get('/results/by-confidence'),
         AdminAPI.get('/analytics/shadow-scoring?date=' + selectedDate).catch(function() { return { candidates: [] }; }),
         AdminAPI.get('/user/match-predictions?date=' + selectedDate).catch(function() { return { predictions: [], stats: {} }; }),
+        AdminAPI.get('/user/race-predictions?date=' + selectedDate).catch(function() { return { predictions: [], stats: {} }; }),
       ]);
       this._performance = data[0];
       this._results = data[1];
@@ -39,6 +40,8 @@ window.ResultsPage = {
       this._candidates = (data[4] && data[4].candidates) ? data[4].candidates : [];
       this._matchPredictions = (data[5] && data[5].predictions) ? data[5].predictions : [];
       this._matchPredictionStats = (data[5] && data[5].stats) ? data[5].stats : {};
+      this._racePredictions = (data[6] && data[6].predictions) ? data[6].predictions : [];
+      this._racePredictionStats = (data[6] && data[6].stats) ? data[6].stats : {};
     } catch (err) {
       container.innerHTML = '<div class="admin-error">Failed to load results data: ' + (err.message || err) + '</div>';
       return;
@@ -55,6 +58,7 @@ window.ResultsPage = {
 
     container.innerHTML = ''
       + this._renderDailyReview()
+      + this._renderRacePredictions()
       + this._renderMatchPredictions()
       + this._renderPerformanceOverview()
       + this._renderSportBreakdown()
@@ -258,9 +262,11 @@ window.ResultsPage = {
       var results = await Promise.all([
         AdminAPI.get('/analytics/shadow-scoring?date=' + this._selectedDate).catch(function() { return { candidates: [] }; }),
         AdminAPI.get('/user/match-predictions?date=' + this._selectedDate).catch(function() { return { predictions: [], stats: {} }; }),
+        AdminAPI.get('/user/race-predictions?date=' + this._selectedDate).catch(function() { return { predictions: [], stats: {} }; }),
       ]);
       this._candidates = (results[0] && results[0].candidates) ? results[0].candidates : [];
       this._matchPredictions = (results[1] && results[1].predictions) ? results[1].predictions : [];
+      this._racePredictions = (results[2] && results[2].predictions) ? results[2].predictions : [];
     } catch (e) {
       this._candidates = [];
       this._matchPredictions = [];
@@ -277,7 +283,56 @@ window.ResultsPage = {
   },
 
   // ---------------------------------------------------------------------------
-  // 0b. MATCH PREDICTIONS — "Our Take" accuracy on every football game
+  // 0b. RACE PREDICTIONS — "Our Pick" in every race
+  // ---------------------------------------------------------------------------
+  _renderRacePredictions() {
+    var preds = this._racePredictions || [];
+    if (preds.length === 0) return '';
+
+    var stats = this._racePredictionStats || {};
+    var winRate = stats.winRate || 0;
+    var placeRate = stats.placeRate || 0;
+    var winColor = winRate >= 25 ? '#22c55e' : winRate >= 15 ? '#d4a843' : '#ef4444';
+    var placeColor = placeRate >= 50 ? '#22c55e' : placeRate >= 35 ? '#d4a843' : '#ef4444';
+
+    var rows = preds.map(function(p) {
+      var resultBadge = '';
+      if (p.correct === true) resultBadge = '<span style="color:#22c55e;font-weight:700;">&#10003; WON</span>';
+      else if (p.finish_position && p.finish_position <= 3) resultBadge = '<span style="color:#d4a843;font-weight:700;">' + p.finish_position + (p.finish_position === 1 ? 'st' : p.finish_position === 2 ? 'nd' : 'rd') + ' Placed</span>';
+      else if (p.correct === false) resultBadge = '<span style="color:#ef4444;">' + (p.finish_position ? p.finish_position + (p.finish_position >= 4 ? 'th' : '') : 'Lost') + '</span>';
+      else resultBadge = '<span style="color:#94a3b8;">Pending</span>';
+
+      return '<tr>' +
+        '<td style="font-size:12px;">' + (p.meeting || '') + ' ' + (p.race_time || '') + '</td>' +
+        '<td><strong>' + (p.selection || '') + '</strong></td>' +
+        '<td style="text-align:center;color:#d4a843;font-weight:700;">' + (p.odds || '-') + '</td>' +
+        '<td style="text-align:center;">' + (p.confidence || '-') + '</td>' +
+        '<td style="text-align:center;">' + (p.runners || '-') + '</td>' +
+        '<td>' + (p.winner || '—') + '</td>' +
+        '<td>' + resultBadge + '</td>' +
+      '</tr>';
+    }).join('');
+
+    return ''
+      + '<h2 class="admin-section-title">Our Pick — Racing Predictions (Every Race)</h2>'
+      + '<div class="admin-stat-cards" style="margin-bottom:16px;">'
+      +   '<div class="stat-card"><div class="stat-label">Races</div><div class="stat-value">' + preds.length + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Winners</div><div class="stat-value stat-green">' + (stats.correct || 0) + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Placed</div><div class="stat-value" style="color:#d4a843;">' + (stats.placed || 0) + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value" style="color:' + winColor + ';">' + winRate + '%</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Place Rate</div><div class="stat-value" style="color:' + placeColor + ';">' + placeRate + '%</div></div>'
+      + '</div>'
+      + '<div class="admin-table-wrap">'
+      +   '<table class="admin-table">'
+      +     '<thead><tr><th>Race</th><th>Our Pick</th><th>Odds</th><th>Conf</th><th>Field</th><th>Winner</th><th>Result</th></tr></thead>'
+      +     '<tbody>' + rows + '</tbody>'
+      +   '</table>'
+      + '</div>'
+      + '<hr style="border:none;border-top:1px solid #2a2e3d;margin:32px 0;">';
+  },
+
+  // ---------------------------------------------------------------------------
+  // 0c. MATCH PREDICTIONS — "Our Take" accuracy on every football game
   // ---------------------------------------------------------------------------
   _renderMatchPredictions() {
     var preds = this._matchPredictions || [];

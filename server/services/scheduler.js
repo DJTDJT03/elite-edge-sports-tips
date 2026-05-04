@@ -436,6 +436,8 @@ module.exports = function startScheduler(deps) {
           var raceWeather = (race.meeting && meetingWeather[race.meeting]) ? meetingWeather[race.meeting] : null;
           var isFestival = race.meeting && festivalMeetings.some(function(f) { return race.meeting.toLowerCase().indexOf(f) !== -1; });
 
+          var bestInRace = null; // Track best runner per race for prediction storage
+
           race.runners.forEach(function(runner) {
             try {
               // Skip non-runners
@@ -446,6 +448,11 @@ module.exports = function startScheduler(deps) {
               // Festival meetings get a 15% edge boost — ensures premium meetings are covered
               var adjustedEdge = scored.edge;
               if (isFestival) adjustedEdge = scored.edge * 1.15;
+
+              // Track best runner per race (for "Our Pick" prediction)
+              if (!bestInRace || adjustedEdge > bestInRace.edge) {
+                bestInRace = { scored: scored, edge: adjustedEdge, confidence: scored.confidence };
+              }
 
               // Filter: edge > 5% AND confidence >= 6
               if (adjustedEdge > 0.05 && scored.confidence >= 6) {
@@ -461,6 +468,22 @@ module.exports = function startScheduler(deps) {
               // Skip individual runner errors
             }
           });
+
+          // Store "Our Pick" for this race — best runner regardless of whether it becomes a published tip
+          if (bestInRace && bestInRace.scored && bestInRace.scored.runner) {
+            try {
+              db.saveRacePrediction({
+                meeting: race.meeting || '', raceTime: race.time || '',
+                raceName: race.raceName || race.name || '',
+                selection: bestInRace.scored.runner.horseName || '',
+                odds: bestInRace.scored.odds || 0,
+                confidence: bestInRace.confidence || 0,
+                edge: bestInRace.edge || 0,
+                runners: race.runners.filter(function(r) { return !r.isNonRunner && !r.scratched; }).length,
+                date: today,
+              }).catch(function() {}); // non-fatal
+            } catch(e) {}
+          }
         });
         console.log('[Auto-Tips] Racing candidates passing filter: ' + allCandidates.filter(function(c) { return c.type === 'racing'; }).length);
 
@@ -2173,6 +2196,14 @@ module.exports = function startScheduler(deps) {
             }
           }
         } catch (err) { console.error('[Auto-Settle] Racing error:', err.message); }
+
+        // Also settle race predictions ("Our Pick" in every race)
+        try {
+          if (raceResults && raceResults.results && raceResults.results.length > 0) {
+            var rpSettled = await db.settleRacePredictions(raceResults.results);
+            if (rpSettled > 0) console.log('[Auto-Settle] Race predictions: ' + rpSettled + ' settled');
+          }
+        } catch (rpErr) { /* non-fatal */ }
       }
 
       // Auto-mark football results
