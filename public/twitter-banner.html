@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { width: 1500px; height: 500px; background: #0a0e1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; position: relative; }
+
+/* Background */
+.bg-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(212,168,67,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(212,168,67,0.03) 1px, transparent 1px); background-size: 40px 40px; }
+.glow-1 { position: absolute; top: -200px; left: -100px; width: 600px; height: 600px; border-radius: 50%; background: radial-gradient(circle, rgba(212,168,67,0.1), transparent 70%); }
+.glow-2 { position: absolute; bottom: -200px; right: 100px; width: 500px; height: 500px; border-radius: 50%; background: radial-gradient(circle, rgba(59,130,246,0.06), transparent 70%); }
+.glow-3 { position: absolute; top: 50%; right: 300px; transform: translateY(-50%); width: 400px; height: 300px; background: radial-gradient(ellipse, rgba(168,85,247,0.05), transparent 70%); }
+
+/* Gold lines */
+.line-top { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, #d4a843, transparent); }
+.line-bottom { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, #d4a843, transparent); }
+
+/* Layout */
+.content { position: relative; z-index: 1; padding: 50px 80px; height: 100%; display: flex; align-items: center; gap: 60px; }
+.left { flex: 1; }
+.right { width: 520px; }
+
+/* Logo */
+.logo { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.logo-icon { width: 48px; height: 48px; background: linear-gradient(135deg, #d4a843, #b8902f); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 20px; color: #0a0e1a; }
+.logo-text { font-size: 15px; font-weight: 800; color: #d4a843; letter-spacing: 2px; text-transform: uppercase; }
+
+/* Headline */
+h1 { font-size: 44px; font-weight: 900; color: #ffffff; line-height: 1.1; margin-bottom: 16px; }
+h1 .gold { color: #d4a843; }
+.sub { font-size: 17px; color: #94a3b8; line-height: 1.5; margin-bottom: 24px; }
+
+/* Stats */
+.stats { display: flex; gap: 12px; }
+.stat { background: linear-gradient(135deg, rgba(212,168,67,0.1), rgba(212,168,67,0.03)); border: 1px solid rgba(212,168,67,0.25); border-radius: 10px; padding: 12px 16px; text-align: center; min-width: 90px; }
+.stat-num { font-size: 24px; font-weight: 900; color: #d4a843; }
+.stat-label { font-size: 9px; color: #8b8d93; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 2px; }
+
+/* Right column — analyst cards */
+.analysts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.analyst-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; gap: 10px; }
+.analyst-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 12px; color: #fff; flex-shrink: 0; }
+.analyst-name { font-size: 13px; font-weight: 800; }
+.analyst-role { font-size: 9px; color: #8b8d93; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* AI engines bar */
+.ai-bar { display: flex; gap: 8px; margin-top: 12px; }
+.ai-chip { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 14px; text-align: center; flex: 1; }
+.ai-chip-name { font-size: 11px; font-weight: 800; color: #ffffff; }
+.ai-chip-role { font-size: 8px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* Self-learning badge */
+.learning-badge { background: linear-gradient(135deg, rgba(34,197,94,0.1), rgba(34,197,94,0.03)); border: 1px solid rgba(34,197,94,0.25); border-radius: 8px; padding: 10px 16px; text-align: center; margin-top: 12px; }
+.learning-text { font-size: 11px; font-weight: 700; color: #22c55e; letter-spacing: 0.5px; }
+
+/* URL */
+.url { position: absolute; bottom: 18px; right: 80px; font-size: 14px; color: #475569; font-weight: 600; letter-spacing: 0.5px; }
+</style></head>
+<body>
+<div class="bg-grid"></div>
+<div class="glow-1"></div>
+<div class="glow-2"></div>
+<div class="glow-3"></div>
+<div class="line-top"></div>
+<div class="line-bottom"></div>
+
+<div class="content">
+  <div class="left">
+    <div class="logo">
+      <div class="logo-icon">EE</div>
+      <div class="logo-text">Elite Edge Sports Tips</div>
+    </div>
+
+    <h1>The UK's Most<br><span class="gold">Intelligent</span> Tipping<br>Platform</h1>
+
+    <div class="sub">5 self-learning AI analysts. 3 AI engines.<br>Every tip verified. Every result tracked.</div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-num">6</div><div class="stat-label">Sports</div></div>
+      <div class="stat"><div class="stat-num">14</div><div class="stat-label">Live APIs</div></div>
+      <div class="stat"><div class="stat-num">5</div><div class="stat-label">AI Analysts</div></div>
+      <div class="stat"><div class="stat-num">9</div><div class="stat-label">Daily Tips</div></div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="analysts-grid">
+      <div class="analyst-card" style="border-color: rgba(59,130,246,0.3);">
+        <div class="analyst-avatar" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);">TP</div>
+        <div><div class="analyst-name" style="color: #3b82f6;">The Professor</div><div class="analyst-role">Data-Driven</div></div>
+      </div>
+      <div class="analyst-card" style="border-color: rgba(34,197,94,0.3);">
+        <div class="analyst-avatar" style="background: linear-gradient(135deg, #22c55e, #15803d);">TS</div>
+        <div><div class="analyst-name" style="color: #22c55e;">The Scout</div><div class="analyst-role">Value Hunter</div></div>
+      </div>
+      <div class="analyst-card" style="border-color: rgba(168,85,247,0.3);">
+        <div class="analyst-avatar" style="background: linear-gradient(135deg, #a855f7, #7c3aed);">TC</div>
+        <div><div class="analyst-name" style="color: #a855f7;">The Clocker</div><div class="analyst-role">Deep Racing</div></div>
+      </div>
+      <div class="analyst-card" style="border-color: rgba(239,68,68,0.3);">
+        <div class="analyst-avatar" style="background: linear-gradient(135deg, #ef4444, #dc2626);">TT</div>
+        <div><div class="analyst-name" style="color: #ef4444;">The Tactician</div><div class="analyst-role">Deep Football</div></div>
+      </div>
+      <div class="analyst-card" style="border-color: rgba(212,168,67,0.3); grid-column: span 2;">
+        <div class="analyst-avatar" style="background: linear-gradient(135deg, #d4a843, #b8902f); color: #0a0e1a;">TE</div>
+        <div><div class="analyst-name" style="color: #d4a843;">The Edge</div><div class="analyst-role">Balanced Analysis &bull; All Sports</div></div>
+      </div>
+    </div>
+
+    <div class="ai-bar">
+      <div class="ai-chip"><div class="ai-chip-name">Claude AI</div><div class="ai-chip-role">Analysis</div></div>
+      <div class="ai-chip"><div class="ai-chip-name">Perplexity</div><div class="ai-chip-role">Live Intel</div></div>
+      <div class="ai-chip"><div class="ai-chip-name">GPT-4o</div><div class="ai-chip-role">Verification</div></div>
+    </div>
+
+    <div class="learning-badge">
+      <div class="learning-text">&#129504; Self-Learning Model &mdash; Gets Sharper Every Week</div>
+    </div>
+  </div>
+</div>
+
+<div class="url">eliteedgesports.co.uk</div>
+</body>
+</html>
