@@ -178,6 +178,19 @@ module.exports = function(deps) {
     res.json({ key: pushSvc ? pushSvc.publicKey : '' });
   });
 
+  // GET /api/user/match-predictions — match prediction accuracy stats
+  router.get('/user/match-predictions', authenticate, async function(req, res) {
+    try {
+      var date = req.query.date || null;
+      var days = parseInt(req.query.days) || 30;
+      var predictions = date ? await db.getMatchPredictions({ date: date }) : [];
+      var stats = await db.getMatchPredictionStats(days);
+      res.json({ predictions: predictions, stats: stats });
+    } catch (err) {
+      res.json({ predictions: [], stats: {} });
+    }
+  });
+
   // GET /api/user/bets/leaderboard — anonymous subscriber leaderboard
   router.get('/user/bets/leaderboard', async function(req, res) {
     try {

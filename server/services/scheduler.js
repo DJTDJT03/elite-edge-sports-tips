@@ -2320,6 +2320,21 @@ module.exports = function startScheduler(deps) {
             }
           }
         } catch (err) { console.error('[Auto-Settle] Football error:', err.message); }
+
+        // Also settle match predictions ("Our Take" on every game)
+        try {
+          var predResults = [];
+          for (var fdi = 0; fdi < datesToSettle.length; fdi++) {
+            try {
+              var dayMatches = await footballSource.getResults(datesToSettle[fdi]);
+              if (dayMatches) predResults = predResults.concat(dayMatches);
+            } catch(e) {}
+          }
+          if (predResults.length > 0) {
+            var predSettled = await db.settleMatchPredictions(predResults);
+            if (predSettled > 0) console.log('[Auto-Settle] Match predictions: ' + predSettled + ' settled');
+          }
+        } catch (predErr) { /* non-fatal */ }
       }
 
       // Auto-settle NBA basketball results

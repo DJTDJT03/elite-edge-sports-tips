@@ -30,12 +30,15 @@ window.ResultsPage = {
         AdminAPI.get('/tips'),
         AdminAPI.get('/results/by-confidence'),
         AdminAPI.get('/analytics/shadow-scoring?date=' + selectedDate).catch(function() { return { candidates: [] }; }),
+        AdminAPI.get('/user/match-predictions?date=' + selectedDate).catch(function() { return { predictions: [], stats: {} }; }),
       ]);
       this._performance = data[0];
       this._results = data[1];
       this._tips = data[2];
       this._byConfidence = data[3];
       this._candidates = (data[4] && data[4].candidates) ? data[4].candidates : [];
+      this._matchPredictions = (data[5] && data[5].predictions) ? data[5].predictions : [];
+      this._matchPredictionStats = (data[5] && data[5].stats) ? data[5].stats : {};
     } catch (err) {
       container.innerHTML = '<div class="admin-error">Failed to load results data: ' + (err.message || err) + '</div>';
       return;
@@ -52,6 +55,7 @@ window.ResultsPage = {
 
     container.innerHTML = ''
       + this._renderDailyReview()
+      + this._renderMatchPredictions()
       + this._renderPerformanceOverview()
       + this._renderSportBreakdown()
       + this._renderByConfidence()
@@ -251,10 +255,15 @@ window.ResultsPage = {
 
   async _fetchCandidatesAndRerender(container) {
     try {
-      var data = await AdminAPI.get('/analytics/shadow-scoring?date=' + this._selectedDate);
-      this._candidates = (data && data.candidates) ? data.candidates : [];
+      var results = await Promise.all([
+        AdminAPI.get('/analytics/shadow-scoring?date=' + this._selectedDate).catch(function() { return { candidates: [] }; }),
+        AdminAPI.get('/user/match-predictions?date=' + this._selectedDate).catch(function() { return { predictions: [], stats: {} }; }),
+      ]);
+      this._candidates = (results[0] && results[0].candidates) ? results[0].candidates : [];
+      this._matchPredictions = (results[1] && results[1].predictions) ? results[1].predictions : [];
     } catch (e) {
       this._candidates = [];
+      this._matchPredictions = [];
     }
     this._renderPage(container);
   },
@@ -265,6 +274,55 @@ window.ResultsPage = {
     // Handle ISO strings and date-only strings
     if (str.length >= 10) return str.substring(0, 10);
     return null;
+  },
+
+  // ---------------------------------------------------------------------------
+  // 0b. MATCH PREDICTIONS — "Our Take" accuracy on every football game
+  // ---------------------------------------------------------------------------
+  _renderMatchPredictions() {
+    var preds = this._matchPredictions || [];
+    if (preds.length === 0) return '';
+
+    var correct = preds.filter(function(p) { return p.correct === true; }).length;
+    var incorrect = preds.filter(function(p) { return p.correct === false; }).length;
+    var pending = preds.filter(function(p) { return p.result === null; }).length;
+    var settled = correct + incorrect;
+    var accuracy = settled > 0 ? Math.round((correct / settled) * 1000) / 10 : 0;
+    var accColor = accuracy >= 60 ? '#22c55e' : accuracy >= 40 ? '#d4a843' : '#ef4444';
+
+    var rows = preds.map(function(p) {
+      var resultBadge = '';
+      if (p.correct === true) resultBadge = '<span style="color:#22c55e;font-weight:700;">&#10003; Correct</span>';
+      else if (p.correct === false) resultBadge = '<span style="color:#ef4444;font-weight:700;">&#10007; Wrong</span>';
+      else resultBadge = '<span style="color:#94a3b8;">Pending</span>';
+
+      var score = p.result || '—';
+      return '<tr>' +
+        '<td style="font-size:12px;">' + (p.home_team || '') + ' vs ' + (p.away_team || '') + '</td>' +
+        '<td style="font-size:12px;color:#94a3b8;">' + (p.league || '') + '</td>' +
+        '<td><strong>' + (p.pick || '') + '</strong><br><span style="font-size:11px;color:#64748b;">' + (p.market || '') + '</span></td>' +
+        '<td style="text-align:center;font-weight:700;color:#d4a843;">' + (p.confidence || '') + '</td>' +
+        '<td style="text-align:center;">' + score + '</td>' +
+        '<td>' + resultBadge + '</td>' +
+      '</tr>';
+    }).join('');
+
+    return ''
+      + '<h2 class="admin-section-title">Our Take — Football Predictions</h2>'
+      + '<div class="admin-stat-cards" style="margin-bottom:16px;">'
+      +   '<div class="stat-card"><div class="stat-label">Predictions</div><div class="stat-value">' + preds.length + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Correct</div><div class="stat-value stat-green">' + correct + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Wrong</div><div class="stat-value stat-red">' + incorrect + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value" style="color:#f59e0b;">' + pending + '</div></div>'
+      +   '<div class="stat-card"><div class="stat-label">Accuracy</div><div class="stat-value" style="color:' + accColor + ';">' + accuracy + '%</div></div>'
+      + '</div>'
+      + '<div class="admin-table-wrap">'
+      +   '<table class="admin-table">'
+      +     '<thead><tr><th>Match</th><th>League</th><th>Our Pick</th><th>Conf</th><th>Score</th><th>Result</th></tr></thead>'
+      +     '<tbody>' + rows + '</tbody>'
+      +   '</table>'
+      + '</div>'
+      + '<hr style="border:none;border-top:1px solid #2a2e3d;margin:32px 0;">';
   },
 
   // ---------------------------------------------------------------------------

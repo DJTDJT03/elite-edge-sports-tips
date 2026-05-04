@@ -222,6 +222,10 @@ app.use('/', require('./routes/public')(deps));
         'CREATE INDEX IF NOT EXISTS idx_sc_date ON scored_candidates(date DESC)',
         'CREATE INDEX IF NOT EXISTS idx_sc_sport ON scored_candidates(sport, date DESC)',
         'CREATE INDEX IF NOT EXISTS idx_sc_settled ON scored_candidates(settled, date DESC)',
+        // Match predictions tracking (Our Take on every game)
+        "CREATE TABLE IF NOT EXISTS match_predictions (id SERIAL PRIMARY KEY, fixture_id INTEGER NOT NULL, home_team TEXT, away_team TEXT, league TEXT, kickoff TIMESTAMPTZ, market TEXT, pick TEXT, confidence INTEGER, reason TEXT, actual_home_goals INTEGER, actual_away_goals INTEGER, result TEXT, correct BOOLEAN, date DATE, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(fixture_id, date))",
+        'CREATE INDEX IF NOT EXISTS idx_mp_date ON match_predictions(date DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_mp_correct ON match_predictions(correct, date DESC)',
         // Push notification subscriptions
         "CREATE TABLE IF NOT EXISTS push_subscriptions (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, subscription JSONB NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(user_id, subscription))",
         'CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id)',

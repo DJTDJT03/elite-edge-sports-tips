@@ -1229,9 +1229,123 @@ module.exports = {
   upsertQualitySnapshot, getQualitySnapshots, getLatestQualitySnapshot,
   // User Bets (Personal ROI)
   backTip, unbackTip, getUserBets, settleUserBets, getUserROI,
+  // Match Predictions (Our Take)
+  saveMatchPrediction, getMatchPredictions, settleMatchPredictions, getMatchPredictionStats,
   // Push Subscriptions
   savePushSubscription, removePushSubscription, getPushSubscriptions, getAllPushSubscriptions,
 };
+
+// ---------------------------------------------------------------------------
+// MATCH PREDICTIONS — "Our Take" on every football game
+// ---------------------------------------------------------------------------
+async function saveMatchPrediction(data) {
+  if (!pool) return null;
+  var { rows } = await query(
+    `INSERT INTO match_predictions (fixture_id, home_team, away_team, league, kickoff, market, pick, confidence, reason, date)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     ON CONFLICT (fixture_id, date) DO NOTHING RETURNING id`,
+    [data.fixtureId, data.homeTeam, data.awayTeam, data.league, data.kickoff,
+     data.market, data.pick, data.confidence, data.reason, data.date || new Date().toISOString().split('T')[0]]
+  );
+  return rows.length > 0 ? rows[0].id : null;
+}
+
+async function getMatchPredictions(filters) {
+  if (!pool) return [];
+  var sql = 'SELECT * FROM match_predictions';
+  var conditions = [];
+  var values = [];
+  var idx = 1;
+  if (filters) {
+    if (filters.date) { conditions.push('date = $' + idx); values.push(filters.date); idx++; }
+    if (filters.correct !== undefined) { conditions.push('correct = $' + idx); values.push(filters.correct); idx++; }
+  }
+  if (conditions.length > 0) sql += ' WHERE ' + conditions.join(' AND ');
+  sql += ' ORDER BY date DESC, kickoff ASC LIMIT 500';
+  var { rows } = await query(sql, values);
+  return rows;
+}
+
+async function settleMatchPredictions(footballResults) {
+  if (!pool || !footballResults || footballResults.length === 0) return 0;
+  var settled = 0;
+  for (var i = 0; i < footballResults.length; i++) {
+    var match = footballResults[i];
+    if (match.homeScore === null || match.awayScore === null) continue;
+    var homeGoals = parseInt(match.homeScore) || 0;
+    var awayGoals = parseInt(match.awayScore) || 0;
+    var totalGoals = homeGoals + awayGoals;
+
+    // Find prediction for this fixture
+    var { rows } = await query(
+      'SELECT * FROM match_predictions WHERE fixture_id = $1 AND result IS NULL',
+      [match.fixtureId || match.id]
+    );
+    if (rows.length === 0) continue;
+
+    var pred = rows[0];
+    var pick = (pred.pick || '').toLowerCase();
+    var market = (pred.market || '').toLowerCase();
+    var correct = false;
+
+    // Evaluate prediction
+    if (market.includes('result') || market.includes('match')) {
+      if (pick.includes('draw')) correct = homeGoals === awayGoals;
+      else if (pick.includes(pred.home_team.toLowerCase())) correct = homeGoals > awayGoals;
+      else if (pick.includes(pred.away_team.toLowerCase())) correct = awayGoals > homeGoals;
+    } else if (market.includes('both teams') || market.includes('btts')) {
+      correct = pick.includes('yes') ? (homeGoals > 0 && awayGoals > 0) : !(homeGoals > 0 && awayGoals > 0);
+    } else if (market.includes('over')) {
+      if (pick.includes('3.5')) correct = totalGoals > 3;
+      else if (pick.includes('2.5')) correct = totalGoals > 2;
+      else if (pick.includes('1.5')) correct = totalGoals > 1;
+    } else if (market.includes('under')) {
+      if (pick.includes('2.5')) correct = totalGoals < 3;
+      else if (pick.includes('1.5')) correct = totalGoals < 2;
+    }
+
+    var resultStr = homeGoals + '-' + awayGoals;
+    await query(
+      'UPDATE match_predictions SET actual_home_goals = $2, actual_away_goals = $3, result = $4, correct = $5 WHERE id = $1',
+      [pred.id, homeGoals, awayGoals, resultStr, correct]
+    );
+    settled++;
+  }
+  return settled;
+}
+
+async function getMatchPredictionStats(days) {
+  if (!pool) return {};
+  var d = days || 30;
+  var { rows } = await query(`
+    SELECT
+      COUNT(*) as total,
+      COUNT(*) FILTER (WHERE correct = true) as correct_count,
+      COUNT(*) FILTER (WHERE correct = false) as incorrect_count,
+      COUNT(*) FILTER (WHERE result IS NULL) as pending,
+      COUNT(*) FILTER (WHERE market ILIKE '%result%' AND correct = true) as match_result_correct,
+      COUNT(*) FILTER (WHERE market ILIKE '%result%' AND result IS NOT NULL) as match_result_total,
+      COUNT(*) FILTER (WHERE market ILIKE '%btts%' OR market ILIKE '%both teams%') FILTER (WHERE correct = true) as btts_correct,
+      COUNT(*) FILTER (WHERE market ILIKE '%btts%' OR market ILIKE '%both teams%') FILTER (WHERE result IS NOT NULL) as btts_total,
+      COUNT(*) FILTER (WHERE market ILIKE '%over%' OR market ILIKE '%under%' OR market ILIKE '%goal%') FILTER (WHERE correct = true) as goals_correct,
+      COUNT(*) FILTER (WHERE market ILIKE '%over%' OR market ILIKE '%under%' OR market ILIKE '%goal%') FILTER (WHERE result IS NOT NULL) as goals_total
+    FROM match_predictions WHERE date >= CURRENT_DATE - $1
+  `, [d]);
+  if (rows.length === 0) return {};
+  var r = rows[0];
+  var total = parseInt(r.total) || 0;
+  var correct = parseInt(r.correct_count) || 0;
+  var settled = total - (parseInt(r.pending) || 0);
+  return {
+    total: total, correct: correct, incorrect: parseInt(r.incorrect_count) || 0, pending: parseInt(r.pending) || 0,
+    accuracy: settled > 0 ? Math.round((correct / settled) * 1000) / 10 : 0,
+    byMarket: {
+      matchResult: { correct: parseInt(r.match_result_correct) || 0, total: parseInt(r.match_result_total) || 0 },
+      btts: { correct: parseInt(r.btts_correct) || 0, total: parseInt(r.btts_total) || 0 },
+      goals: { correct: parseInt(r.goals_correct) || 0, total: parseInt(r.goals_total) || 0 },
+    }
+  };
+}
 
 // ---------------------------------------------------------------------------
 // PUSH SUBSCRIPTIONS

@@ -449,6 +449,18 @@ module.exports = function(deps) {
         // Non-fatal — skip odds movement
       }
 
+      // Store the prediction for tracking accuracy
+      try {
+        await db.saveMatchPrediction({
+          fixtureId: parseInt(fixtureId),
+          homeTeam: homeTeam.name, awayTeam: awayTeam.name,
+          league: league.name, kickoff: kickoff,
+          market: verdictMarket, pick: verdictPick,
+          confidence: confidence, reason: verdictReason,
+          date: new Date(kickoff).toISOString().split('T')[0],
+        });
+      } catch(e) { /* non-fatal — duplicate or DB error */ }
+
       res.json({
         fixtureId: parseInt(fixtureId),
         match: {
