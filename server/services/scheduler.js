@@ -4283,6 +4283,32 @@ module.exports = function startScheduler(deps) {
     var tipMap = {};
     allTips.forEach(function(t) { tipMap[t.id] = t; });
 
+    // Pull ALL prediction data for comprehensive learning
+    var racePredictions = [];
+    var matchPredictions = [];
+    var shadowCandidates = [];
+    try { racePredictions = await db.getRacePredictions({}); } catch(e) {}
+    try { matchPredictions = await db.getMatchPredictions({}); } catch(e) {}
+    try { shadowCandidates = await db.getScoredCandidates({ settled: true }); } catch(e) {}
+
+    // Racing prediction accuracy — model's top pick in every race
+    var rpSettled = racePredictions.filter(function(p) { return p.correct !== null; });
+    var rpCorrect = rpSettled.filter(function(p) { return p.correct === true; });
+    var rpPlaced = rpSettled.filter(function(p) { return p.finish_position && p.finish_position <= 3; });
+    var rpWinRate = rpSettled.length > 0 ? Math.round((rpCorrect.length / rpSettled.length) * 100) : 0;
+    var rpPlaceRate = rpSettled.length > 0 ? Math.round((rpPlaced.length / rpSettled.length) * 100) : 0;
+
+    // Football prediction accuracy — verdict on every game
+    var mpSettled = matchPredictions.filter(function(p) { return p.result !== null; });
+    var mpCorrect = mpSettled.filter(function(p) { return p.correct === true; });
+    var mpAccuracy = mpSettled.length > 0 ? Math.round((mpCorrect.length / mpSettled.length) * 100) : 0;
+
+    // Shadow candidate accuracy — all scored selections
+    var scWins = shadowCandidates.filter(function(c) { return c.result === 'won'; });
+    var scTotal = shadowCandidates.filter(function(c) { return c.result === 'won' || c.result === 'lost'; });
+
+    console.log('[AutoTune] Data: ' + allResults.length + ' tip results, ' + rpSettled.length + ' race predictions, ' + mpSettled.length + ' match predictions, ' + scTotal.length + ' shadow candidates');
+
     var analysts = ['The Professor', 'The Scout', 'The Clocker', 'The Tactician', 'The Edge'];
     var tuningReport = [];
 
@@ -4437,6 +4463,71 @@ module.exports = function startScheduler(deps) {
           adjustmentsMade.push('Widened max odds to ' + profile.oddsRange.max.toFixed(1) + ' (strong ROI)');
         }
 
+        // --- LEARN FROM ALL SELECTIONS (not just published tips) ---
+
+        // The Clocker: learn from race predictions (Our Pick in every race)
+        if (analystKey === 'clocker' && rpSettled.length >= 10) {
+          actions.push('RACE PREDICTIONS: ' + rpCorrect.length + '/' + rpSettled.length + ' winners (' + rpWinRate + '%), ' + rpPlaced.length + ' placed (' + rpPlaceRate + '%)');
+          // If win rate is below 15% on all race picks, the going/course weighting needs increasing
+          if (rpWinRate < 15 && rpSettled.length >= 20) {
+            profile.racingWeightModifiers.going = Math.min(profile.racingWeightModifiers.going + 0.1, 2.0);
+            profile.racingWeightModifiers.course = Math.min(profile.racingWeightModifiers.course + 0.1, 2.0);
+            adjustmentsMade.push('Clocker: increased going/course weights (win rate ' + rpWinRate + '% too low)');
+          }
+          // If win rate is above 25%, the model is strong — slightly widen odds range
+          if (rpWinRate > 25 && rpSettled.length >= 20) {
+            profile.oddsRange.max = Math.min(profile.oddsRange.max + 1.0, 30.0);
+            adjustmentsMade.push('Clocker: widened max odds (win rate ' + rpWinRate + '% — strong)');
+          }
+        }
+
+        // The Tactician: learn from match predictions (Our Take on every game)
+        if (analystKey === 'tactician' && mpSettled.length >= 10) {
+          actions.push('MATCH PREDICTIONS: ' + mpCorrect.length + '/' + mpSettled.length + ' correct (' + mpAccuracy + '%)');
+          // By market type analysis
+          var mpByMarket = {};
+          mpSettled.forEach(function(p) {
+            var m = (p.market || 'unknown').toLowerCase();
+            var key = m.indexOf('result') !== -1 ? 'match_result' : m.indexOf('btts') !== -1 || m.indexOf('both') !== -1 ? 'btts' : 'goals';
+            if (!mpByMarket[key]) mpByMarket[key] = { correct: 0, total: 0 };
+            mpByMarket[key].total++;
+            if (p.correct) mpByMarket[key].correct++;
+          });
+          for (var mKey in mpByMarket) {
+            var mData = mpByMarket[mKey];
+            var mAcc = mData.total > 0 ? Math.round((mData.correct / mData.total) * 100) : 0;
+            actions.push('  ' + mKey + ': ' + mData.correct + '/' + mData.total + ' (' + mAcc + '%)');
+            // If a market type is below 40% accuracy with 10+ picks, reduce its weight
+            if (mAcc < 40 && mData.total >= 10) {
+              if (mKey === 'btts') {
+                var idx = profile.preferredMarkets.football.indexOf('Both Teams to Score');
+                if (idx !== -1) { profile.preferredMarkets.football.splice(idx, 1); adjustmentsMade.push('Tactician: dropped BTTS (' + mAcc + '% accuracy)'); }
+              }
+              if (mKey === 'goals' && mAcc < 35) {
+                profile.footballWeightModifiers.shots = Math.max(profile.footballWeightModifiers.shots - 0.1, 0.8);
+                adjustmentsMade.push('Tactician: reduced shots weight (goals market ' + mAcc + '%)');
+              }
+            }
+          }
+          // If overall accuracy is above 60%, increase injury/motivation weights (the key differentiators)
+          if (mpAccuracy > 60 && mpSettled.length >= 20) {
+            profile.footballWeightModifiers.injuries = Math.min(profile.footballWeightModifiers.injuries + 0.1, 2.0);
+            profile.footballWeightModifiers.motivation = Math.min(profile.footballWeightModifiers.motivation + 0.1, 2.0);
+            adjustmentsMade.push('Tactician: boosted injury/motivation weights (accuracy ' + mpAccuracy + '%)');
+          }
+        }
+
+        // All analysts: learn from shadow candidates
+        if (scTotal.length >= 20) {
+          var scAnalystPicks = shadowCandidates.filter(function(c) { return c.analyst === name; });
+          var scAnalystWins = scAnalystPicks.filter(function(c) { return c.result === 'won'; });
+          var scAnalystSettled = scAnalystPicks.filter(function(c) { return c.result === 'won' || c.result === 'lost'; });
+          if (scAnalystSettled.length >= 5) {
+            var scSR = Math.round((scAnalystWins.length / scAnalystSettled.length) * 100);
+            actions.push('SHADOW PICKS: ' + scAnalystWins.length + '/' + scAnalystSettled.length + ' (' + scSR + '%) — includes unpublished selections');
+          }
+        }
+
         if (adjustmentsMade.length > 0) {
           actions.push('APPLIED: ' + adjustmentsMade.join(', '));
           console.log('[AutoTune] ' + name + ' adjustments: ' + adjustmentsMade.join(', '));
@@ -4491,6 +4582,21 @@ module.exports = function startScheduler(deps) {
         }
         reportHtml += '</div>';
       });
+
+      // All-selections accuracy section
+      reportHtml += '<div style="background:#0a0e1a;border:1px solid #2a2d45;padding:20px;margin:20px 0;border-radius:8px;">';
+      reportHtml += '<h2 style="color:#d4a843;margin-bottom:12px;">All Selections Accuracy (Not Just Published Tips)</h2>';
+      if (rpSettled.length > 0) {
+        reportHtml += '<p style="color:#cbd5e1;">Racing — Our Pick in every race: <strong style="color:#22c55e;">' + rpCorrect.length + '/' + rpSettled.length + ' winners (' + rpWinRate + '%)</strong>, ' + rpPlaced.length + ' placed (' + rpPlaceRate + '%)</p>';
+      }
+      if (mpSettled.length > 0) {
+        reportHtml += '<p style="color:#cbd5e1;">Football — Our Take on every game: <strong style="color:#22c55e;">' + mpCorrect.length + '/' + mpSettled.length + ' correct (' + mpAccuracy + '%)</strong></p>';
+      }
+      if (scTotal.length > 0) {
+        var scOverallSR = scTotal.length > 0 ? Math.round((scWins.length / scTotal.length) * 100) : 0;
+        reportHtml += '<p style="color:#cbd5e1;">Shadow Candidates (all scored): <strong>' + scWins.length + '/' + scTotal.length + ' (' + scOverallSR + '%)</strong></p>';
+      }
+      reportHtml += '</div>';
 
       // Add marketing-ready stats summary
       var allResults = await db.getResults();
