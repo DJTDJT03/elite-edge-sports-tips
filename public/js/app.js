@@ -2911,8 +2911,7 @@ const App = {
                 <div style="font-size:18px;font-weight:800;color:#d4a843;">How Elite Edge Works</div>
                 <div style="font-size:12px;color:#8a8fa0;">Understanding our system and how to use our tips</div>
               </div>
-              <a href="#/how-it-works" style="font-size:12px;color:#d4a843;text-decoration:none;font-weight:600;">Full Guide &rarr;</a>
-              </div>
+              <a href="#/how-it-works" style="font-size:12px;color:#d4a843;text-decoration:none;font-weight:600;margin-left:auto;">Full Guide &rarr;</a>
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
               <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
@@ -10045,37 +10044,6 @@ const App = {
 
           <!-- Video Walkthrough -->
           <div id="how-it-works-video" style="margin-bottom:32px;"></div>
-          <script>
-          (function() {
-            // Set your video URL here once recorded — supports Loom, YouTube, or Vimeo
-            var videoUrl = window.ELITE_EDGE_VIDEO_URL || localStorage.getItem('ee_walkthrough_url') || '';
-            var container = document.getElementById('how-it-works-video');
-            if (!container) return;
-            if (videoUrl) {
-              // Detect Loom, YouTube, or Vimeo and embed accordingly
-              var embedHtml = '';
-              if (videoUrl.indexOf('loom.com') !== -1) {
-                var loomId = videoUrl.split('/').pop().split('?')[0];
-                embedHtml = '<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;border:1px solid #2a2d45;"><iframe src="https://www.loom.com/embed/' + loomId + '" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe></div>';
-              } else if (videoUrl.indexOf('youtube.com') !== -1 || videoUrl.indexOf('youtu.be') !== -1) {
-                var ytId = videoUrl.indexOf('youtu.be') !== -1 ? videoUrl.split('/').pop().split('?')[0] : (videoUrl.match(/[?&]v=([^&]+)/) || [])[1];
-                if (ytId) embedHtml = '<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;border:1px solid #2a2d45;"><iframe src="https://www.youtube.com/embed/' + ytId + '" frameborder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe></div>';
-              } else if (videoUrl.indexOf('vimeo.com') !== -1) {
-                var vimeoId = videoUrl.split('/').pop().split('?')[0];
-                embedHtml = '<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;border:1px solid #2a2d45;"><iframe src="https://player.vimeo.com/video/' + vimeoId + '" frameborder="0" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe></div>';
-              } else {
-                embedHtml = '<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;border:1px solid #2a2d45;"><iframe src="' + videoUrl + '" frameborder="0" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe></div>';
-              }
-              container.innerHTML = '<div style="margin-bottom:12px;font-size:14px;font-weight:700;color:#d4a843;">&#127916; Watch: How to Use Elite Edge (3 min)</div>' + embedHtml;
-            } else {
-              container.innerHTML = '<div style="position:relative;background:#0a0e1a;border-radius:12px;padding:40px 20px;text-align:center;border:1px solid #2a2d45;cursor:pointer;" onclick="var url=prompt(\'Paste your Loom/YouTube video URL:\');if(url){localStorage.setItem(\'ee_walkthrough_url\',url);location.reload();}">' +
-                '<div style="font-size:48px;margin-bottom:12px;">&#9654;</div>' +
-                '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">Video Walkthrough Coming Soon</div>' +
-                '<div style="font-size:13px;color:#8a8fa0;">3 minute guide showing how to use Elite Edge</div>' +
-              '</div>';
-            }
-          })();
-          </script>
 
           <!-- Quick Start Guide -->
           <div style="background:linear-gradient(135deg,#0a0e1a,#1a1a2e);border-radius:12px;padding:32px 24px;margin-bottom:32px;border:1px solid #2a2d45;">
@@ -10221,6 +10189,26 @@ const App = {
         </div>
       </div>
     `;
+
+    // Render video embed after DOM update
+    setTimeout(function() {
+      var container = document.getElementById('how-it-works-video');
+      if (!container) return;
+      var videoUrl = window.ELITE_EDGE_VIDEO_URL || localStorage.getItem('ee_walkthrough_url') || '';
+      if (videoUrl) {
+        var embedHtml = '';
+        if (videoUrl.indexOf('loom.com') !== -1) {
+          var loomId = videoUrl.split('/').pop().split('?')[0];
+          embedHtml = '<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;border:1px solid #2a2d45;"><iframe src="https://www.loom.com/embed/' + loomId + '" frameborder="0" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe></div>';
+        } else if (videoUrl.indexOf('youtube.com') !== -1 || videoUrl.indexOf('youtu.be') !== -1) {
+          var ytId = videoUrl.indexOf('youtu.be') !== -1 ? videoUrl.split('/').pop().split('?')[0] : (videoUrl.match(/[?&]v=([^&]+)/) || [])[1];
+          if (ytId) embedHtml = '<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;border:1px solid #2a2d45;"><iframe src="https://www.youtube.com/embed/' + ytId + '" frameborder="0" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe></div>';
+        }
+        if (embedHtml) container.innerHTML = '<div style="margin-bottom:12px;font-size:14px;font-weight:700;color:#d4a843;">Watch: How to Use Elite Edge</div>' + embedHtml;
+      } else {
+        container.innerHTML = '<div style="background:#0a0e1a;border-radius:12px;padding:40px 20px;text-align:center;border:1px solid #2a2d45;"><div style="font-size:48px;margin-bottom:12px;">&#9654;</div><div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">Video Walkthrough Coming Soon</div><div style="font-size:13px;color:#8a8fa0;">3 minute guide showing how to use Elite Edge</div></div>';
+      }
+    }, 50);
   },
 
   render404() {
