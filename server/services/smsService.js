@@ -16,8 +16,13 @@ class SmsService {
     this.fromNumber = process.env.TWILIO_PHONE_NUMBER || '';
 
     if (this.isAvailable) {
-      this.client = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-      console.log('[SMS] Twilio configured — SMS enabled');
+      try {
+        this.client = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+        console.log('[SMS] Twilio configured — SMS enabled');
+      } catch(e) {
+        this.isAvailable = false;
+        console.log('[SMS] Twilio package not installed — run npm install twilio to enable SMS');
+      }
     } else {
       console.log('[SMS] Twilio not configured — SMS disabled (set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER)');
     }
