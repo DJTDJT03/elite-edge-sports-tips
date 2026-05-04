@@ -436,6 +436,22 @@ module.exports = function startScheduler(deps) {
           var raceWeather = (race.meeting && meetingWeather[race.meeting]) ? meetingWeather[race.meeting] : null;
           var isFestival = race.meeting && festivalMeetings.some(function(f) { return race.meeting.toLowerCase().indexOf(f) !== -1; });
 
+          // WEATHER-TO-GOING PREDICTION: if rain expected, anticipate going change
+          // This gets us ahead of the market — going specialists get a boost BEFORE the official change
+          var goingWillEase = false;
+          var goingWillDry = false;
+          if (raceWeather) {
+            var rainMm = raceWeather.rain || 0;
+            var humidity = raceWeather.humidity || 0;
+            var description = (raceWeather.description || '').toLowerCase();
+            if (rainMm >= 2 || description.indexOf('rain') !== -1 || description.indexOf('shower') !== -1) {
+              goingWillEase = true; // Ground will soften
+            }
+            if (rainMm === 0 && humidity < 50 && (description.indexOf('sun') !== -1 || description.indexOf('clear') !== -1)) {
+              goingWillDry = true; // Ground will dry out
+            }
+          }
+
           var bestInRace = null; // Track best runner per race for prediction storage
 
           race.runners.forEach(function(runner) {
@@ -445,9 +461,22 @@ module.exports = function startScheduler(deps) {
 
               var scored = scoringModel.scoreRunner(runner, race, null, raceWeather);
               if (!scored) return;
-              // Festival meetings get a 15% edge boost — ensures premium meetings are covered
               var adjustedEdge = scored.edge;
+              // Festival meetings get a 15% edge boost
               if (isFestival) adjustedEdge = scored.edge * 1.15;
+              // Weather-to-going: boost going specialists when rain is expected
+              if (goingWillEase && scored.factors && scored.factors.going >= 0.7) {
+                adjustedEdge *= 1.12; // 12% edge boost for going specialists when rain expected
+                if (scored.factors.going >= 0.85) adjustedEdge *= 1.08; // extra 8% for strong going factor
+              }
+              // Penalise horses that need fast ground when rain coming
+              if (goingWillEase && scored.factors && scored.factors.going < 0.4) {
+                adjustedEdge *= 0.85; // 15% edge reduction — ground going against them
+              }
+              // Boost speed-ground horses when it will dry out
+              if (goingWillDry && scored.factors && scored.factors.speedRatings >= 0.7 && scored.factors.going < 0.5) {
+                adjustedEdge *= 1.08; // Drying ground suits speed horses
+              }
 
               // Track best runner per race (for "Our Pick" prediction)
               if (!bestInRace || adjustedEdge > bestInRace.edge) {
@@ -1314,15 +1343,27 @@ module.exports = function startScheduler(deps) {
       return c.scored && c.scored.selectedOdds >= MIN_MAIN_TIP_ODDS && c.scored.selectedOdds <= MAX_MAIN_TIP_ODDS && c.confidence >= MIN_MAIN_CONFIDENCE;
     }).sort(function(a, b) { return b.edge - a.edge; });
 
-    // Select: up to 2 main racing + 2 main football + 1 outsider = max 5
-    var selectedRacing = racingMain.slice(0, 2);
+    // Select: 1 per meeting (prevent correlated losses) + up to 2 main football + 1 outsider
+    var usedMeetings = {};
+    var selectedRacing = [];
+    racingMain.forEach(function(c) {
+      var meeting = c.scored && c.scored.race ? (c.scored.race.meeting || '').toLowerCase() : '';
+      if (meeting && usedMeetings[meeting]) return; // 1 per meeting
+      if (selectedRacing.length >= 3) return; // max 3 racing main tips
+      selectedRacing.push(c);
+      if (meeting) usedMeetings[meeting] = true;
+    });
     var selectedFootball = footballMain.slice(0, 2);
     var selected = selectedRacing.concat(selectedFootball);
 
     // Add one EW Outsider of the Day (if available, mark it specially)
     var outsider = null;
     if (racingOutsider.length > 0) {
-      outsider = racingOutsider[0];
+      // Find best outsider from a meeting we haven't already picked from
+      outsider = racingOutsider.find(function(c) {
+        var mtg = c.scored && c.scored.race ? (c.scored.race.meeting || '').toLowerCase() : '';
+        return !usedMeetings[mtg];
+      }) || racingOutsider[0]; // fallback to best if all meetings used
       var outsiderId = outsider.scored && outsider.scored.runner ? outsider.scored.runner.horseName : null;
       var alreadyPicked = selected.some(function(s) {
         return s.scored && s.scored.runner && s.scored.runner.horseName === outsiderId;
@@ -4259,6 +4300,119 @@ module.exports = function startScheduler(deps) {
   setTimeout(safeRun('PriceHistory', logPriceHistory), 3 * 60 * 1000);
 
   // =========================================================================
+  // =========================================================================
+  // PRE-RACE VALIDATION — re-evaluate tips 30-45 mins before race
+  // Checks: going changes, non-runners impact, odds drift, edge erosion
+  // =========================================================================
+  var validatedTips = new Set();
+
+  async function preRaceValidation() {
+    if (!racingSource) return;
+    try {
+      var tips = await db.getTips({ sport: 'racing', status: 'active' });
+      if (!tips || tips.length === 0) return;
+
+      var now = new Date();
+      var ukNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/London' }));
+      var currentMins = ukNow.getHours() * 60 + ukNow.getMinutes();
+
+      for (var i = 0; i < tips.length; i++) {
+        var tip = tips[i];
+        if (validatedTips.has(tip.id)) continue;
+
+        // Parse race time
+        var raceTime = tip.raceTime || '';
+        if (!raceTime) continue;
+        var timeParts = raceTime.split(':');
+        var raceMins = parseInt(timeParts[0]) * 60 + parseInt(timeParts[1] || 0);
+
+        // Only validate 15-45 minutes before race
+        var minsUntilRace = raceMins - currentMins;
+        if (minsUntilRace < 15 || minsUntilRace > 45) continue;
+
+        validatedTips.add(tip.id);
+        var warnings = [];
+        var shouldPull = false;
+
+        // 1. Check current odds vs published odds (drift detection)
+        if (tip.bookmakerOdds && Object.keys(tip.bookmakerOdds).length > 0) {
+          var currentPrices = Object.values(tip.bookmakerOdds).filter(function(v) { return v > 0; });
+          if (currentPrices.length > 0) {
+            var currentAvg = currentPrices.reduce(function(s, v) { return s + v; }, 0) / currentPrices.length;
+            var publishedOdds = tip.odds || 0;
+            if (publishedOdds > 0 && currentAvg > 0) {
+              var driftPct = ((currentAvg - publishedOdds) / publishedOdds) * 100;
+
+              // Store drift data on the tip
+              await db.updateTip(tip.id, {
+                oddsDrift: Math.round(driftPct * 10) / 10,
+                currentOdds: Math.round(currentAvg * 100) / 100,
+              });
+
+              if (driftPct > 40) {
+                warnings.push('ODDS DRIFTED ' + Math.round(driftPct) + '% — market confidence has weakened significantly');
+                shouldPull = true;
+              } else if (driftPct > 20) {
+                warnings.push('Odds drifted ' + Math.round(driftPct) + '% — consider reducing stake');
+              } else if (driftPct < -15) {
+                warnings.push('Odds shortened ' + Math.abs(Math.round(driftPct)) + '% — market agrees with our selection');
+              }
+            }
+          }
+        }
+
+        // 2. Recalculate edge with current odds
+        var currentOddsVal = tip.currentOdds || tip.odds;
+        if (currentOddsVal > 0 && tip.modelProbability > 0) {
+          var currentImplied = 1 / currentOddsVal;
+          var currentEdge = tip.modelProbability - currentImplied;
+          if (currentEdge < 0.03 && (tip.edge || 0) >= 0.05) {
+            warnings.push('Edge eroded from ' + ((tip.edge || 0) * 100).toFixed(1) + '% to ' + (currentEdge * 100).toFixed(1) + '% — value may have gone');
+            if (currentEdge < 0.01) shouldPull = true;
+          }
+        }
+
+        // 3. Apply confidence decay based on drift
+        var oddsDrift = tip.oddsDrift || 0;
+        if (oddsDrift > 20) {
+          var newConf = Math.max((tip.confidence || 7) - 1, 4);
+          if (oddsDrift > 40) newConf = Math.max((tip.confidence || 7) - 2, 3);
+          if (newConf !== tip.confidence) {
+            await db.updateTip(tip.id, { confidence: newConf, preRaceAdjusted: true });
+            warnings.push('Confidence adjusted from ' + tip.confidence + ' to ' + newConf + ' (market drift)');
+          }
+        }
+
+        // 4. Store warnings on the tip for frontend display
+        if (warnings.length > 0) {
+          await db.updateTip(tip.id, { preRaceWarnings: warnings });
+          console.log('[PreRace] ' + tip.selection + ': ' + warnings.join(' | '));
+        }
+
+        // 5. If conditions are severely against, void the tip
+        if (shouldPull) {
+          await db.updateTip(tip.id, { status: 'voided', preRacePulled: true });
+          await db.createNotification({
+            type: 'warning',
+            message: 'TIP PULLED: ' + tip.selection + ' — ' + warnings[0],
+            tipId: tip.id,
+          });
+          console.log('[PreRace] PULLED: ' + tip.selection + ' — conditions changed too much');
+        }
+      }
+    } catch (err) {
+      console.error('[PreRace] Validation error:', err.message);
+    }
+  }
+
+  // Run pre-race validation every 5 minutes during racing hours (10am-7pm UK)
+  setInterval(function() {
+    var uk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+    if (uk.getHours() >= 10 && uk.getHours() <= 19) {
+      safeRun('PreRace', preRaceValidation)();
+    }
+  }, 5 * 60 * 1000);
+
   // =========================================================================
   // POST-RESULT LOSS ANALYSIS — determines WHY each loss happened
   // Runs after auto-settle. Compares pre-race/match conditions to outcomes.

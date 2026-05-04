@@ -327,14 +327,41 @@ class ScoringModel {
         else formPoints += 0.02 * recency;
       });
 
-      // Improvement bonus: if recent positions are getting lower (better), boost
+      // Form cycle detection — is the horse PEAKING, IMPROVING, DECLINING, or INCONSISTENT?
       if (recentForm.length >= 3) {
+        // Calculate trend using sequential comparison (not just avg)
+        let improving = 0, declining = 0;
+        for (let fi = 1; fi < recentForm.length; fi++) {
+          if (recentForm[fi - 1] < recentForm[fi]) improving++; // more recent run was better
+          else if (recentForm[fi - 1] > recentForm[fi]) declining++;
+        }
+
+        if (improving >= 3 && declining <= 1) {
+          // Strong improving trend (e.g. 5,3,2,1) — horse is peaking
+          improvementBonus = 0.20;
+        } else if (improving >= 2 && recentForm[0] <= 3) {
+          // Improving and last run was good — on an upward curve
+          improvementBonus = 0.15;
+        } else if (declining >= 3 && improving <= 1) {
+          // Strong declining trend (e.g. 1,2,4,8) — horse going wrong direction
+          improvementBonus = -0.15;
+        } else if (declining >= 2 && recentForm[0] >= 6) {
+          // Declining and last run was poor — going the wrong way
+          improvementBonus = -0.12;
+        } else if (recentForm[0] === 1) {
+          // Won last time out — form is hot regardless of older results
+          improvementBonus = 0.10;
+        }
+
+        // Standard average comparison as fallback
         const first3 = recentForm.slice(0, 3);
         const last3 = recentForm.slice(-3);
         const recentAvg = first3.reduce((s, p) => s + p, 0) / first3.length;
         const olderAvg = last3.reduce((s, p) => s + p, 0) / last3.length;
-        if (recentAvg < olderAvg) improvementBonus = 0.15; // improving
-        if (recentAvg > olderAvg + 2) improvementBonus = -0.1; // declining
+        if (improvementBonus === 0) {
+          if (recentAvg < olderAvg) improvementBonus = 0.10;
+          if (recentAvg > olderAvg + 2) improvementBonus = -0.08;
+        }
       }
 
       // Consistency bonus: if all recent runs are in the first 3, very consistent
