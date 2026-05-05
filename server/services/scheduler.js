@@ -4759,12 +4759,12 @@ module.exports = function startScheduler(deps) {
     var dateStr = uk.toISOString().split('T')[0];
     var day = uk.getDate();
 
-    // Run every Monday at 3am (weekly tuning cycle)
-    var dayOfWeek = uk.getDay();
-    if (dayOfWeek !== 1 || hour !== 3 || lastAutoTuneDate === dateStr) return;
+    // Run daily at 11pm UK (after all racing and most football has settled)
+    if (hour !== 23 || lastAutoTuneDate === dateStr) return;
     lastAutoTuneDate = dateStr;
 
-    console.log('[AutoTune] Starting weekly analyst performance review...');
+    var isMonday = uk.getDay() === 1;
+    console.log('[AutoTune] Starting daily analyst review...' + (isMonday ? ' (Monday — full report + email)' : ''));
 
     var allResults = await db.getResults();
     var allTips = await db.getTips();
@@ -5162,18 +5162,21 @@ module.exports = function startScheduler(deps) {
       reportHtml += '<p style="color:#94a3b8;font-size:13px;margin-top:8px;">Full track record: https://eliteedgesports.co.uk/#/track-record</p>';
       reportHtml += '</div>';
 
-      reportHtml += '<p style="font-size:12px;color:#64748b;margin-top:20px;">This report is generated automatically every Monday at 3am.</p>';
+      reportHtml += '<p style="font-size:12px;color:#64748b;margin-top:20px;">Daily tuning runs at 11pm. Full email report every Monday.</p>';
       reportHtml += '</div>';
 
-      emailService._sendEmail({
-        to: adminEmail,
-        subject: '📊 Elite Edge — Weekly Analyst Review',
-        html: reportHtml,
-        emailType: 'admin_report'
-      }).catch(function(e) { console.log('[AutoTune] Admin email failed:', e.message); });
+      // Email full report on Mondays only (daily adjustments are silent)
+      if (isMonday) {
+        emailService._sendEmail({
+          to: adminEmail,
+          subject: '📊 Elite Edge — Weekly Analyst Review',
+          html: reportHtml,
+          emailType: 'admin_report'
+        }).catch(function(e) { console.log('[AutoTune] Admin email failed:', e.message); });
+      }
     } catch(e) {}
 
-    console.log('[AutoTune] Review complete — report saved and emailed');
+    console.log('[AutoTune] Daily review complete — adjustments applied' + (isMonday ? ' + email sent' : ''));
   }
 
   // Auto-tune: check every 30 minutes (only runs on 1st and 15th at 3am)
