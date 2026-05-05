@@ -372,14 +372,16 @@ module.exports = function startScheduler(deps) {
     }
 
     // Check if tips already exist for today — use normDate for reliable comparison
-    var existingTips = await db.getTips();
-    var todayAutoTips = existingTips.filter(function(t) {
-      return normDate(t.date) === today && t.id && t.id.toString().indexOf('auto_') === 0;
-    });
-    if (todayAutoTips.length > 0) {
-      lastAutoTipDate = today;
-      console.log('[Auto-Tips] Tips already exist for ' + today + ' (' + todayAutoTips.length + ' auto tips) — skipping');
-      return;
+    if (!force) {
+      var existingTips = await db.getTips();
+      var todayAutoTips = existingTips.filter(function(t) {
+        return normDate(t.date) === today && t.id && t.id.toString().indexOf('auto_') === 0;
+      });
+      if (todayAutoTips.length > 0) {
+        lastAutoTipDate = today;
+        console.log('[Auto-Tips] Tips already exist for ' + today + ' (' + todayAutoTips.length + ' auto tips) — skipping');
+        return;
+      }
     }
     console.log('[Auto-Tips] No tips for ' + today + ' — generating now (hour: ' + hour + ', minute: ' + minute + ')');
 
