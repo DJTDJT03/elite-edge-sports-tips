@@ -550,6 +550,16 @@ app.use('/', require('./routes/public')(deps));
 // ---------------------------------------------------------------------------
 (async function cleanupBadSelections() {
   var removeSelections = ["Commander's Intent", "Caballo Grande", "Lavender Hill Mob", "Calico", "Catching The Moon", "Spinning Lizzie", "Aqpan", "Ardisia", "Title Role", "Uptown Dandy", "Getaway King", "Rathkenny", "Sogna In Grande"];
+  // Also clean up broken tips/results with null odds or null market
+  try {
+    if (db.isAvailable()) {
+      await db.query("DELETE FROM results WHERE odds IS NULL AND market IS NULL AND pnl = 0");
+      await db.query("DELETE FROM tips WHERE odds IS NULL AND market IS NULL");
+      await db.query("UPDATE tips SET sport = 'racing' WHERE sport = 'football' AND (event LIKE '%Ffos Las%' OR event LIKE '%Hereford%' OR event LIKE '%Wolverhampton%' OR event LIKE '%Gowran%' OR event LIKE '%Curragh%' OR event LIKE '%Newmarket%' OR event LIKE '%Ascot%' OR event LIKE '%York%' OR event LIKE '%Ayr%')");
+      await db.query("UPDATE results SET sport = 'racing' WHERE sport = 'football' AND (event LIKE '%Ffos Las%' OR event LIKE '%Hereford%' OR event LIKE '%Wolverhampton%' OR event LIKE '%Gowran%' OR event LIKE '%Curragh%' OR event LIKE '%Newmarket%' OR event LIKE '%Ascot%' OR event LIKE '%York%' OR event LIKE '%Ayr%')");
+      console.log('[Startup] Cleaned up null/broken tips and misclassified sports');
+    }
+  } catch(e) {}
   try {
     // Clean from database
     if (db.isAvailable()) {
