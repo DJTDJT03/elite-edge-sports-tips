@@ -555,11 +555,13 @@ app.use('/', require('./routes/public')(deps));
     if (db.isAvailable()) {
       await db.query("DELETE FROM results WHERE odds IS NULL AND market IS NULL AND pnl = 0");
       await db.query("DELETE FROM tips WHERE odds IS NULL AND market IS NULL");
-      // Delete ALL broken auto tips from recent days that weren't properly generated
-      await db.query("DELETE FROM tips WHERE id LIKE 'auto_%' AND date >= '2026-05-04' AND (selection IS NULL OR market IS NULL OR odds IS NULL OR odds = 0 OR sport = 'football' AND event NOT LIKE '%vs%')");
-      // Nuclear cleanup: delete ALL auto tips from May 5th (ghost records from failed runs)
-      await db.query("DELETE FROM tips WHERE id LIKE 'auto_%' AND date = '2026-05-05'");
-      console.log('[Startup] Removed ghost auto tips from 2026-05-05');
+      // Delete broken auto tips: null selection, null market, null/zero odds, or misclassified sport
+      var cleanResult = await db.query("DELETE FROM tips WHERE id LIKE 'auto_%' AND (selection IS NULL OR market IS NULL OR odds IS NULL OR odds = 0)");
+      var cleanCount = cleanResult && cleanResult.rowCount ? cleanResult.rowCount : 0;
+      // Also remove racing events mislabelled as football
+      var fixResult = await db.query("DELETE FROM tips WHERE id LIKE 'auto_%' AND sport = 'football' AND event NOT LIKE '%vs%' AND event LIKE '%:%'");
+      var fixCount = fixResult && fixResult.rowCount ? fixResult.rowCount : 0;
+      if (cleanCount > 0 || fixCount > 0) console.log('[Startup] Removed ' + (cleanCount + fixCount) + ' broken auto tip(s)');
       await db.query("UPDATE tips SET sport = 'racing' WHERE sport = 'football' AND (event LIKE '%Ffos Las%' OR event LIKE '%Hereford%' OR event LIKE '%Wolverhampton%' OR event LIKE '%Gowran%' OR event LIKE '%Curragh%' OR event LIKE '%Newmarket%' OR event LIKE '%Ascot%' OR event LIKE '%York%' OR event LIKE '%Ayr%')");
       await db.query("UPDATE results SET sport = 'racing' WHERE sport = 'football' AND (event LIKE '%Ffos Las%' OR event LIKE '%Hereford%' OR event LIKE '%Wolverhampton%' OR event LIKE '%Gowran%' OR event LIKE '%Curragh%' OR event LIKE '%Newmarket%' OR event LIKE '%Ascot%' OR event LIKE '%York%' OR event LIKE '%Ayr%')");
       console.log('[Startup] Cleaned up null/broken tips and misclassified sports');
