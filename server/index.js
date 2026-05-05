@@ -760,6 +760,33 @@ app.use((err, req, res, next) => {
 const scheduler = require('./services/scheduler')(deps);
 
 // Admin manual triggers for scheduler functions
+// Health check — shows tip generation status for today
+app.get('/api/health', async (req, res) => {
+  try {
+    var today = new Date().toISOString().split('T')[0];
+    var tips = await db.getTips();
+    var todayTips = tips.filter(function(t) {
+      return (t.date || '').toString().substring(0, 10) === today && t.id && t.id.toString().indexOf('auto_') === 0;
+    });
+    var validTips = todayTips.filter(function(t) {
+      return t.selection && t.selection !== 'Unknown' && t.market && t.odds && t.odds > 0;
+    });
+    var racing = validTips.filter(function(t) { return t.sport === 'racing'; });
+    var football = validTips.filter(function(t) { return t.sport === 'football'; });
+    res.json({
+      status: validTips.length >= 3 ? 'healthy' : validTips.length > 0 ? 'partial' : 'no_tips',
+      today: today,
+      totalTips: validTips.length,
+      brokenTips: todayTips.length - validTips.length,
+      racing: racing.length,
+      football: football.length,
+      tipsGenerated: validTips.length >= 3,
+    });
+  } catch(e) {
+    res.json({ status: 'error', message: e.message });
+  }
+});
+
 app.post('/api/admin/trigger/generate', deps.authenticate, deps.requireAdmin, async (req, res) => {
   try {
     console.log('[Admin] Manual tip generation triggered — bypassing date guard');
