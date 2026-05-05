@@ -1347,10 +1347,10 @@ module.exports = function startScheduler(deps) {
     // EW Outsider of the Day: ONE value pick at bigger odds (8/1 to 20/1)
     // Nothing above 20/1 should ever be published as a tip
     // ===================================================================
-    var MAX_MAIN_TIP_ODDS = 9.0;
-    var MIN_MAIN_TIP_ODDS = 1.8;  // Minimum ~4/5 decimal — allows evens (2.0), 10/11 (1.91) but blocks 1/2 (1.5) and shorter
+    var MAX_MAIN_TIP_ODDS = 12.0;   // Up to 11/1 — expanded range
+    var MIN_MAIN_TIP_ODDS = 1.3;   // Allow strong favourites — subscribers want WINNERS not just value
     var MIN_OUTSIDER_ODDS = 7.0;
-    var MAX_OUTSIDER_ODDS = 21.0;
+    var MAX_OUTSIDER_ODDS = 25.0;
     var MIN_MAIN_CONFIDENCE = 6;
 
     // --- SELECTION PIPELINE LOG ---
@@ -1359,40 +1359,42 @@ module.exports = function startScheduler(deps) {
     var otherCandidates = allCandidates.filter(function(c) { return c.type !== 'racing' && c.type !== 'football'; });
     console.log('[Auto-Tips] Candidates: ' + racingCandidates.length + ' racing, ' + footballCandidatesFinal.length + ' football, ' + otherCandidates.length + ' other (total: ' + allCandidates.length + ')');
 
-    // Main racing tips: confidence 6+, odds between 1/2 (1.5) and 8/1 (9.0)
+    // Main racing tips: confidence 6+, sort by confidence (winners first) then edge
     var racingMain = racingCandidates.filter(function(c) {
       return c.scored && c.scored.odds >= MIN_MAIN_TIP_ODDS && c.scored.odds <= MAX_MAIN_TIP_ODDS && c.confidence >= MIN_MAIN_CONFIDENCE;
-    }).sort(function(a, b) { return b.edge - a.edge; });
+    }).sort(function(a, b) { return (b.confidence - a.confidence) || (b.edge - a.edge); });
 
     // EW Outsider: odds 6/1 to 20/1, best edge
     var racingOutsider = racingCandidates.filter(function(c) {
       return c.scored && c.scored.odds >= MIN_OUTSIDER_ODDS && c.scored.odds <= MAX_OUTSIDER_ODDS && c.confidence >= 5;
     }).sort(function(a, b) { return b.edge - a.edge; });
 
-    // Main football tips: odds between 1/2 (1.5) and 8/1 (9.0), confidence 6+
+    // Main football tips: odds between min and max, confidence 6+
+    // Sort by CONFIDENCE first (subscribers want winners), then edge as tiebreaker
     var footballMain = footballCandidatesFinal.filter(function(c) {
       return c.scored && c.scored.selectedOdds >= MIN_MAIN_TIP_ODDS && c.scored.selectedOdds <= MAX_MAIN_TIP_ODDS && c.confidence >= MIN_MAIN_CONFIDENCE;
-    }).sort(function(a, b) { return b.edge - a.edge; });
+    }).sort(function(a, b) { return (b.confidence - a.confidence) || (b.edge - a.edge); });
 
-    // Select: 1 per meeting (prevent correlated losses) + up to 2 main football + 1 outsider
+    // Select: 1 per meeting for racing, up to 4 main racing tips
     var usedMeetings = {};
     var selectedRacing = [];
     racingMain.forEach(function(c) {
       var meeting = c.scored && c.scored.race ? (c.scored.race.meeting || '').toLowerCase() : '';
-      if (meeting && usedMeetings[meeting]) return; // 1 per meeting
-      if (selectedRacing.length >= 3) return; // max 3 racing main tips
+      if (meeting && usedMeetings[meeting]) return;
+      if (selectedRacing.length >= 4) return; // up to 4 racing tips
       selectedRacing.push(c);
       if (meeting) usedMeetings[meeting] = true;
     });
-    // One tip per league for football (prevent correlated league results)
-    var usedLeagues = {};
+    // Football: up to 4 tips, max 2 per league (allow same league if strong confidence)
+    var leagueCounts = {};
     var selectedFootball = [];
     footballMain.forEach(function(c) {
       var league = c.scored && c.scored.fixture ? (c.scored.fixture.league || '').toLowerCase() : '';
-      if (league && usedLeagues[league]) return; // 1 per league
-      if (selectedFootball.length >= 3) return; // max 3 football tips
+      var leagueCount = leagueCounts[league] || 0;
+      if (league && leagueCount >= 2) return; // max 2 per league
+      if (selectedFootball.length >= 4) return; // up to 4 football tips
       selectedFootball.push(c);
-      if (league) usedLeagues[league] = true;
+      if (league) leagueCounts[league] = leagueCount + 1;
     });
     var selected = selectedRacing.concat(selectedFootball);
 
@@ -1414,8 +1416,8 @@ module.exports = function startScheduler(deps) {
       }
     }
 
-    // Cap at 9 total (2 racing + 2 football + 1 NBA + 1 rugby + 1 NFL + 1 tennis + 1 outsider)
-    selected = selected.slice(0, 9);
+    // Cap at 12 total (4 racing + 4 football + 1 NBA + 1 rugby + 1 NFL + 1 tennis + 1 outsider)
+    selected = selected.slice(0, 12);
 
     // If we have fewer than 3 main tips, try to fill from football
     if (selected.filter(function(s) { return !s._isOutsider; }).length < 3 && footballMain.length > 2) {
