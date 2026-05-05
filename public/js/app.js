@@ -6841,6 +6841,7 @@ const App = {
 
           <!-- PREMIUM CARD -->
           <div class="pricing-card${accessLevel === 'premium' ? ' featured' : ''}">
+            <div class="featured-badge" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">MOST POPULAR</div>
             <h3>Premium</h3>
             <p class="text-muted">Every edge play, every day</p>
             <div class="pricing-price"><span class="currency">&pound;</span>19<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
