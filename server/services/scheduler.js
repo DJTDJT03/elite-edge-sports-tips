@@ -371,9 +371,11 @@ module.exports = function startScheduler(deps) {
       console.log('[Auto-Tips] Force mode — bypassing date/time guards');
     }
 
-    // Check if tips already exist for today — use normDate for reliable comparison
+    // Always fetch existing tips (needed for stale cleanup)
+    var existingTips = await db.getTips() || [];
+
+    // Check if tips already exist for today
     if (!force) {
-      var existingTips = await db.getTips();
       var todayAutoTips = existingTips.filter(function(t) {
         return normDate(t.date) === today && t.id && t.id.toString().indexOf('auto_') === 0;
       });
@@ -383,11 +385,9 @@ module.exports = function startScheduler(deps) {
         return;
       }
     }
-    console.log('[Auto-Tips] No tips for ' + today + ' — generating now (hour: ' + hour + ', minute: ' + minute + ')');
+    console.log('[Auto-Tips] ' + (force ? 'FORCE MODE — ' : '') + 'Generating tips for ' + today + '...');
 
-    console.log('[Auto-Tips] Starting daily tip generation for ' + today + '...');
-
-    // Clear tips that are 3+ days old and still unsettled (gives auto-settle time to work)
+    // Clear tips that are 3+ days old and still unsettled
     var archiveCutoff = new Date(ukTime.getTime() - 3 * 86400000).toISOString().split('T')[0];
     var staleCleared = 0;
     for (var si = 0; si < existingTips.length; si++) {
@@ -395,14 +395,10 @@ module.exports = function startScheduler(deps) {
       if (staleTip.isWeeklyAcca) continue;
       if (staleTip.date && normDate(staleTip.date) < archiveCutoff && staleTip.status === 'active' && !staleTip.result) {
         await db.updateTip(staleTip.id, { status: 'expired', result: 'void' });
-        staleTip.status = 'expired';
-        staleTip.result = 'void';
         staleCleared++;
       }
     }
-    if (staleCleared > 0) {
-      console.log('[Auto-Tips] Cleared ' + staleCleared + ' stale tip(s) from previous days');
-    }
+    if (staleCleared > 0) console.log('[Auto-Tips] Cleared ' + staleCleared + ' stale tip(s)');
 
     var allCandidates = [];
 
@@ -1347,8 +1343,11 @@ module.exports = function startScheduler(deps) {
     var MAX_OUTSIDER_ODDS = 21.0;
     var MIN_MAIN_CONFIDENCE = 6;
 
+    // --- SELECTION PIPELINE LOG ---
     var racingCandidates = allCandidates.filter(function(c) { return c.type === 'racing'; });
     var footballCandidatesFinal = allCandidates.filter(function(c) { return c.type === 'football'; });
+    var otherCandidates = allCandidates.filter(function(c) { return c.type !== 'racing' && c.type !== 'football'; });
+    console.log('[Auto-Tips] Candidates: ' + racingCandidates.length + ' racing, ' + footballCandidatesFinal.length + ' football, ' + otherCandidates.length + ' other (total: ' + allCandidates.length + ')');
 
     // Main racing tips: confidence 6+, odds between 1/2 (1.5) and 8/1 (9.0)
     var racingMain = racingCandidates.filter(function(c) {
@@ -1424,6 +1423,15 @@ module.exports = function startScheduler(deps) {
         if (!selected[ni2]._isOutsider) { napIdx = ni2; break; }
       }
     }
+
+    // --- LOG SELECTED TIPS ---
+    console.log('[Auto-Tips] Selected ' + selected.length + ' tips for publication:');
+    selected.forEach(function(s, i) {
+      var sel = s.type === 'racing' ? (s.scored.runner || {}).horseName : (s.scored.selectedSelection || 'Unknown');
+      var evt = s.type === 'racing' ? ((s.scored.race || {}).meeting + ' ' + ((s.scored.race || {}).time || '')) : (((s.scored.fixture || {}).homeTeam || '') + ' vs ' + ((s.scored.fixture || {}).awayTeam || ''));
+      var odds = s.type === 'racing' ? s.scored.odds : (s.scored.selectedOdds || 0);
+      console.log('  ' + (i + 1) + '. [' + s.type.toUpperCase() + '] ' + sel + ' @ ' + odds + ' | Edge: ' + (s.edge * 100).toFixed(1) + '% | Conf: ' + s.confidence + (s._isOutsider ? ' [OUTSIDER]' : ''));
+    });
 
     // ---------------------------------------------------------------
     // Pass 1: Assign analysts, generate tip IDs, collect enrichment inputs
@@ -1769,8 +1777,14 @@ module.exports = function startScheduler(deps) {
         console.log('[Auto-Tips] Skipping duplicate: ' + nt.selection + ' already exists for ' + ntDate);
         continue;
       }
+      // Validate tip has required fields before saving
+      if (!nt.selection || nt.selection === 'Unknown' || !nt.odds || !nt.market) {
+        console.log('[Auto-Tips] SKIPPED invalid tip: ' + JSON.stringify({ id: nt.id, selection: nt.selection, odds: nt.odds, market: nt.market, sport: nt.sport }));
+        continue;
+      }
       await db.createTip(nt);
       savedCount++;
+      console.log('[Auto-Tips] SAVED: ' + nt.sport + ' | ' + nt.selection + ' @ ' + nt.odds + ' | ' + nt.market + ' | Conf: ' + nt.confidence + ' | Analyst: ' + nt.tipsterProfile);
 
       // Mark this candidate as published in shadow scoring
       try {
