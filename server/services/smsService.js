@@ -63,7 +63,7 @@ class SmsService {
    */
   async sendWelcome(name, mobile) {
     var body = 'Welcome to Elite Edge Sports Tips, ' + (name || 'there').split(' ')[0] + '! ' +
-      'Your 5 free credits are ready. Join our Telegram for instant alerts: https://t.me/EliteEdgeTips ' +
+      'Your 5 free credits are ready. Join our Telegram for instant alerts: https://t.me/EliteEdgeSportsTips ' +
       '— Elite Edge';
     return this.send(mobile, body);
   }

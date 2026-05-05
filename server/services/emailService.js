@@ -436,7 +436,7 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
         <div style="background:linear-gradient(135deg,rgba(34,158,217,0.1),rgba(34,158,217,0.03));border:2px solid rgba(34,158,217,0.3);border-radius:10px;padding:20px;margin:20px 0;text-align:center;">
           <p style="color:#229ED9;font-weight:700;font-size:16px;margin:0 0 8px;">Step 3: Join Us on Telegram</p>
           <p style="color:#cbd5e1;font-size:13px;margin:0 0 16px;">Get instant tip alerts, live winner notifications, and community chat — straight to your phone.</p>
-          <a href="https://t.me/EliteEdgeTips" style="display:inline-block;padding:12px 28px;background:#229ED9;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Join Elite Edge on Telegram</a>
+          <a href="https://t.me/EliteEdgeSportsTips" style="display:inline-block;padding:12px 28px;background:#229ED9;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Join Elite Edge on Telegram</a>
           <p style="color:#64748b;font-size:11px;margin:12px 0 0;">90%+ of our subscribers are on Telegram. Don't miss a winner.</p>
         </div>
 
@@ -472,7 +472,7 @@ Earn free credits: refer a friend (+3), share on social (+1/day).
 Your login email: ${email}
 
 STEP 3: Join us on Telegram
-Get instant tip alerts and winner notifications: https://t.me/EliteEdgeTips
+Get instant tip alerts and winner notifications: https://t.me/EliteEdgeSportsTips
 90%+ of our subscribers are on Telegram.
 
 IMPORTANT: This service provides statistical analysis and entertainment content ONLY.
@@ -568,7 +568,7 @@ Cancel anytime: contact@eliteedgesports.co.uk`;
         <p style="color:#cbd5e1;font-size:14px;line-height:1.6;"><strong style="color:#ffffff;">Quick start guide:</strong></p>
         <table cellpadding="0" cellspacing="0" style="margin:12px 0;">
           <tr><td style="color:#d4a843;padding:4px 10px 4px 0;font-size:14px;font-weight:700;">1.</td><td style="color:#cbd5e1;font-size:14px;padding:4px 0;">Check the Dashboard every morning for today's selections</td></tr>
-          <tr><td style="color:#d4a843;padding:4px 10px 4px 0;font-size:14px;font-weight:700;">2.</td><td style="color:#cbd5e1;font-size:14px;padding:4px 0;">Join our Telegram: t.me/EliteEdgeTips</td></tr>
+          <tr><td style="color:#d4a843;padding:4px 10px 4px 0;font-size:14px;font-weight:700;">2.</td><td style="color:#cbd5e1;font-size:14px;padding:4px 0;">Join our Telegram: t.me/EliteEdgeSportsTips</td></tr>
           <tr><td style="color:#d4a843;padding:4px 10px 4px 0;font-size:14px;font-weight:700;">3.</td><td style="color:#cbd5e1;font-size:14px;padding:4px 0;">Tips are published by 9am daily</td></tr>
           <tr><td style="color:#d4a843;padding:4px 10px 4px 0;font-size:14px;font-weight:700;">4.</td><td style="color:#cbd5e1;font-size:14px;padding:4px 0;">Results auto-update throughout the day</td></tr>
         </table>
@@ -596,7 +596,7 @@ YOUR FIRST MONTH IS FREE -- you won't be charged until ${chargeDateStr}.
 
 Quick start guide:
 1. Check the Dashboard every morning for today's selections
-2. Join our Telegram: t.me/EliteEdgeTips
+2. Join our Telegram: t.me/EliteEdgeSportsTips
 3. Tips are published by 9am daily
 4. Results auto-update throughout the day
 

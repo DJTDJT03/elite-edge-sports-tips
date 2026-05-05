@@ -8,7 +8,7 @@ const https = require('https');
 class TelegramBot {
   constructor() {
     this.botToken = process.env.TELEGRAM_BOT_TOKEN || '';
-    this.channelId = process.env.TELEGRAM_CHANNEL_ID || '@EliteEdgeTips';
+    this.channelId = process.env.TELEGRAM_CHANNEL_ID || '@EliteEdgeSportsTips';
     if (this.botToken) {
       console.log('[Telegram] Bot configured — channel: ' + this.channelId);
     } else {
