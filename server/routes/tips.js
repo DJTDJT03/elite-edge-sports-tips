@@ -72,15 +72,22 @@ module.exports = function(deps) {
       const { sport, date, premium } = req.query;
       var todayStr = new Date().toISOString().split('T')[0];
 
+      // Normalise date to YYYY-MM-DD string for comparison
+      function normDate(d) {
+        if (!d) return '';
+        return d.toString().split('T')[0].substring(0, 10);
+      }
+
       let filtered = tips.filter(function(t) {
         if (t.isWeeklyAcca) return true;
         if (t.status && t.status !== 'active') return false;
-        if (t.date && t.date < todayStr) return false;
+        var tipDate = normDate(t.date);
+        if (tipDate && tipDate < todayStr) return false;
         return true;
       });
 
       if (sport) filtered = filtered.filter(t => t.sport === sport);
-      if (date) filtered = filtered.filter(t => t.date === date);
+      if (date) filtered = filtered.filter(t => normDate(t.date) === date);
       if (premium === 'true') filtered = filtered.filter(t => t.isPremium);
       if (premium === 'false') filtered = filtered.filter(t => !t.isPremium);
 
