@@ -30,6 +30,7 @@
           '<h3 class="admin-section-title">Quick Actions</h3>' +
           '<div class="quick-actions">' +
             '<button class="btn btn-gold" onclick="DashboardPage.goAddTip()">+ Add Tip</button>' +
+            '<button class="btn btn-gold" onclick="DashboardPage.generateTips()" style="background:#22c55e;">Generate Tips Now</button>' +
             '<button class="btn btn-outline" onclick="DashboardPage.goSendBulletin()">Send Bulletin</button>' +
             '<button class="btn btn-outline" onclick="DashboardPage.autoSettle()">Auto-Settle</button>' +
             '<button class="btn btn-outline" onclick="DashboardPage.refreshData()">Refresh Data</button>' +
@@ -225,6 +226,21 @@
           })
           .catch(function (err) {
             AdminApp.toast('Auto-settle failed: ' + err.message, 'error');
+          });
+      });
+    },
+
+    generateTips: function () {
+      AdminApp.confirm('Run tip generation now? This will score all races and fixtures and publish tips.', function () {
+        AdminApp.toast('Generating tips — this may take 30-60 seconds...', 'info');
+        AdminAPI.post('/admin/trigger/generate', {})
+          .then(function (data) {
+            AdminApp.toast(data.message || 'Tips generated successfully', 'success');
+            DashboardPage._loadStats();
+            DashboardPage._loadRecentActivity();
+          })
+          .catch(function (err) {
+            AdminApp.toast('Generate failed: ' + err.message, 'error');
           });
       });
     },
