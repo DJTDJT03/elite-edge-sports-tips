@@ -555,6 +555,10 @@ app.use('/', require('./routes/public')(deps));
     if (db.isAvailable()) {
       await db.query("DELETE FROM results WHERE odds IS NULL AND market IS NULL AND pnl = 0");
       await db.query("DELETE FROM tips WHERE odds IS NULL AND market IS NULL");
+      // Delete broken auto tips from today that have no valid odds
+      await db.query("DELETE FROM tips WHERE id LIKE 'auto_%' AND (odds IS NULL OR odds = 0) AND date = CURRENT_DATE");
+      // Delete any auto tips from today where sport is wrong (racing labelled as football)
+      await db.query("DELETE FROM tips WHERE id LIKE 'auto_%' AND sport = 'football' AND (event LIKE '%:%' AND event NOT LIKE '%vs%') AND date >= CURRENT_DATE - 2");
       await db.query("UPDATE tips SET sport = 'racing' WHERE sport = 'football' AND (event LIKE '%Ffos Las%' OR event LIKE '%Hereford%' OR event LIKE '%Wolverhampton%' OR event LIKE '%Gowran%' OR event LIKE '%Curragh%' OR event LIKE '%Newmarket%' OR event LIKE '%Ascot%' OR event LIKE '%York%' OR event LIKE '%Ayr%')");
       await db.query("UPDATE results SET sport = 'racing' WHERE sport = 'football' AND (event LIKE '%Ffos Las%' OR event LIKE '%Hereford%' OR event LIKE '%Wolverhampton%' OR event LIKE '%Gowran%' OR event LIKE '%Curragh%' OR event LIKE '%Newmarket%' OR event LIKE '%Ascot%' OR event LIKE '%York%' OR event LIKE '%Ayr%')");
       console.log('[Startup] Cleaned up null/broken tips and misclassified sports');
