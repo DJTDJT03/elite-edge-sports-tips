@@ -6791,7 +6791,7 @@ const App = {
         <div class="pricing-grid mb-32">
           <!-- FREE CARD -->
           <div class="pricing-card">
-            ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">START HERE</div>' : ''}
+            ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">START HERE</div>' : '<div style="height:30px;margin:-24px -24px 16px;"></div>'}
             <h3>Free Access</h3>
             <p class="text-muted">Get started with the basics</p>
             <div class="pricing-price">&pound;<span style="font-size:42px;">0</span><span class="period">/forever</span></div>
@@ -6815,6 +6815,7 @@ const App = {
 
           <!-- STARTER CARD -->
           <div class="pricing-card${accessLevel === 'starter' ? ' featured' : ''}">
+            <div style="height:30px;margin:-24px -24px 16px;"></div>
             <h3>Starter</h3>
             <p class="text-muted">Get your feet wet</p>
             <div class="pricing-price"><span class="currency">&pound;</span>9<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
