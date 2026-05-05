@@ -374,17 +374,27 @@ module.exports = function startScheduler(deps) {
     // Always fetch existing tips (needed for stale cleanup)
     var existingTips = await db.getTips() || [];
 
-    // Check if tips already exist for today
+    // Check if VALID tips exist for today (must have selection + market + odds)
     if (!force) {
-      var todayAutoTips = existingTips.filter(function(t) {
-        return normDate(t.date) === today && t.id && t.id.toString().indexOf('auto_') === 0;
+      var todayValidTips = existingTips.filter(function(t) {
+        return normDate(t.date) === today && t.id && t.id.toString().indexOf('auto_') === 0
+          && t.selection && t.selection !== 'Unknown' && t.market && t.odds && t.odds > 0;
       });
-      if (todayAutoTips.length > 0) {
+      if (todayValidTips.length >= 3) {
         lastAutoTipDate = today;
-        console.log('[Auto-Tips] Tips already exist for ' + today + ' (' + todayAutoTips.length + ' auto tips) — skipping');
+        console.log('[Auto-Tips] Valid tips exist for ' + today + ' (' + todayValidTips.length + ') — skipping');
         return;
       }
     }
+    // Always delete broken auto tips from today before generating
+    var brokenToday = existingTips.filter(function(t) {
+      return normDate(t.date) === today && t.id && t.id.toString().indexOf('auto_') === 0
+        && (!t.selection || t.selection === 'Unknown' || !t.market || !t.odds || t.odds <= 0);
+    });
+    for (var bti = 0; bti < brokenToday.length; bti++) {
+      try { await db.deleteTip(brokenToday[bti].id); } catch(e) {}
+    }
+    if (brokenToday.length > 0) console.log('[Auto-Tips] Deleted ' + brokenToday.length + ' broken tip(s)');
     console.log('[Auto-Tips] ' + (force ? 'FORCE MODE — ' : '') + 'Generating tips for ' + today + '...');
 
     // Clear tips that are 3+ days old and still unsettled
