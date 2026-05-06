@@ -278,7 +278,7 @@ class FootballOddsSource extends DataSource {
       'horse_racing_uk', 'horse_racing_ire'
     ];
     // All football markets we want
-    this.footballMarkets = 'h2h,totals,btts,spreads';
+    this.footballMarkets = 'h2h,totals,spreads';
     // Racing markets
     this.racingMarkets = 'h2h'; // win market for racing
     // Backwards compat
