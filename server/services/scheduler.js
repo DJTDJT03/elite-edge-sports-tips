@@ -1873,9 +1873,9 @@ module.exports = function startScheduler(deps) {
     var premCount = newTips.filter(function(t) { return t.isPremium; }).length;
     console.log('[Auto-Tips] Summary: ' + freeCount + ' free, ' + premCount + ' premium');
 
-    // Push notification: tips published
-    var pushService = deps.pushService;
-    if (pushService && pushService.isAvailable) {
+    // Push notification DELAYED — sent from bulletin function at 10:30am after non-runners cleared
+    // (was here at 7:30am but non-runners hadn't been checked yet)
+    if (false && pushService && pushService.isAvailable) {
       var napName = newTips.find(function(t) { return t.isNap; });
       pushService.broadcast(db, {
         title: newTips.length + ' tips published',
@@ -3149,12 +3149,16 @@ module.exports = function startScheduler(deps) {
       var minute = uk.getMinutes();
       var dateStr = uk.toISOString().split('T')[0];
 
-      // Run any time after 8:45am UK, once per day
-      var isPastBulletinTime = hour > 8 || (hour === 8 && minute >= 45);
+      // Run any time after 10:30am UK — gives non-runner checker time to void withdrawn horses
+      var isPastBulletinTime = hour > 10 || (hour === 10 && minute >= 30);
       if (!isPastBulletinTime || lastDailyBulletinDate === dateStr) return;
 
       var tips = await db.getTips();
-      var todayTips = tips.filter(function(t) { return normDate(t.date) === dateStr && t.status === 'active' && !t.isWeeklyAcca; });
+      // Only include active, non-voided tips with valid data (non-runners already removed by this point)
+      var todayTips = tips.filter(function(t) {
+        return normDate(t.date) === dateStr && t.status === 'active' && !t.isWeeklyAcca
+          && t.selection && t.selection !== 'Unknown' && t.market && t.odds && t.odds > 0;
+      });
       if (todayTips.length === 0) {
         console.log('[Bulletin] No tips for ' + dateStr + ' — skipping');
         return;
@@ -3296,6 +3300,18 @@ module.exports = function startScheduler(deps) {
 
       lastDailyBulletinDate = dateStr;
       console.log('[Email] Daily bulletin sent to ' + sentCount + ' premium user(s) with ' + todayTips.length + ' tip(s)');
+
+      // Push notification — sent here at 10:30am (not at 7:30am tip generation)
+      var pushService = deps.pushService;
+      if (pushService && pushService.isAvailable && todayTips.length > 0) {
+        var napTip = todayTips.find(function(t) { return t.isNap; });
+        pushService.broadcast(db, {
+          title: todayTips.length + ' tips live — non-runners cleared',
+          body: (napTip ? 'NAP: ' + napTip.selection + ' — ' : '') + 'Today\'s selections are ready.',
+          url: '/#/dashboard',
+          tag: 'daily-tips-' + dateStr,
+        }, 'premium').catch(function(e) {});
+      }
     } catch (err) {
       console.error('[Email] Daily bulletin error:', err.message);
     }
