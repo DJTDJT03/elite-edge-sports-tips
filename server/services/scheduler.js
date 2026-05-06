@@ -3746,9 +3746,8 @@ module.exports = function startScheduler(deps) {
             timestamp: new Date().toISOString()
           });
 
-          if (telegramBot) {
-            telegramBot.sendMessage('\u26a0\ufe0f NON-RUNNER: ' + tip.selection + ' withdrawn from ' + tip.event + '. This tip has been voided.');
-          }
+          // Non-runner alerts NOT sent to Telegram — subscribers don't need to see voids
+          // The tip is silently removed from the website and excluded from email bulletins
 
           if (alertEngine) {
             try {
@@ -3945,13 +3944,8 @@ module.exports = function startScheduler(deps) {
 
         console.log('[OddsAlert] ' + alertDirection + ': ' + tip.selection + ' (' + changePercent.toFixed(1) + '%)');
 
-        // Send Telegram alert if available
-        if (telegramBot && telegramBot.sendMessage) {
-          try {
-            var emoji = alertDirection === 'shortened' ? '\uD83D\uDCC9' : '\uD83D\uDCC8';
-            telegramBot.sendMessage(emoji + ' ' + alertMessage);
-          } catch (e) { /* non-fatal */ }
-        }
+        // Odds alerts NOT sent to Telegram — too noisy for subscribers
+        // Only winners and the daily bulletin go to the public channel
       }
 
       // Clean up old alert keys (reset daily)
@@ -4092,12 +4086,15 @@ module.exports = function startScheduler(deps) {
     var day = uk.getDay(); // 0=Sun, 5=Fri
     var dateStr = uk.toISOString().split('T')[0];
 
-    // Morning teaser: 7:45am (after tips generated at 7:30)
-    if (hour === 7 && minute >= 40 && minute <= 55 && lastTgMorning !== dateStr) {
+    // Morning teaser: 10:35am (after non-runners cleared and bulletin sent)
+    if (hour === 10 && minute >= 30 && minute <= 45 && lastTgMorning !== dateStr) {
       lastTgMorning = dateStr; _tgDates.m = dateStr; try { require('fs').writeFileSync(_tgFile, JSON.stringify(_tgDates)); } catch(e) {}
       try {
         var tips = await db.getTips();
-        var todayTips = tips.filter(function(t) { return normDate(t.date) === dateStr && t.status === 'active' && !t.isWeeklyAcca; });
+        var todayTips = tips.filter(function(t) {
+          return normDate(t.date) === dateStr && t.status === 'active' && !t.isWeeklyAcca
+            && t.selection && t.selection !== 'Unknown' && t.market && t.odds && t.odds > 0;
+        });
         if (todayTips.length > 0) {
           var nap = todayTips.sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); })[0];
           await telegramBot.sendMorningTeaser(todayTips.length, nap ? nap.confidence : null);
