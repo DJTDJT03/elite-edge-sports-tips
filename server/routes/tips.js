@@ -70,11 +70,16 @@ module.exports = function(deps) {
     try {
       const tips = await db.getTips();
       const { sport, date, premium } = req.query;
-      var todayStr = new Date().toISOString().split('T')[0];
+      // Use UK time for date comparison (server may be UTC)
+      var ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+      var todayStr = ukNow.getFullYear() + '-' + String(ukNow.getMonth() + 1).padStart(2, '0') + '-' + String(ukNow.getDate()).padStart(2, '0');
 
       // Normalise date to YYYY-MM-DD string for comparison
       function normDate(d) {
         if (!d) return '';
+        if (d instanceof Date) {
+          return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
         return d.toString().split('T')[0].substring(0, 10);
       }
 
