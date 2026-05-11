@@ -1551,6 +1551,16 @@ module.exports = function startScheduler(deps) {
         }
       }
 
+      // SAFETY: detect sport from scored data if candidate.type is wrong
+      if (scored.runner && scored.race && (!sport || sport === 'football')) {
+        console.log('[Auto-Tips] WARNING: Racing scored data has type "' + sport + '" — correcting to "racing"');
+        sport = 'racing';
+      }
+      if (scored.fixture && scored.selectedSelection && sport === 'racing') {
+        console.log('[Auto-Tips] WARNING: Football scored data has type "racing" — correcting to "football"');
+        sport = 'football';
+      }
+
       var tip;
       if (sport === 'racing') {
         var runner = scored.runner || {};
