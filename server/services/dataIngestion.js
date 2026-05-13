@@ -287,34 +287,55 @@ class FootballOddsSource extends DataSource {
 
   async fetch() {
     if (!this.config.apiKey) {
-      console.log('[elite-odds] No API key — set ODDS_API_KEY env var. Sign up: https://the-odds-api.com/');
+      console.log('[elite-odds] No API key — set ODDS_API_KEY env var');
       return { football: [], racing: [] };
     }
+    // Check quota with a single lightweight call first
+    try {
+      var testData = await this._apiGet('/sports/?apiKey=' + this.config.apiKey);
+      if (testData && testData.error_code === 'OUT_OF_USAGE') {
+        console.log('[elite-odds] QUOTA EXHAUSTED — skipping all odds fetches until reset');
+        this._quotaExhausted = true;
+        return { football: [], racing: [] };
+      }
+    } catch(e) {}
+    if (this._quotaExhausted) {
+      return { football: [], racing: [] };
+    }
+
     try {
       var footballOdds = [];
       var racingOdds = [];
 
-      // Fetch football odds — all configured leagues
-      for (var i = 0; i < this.footballKeys.length; i++) {
+      // Fetch football odds — only EPL + top 4 leagues to conserve credits
+      var priorityKeys = ['soccer_epl', 'soccer_spain_la_liga', 'soccer_italy_serie_a', 'soccer_germany_bundesliga', 'soccer_france_ligue_one'];
+      for (var i = 0; i < priorityKeys.length; i++) {
         try {
-          var fbData = await this._apiGet('/sports/' + this.footballKeys[i] + '/odds/?regions=uk&markets=' + this.footballMarkets + '&oddsFormat=decimal&apiKey=' + this.config.apiKey);
+          var fbData = await this._apiGet('/sports/' + priorityKeys[i] + '/odds/?regions=uk&markets=h2h,totals&oddsFormat=decimal&apiKey=' + this.config.apiKey);
           if (Array.isArray(fbData)) footballOdds = footballOdds.concat(fbData);
-        } catch (e) {
-          // Sport may have no upcoming events — not an error
+          else if (fbData && fbData.error_code === 'OUT_OF_USAGE') {
+            console.log('[elite-odds] Quota hit mid-fetch — stopping');
+            this._quotaExhausted = true;
+            break;
+          }
+        } catch (e) {}
+      }
+
+      // Fetch horse racing odds — UK & IRE (only if quota not hit)
+      if (!this._quotaExhausted) {
+        for (var j = 0; j < this.racingKeys.length; j++) {
+          try {
+            var rcData = await this._apiGet('/sports/' + this.racingKeys[j] + '/odds/?regions=uk&markets=' + this.racingMarkets + '&oddsFormat=decimal&apiKey=' + this.config.apiKey);
+            if (Array.isArray(rcData)) racingOdds = racingOdds.concat(rcData);
+            else if (rcData && rcData.error_code === 'OUT_OF_USAGE') {
+              this._quotaExhausted = true;
+              break;
+            }
+          } catch (e) {}
         }
       }
 
-      // Fetch horse racing odds — UK & IRE
-      for (var j = 0; j < this.racingKeys.length; j++) {
-        try {
-          var rcData = await this._apiGet('/sports/' + this.racingKeys[j] + '/odds/?regions=uk&markets=' + this.racingMarkets + '&oddsFormat=decimal&apiKey=' + this.config.apiKey);
-          if (Array.isArray(rcData)) racingOdds = racingOdds.concat(rcData);
-        } catch (e) {
-          // No racing events today — not an error
-        }
-      }
-
-      console.log('[elite-odds] Fetched ' + footballOdds.length + ' football + ' + racingOdds.length + ' racing events from ' + (this.footballKeys.length + this.racingKeys.length) + ' sport keys');
+      console.log('[elite-odds] Fetched ' + footballOdds.length + ' football + ' + racingOdds.length + ' racing events' + (this._quotaExhausted ? ' (QUOTA LIMIT REACHED)' : ''));
       return { football: footballOdds, racing: racingOdds };
     } catch (err) {
       console.error('[elite-odds] Error: ' + err.message);

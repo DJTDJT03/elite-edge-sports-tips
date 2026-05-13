@@ -70,8 +70,8 @@ module.exports = function(deps) {
 
       // 3. Fetch last 10 fixtures for each team + enhanced data (in parallel)
       var parallelResults = await Promise.allSettled([
-        footballSource._apiGet('/fixtures?team=' + homeTeam.id + '&last=10&status=FT'),
-        footballSource._apiGet('/fixtures?team=' + awayTeam.id + '&last=10&status=FT'),
+        footballSource._apiGet('/fixtures?team=' + homeTeam.id + '&last=10'),
+        footballSource._apiGet('/fixtures?team=' + awayTeam.id + '&last=10'),
         footballSource.fetchInjuries(parseInt(fixtureId)),
         footballSource.fetchPredictions(parseInt(fixtureId)),
         footballSource.fetchTeamStats(homeTeam.id, league.id, '2025'),
@@ -177,6 +177,18 @@ module.exports = function(deps) {
       var verdictReason = '';
       var confidence = 5;
       var riskLevel = 'Medium';
+
+      // Ensure stats have safe defaults
+      homeStats.cleanSheetPct = homeStats.cleanSheetPct || 0;
+      homeStats.bttsPct = homeStats.bttsPct || 0;
+      homeStats.over25Pct = homeStats.over25Pct || 0;
+      homeStats.avgScored = homeStats.avgScored || 0;
+      homeStats.avgConceded = homeStats.avgConceded || 0;
+      awayStats.cleanSheetPct = awayStats.cleanSheetPct || 0;
+      awayStats.bttsPct = awayStats.bttsPct || 0;
+      awayStats.over25Pct = awayStats.over25Pct || 0;
+      awayStats.avgScored = awayStats.avgScored || 0;
+      awayStats.avgConceded = awayStats.avgConceded || 0;
 
       var combinedBttsPct = (homeStats.bttsPct + awayStats.bttsPct + h2hBttsPct) / 3;
       var combinedOver25Pct = (homeStats.over25Pct + awayStats.over25Pct + h2hOver25Pct) / 3;

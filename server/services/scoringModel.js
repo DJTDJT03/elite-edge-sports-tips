@@ -793,6 +793,16 @@ class ScoringModel {
       if (bk['Draw'] || bk['draw']) drawOdds = bk['Draw'] || bk['draw'];
       if (bk[fixture.awayTeam]) awayOdds = bk[fixture.awayTeam];
     }
+    // If no bookmaker odds, estimate from league position (better than flat defaults)
+    if (!firstBookmaker && fixture.homePosition && fixture.awayPosition) {
+      var posDiff = fixture.awayPosition - fixture.homePosition; // positive = home team higher
+      if (posDiff >= 10) { homeOdds = 1.5; drawOdds = 4.0; awayOdds = 6.0; }
+      else if (posDiff >= 5) { homeOdds = 1.8; drawOdds = 3.5; awayOdds = 4.5; }
+      else if (posDiff >= 2) { homeOdds = 2.1; drawOdds = 3.3; awayOdds = 3.5; }
+      else if (posDiff >= -2) { homeOdds = 2.3; drawOdds = 3.2; awayOdds = 3.2; }
+      else if (posDiff >= -5) { homeOdds = 2.8; drawOdds = 3.3; awayOdds = 2.5; }
+      else { homeOdds = 3.5; drawOdds = 3.5; awayOdds = 1.9; }
+    }
 
     // --- xG proxy (based on league position / odds as proxy) ---
     // Short-priced teams tend to create more xG
