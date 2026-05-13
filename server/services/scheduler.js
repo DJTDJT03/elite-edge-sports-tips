@@ -989,8 +989,9 @@ module.exports = function startScheduler(deps) {
 
     // --- NBA BASKETBALL SELECTIONS ---
     var basketballCandidates = [];
-    var basketballData = deps.basketballData;
-    if (basketballData && basketballData.isAvailable) {
+    // NBA, NFL, Rugby, Tennis tip generation DISABLED — focusing on Racing + Football only
+    // Re-enable when API plans upgraded and core pipeline is stable
+    if (false && deps.basketballData && deps.basketballData.isAvailable) {
       try {
         console.log('[Auto-Tips] Fetching NBA games...');
         var nbaGames = await basketballData.getGames(today);
@@ -1063,7 +1064,7 @@ module.exports = function startScheduler(deps) {
     // --- RUGBY LEAGUE SELECTIONS ---
     var rugbyCandidates = [];
     var rugbyData = deps.rugbyData;
-    if (rugbyData && rugbyData.isAvailable) {
+    if (false && rugbyData && rugbyData.isAvailable) {
       try {
         console.log('[Auto-Tips] Fetching rugby league games...');
         var rugbyGames = await rugbyData.getGames(today);
@@ -1134,7 +1135,7 @@ module.exports = function startScheduler(deps) {
     // --- NFL SELECTIONS ---
     var nflCandidates = [];
     var nflData = deps.nflData;
-    if (nflData && nflData.isAvailable) {
+    if (false && nflData && nflData.isAvailable) {
       try {
         console.log('[Auto-Tips] Fetching NFL games...');
         var nflGames = await nflData.getGames(today);
@@ -1194,7 +1195,7 @@ module.exports = function startScheduler(deps) {
     // --- TENNIS SELECTIONS ---
     var tennisCandidates = [];
     var tennisData = deps.tennisData;
-    if (tennisData && tennisData.isAvailable) {
+    if (false && tennisData && tennisData.isAvailable) {
       try {
         console.log('[Auto-Tips] Fetching tennis fixtures...');
         var tennisMatches = await tennisData.getFixtures(today);
