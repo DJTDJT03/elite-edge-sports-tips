@@ -307,11 +307,10 @@ class FootballOddsSource extends DataSource {
       var footballOdds = [];
       var racingOdds = [];
 
-      // Fetch football odds — only EPL + top 4 leagues to conserve credits
-      var priorityKeys = ['soccer_epl', 'soccer_spain_la_liga', 'soccer_italy_serie_a', 'soccer_germany_bundesliga', 'soccer_france_ligue_one'];
-      for (var i = 0; i < priorityKeys.length; i++) {
+      // Fetch football odds — all configured leagues (100K monthly credits)
+      for (var i = 0; i < this.footballKeys.length; i++) {
         try {
-          var fbData = await this._apiGet('/sports/' + priorityKeys[i] + '/odds/?regions=uk&markets=h2h,totals&oddsFormat=decimal&apiKey=' + this.config.apiKey);
+          var fbData = await this._apiGet('/sports/' + this.footballKeys[i] + '/odds/?regions=uk&markets=h2h,totals&oddsFormat=decimal&apiKey=' + this.config.apiKey);
           if (Array.isArray(fbData)) footballOdds = footballOdds.concat(fbData);
           else if (fbData && fbData.error_code === 'OUT_OF_USAGE') {
             console.log('[elite-odds] Quota hit mid-fetch — stopping');
