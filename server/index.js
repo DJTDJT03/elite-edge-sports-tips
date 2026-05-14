@@ -566,17 +566,16 @@ app.use('/', require('./routes/public')(deps));
       await db.query("UPDATE results SET sport = 'racing' WHERE sport = 'football' AND (event LIKE '%Ffos Las%' OR event LIKE '%Hereford%' OR event LIKE '%Wolverhampton%' OR event LIKE '%Gowran%' OR event LIKE '%Curragh%' OR event LIKE '%Newmarket%' OR event LIKE '%Ascot%' OR event LIKE '%York%' OR event LIKE '%Ayr%' OR event LIKE '%Haydock%' OR event LIKE '%Killarney%' OR event LIKE '%Lingfield%' OR event LIKE '%Hexham%' OR event LIKE '%Ripon%' OR event LIKE '%Market Rasen%' OR event LIKE '%Chester%' OR event LIKE '%Newton%' OR event LIKE '%Kempton%' OR event LIKE '%Doncaster%' OR event LIKE '%Epsom%' OR event LIKE '%Newbury%')");
       // Fix tips with racing events wrongly labelled as football
       await db.query("UPDATE tips SET sport = 'racing' WHERE sport = 'football' AND (event LIKE '%Haydock%' OR event LIKE '%Ascot%' OR event LIKE '%Killarney%' OR event LIKE '%Lingfield%' OR event LIKE '%Hexham%' OR event LIKE '%Wolverhampton%' OR event LIKE '%Ripon%' OR event LIKE '%Market Rasen%' OR event LIKE '%Chester%' OR event LIKE '%Newton%' OR event LIKE '%Kempton%' OR event LIKE '%Doncaster%' OR event LIKE '%Epsom%' OR event LIKE '%Newbury%' OR event LIKE '%Newmarket%' OR event LIKE '%York%' OR event LIKE '%Ayr%' OR event LIKE '%Gowran%' OR event LIKE '%Curragh%')");
-      // ONE-TIME RESET: Clear all old sample/broken data — fresh start from 13 May 2026
-      await db.query("DELETE FROM results WHERE date < '2026-05-13'");
-      await db.query("DELETE FROM results WHERE result = 'void'");
-      await db.query("DELETE FROM results WHERE market IS NULL");
-      await db.query("DELETE FROM results WHERE odds IS NULL AND pnl = 0");
-      await db.query("DELETE FROM tips WHERE id LIKE 'auto_%' AND date < '2026-05-13'");
+      // ONE-TIME RESET: Clear ALL old data — use CAST for date comparison
+      await db.query("DELETE FROM results WHERE date::text < '2026-05-14'");
+      await db.query("DELETE FROM results WHERE result = 'void' OR market IS NULL OR odds IS NULL");
+      await db.query("DELETE FROM tips WHERE id LIKE 'auto_%' AND date::text < '2026-05-14'");
       await db.query("DELETE FROM tips WHERE market IS NULL AND id LIKE 'auto_%'");
-      await db.query("DELETE FROM race_predictions WHERE date < '2026-05-13'");
-      await db.query("DELETE FROM match_predictions WHERE date < '2026-05-13'");
-      await db.query("DELETE FROM loss_analysis WHERE date < '2026-05-13'");
-      console.log('[Startup] RESET: Cleared all pre-13 May data — clean start');
+      await db.query("DELETE FROM race_predictions WHERE date::text < '2026-05-14'");
+      await db.query("DELETE FROM match_predictions WHERE date::text < '2026-05-14'");
+      await db.query("DELETE FROM loss_analysis WHERE date::text < '2026-05-14'");
+      await db.query("DELETE FROM scored_candidates WHERE date::text < '2026-05-14'");
+      console.log('[Startup] RESET: Cleared all pre-14 May data');
       console.log('[Startup] Cleaned up null/broken tips and misclassified sports');
     }
   } catch(e) {}

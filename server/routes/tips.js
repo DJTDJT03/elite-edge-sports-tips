@@ -83,6 +83,13 @@ module.exports = function(deps) {
         return d.toString().split('T')[0].substring(0, 10);
       }
 
+      // Debug: log first few tip dates to trace the comparison issue
+      if (tips.length > 0 && tips.length <= 20) {
+        tips.slice(0, 5).forEach(function(t) {
+          console.log('[Tips Debug] id:' + t.id + ' rawDate:' + t.date + ' type:' + typeof t.date + ' norm:' + normDate(t.date) + ' today:' + todayStr + ' isWeekly:' + t.isWeeklyAcca);
+        });
+      }
+
       let filtered = tips.filter(function(t) {
         if (t.isWeeklyAcca) return true;
         if (t.status && t.status !== 'active') return false;
@@ -90,6 +97,7 @@ module.exports = function(deps) {
         if (tipDate && tipDate < todayStr) return false;
         return true;
       });
+      console.log('[Tips] Total:' + tips.length + ' Filtered:' + filtered.length + ' Today:' + todayStr);
 
       if (sport) filtered = filtered.filter(t => t.sport === sport);
       if (date) filtered = filtered.filter(t => normDate(t.date) === date);
