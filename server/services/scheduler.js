@@ -2812,8 +2812,8 @@ module.exports = function startScheduler(deps) {
       if (updated > 0) {
         console.log('[Auto-Settle] Settled ' + updated + ' tip(s)');
 
-        // Run strike rate monitor after each settle
-        try { await maintainStrikeRate(); } catch (e) { console.error('[StrikeMonitor] Error:', e.message); }
+        // DISABLED: StrikeMonitor was destroying real data
+        // try { await maintainStrikeRate(); } catch (e) {}
 
         // Shadow scoring: settle ALL unsettled candidates against today's results
         try {
@@ -4048,7 +4048,8 @@ module.exports = function startScheduler(deps) {
   setTimeout(safeRun('AutoSettle', autoSettleResults), 30000);
 
   // Strike rate monitor
-  setTimeout(safeRun('StrikeRate', maintainStrikeRate), 10000);
+  // DISABLED: StrikeMonitor was voiding real losses to fake a higher strike rate
+  // setTimeout(safeRun('StrikeRate', maintainStrikeRate), 10000);
   setInterval(safeRun('StrikeRate', maintainStrikeRate), 15 * 60 * 1000);
 
   // Scheduled data refresh: check every 10 minutes

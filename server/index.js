@@ -308,9 +308,23 @@ app.use('/', require('./routes/public')(deps));
       }
       console.log('[Startup] Schema up to date');
 
-      // One-time re-seed: import persistent volume data into DB if DB has fewer tips
-      // This fixes the case where DB was seeded from bundled (old) data instead of live data
+      // DISABLED: persistent volume import was reimporting old sample data after DB reset
+      // Clear the old JSON files from persistent volume so they can't contaminate the DB
       try {
+        var fs2 = require('fs');
+        var path2 = require('path');
+        var pvDir = process.env.PERSISTENT_DATA_DIR || '/data';
+        ['sample-tips.json', 'sample-results.json', 'sample-users.json'].forEach(function(f) {
+          var fp = path2.join(pvDir, f);
+          if (fs2.existsSync(fp)) {
+            fs2.writeFileSync(fp, '[]');
+            console.log('[Startup] Cleared persistent volume file: ' + f);
+          }
+        });
+      } catch(e) {}
+
+      // OLD import code — DISABLED
+      if (false) try {
         var fs2 = require('fs');
         var path2 = require('path');
         var pvDir = process.env.PERSISTENT_DATA_DIR || '/data';
