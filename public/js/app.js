@@ -4025,8 +4025,11 @@ const App = {
           (intel && intel.topRated ? ' | Top rated: ' + intel.topRated.name + ' (' + intel.topRated.rating + ')' : '') +
         '</div>' +
       '</div>' +
-      runnersHtml +
       analysisHtml +
+      '<div style="margin:20px 0;">' +
+        '<button class="btn btn-outline btn-sm" onclick="var el=document.getElementById(\'runners-table\');el.style.display=el.style.display===\'none\'?\'block\':\'none\';this.textContent=el.style.display===\'none\'?\'Show Full Race Card ('+runners.length+' Runners)\':\'Hide Race Card\'">Show Full Race Card (' + runners.length + ' Runners)</button>' +
+      '</div>' +
+      '<div id="runners-table" style="display:none;">' + runnersHtml + '</div>' +
       '<div class="race-analysis-section" style="margin-top:20px;" id="racing-ai-preview-section">' +
         '<div class="race-analysis-header">AI RACE PREVIEW</div>' +
         '<p class="text-muted" style="font-size:12px;margin:12px 16px 12px;">Powered by Claude AI — professional written race analysis unique to Elite Edge.</p>' +
