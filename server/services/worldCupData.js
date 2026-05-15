@@ -8,7 +8,7 @@
 
 module.exports = function(deps) {
   var db = deps.db;
-  var FOOTBALL_API_KEY = process.env.FOOTBALL_API_KEY;
+  var FOOTBALL_API_KEY = process.env.API_FOOTBALL_KEY || process.env.FOOTBALL_API_KEY;
   var WORLD_CUP_LEAGUE_ID = process.env.WORLD_CUP_LEAGUE_ID || '1'; // API-Football league ID for FIFA World Cup
   var WORLD_CUP_SEASON = process.env.WORLD_CUP_SEASON || '2026';
 
@@ -98,7 +98,7 @@ module.exports = function(deps) {
 
         // Extract group letter
         var groupLetter = null;
-        var groupMatch = (league.round || '').match(/Group\s+([A-H])/i);
+        var groupMatch = (league.round || '').match(/Group\s+([A-L])/i);
         if (groupMatch) groupLetter = groupMatch[1].toUpperCase();
 
         // Determine result
@@ -112,8 +112,7 @@ module.exports = function(deps) {
         await db.query(
           `INSERT INTO world_cup_fixtures (tournament_id, stage, group_letter, home_team, away_team, kickoff, venue, home_goals, away_goals, result, status, external_fixture_id)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-           ON CONFLICT (id) DO UPDATE SET home_goals = $8, away_goals = $9, result = $10, status = $11
-           WHERE world_cup_fixtures.external_fixture_id = $12`,
+           ON CONFLICT (external_fixture_id) DO UPDATE SET home_goals = $8, away_goals = $9, result = $10, status = $11, stage = $2, kickoff = $6`,
           [
             tournamentId, stage, groupLetter,
             teams.home.name, teams.away.name,
