@@ -703,30 +703,29 @@ app.use('/', require('./routes/public')(deps));
         updates.credits = 999999;
         updates.creditsMonthlyAllowance = 999999;
         needsUpdate = true;
-      } else if (u.subscription === 'premium' && u.creditsMonthlyAllowance !== 120) {
-        updates.credits = 120;
-        updates.creditsMonthlyAllowance = 120;
+      } else if (u.subscription === 'premium' && u.creditsMonthlyAllowance !== 250) {
+        updates.credits = 250;
+        updates.creditsMonthlyAllowance = 250;
         var resetDate = new Date();
         resetDate.setMonth(resetDate.getMonth() + 1);
         updates.creditsResetDate = resetDate.toISOString().split('T')[0];
         needsUpdate = true;
-      } else if (u.subscription === 'starter' && u.creditsMonthlyAllowance !== 40) {
-        updates.credits = 40;
-        updates.creditsMonthlyAllowance = 40;
+      } else if (u.subscription === 'starter' && u.creditsMonthlyAllowance !== 50) {
+        updates.credits = 50;
+        updates.creditsMonthlyAllowance = 50;
         var resetDate2 = new Date();
         resetDate2.setMonth(resetDate2.getMonth() + 1);
         updates.creditsResetDate = resetDate2.toISOString().split('T')[0];
         needsUpdate = true;
-      } else if (u.subscription === 'free') {
-        // Free users: max 5 credits, no monthly allowance
-        if (u.creditsMonthlyAllowance > 0) {
-          updates.creditsMonthlyAllowance = 0;
+      } else if (u.subscription === 'free' && u.role !== 'admin') {
+        // Free users: 3 credits/month with renewal
+        if (u.creditsMonthlyAllowance !== 3) {
+          updates.creditsMonthlyAllowance = 3;
           needsUpdate = true;
         }
-        if (u.credits > 5 && u.role !== 'admin') {
-          updates.credits = 5;
+        if (u.credits > 3) {
+          updates.credits = 3;
           needsUpdate = true;
-          console.log('[Startup] Reset ' + u.email + ' credits from ' + u.credits + ' to 5 (free tier)');
         }
       }
 

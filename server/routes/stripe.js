@@ -117,7 +117,7 @@ module.exports = function(deps) {
         : (session.subscription && session.subscription.id) || null;
 
       // Set monthly credit allowance based on tier
-      var creditAllowance = tier === 'vip' ? 999999 : tier === 'premium' ? 120 : tier === 'starter' ? 40 : 0;
+      var creditAllowance = tier === 'vip' ? 999999 : tier === 'premium' ? 250 : tier === 'starter' ? 50 : 0;
       var nextResetDate = new Date();
       nextResetDate.setMonth(nextResetDate.getMonth() + 1);
 

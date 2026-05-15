@@ -294,6 +294,23 @@ module.exports = function(deps) {
     }
   });
 
+  // POST /api/user/bets/deduct-acca — deduct 3 credits for acca generator
+  router.post('/user/bets/deduct-acca', authenticate, async function(req, res) {
+    try {
+      var user = req.user;
+      if (user.subscription === 'vip' || user.subscription === 'premium' || user.role === 'admin') {
+        return res.json({ ok: true, credits: user.credits });
+      }
+      var newBalance = await db.deductCredits(user.id, 3, 'acca_generator', 'Smart Acca Generator use');
+      if (newBalance < 0) {
+        return res.status(402).json({ insufficientCredits: true, credits: user.credits });
+      }
+      res.json({ ok: true, credits: newBalance });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to deduct credits' });
+    }
+  });
+
   // GET /api/user/race-predictions — race prediction accuracy
   router.get('/user/race-predictions', authenticate, async function(req, res) {
     try {

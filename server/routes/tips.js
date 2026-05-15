@@ -191,7 +191,7 @@ module.exports = function(deps) {
           });
         }
 
-        // Auto-deduct 1 credit for viewing premium tip
+        // Auto-deduct 1 credit for viewing premium tip (1 credit per tip)
         var newBalance = await db.deductCredits(userId, 1, 'view_tip', 'Viewed: ' + (tip.selection || 'tip'), tip.id);
         if (newBalance < 0) {
           return res.json({ ...tip, analysis: { summary: 'Insufficient credits.' }, locked: true, outOfCredits: true });
