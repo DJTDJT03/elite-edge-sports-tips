@@ -191,30 +191,19 @@ module.exports = function(deps) {
           });
         }
 
-        // Deduct 1 credit for viewing tip (use query param ?spend=true to actually deduct)
-        if (req.query.spend === 'true') {
-          var newBalance = await db.deductCredits(userId, 1, 'view_tip', 'Viewed: ' + (tip.selection || 'tip'), tip.id);
-          if (newBalance < 0) {
-            return res.json({ ...tip, analysis: { summary: 'Insufficient credits.' }, locked: true, outOfCredits: true });
-          }
-          // Starter: show tip but not full analysis
-          if (access === 'starter') {
-            return res.json({
-              ...tip, locked: false, starterLimited: true, creditsRemaining: newBalance,
-              analysis: { summary: tip.analysis ? tip.analysis.summary : 'Upgrade to Premium for full breakdown.' },
-            });
-          }
-          return res.json({ ...tip, locked: false, creditsRemaining: newBalance });
+        // Auto-deduct 1 credit for viewing premium tip
+        var newBalance = await db.deductCredits(userId, 1, 'view_tip', 'Viewed: ' + (tip.selection || 'tip'), tip.id);
+        if (newBalance < 0) {
+          return res.json({ ...tip, analysis: { summary: 'Insufficient credits.' }, locked: true, outOfCredits: true });
         }
-
-        // Preview mode: show selection + odds, prompt to spend credit
-        return res.json({
-          ...tip,
-          analysis: { summary: 'Spend 1 credit to unlock this tip. You have ' + user.credits + ' credits remaining.' },
-          locked: true,
-          creditCost: 1,
-          creditsRemaining: user.credits,
-        });
+        // Starter: show tip but not full analysis
+        if (access === 'starter') {
+          return res.json({
+            ...tip, locked: false, starterLimited: true, creditsRemaining: newBalance,
+            analysis: { summary: tip.analysis ? tip.analysis.summary : 'Upgrade to Premium for full breakdown.' },
+          });
+        }
+        return res.json({ ...tip, locked: false, creditsRemaining: newBalance });
       }
 
       // Free tip: no credits needed

@@ -717,10 +717,17 @@ app.use('/', require('./routes/public')(deps));
         resetDate2.setMonth(resetDate2.getMonth() + 1);
         updates.creditsResetDate = resetDate2.toISOString().split('T')[0];
         needsUpdate = true;
-      } else if (u.subscription === 'free' && !u.credits && u.credits !== 0) {
-        updates.credits = 5;
-        updates.creditsMonthlyAllowance = 0;
-        needsUpdate = true;
+      } else if (u.subscription === 'free') {
+        // Free users: max 5 credits, no monthly allowance
+        if (u.creditsMonthlyAllowance > 0) {
+          updates.creditsMonthlyAllowance = 0;
+          needsUpdate = true;
+        }
+        if (u.credits > 5 && u.role !== 'admin') {
+          updates.credits = 5;
+          needsUpdate = true;
+          console.log('[Startup] Reset ' + u.email + ' credits from ' + u.credits + ' to 5 (free tier)');
+        }
       }
 
       if (needsUpdate) {

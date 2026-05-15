@@ -47,6 +47,22 @@ module.exports = function(deps) {
         return res.status(503).json({ error: 'API-Football not configured. Set API_FOOTBALL_KEY.' });
       }
 
+      // Credit gate: deduct 1 credit for AI match preview (free users get form guide only)
+      var authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+          var decoded = require('jsonwebtoken').verify(authHeader.split(' ')[1], deps.JWT_SECRET);
+          var user = await db.getUserById(decoded.id);
+          if (user && user.subscription !== 'vip' && user.subscription !== 'premium' && user.role !== 'admin') {
+            // Starter and free users spend 1 credit
+            if (!user.credits || user.credits <= 0) {
+              return res.status(402).json({ error: 'No credits remaining. Buy credits or upgrade to Premium for unlimited match intelligence.', creditsRequired: true });
+            }
+            await db.deductCredits(user.id, 1, 'match_intelligence', 'Match preview: fixture ' + req.params.fixtureId);
+          }
+        } catch(e) {} // auth failure = treat as free (will show limited data)
+      }
+
       var fixtureId = req.params.fixtureId;
 
       // 1. Fetch fixture details
