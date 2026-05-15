@@ -3822,7 +3822,8 @@ const App = {
       '</div>' +
       '<div class="race-list">' +
         (meetingRaces.length ? meetingRaces.map(function(race) {
-          var runnerCount = (race.runners || []).length;
+          var allRunners = race.runners || [];
+          var runnerCount = allRunners.filter(function(r) { return !r.isNonRunner && !r.scratched && r.odds && r.odds > 0; }).length || allRunners.length;
           return '<button class="race-list-item" onclick="App._selectedRace=\'' + (race.raceId || race.time || '').replace(/'/g, "\\'") + '\';App._racingView=\'detail\';App.renderRacing()">' +
             '<div class="race-list-time">' + (race.time || '-') + '</div>' +
             '<div class="race-list-body">' +
@@ -3866,7 +3867,10 @@ const App = {
       return ir.meeting === race.meeting && ir.time === race.time;
     });
     var isPremium = this.isPremium();
-    var runners = race.runners || [];
+    var allRaceRunners = race.runners || [];
+    // Filter to declared runners only (have odds and not non-runner)
+    var runners = allRaceRunners.filter(function(r) { return !r.isNonRunner && !r.scratched && r.odds && r.odds > 0; });
+    if (runners.length === 0) runners = allRaceRunners; // fallback if no odds data
 
     // Find best odds per runner from allOdds
     function getBestOdds(runner) {
