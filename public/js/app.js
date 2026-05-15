@@ -127,18 +127,42 @@ const App = {
 
   initInstallPrompt() {
     var self = this;
+    // Android install prompt
     window.addEventListener('beforeinstallprompt', function(e) {
       e.preventDefault();
       self._deferredInstallPrompt = e;
-      // Show banner after 30 seconds if user hasn't dismissed before
       if (!localStorage.getItem('ee_install_dismissed')) {
         setTimeout(function() {
-          if (self._deferredInstallPrompt) {
-            self.showInstallBanner();
-          }
+          if (self._deferredInstallPrompt) self.showInstallBanner();
         }, 30000);
       }
     });
+
+    // iOS install prompt (no beforeinstallprompt support)
+    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    var isStandalone = window.navigator.standalone === true;
+    if (isIOS && !isStandalone && !localStorage.getItem('ee_install_dismissed')) {
+      setTimeout(function() {
+        self.showIOSInstallPrompt();
+      }, 15000);
+    }
+  },
+
+  showIOSInstallPrompt() {
+    if (document.getElementById('ios-install-prompt')) return;
+    var prompt = document.createElement('div');
+    prompt.id = 'ios-install-prompt';
+    prompt.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#141828;border-top:2px solid rgba(212,168,67,0.3);padding:16px 20px;z-index:9998;animation:slideUp 0.3s ease-out;';
+    prompt.innerHTML =
+      '<div style="display:flex;align-items:center;gap:14px;max-width:600px;margin:0 auto;">' +
+        '<div style="font-size:36px;flex-shrink:0;">&#128241;</div>' +
+        '<div style="flex:1;">' +
+          '<div style="font-weight:700;color:#fff;font-size:14px;margin-bottom:4px;">Install Elite Edge</div>' +
+          '<div style="font-size:12px;color:#94a3b8;line-height:1.4;">Tap <strong style="color:#fff;">Share</strong> <span style="font-size:16px;">&#9757;</span> then <strong style="color:#fff;">"Add to Home Screen"</strong> for the full app experience.</div>' +
+        '</div>' +
+        '<button onclick="document.getElementById(\'ios-install-prompt\').remove();localStorage.setItem(\'ee_install_dismissed\',\'true\');" style="background:none;border:none;color:#64748b;font-size:20px;cursor:pointer;padding:8px;">&times;</button>' +
+      '</div>';
+    document.body.appendChild(prompt);
   },
 
   showInstallBanner() {
