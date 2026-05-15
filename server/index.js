@@ -190,6 +190,13 @@ app.use('/api', require('./routes/support')(deps));
 app.use('/api', require('./routes/analytics')(deps));
 app.use('/api', require('./routes/stripe')(deps));
 app.use('/api', require('./routes/userBets')(deps));
+// World Cup Mode — feature-flagged
+if (process.env.ENABLE_WORLD_CUP === 'true') {
+  var worldCupData = require('./services/worldCupData')(deps);
+  deps.worldCupData = worldCupData;
+  app.use('/api/world-cup', require('./routes/worldCup')(deps));
+  console.log('[Startup] World Cup Mode ENABLED');
+}
 app.use('/', require('./routes/public')(deps));
 
 // ---------------------------------------------------------------------------
@@ -302,6 +309,20 @@ app.use('/', require('./routes/public')(deps));
         // Quality loop snapshots
         "CREATE TABLE IF NOT EXISTS enrichment_quality_snapshots (id SERIAL PRIMARY KEY, snapshot_date DATE NOT NULL, is_aggregate BOOLEAN NOT NULL DEFAULT FALSE, signal_key TEXT, sport TEXT, tips_with INTEGER NOT NULL DEFAULT 0, avg_clv_with NUMERIC(8,2), roi_pct_with NUMERIC(8,2), strike_rate_with NUMERIC(6,2), tips_without INTEGER NOT NULL DEFAULT 0, avg_clv_without NUMERIC(8,2), roi_pct_without NUMERIC(8,2), strike_rate_without NUMERIC(6,2), clv_delta NUMERIC(8,2), roi_delta_pct NUMERIC(8,2), verdict TEXT, sample_sufficient BOOLEAN DEFAULT TRUE, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(snapshot_date, is_aggregate, signal_key, sport))",
         'CREATE INDEX IF NOT EXISTS idx_eqs_date ON enrichment_quality_snapshots(snapshot_date DESC)',
+        // World Cup Mode tables (feature-flagged via ENABLE_WORLD_CUP)
+        ...(process.env.ENABLE_WORLD_CUP === 'true' ? [
+          "CREATE TABLE IF NOT EXISTS world_cup_tournaments (id SERIAL PRIMARY KEY, name TEXT NOT NULL, year INTEGER NOT NULL UNIQUE, start_date DATE, end_date DATE, status TEXT DEFAULT 'upcoming', config JSONB DEFAULT '{}', created_at TIMESTAMPTZ DEFAULT NOW())",
+          "CREATE TABLE IF NOT EXISTS world_cup_groups (id SERIAL PRIMARY KEY, tournament_id INTEGER NOT NULL REFERENCES world_cup_tournaments(id), group_letter CHAR(1) NOT NULL, standings JSONB DEFAULT '[]', created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(tournament_id, group_letter))",
+          "CREATE TABLE IF NOT EXISTS world_cup_fixtures (id SERIAL PRIMARY KEY, tournament_id INTEGER REFERENCES world_cup_tournaments(id), stage TEXT NOT NULL, group_letter CHAR(1), home_team TEXT NOT NULL, away_team TEXT NOT NULL, kickoff TIMESTAMPTZ, venue TEXT, home_goals INTEGER, away_goals INTEGER, result TEXT, status TEXT DEFAULT 'scheduled', stats JSONB DEFAULT '{}', external_fixture_id INTEGER, created_at TIMESTAMPTZ DEFAULT NOW())",
+          'CREATE INDEX IF NOT EXISTS idx_wcf_kickoff ON world_cup_fixtures(kickoff)',
+          'CREATE INDEX IF NOT EXISTS idx_wcf_stage ON world_cup_fixtures(stage)',
+          'CREATE INDEX IF NOT EXISTS idx_wcf_status ON world_cup_fixtures(status)',
+          "CREATE TABLE IF NOT EXISTS world_cup_predictions (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, fixture_id INTEGER NOT NULL REFERENCES world_cup_fixtures(id), predicted_home INTEGER NOT NULL, predicted_away INTEGER NOT NULL, first_goalscorer TEXT, predicted_cards INTEGER, predicted_corners INTEGER, points INTEGER DEFAULT 0, scored BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(user_id, fixture_id))",
+          'CREATE INDEX IF NOT EXISTS idx_wcp_user ON world_cup_predictions(user_id)',
+          'CREATE INDEX IF NOT EXISTS idx_wcp_fixture ON world_cup_predictions(fixture_id)',
+          "CREATE TABLE IF NOT EXISTS world_cup_nations (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL UNIQUE, country TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())",
+          'CREATE INDEX IF NOT EXISTS idx_wcn_country ON world_cup_nations(country)',
+        ] : []),
       ];
       for (var ci = 0; ci < alterCols.length; ci++) {
         try { await db.query(alterCols[ci]); } catch(e) {}

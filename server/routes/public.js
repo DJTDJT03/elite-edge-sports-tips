@@ -25,7 +25,10 @@ module.exports = function(deps) {
         },
         racingOdds: { connected: !!(racingOddsSource && process.env.ODDS_API_KEY) },
         movementTracker: movementStatus,
-        ingestion: dataIngestion.getStatus ? dataIngestion.getStatus() : {}
+        ingestion: dataIngestion.getStatus ? dataIngestion.getStatus() : {},
+        features: {
+          worldCup: process.env.ENABLE_WORLD_CUP === 'true',
+        }
       });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });

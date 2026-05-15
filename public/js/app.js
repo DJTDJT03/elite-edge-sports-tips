@@ -118,6 +118,13 @@ const App = {
     this.loadAnalytics();
     this.initChatTease();
     this.initInstallPrompt();
+    // Feature flags — show/hide World Cup nav
+    this.api('/status').then(function(data) {
+      if (data && data.features && data.features.worldCup) {
+        var wcNav = document.getElementById('nav-world-cup');
+        if (wcNav) wcNav.style.display = '';
+      }
+    }).catch(function() {});
   },
 
   // -----------------------------------------------------------------------
@@ -987,6 +994,10 @@ const App = {
       clearInterval(this._liveRaceInterval);
       this._liveRaceInterval = null;
     }
+    // Clear World Cup countdown
+    if (typeof WorldCup !== 'undefined' && WorldCup._countdownInterval) {
+      WorldCup.cleanup();
+    }
 
     // Update active nav
     document.querySelectorAll('.nav-link').forEach(link => {
@@ -1054,6 +1065,7 @@ const App = {
       case 'premier-league': this.renderPremierLeague(); break;
       case 'acca-generator': this.renderAccaGenerator(); break;
       case 'challenge': this.renderChallenge(); break;
+      case 'world-cup': if (typeof WorldCup !== 'undefined') { WorldCup.render(); } else { this.render404(); } break;
       case 'reset-password': this.handleResetPasswordRoute(); break;
       default: this.render404();
     }
@@ -1087,6 +1099,7 @@ const App = {
       'festivals': 'Festival Racing Hub — Major Meetings | Elite Edge',
       'admin': 'Admin Panel | Elite Edge Sports Tips',
       'challenge': '30-Day Bankroll Challenge — Track Your Growth | Elite Edge',
+      'world-cup': 'World Cup 2026 — Predictions, Bracket & Nation Wars | Elite Edge',
     };
 
     var descriptions = {
