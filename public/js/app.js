@@ -6844,10 +6844,39 @@ const App = {
         <!-- Confidence Tier Leaderboard (social proof before plans) -->
         <div id="pricing-confidence-leaderboard"></div>
 
-        <!-- CREDIT EXPLAINER -->
-        <div style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;margin-bottom:24px;text-align:center;">
-          <div style="font-size:16px;font-weight:800;color:#d4a843;margin-bottom:8px;">How Credits Work</div>
-          <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;">Tips cost <strong style="color:#fff;">1 credit</strong>. AI previews cost <strong style="color:#fff;">1 credit</strong>. Acca Generator costs <strong style="color:#fff;">3 credits</strong>. Credits renew monthly — no rollover. Use them or lose them.</div>
+        <!-- CREDIT EXPLAINER — urgency + clarity -->
+        <div style="background:linear-gradient(135deg,rgba(212,168,67,0.08),rgba(212,168,67,0.02));border:2px solid rgba(212,168,67,0.25);border-radius:14px;padding:24px;margin-bottom:28px;">
+          <div style="text-align:center;margin-bottom:16px;">
+            <div style="font-size:20px;font-weight:900;color:#d4a843;">1 Credit = 1 Selection</div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-top:6px;">Every tip, every AI preview, every verdict costs just 1 credit. Acca Generator costs 3.</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
+            <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;">
+              <div style="font-size:20px;margin-bottom:4px;">&#127919;</div>
+              <div style="font-size:11px;font-weight:700;color:#fff;">Tips</div>
+              <div style="font-size:18px;font-weight:900;color:#d4a843;">1</div>
+              <div style="font-size:9px;color:var(--text-muted);">credit each</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;">
+              <div style="font-size:20px;margin-bottom:4px;">&#129302;</div>
+              <div style="font-size:11px;font-weight:700;color:#fff;">AI Previews</div>
+              <div style="font-size:18px;font-weight:900;color:#d4a843;">1</div>
+              <div style="font-size:9px;color:var(--text-muted);">credit each</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;">
+              <div style="font-size:20px;margin-bottom:4px;">&#9917;</div>
+              <div style="font-size:11px;font-weight:700;color:#fff;">Our Take</div>
+              <div style="font-size:18px;font-weight:900;color:#d4a843;">1</div>
+              <div style="font-size:9px;color:var(--text-muted);">credit each</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;">
+              <div style="font-size:20px;margin-bottom:4px;">&#128200;</div>
+              <div style="font-size:11px;font-weight:700;color:#fff;">Acca Builder</div>
+              <div style="font-size:18px;font-weight:900;color:#d4a843;">3</div>
+              <div style="font-size:9px;color:var(--text-muted);">credits per use</div>
+            </div>
+          </div>
+          <div style="text-align:center;margin-top:12px;font-size:12px;color:#f59e0b;font-weight:600;">Credits renew monthly. No rollover. Use them or lose them.</div>
         </div>
 
         <div class="pricing-grid mb-32">
@@ -6855,22 +6884,20 @@ const App = {
           <div class="pricing-card">
             ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">START HERE</div>' : '<div style="height:30px;margin:-24px -24px 16px;"></div>'}
             <h3>Free</h3>
-            <p class="text-muted">Try before you buy</p>
-            <div class="pricing-price">&pound;<span style="font-size:42px;">0</span><span class="period">/forever</span></div>
-            <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);border-radius:8px;padding:12px;margin:8px 0 12px;text-align:center;">
-              <div style="font-size:28px;font-weight:900;color:var(--gold);">3</div>
-              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
-              <div style="font-size:10px;color:#22c55e;margin-top:4px;">Renews monthly — stay engaged</div>
+            <p class="text-muted">See what all the fuss is about</p>
+            <div class="pricing-price">&pound;<span style="font-size:42px;">0</span><span class="period">/month</span></div>
+            <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);border-radius:8px;padding:14px;margin:8px 0 12px;text-align:center;">
+              <div style="font-size:32px;font-weight:900;color:var(--gold);">3</div>
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
+              <div style="font-size:11px;color:#22c55e;font-weight:600;margin-top:4px;">&#10003; Auto-renews monthly</div>
             </div>
             <ul class="pricing-features">
-              <li>3 credits per month (no rollover)</li>
-              <li>1 free daily tip (revealed after race)</li>
-              <li>Results page + track record</li>
-              <li>Betting calculators + academy</li>
-              <li>Buy more credits from &pound;1.99</li>
-              <li style="color:var(--text-muted);text-decoration:line-through;">Monthly credit renewal</li>
-              <li style="color:var(--text-muted);text-decoration:line-through;">Full AI analysis</li>
-              <li style="color:var(--text-muted);text-decoration:line-through;">Email bulletins</li>
+              <li>3 credits renewed every month</li>
+              <li>View 3 tips or AI previews</li>
+              <li>1 free daily tip (after the race)</li>
+              <li>Full results + track record</li>
+              <li>Betting calculators</li>
+              <li>Top up anytime from &pound;1.99</li>
             </ul>
             <button class="btn ${!isLoggedIn ? 'btn-gold' : 'btn-outline'} btn-full" onclick="${isLoggedIn ? '' : "App.showModal('register')"}">
               ${isLoggedIn ? (isPremium ? 'Free Features Included' : 'Your Current Plan') : 'Sign Up Free'}
@@ -6881,24 +6908,23 @@ const App = {
           <div class="pricing-card${accessLevel === 'starter' ? ' featured' : ''}">
             <div style="height:30px;margin:-24px -24px 16px;"></div>
             <h3>Starter</h3>
-            <p class="text-muted">Daily selections on a budget</p>
+            <p class="text-muted">The daily NAP + extras</p>
             <div class="pricing-price"><span class="currency">&pound;</span>9<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
             <p class="text-xs text-gold mb-8">&pound;99.99/year (save &pound;20) | Cancel anytime</p>
-            <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);border-radius:8px;padding:12px;margin:0 0 12px;text-align:center;">
-              <div style="font-size:28px;font-weight:900;color:var(--gold);">50</div>
-              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
-              <div style="font-size:10px;color:#22c55e;margin-top:4px;">Renews monthly &bull; 20p per credit</div>
+            <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);border-radius:8px;padding:14px;margin:0 0 12px;text-align:center;">
+              <div style="font-size:32px;font-weight:900;color:var(--gold);">50</div>
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
+              <div style="font-size:11px;color:#22c55e;font-weight:600;margin-top:4px;">20p per credit &bull; 16x more than Free</div>
             </div>
             <ul class="pricing-features">
               <li><strong>Everything in Free, plus:</strong></li>
-              <li>50 credits renewed monthly (no rollover)</li>
-              <li>1 credit per tip &bull; 1 per preview &bull; 3 per acca</li>
+              <li>50 credits renewed monthly</li>
+              <li>~2 tips per day comfortably</li>
               <li>Selection + odds before the off</li>
               <li>Racing + Football tips</li>
-              <li>Full results + personal tracking</li>
-              <li style="color:var(--text-muted);text-decoration:line-through;">Full AI analysis</li>
-              <li style="color:var(--text-muted);text-decoration:line-through;">Email bulletins</li>
-              <li style="color:var(--text-muted);text-decoration:line-through;">Acca generator</li>
+              <li>Personal ROI tracking</li>
+              <li style="color:var(--text-muted);text-decoration:line-through;">Full AI deep analysis</li>
+              <li style="color:var(--text-muted);text-decoration:line-through;">Daily email bulletin</li>
             </ul>
             ${accessLevel === 'starter' ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button><p class="text-xs text-gold mt-8"><a href="#" onclick="App.startCheckout(\'premium-monthly\');return false;" style="color:var(--gold);">Upgrade to Premium &rarr;</a></p>' :
               isLoggedIn && !isPremium ? '<button class="btn btn-outline btn-full" onclick="App.startCheckout(\'starter-monthly\')">Subscribe &mdash; &pound;9.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'starter-annual\')">Annual &mdash; &pound;99.99/year</button>' :
@@ -6910,22 +6936,22 @@ const App = {
           <div class="pricing-card${accessLevel === 'premium' ? ' featured' : ''}">
             <div class="featured-badge" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">MOST POPULAR</div>
             <h3>Premium</h3>
-            <p class="text-muted">Full access, every day</p>
+            <p class="text-muted">Every tip, every day, all month</p>
             <div class="pricing-price"><span class="currency">&pound;</span>19<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
             <p class="text-xs text-gold mb-8">&pound;199.99/year (save &pound;40) | Cancel anytime</p>
-            <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:12px;margin:0 0 12px;text-align:center;">
-              <div style="font-size:28px;font-weight:900;color:#3b82f6;">250</div>
-              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
-              <div style="font-size:10px;color:#22c55e;margin-top:4px;">Renews monthly &bull; 8p per credit</div>
+            <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:14px;margin:0 0 12px;text-align:center;">
+              <div style="font-size:32px;font-weight:900;color:#3b82f6;">250</div>
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
+              <div style="font-size:11px;color:#22c55e;font-weight:600;margin-top:4px;">8p per credit &bull; 83x more than Free</div>
             </div>
             <ul class="pricing-features">
               <li><strong>Everything in Starter, plus:</strong></li>
-              <li>250 credits renewed monthly (no rollover)</li>
-              <li>All tips — Racing + Football</li>
-              <li>All AI match + race previews</li>
-              <li>Full 5-analyst AI analysis</li>
-              <li>Daily email bulletin</li>
-              <li>Smart acca generator</li>
+              <li style="color:#22c55e;font-weight:700;">250 credits — view every tip, every day</li>
+              <li>All Racing + Football selections</li>
+              <li>All AI match + race previews included</li>
+              <li>Full 5-analyst deep analysis</li>
+              <li>Acca Generator included (3 credits)</li>
+              <li>Daily email bulletin with AI insights</li>
               <li>Personal ROI dashboard</li>
             </ul>
             ${accessLevel === 'premium' && !this.user.trialActive ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
@@ -6939,23 +6965,23 @@ const App = {
           <div class="pricing-card vip${isVIP ? ' featured' : ''}">
             <div class="featured-badge" style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">ELITE</div>
             <h3>VIP</h3>
-            <p class="text-muted">Never count credits again</p>
+            <p class="text-muted">Zero limits. Zero thinking.</p>
             <div class="pricing-price"><span class="currency">&pound;</span>39<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
             <p class="text-xs text-gold mb-8">&pound;399.99/year (save &pound;80) | Cancel anytime</p>
-            <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.3);border-radius:8px;padding:12px;margin:0 0 12px;text-align:center;">
-              <div style="font-size:24px;font-weight:900;color:var(--gold);">UNLIMITED</div>
-              <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits Forever</div>
-              <div style="font-size:10px;color:#d4a843;margin-top:4px;">Every tip &bull; every preview &bull; no limits</div>
+            <div style="background:linear-gradient(135deg,rgba(212,168,67,0.15),rgba(212,168,67,0.05));border:2px solid rgba(212,168,67,0.4);border-radius:8px;padding:14px;margin:0 0 12px;text-align:center;">
+              <div style="font-size:28px;font-weight:900;color:var(--gold);">UNLIMITED</div>
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits Forever</div>
+              <div style="font-size:11px;color:#d4a843;font-weight:600;margin-top:4px;">Never count. Never run out. Never miss.</div>
             </div>
             <ul class="pricing-features">
               <li><strong>Everything in Premium, plus:</strong></li>
-              <li style="color:var(--gold);font-weight:700;">Unlimited credits — view everything</li>
-              <li>Every tip, every AI preview, always</li>
-              <li>Early access tips (6:30am)</li>
+              <li style="color:var(--gold);font-weight:700;">Unlimited — every tip, every preview, every acca</li>
+              <li>Early access tips (6:30am — before anyone else)</li>
               <li>AI race replay analysis</li>
-              <li>Personalised AI bulletin</li>
+              <li>Personalised AI morning bulletin</li>
               <li>Priority email support</li>
               <li>Custom edge threshold alerts</li>
+              <li style="color:var(--gold);font-weight:600;">If you're buying 2+ packs/month — VIP saves you money</li>
             </ul>
             ${isVIP && !this.user.trialActive ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
               isOnTrial ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'vip-monthly\')">Subscribe — &pound;39.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'vip-annual\')">Annual — &pound;399.99/year (Save &pound;80)</button><p class="text-xs text-gold mt-8">Lock in before your trial ends.</p>' :
