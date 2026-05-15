@@ -3728,9 +3728,17 @@ const App = {
     var racecards = hasLiveCards ? liveData.racecards : [];
     var liveUpdatedAt = liveData && liveData.fetchedAt ? new Date(liveData.fetchedAt) : null;
 
+    // Filter to today's races only (exclude future big-race entries)
+    var todayStr = this._getToday();
+    var todayRacecards = racecards.filter(function(r) {
+      if (!r.date) return true; // no date = assume today
+      var rDate = r.date.toString().split('T')[0].substring(0, 10);
+      return rDate === todayStr || rDate === '';
+    });
+
     // Group by meeting
     var liveMeetings = {};
-    racecards.forEach(function(r) {
+    todayRacecards.forEach(function(r) {
       var key = r.meeting || 'Unknown';
       if (!liveMeetings[key]) liveMeetings[key] = { name: key, races: [], going: '', firstTime: '' };
       liveMeetings[key].races.push(r);
