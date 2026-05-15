@@ -795,6 +795,18 @@ const App = {
       if (guestMobile) guestMobile.style.display = 'none';
       if (userMobile) userMobile.style.display = '';
       if (badgeMobile) { badgeMobile.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">VIP</span>' : ''); badgeMobile.style.cursor = 'pointer'; badgeMobile.onclick = () => { window.location.hash = '#/account'; }; }
+      // Top menu auth
+      var topGuest = document.getElementById('nav-auth-top-guest');
+      var topUser = document.getElementById('nav-auth-top-user');
+      if (topGuest) topGuest.style.display = 'none';
+      if (topUser) topUser.style.display = '';
+      var navAvatar = document.getElementById('nav-user-avatar');
+      var navWelcome = document.getElementById('nav-user-welcome');
+      var navPlan = document.getElementById('nav-user-plan');
+      if (navAvatar) navAvatar.textContent = (this.user.name || '?').charAt(0).toUpperCase();
+      if (navWelcome) navWelcome.textContent = 'Welcome, ' + (this.user.name || '').split(' ')[0];
+      var planLabel = this.isVIP() ? 'VIP Member' : this.isPremium() ? 'Premium Member' : this.user.subscription === 'starter' ? 'Starter Member' : 'Free Member';
+      if (navPlan) navPlan.textContent = planLabel;
       adminLink.style.display = this.user.role === 'admin' ? 'inline-block' : 'none';
       if (myBetsLink) myBetsLink.style.display = 'inline-block';
       // Payment failed grace period banner
@@ -863,6 +875,11 @@ const App = {
       // Mobile auth
       if (guestMobile) guestMobile.style.display = '';
       if (userMobile) userMobile.style.display = 'none';
+      // Top menu auth
+      var topGuest2 = document.getElementById('nav-auth-top-guest');
+      var topUser2 = document.getElementById('nav-auth-top-user');
+      if (topGuest2) topGuest2.style.display = '';
+      if (topUser2) topUser2.style.display = 'none';
       adminLink.style.display = 'none';
       if (myBetsLink) myBetsLink.style.display = 'none';
       subBar.style.display = 'none';

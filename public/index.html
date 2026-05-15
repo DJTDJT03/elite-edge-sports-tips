@@ -84,6 +84,22 @@
         <span class="logo-text">Elite Edge<span class="logo-sub">Data-Driven Betting Intelligence</span></span>
       </a>
       <div class="nav-links" id="nav-links">
+        <!-- Auth section — top of mobile menu -->
+        <div id="nav-auth-top-guest" style="padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:8px;text-align:center;">
+          <div style="font-size:14px;color:var(--text-secondary);margin-bottom:10px;">Join the UK's #1 AI tipping platform</div>
+          <button class="btn btn-gold btn-sm" onclick="App.showModal('register')" style="margin-right:8px;">Sign Up Free</button>
+          <button class="btn btn-outline btn-sm" onclick="App.showModal('login')">Log In</button>
+        </div>
+        <div id="nav-auth-top-user" style="display:none;padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#d4a843,#b8902f);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;color:#0a0e1a;" id="nav-user-avatar">?</div>
+            <div>
+              <div style="font-weight:700;color:#fff;font-size:14px;" id="nav-user-welcome">Welcome</div>
+              <div style="font-size:11px;color:#d4a843;" id="nav-user-plan">Free</div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="App.logout()" style="margin-left:auto;font-size:11px;">Log Out</button>
+          </div>
+        </div>
         <a href="#/" class="nav-link" data-page="dashboard">Dashboard</a>
         <a href="#/selections" class="nav-link" data-page="selections">Tips</a>
         <a href="#/racing" class="nav-link" data-page="racing">Racing</a>
@@ -99,14 +115,10 @@
         <a href="#/support" class="nav-link" data-page="support">Support</a>
         <a href="#/admin" class="nav-link nav-link-admin" data-page="admin" id="nav-admin" style="display:none;">Admin</a>
         <a href="#/my-roi" class="nav-link nav-link-mybets" id="nav-mybets" data-page="my-roi" style="display:none;">My ROI</a>
-        <!-- Mobile auth buttons (hidden on desktop, shown in hamburger menu) -->
-        <div id="nav-auth-guest-mobile">
-          <button class="btn btn-outline btn-sm" onclick="App.showModal('login')">Log In</button>
-          <button class="btn btn-gold btn-sm" onclick="App.showModal('register')">Sign Up</button>
-        </div>
+        <!-- Old mobile auth moved to top of menu -->
+        <div id="nav-auth-guest-mobile" style="display:none;"></div>
         <div id="nav-auth-user-mobile" style="display:none;">
           <span class="user-badge" id="user-badge-mobile"></span>
-          <button class="btn btn-outline btn-sm" onclick="App.logout()">Log Out</button>
         </div>
         <div class="mobile-menu-tools">
           <span class="odds-format-toggle" onclick="App.toggleOddsFormat()" title="Switch odds format">
