@@ -2300,16 +2300,36 @@ module.exports = function startScheduler(deps) {
         } catch (rpErr) { /* non-fatal */ }
       }
 
-      // Auto-mark football results
-      if (footballSource && process.env.API_FOOTBALL_KEY) {
+      // Auto-mark football results — SportMonks primary, API-Football fallback
+      var sportMonks = deps.sportMonks;
+      if ((sportMonks && sportMonks.isAvailable()) || (footballSource && process.env.API_FOOTBALL_KEY)) {
         try {
           var fbResults = [];
           for (var fi = 0; fi < datesToSettle.length; fi++) {
-            try {
-              var fbRaw = await footballSource.fetchFixturesByDate(datesToSettle[fi]);
-              var dayFixtures = footballSource.normalise(fbRaw).filter(function(f) { return f.status === 'FT'; });
-              fbResults = fbResults.concat(dayFixtures);
-            } catch (e) { /* individual day fetch optional */ }
+            // Try SportMonks first (faster, more leagues)
+            if (sportMonks && sportMonks.isAvailable()) {
+              try {
+                var smFixtures = await sportMonks.getFixturesByDate(datesToSettle[fi]);
+                var smFinished = (smFixtures || []).filter(function(f) { return f.status === 'FT' || f.status === 'AET' || f.status === 'PEN'; });
+                if (smFinished.length > 0) {
+                  fbResults = fbResults.concat(smFinished);
+                  continue; // Got data from SportMonks, skip API-Football for this date
+                }
+              } catch(smErr) {
+                console.log('[Auto-Settle] SportMonks failed for ' + datesToSettle[fi] + ': ' + smErr.message);
+              }
+            }
+            // Fallback to API-Football
+            if (footballSource && process.env.API_FOOTBALL_KEY) {
+              try {
+                var fbRaw = await footballSource.fetchFixturesByDate(datesToSettle[fi]);
+                var dayFixtures = footballSource.normalise(fbRaw).filter(function(f) { return f.status === 'FT'; });
+                fbResults = fbResults.concat(dayFixtures);
+              } catch (e) { /* individual day fetch optional */ }
+            }
+          }
+          if (fbResults.length > 0) {
+            console.log('[Auto-Settle] Found ' + fbResults.length + ' finished fixtures across ' + datesToSettle.length + ' date(s)');
           }
 
           for (var fti = 0; fti < activeTips.length; fti++) {
@@ -2446,17 +2466,10 @@ module.exports = function startScheduler(deps) {
           }
         } catch (err) { console.error('[Auto-Settle] Football error:', err.message); }
 
-        // Also settle match predictions ("Our Take" on every game)
+        // Also settle match predictions ("Our Take" on every game) using same fbResults
         try {
-          var predResults = [];
-          for (var fdi = 0; fdi < datesToSettle.length; fdi++) {
-            try {
-              var dayMatches = await footballSource.getResults(datesToSettle[fdi]);
-              if (dayMatches) predResults = predResults.concat(dayMatches);
-            } catch(e) {}
-          }
-          if (predResults.length > 0) {
-            var predSettled = await db.settleMatchPredictions(predResults);
+          if (fbResults.length > 0) {
+            var predSettled = await db.settleMatchPredictions(fbResults);
             if (predSettled > 0) console.log('[Auto-Settle] Match predictions: ' + predSettled + ' settled');
           }
         } catch (predErr) { /* non-fatal */ }
@@ -4030,7 +4043,7 @@ module.exports = function startScheduler(deps) {
   }, 45000); // 45s delay — gives DB cleanup time to finish
 
   // Auto-settle: run every 5 minutes
-  setInterval(safeRun('AutoSettle', autoSettleResults), 5 * 60 * 1000);
+  setInterval(safeRun('AutoSettle', autoSettleResults), 2 * 60 * 1000); // Every 2 mins — near real-time settlement
   setTimeout(safeRun('AutoSettle', autoSettleResults), 30000);
 
   // Strike rate monitor
