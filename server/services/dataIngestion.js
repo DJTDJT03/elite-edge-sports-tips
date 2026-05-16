@@ -839,6 +839,7 @@ class RacingCardsSource extends DataSource {
       return {
         raceId: race.race_id || race.id,
         meeting: race.course || race.meeting,
+        date: race.date || race.race_date || (race.off_time ? race.off_time.split('T')[0] : null) || (race.off_dt ? race.off_dt.split('T')[0] : null),
         time: race.off_time || race.time,
         raceClass: race.race_class || race.class,
         distance: race.distance,

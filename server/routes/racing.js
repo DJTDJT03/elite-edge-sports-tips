@@ -77,8 +77,27 @@ module.exports = function(deps) {
       }
       const raw = await racingSource.fetch();
       var normalised = racingSource.normalise(raw);
-      // Filter to UK-only races (region === 'GB')
-      normalised = normalised.filter(function(r) { return r.region === 'GB'; });
+      // Filter to UK-only races (region === 'GB') and today's date only
+      var today = new Date().toISOString().split('T')[0];
+      normalised = normalised.filter(function(r) {
+        if (r.region !== 'GB') return false;
+        // Exclude future big-race entries — only show today's races
+        if (r.date) {
+          var rDate = r.date.toString().split('T')[0].substring(0, 10);
+          if (rDate !== today && rDate !== '') return false;
+        }
+        return true;
+      });
+      // Filter runners: only declared runners with odds (not non-runners, not 90-entry fields)
+      normalised.forEach(function(race) {
+        if (race.runners && race.runners.length > 0) {
+          var declared = race.runners.filter(function(r) {
+            return !r.isNonRunner && r.odds && r.odds > 0;
+          });
+          // Use declared runners if available, otherwise keep all (pre-odds cards)
+          if (declared.length > 0) race.runners = declared;
+        }
+      });
       res.json({ live: true, racecards: normalised, fetchedAt: new Date().toISOString() });
     } catch (err) {
       res.status(500).json({ error: err.message });
