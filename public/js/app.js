@@ -3424,6 +3424,35 @@ const App = {
   // -----------------------------------------------------------------------
   // TIP CARD (reusable) — includes odds comparison, movement, form, acca, backed
   // -----------------------------------------------------------------------
+  _renderFootballResultCard(item) {
+    var isWon = item.result === 'won' || item.result === 'placed';
+    var isLost = item.result === 'lost';
+    var isSettled = isWon || isLost;
+    var outcome = item.actualOutcome || '';
+    var borderColor = isWon ? '#22c55e' : isLost ? '#ef4444' : 'rgba(255,255,255,0.08)';
+    var resultIcon = isWon ? '<span style="color:#22c55e;font-size:18px;font-weight:900;">&#10003;</span>' : isLost ? '<span style="color:#ef4444;font-size:18px;font-weight:900;">&#10007;</span>' : '<span style="color:rgba(255,255,255,0.3);">&#8212;</span>';
+    var resultLabel = isWon ? '<span style="color:#22c55e;font-weight:800;">WON</span>' : isLost ? '<span style="color:#ef4444;font-weight:800;">LOST</span>' : '<span style="color:rgba(255,255,255,0.4);">Pending</span>';
+    var pnlStr = item.pnl !== undefined && item.pnl !== null ? (item.pnl >= 0 ? '<span style="color:#22c55e;font-weight:700;">+' + item.pnl.toFixed(2) + 'u</span>' : '<span style="color:#ef4444;font-weight:700;">' + item.pnl.toFixed(2) + 'u</span>') : '';
+
+    return '<div style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-left:4px solid ' + borderColor + ';background:rgba(255,255,255,0.02);border-radius:0 10px 10px 0;margin-bottom:8px;">' +
+      '<div style="flex-shrink:0;width:36px;text-align:center;">' + resultIcon + '</div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px;">' + (item.event || item.selection || '') + '</div>' +
+        (outcome ? '<div style="font-size:16px;font-weight:900;color:' + (isWon ? '#22c55e' : isLost ? '#ef4444' : '#d4a843') + ';margin-bottom:4px;">' + outcome + '</div>' : '') +
+        '<div style="font-size:12px;color:rgba(255,255,255,0.5);">' +
+          '<span>Our Pick: <strong style="color:rgba(255,255,255,0.8);">' + (item.selection || '') + '</strong></span>' +
+          ' &bull; <span>' + (item.market || '') + '</span>' +
+          ' &bull; <span>' + this.formatOdds(item.odds || 0) + '</span>' +
+          (item.tipsterProfile ? ' &bull; <span>' + item.tipsterProfile + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div style="flex-shrink:0;text-align:right;">' +
+        '<div>' + resultLabel + '</div>' +
+        (pnlStr ? '<div style="font-size:13px;margin-top:2px;">' + pnlStr + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  },
+
   renderTipCard(tip) {
     // Override server lock if client knows user is premium (handles stale JWT edge case)
     const isLocked = this.isPremium() ? false : tip.locked;
@@ -5566,20 +5595,38 @@ const App = {
 
     // Re-filter tips based on selected date tab
     var displayTips = tips;
+    var isPastTab = false;
     if (dateTab === 'tomorrow') {
       displayTips = tomorrowTips;
     } else if (dateTab === 'weekend') {
       displayTips = weekendTips;
-    } else if (dateTab === 'yesterday') {
-      var allFootball = (this._footballResults || []).concat(this.tips || []);
-      displayTips = allFootball.filter(function(t) { return t.sport === 'football' && App._normDate(t.date) === yesterday && !t.isWeeklyAcca; });
-    } else if (dateTab === 'day-before') {
-      var allFootball2 = (this._footballResults || []).concat(this.tips || []);
-      displayTips = allFootball2.filter(function(t) { return t.sport === 'football' && App._normDate(t.date) === dayBeforeYesterday && !t.isWeeklyAcca; });
+    } else if (dateTab === 'yesterday' || dateTab === 'day-before') {
+      isPastTab = true;
+      var targetDate = dateTab === 'yesterday' ? yesterday : dayBeforeYesterday;
+      // For past days, use results (settled tips with outcomes) — dedupe by selection+event
+      var pastResults = (this._footballResults || []).filter(function(r) {
+        return r.sport === 'football' && App._normDate(r.date) === targetDate;
+      });
+      // Also check settled tips
+      var pastTips = (this.tips || []).filter(function(t) {
+        return t.sport === 'football' && App._normDate(t.date) === targetDate && !t.isWeeklyAcca;
+      });
+      // Merge: prefer results (have actualOutcome), fall back to tips
+      var seen = {};
+      displayTips = [];
+      pastResults.forEach(function(r) {
+        var key = (r.selection || '').toLowerCase() + '|' + (r.event || '').toLowerCase();
+        if (!seen[key]) { seen[key] = true; displayTips.push(r); }
+      });
+      pastTips.forEach(function(t) {
+        var key = (t.selection || '').toLowerCase() + '|' + (t.event || '').toLowerCase();
+        if (!seen[key]) { seen[key] = true; displayTips.push(t); }
+      });
     } else {
       displayTips = tips.filter(function(t) { return App._normDate(t.date) === today; });
-      // If no today tips, show all upcoming
-      if (displayTips.length === 0) displayTips = tips;
+      if (displayTips.length === 0) {
+        displayTips = []; // Show empty state, not all tips
+      }
     }
     // Sort: Premier League first, then alphabetically by league
     displayTips.sort(function(a, b) {
@@ -5742,9 +5789,9 @@ const App = {
         </div>
 
         <div class="section">
-          <div class="section-title"><span class="icon">&#9917;</span> Football Selections</div>
-          <div class="grid grid-2" id="football-tips">
-            ${displayTips.length ? displayTips.map(t => this.renderTipCard(t)).join('') : '<p class="text-muted" style="text-align:center;padding:30px;grid-column:1/-1;">No selections for this period. Check back at 7:30am UK for the latest tips.</p>'}
+          <div class="section-title"><span class="icon">&#9917;</span> ${isPastTab ? 'Results' : 'Football Selections'}</div>
+          <div class="${isPastTab ? '' : 'grid grid-2'}" id="football-tips">
+            ${displayTips.length ? (isPastTab ? displayTips.map(function(t) { return App._renderFootballResultCard(t); }).join('') : displayTips.map(t => this.renderTipCard(t)).join('')) : '<p class="text-muted" style="text-align:center;padding:30px;' + (isPastTab ? '' : 'grid-column:1/-1;') + '">No ' + (isPastTab ? 'results' : 'selections') + ' for this period.' + (isPastTab ? '' : ' Check back at 7:30am UK for the latest tips.') + '</p>'}
           </div>
         </div>
 
