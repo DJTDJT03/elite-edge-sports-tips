@@ -57,31 +57,6 @@ module.exports = function(deps) {
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
-  // Debug: raw SportMonks fixture data to check odds structure
-  router.get('/football/debug-odds', authenticate, requireAdmin, async (req, res) => {
-    try {
-      if (!sportMonks || !sportMonks.isAvailable()) return res.json({ error: 'SportMonks not available' });
-      var today = new Date().toISOString().split('T')[0];
-      var raw = await sportMonks._request('/fixtures/date/' + today, {
-        include: 'participants;odds',
-        per_page: 3,
-      });
-      var fixtures = (raw.data || []).slice(0, 2);
-      res.json({
-        fixtureCount: fixtures.length,
-        sample: fixtures.map(function(f) {
-          return {
-            name: f.name,
-            hasOdds: !!(f.odds && f.odds.length),
-            oddsCount: f.odds ? f.odds.length : 0,
-            oddsSample: f.odds ? f.odds.slice(0, 10) : [],
-            oddsKeys: f.odds && f.odds[0] ? Object.keys(f.odds[0]) : [],
-          };
-        }),
-      });
-    } catch(err) { res.status(500).json({ error: err.message }); }
-  });
-
   router.get('/football/h2h/:team1/:team2', async (req, res) => {
     try {
       if (!footballSource || !process.env.API_FOOTBALL_KEY) return res.json({ live: false });
