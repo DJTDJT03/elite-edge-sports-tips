@@ -1869,16 +1869,26 @@ module.exports = function startScheduler(deps) {
     var premCount = newTips.filter(function(t) { return t.isPremium; }).length;
     console.log('[Auto-Tips] Summary: ' + freeCount + ' free, ' + premCount + ' premium');
 
-    // Push notification DELAYED — sent from bulletin function at 10:30am after non-runners cleared
-    // (was here at 7:30am but non-runners hadn't been checked yet)
-    if (false && pushService && pushService.isAvailable) {
+    // In-app notification for all users — tips are live
+    try {
+      var napTip = newTips.find(function(t) { return t.isNap; });
+      await db.createNotification({
+        type: 'tips_published',
+        message: newTips.length + ' football selection' + (newTips.length === 1 ? '' : 's') + ' published for today' + (napTip ? ' — NAP: ' + napTip.selection + ' (' + napTip.confidence + '/10)' : '') + '. Check your dashboard now.',
+        audience: 'all',
+      });
+      console.log('[Auto-Tips] In-app notification created');
+    } catch(e) {}
+
+    // Push notification if available
+    if (pushService && pushService.isAvailable) {
       var napName = newTips.find(function(t) { return t.isNap; });
       pushService.broadcast(db, {
-        title: newTips.length + ' tips published',
+        title: newTips.length + ' football tips published',
         body: (napName ? 'NAP: ' + napName.selection + ' — ' : '') + 'Check your dashboard for today\'s selections.',
         url: '/#/dashboard',
         tag: 'daily-tips-' + today,
-      }, 'premium').catch(function(e) { console.log('[Push] Broadcast error:', e.message); });
+      }, 'all').catch(function(e) { console.log('[Push] Broadcast error:', e.message); });
     }
 
     // --- Alert Engine: notify users with matching alert preferences ---
@@ -1894,12 +1904,12 @@ module.exports = function startScheduler(deps) {
       }
     }
 
-    // --- Telegram Bot: WINNERS ONLY (public channel shows results, not pre-race tips) ---
-    // Pre-race tips are premium content — only posted after winning to showcase track record
-    if (false && telegramBot && telegramBot.isAvailable()) {
-      // DISABLED: tips no longer posted before the race
+    // --- Telegram: Send daily bulletin immediately when tips are published ---
+    // Per Master Prompt: when picks are released, all channels must update simultaneously
+    if (telegramBot && telegramBot.isAvailable()) {
       try {
         await telegramBot.sendDailyBulletin(newTips);
+        console.log('[Auto-Tips] Telegram daily bulletin sent — ' + newTips.length + ' tips');
       } catch (tgErr) {
         console.error('[Auto-Tips] Telegram error (non-fatal):', tgErr.message);
       }
