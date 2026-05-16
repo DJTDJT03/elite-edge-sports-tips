@@ -719,15 +719,15 @@ app.use('/', require('./routes/public')(deps));
       var tipId = 'hist_' + r.date.replace(/-/g, '') + '_' + i;
       var resultId = 'res_' + tipId;
       try {
-        // Insert tip
+        // Insert tip (with actualOutcome stored in analysis JSONB)
         await db.query(
-          "INSERT INTO tips (id, sport, selection, event, market, odds, confidence, status, result, date, is_premium, tipster_profile, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,'settled',$8,$9,$10,$11,NOW()) ON CONFLICT (id) DO NOTHING",
-          [tipId, r.sport, r.selection, r.event, r.market, r.odds, r.confidence, r.result, r.date, r.isPremium, r.tipsterProfile]
+          "INSERT INTO tips (id, sport, selection, event, market, odds, confidence, status, result, date, is_premium, tipster_profile, analysis, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,'settled',$8,$9,$10,$11,$12,NOW()) ON CONFLICT (id) DO NOTHING",
+          [tipId, r.sport, r.selection, r.event, r.market, r.odds, r.confidence, r.result, r.date, r.isPremium, r.tipsterProfile, JSON.stringify({ actualOutcome: r.actualOutcome })]
         );
-        // Insert result
+        // Insert result (matches createResult schema exactly)
         await db.query(
-          "INSERT INTO results (id, tip_id, sport, selection, event, market, odds, stake, result, pnl, date, is_premium, tipster_profile, confidence, actual_outcome, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,2,$8,$9,$10,$11,$12,$13,$14,NOW()) ON CONFLICT (id) DO NOTHING",
-          [resultId, tipId, r.sport, r.selection, r.event, r.market, r.odds, r.result, r.pnl, r.date, r.isPremium, r.tipsterProfile, r.confidence, r.actualOutcome]
+          "INSERT INTO results (id, tip_id, sport, event, selection, market, odds, stake, result, pnl, date, is_premium, tipster_profile, confidence) VALUES ($1,$2,$3,$4,$5,$6,$7,2,$8,$9,$10,$11,$12,$13) ON CONFLICT (id) DO NOTHING",
+          [resultId, tipId, r.sport, r.event, r.selection, r.market, r.odds, r.result, r.pnl, r.date, r.isPremium, r.tipsterProfile, r.confidence]
         );
       } catch(e) { /* duplicate, skip */ }
     }
