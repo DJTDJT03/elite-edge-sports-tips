@@ -78,7 +78,7 @@ app.use(helmet({
       scriptSrcAttr: ["'unsafe-inline'"],  // Required — app uses onclick= handlers extensively
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:", "https://media.api-sports.io"],
+      imgSrc: ["'self'", "data:", "https:", "https://media.api-sports.io", "https://cdn.sportmonks.com"],
       connectSrc: ["'self'", "https://api.stripe.com", "https://*.loom.com", "https://*.youtube.com"],
       frameSrc: ["'self'", "https://js.stripe.com", "https://www.loom.com", "https://www.youtube.com", "https://player.vimeo.com"],
       objectSrc: ["'none'"],

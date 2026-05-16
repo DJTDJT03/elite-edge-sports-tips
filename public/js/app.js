@@ -5853,7 +5853,11 @@ const App = {
                   return '<div class="fixture-card fixture-card-clickable" onclick="App.openMatchIntelligence(' + (f.id || 0) + ', this)" title="Click for match analysis">' +
                     '<div style="flex:1;">' +
                       '<div class="fixture-league">' + leagueName + '</div>' +
-                      '<div class="fixture-teams">' + (f.homeTeam||'') + ' <span class="fixture-vs">vs</span> ' + (f.awayTeam||'') + '</div>' +
+                      '<div class="fixture-teams" style="display:flex;align-items:center;gap:6px;">' +
+                        (f.homeTeamLogo ? '<img src="' + f.homeTeamLogo + '" style="width:20px;height:20px;object-fit:contain;" onerror="this.style.display=\'none\'">' : '') +
+                        (f.homeTeam||'') + ' <span class="fixture-vs">vs</span> ' + (f.awayTeam||'') +
+                        (f.awayTeamLogo ? '<img src="' + f.awayTeamLogo + '" style="width:20px;height:20px;object-fit:contain;" onerror="this.style.display=\'none\'">' : '') +
+                      '</div>' +
                       '<div class="fixture-meta">' + (f.venue || '') + (kickoffTime ? ' | ' + kickoffTime : '') + '</div>' +
                       pickBadge +
                     '</div>' +
@@ -12220,6 +12224,7 @@ const App = {
             modelProbability: bestMarket.modelProb,
             confidence: 6, edge: Math.max(0.03, bestMarket.edge),
             analyst: 'Elite Edge', sport: 'football', isPublishedTip: false,
+            homeTeamLogo: f.homeTeamLogo || '', awayTeamLogo: f.awayTeamLogo || '',
             _allMarkets: markets.map(function(m) {
               return { sel: m.sel, market: m.market, odds: m.odds, modelProb: m.modelProb, edge: m.edge };
             }),
@@ -12379,11 +12384,14 @@ const App = {
         legBorderStyle = 'border-left:3px solid #22c55e;';
       }
 
+      var homeLogo = tip.homeTeamLogo ? '<img src="' + tip.homeTeamLogo + '" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;" onerror="this.style.display=\'none\'"> ' : '';
+      var awayLogo = tip.awayTeamLogo ? ' <img src="' + tip.awayTeamLogo + '" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;" onerror="this.style.display=\'none\'">' : '';
+
       legsHtml +=
         '<div class="acca-leg" style="' + legBorderStyle + '">' +
           '<div class="acca-leg-number">' + (i + 1) + '</div>' +
           '<div class="acca-leg-info">' +
-            (fixtureName ? '<div style="font-size:13px;font-weight:700;color:#d4a843;margin-bottom:2px;">' + fixtureName + '</div>' : '') +
+            (fixtureName ? '<div style="font-size:13px;font-weight:700;color:#d4a843;margin-bottom:2px;">' + homeLogo + fixtureName + awayLogo + '</div>' : '') +
             '<div class="acca-leg-selection">' + (tip.selection || 'Selection') + '</div>' +
             '<div class="acca-leg-event">' + (leagueInfo ? leagueInfo : '') + (kickoffInfo ? ' &bull; ' + kickoffInfo : '') + '</div>' +
             '<div style="font-size:11px;color:#94a3b8;font-style:italic;margin-top:4px;line-height:1.4;">' + reasoning + '</div>' +
