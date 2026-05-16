@@ -80,7 +80,7 @@ SportMonks.prototype._request = function(path, params) {
 // =========================================================================
 SportMonks.prototype.getLivescores = function() {
   return this._request('/livescores', {
-    include: 'participants;scores;events;state;league;venue',
+    include: 'participants;scores;events;state;league;venue;odds',
   }).then(function(data) {
     return (data.data || []).map(normaliseFixture);
   });
@@ -91,7 +91,7 @@ SportMonks.prototype.getLivescores = function() {
 // =========================================================================
 SportMonks.prototype.getFixturesByDate = function(dateStr) {
   return this._request('/fixtures/date/' + dateStr, {
-    include: 'participants;scores;state;league;venue',
+    include: 'participants;scores;state;league;venue;odds',
     per_page: 50,
   }).then(function(data) {
     return (data.data || []).map(normaliseFixture);
@@ -286,6 +286,28 @@ function normaliseFixture(f) {
     });
   }
 
+  // Extract odds from SportMonks (market_id 1 = Fulltime Result, 12 = Over/Under, 3 = BTTS)
+  var homeOdds = null, drawOdds = null, awayOdds = null, overOdds = null, underOdds = null, bttsYesOdds = null;
+  var oddsArr = f.odds || [];
+  if (Array.isArray(oddsArr)) {
+    oddsArr.forEach(function(o) {
+      var label = (o.label || o.name || '').toLowerCase();
+      var val = parseFloat(o.value) || null;
+      var marketId = o.market_id;
+      // Fulltime Result (market_id 1): Home, Draw, Away
+      if (marketId === 1 || label === 'home' || label === 'draw' || label === 'away' || label === '1' || label === 'x' || label === '2') {
+        if (label === 'home' || label === '1') homeOdds = homeOdds || val;
+        else if (label === 'draw' || label === 'x') drawOdds = drawOdds || val;
+        else if (label === 'away' || label === '2') awayOdds = awayOdds || val;
+      }
+      // Over/Under 2.5 (market_id 12 or 18)
+      if ((marketId === 12 || marketId === 18) && label.indexOf('over') !== -1 && label.indexOf('2.5') !== -1) overOdds = overOdds || val;
+      if ((marketId === 12 || marketId === 18) && label.indexOf('under') !== -1 && label.indexOf('2.5') !== -1) underOdds = underOdds || val;
+      // BTTS (market_id 3)
+      if (marketId === 3 && (label === 'yes' || label.indexOf('yes') !== -1)) bttsYesOdds = bttsYesOdds || val;
+    });
+  }
+
   return {
     id: f.id,
     sportmonksId: f.id,
@@ -306,6 +328,12 @@ function normaliseFixture(f) {
     venue: venue.name || '',
     venueCity: venue.city_name || '',
     resultInfo: f.result_info || '',
+    homeOdds: homeOdds,
+    drawOdds: drawOdds,
+    awayOdds: awayOdds,
+    overOdds: overOdds,
+    underOdds: underOdds,
+    bttsOdds: bttsYesOdds,
     stats: stats,
     events: events,
     round: f.round_id,
