@@ -100,72 +100,75 @@ module.exports = function(deps) {
       var homeTeamSeasonStats = null, awayTeamSeasonStats = null;
       var usedSportMonks = false;
 
-      if (sportMonks && sportMonks.isAvailable()) {
+      // Always use API-Football for deep match intelligence (form, H2H, injuries, predictions, stats).
+      // If the fixture ID is from SportMonks, resolve to API-Football by searching by team+date.
+      if (!footballSource || !process.env.API_FOOTBALL_KEY) {
+        return res.status(503).json({ error: 'API-Football not configured.' });
+      }
+
+      // 1. Try direct API-Football lookup first
+      var fixtureData = await footballSource._apiGet('/fixtures?id=' + fixtureId);
+
+      // 2. If that fails (SportMonks ID), resolve team names via SportMonks, then search API-Football by date
+      if ((!fixtureData.response || !fixtureData.response.length) && sportMonks && sportMonks.isAvailable()) {
         try {
           var smFixture = await sportMonks.getFixture(fixtureId);
-          if (smFixture && smFixture.homeTeam && smFixture.awayTeam && smFixture.homeTeam !== '' && smFixture.awayTeam !== '') {
+          if (smFixture && smFixture.homeTeam && smFixture.kickoff) {
             usedSportMonks = true;
-            homeTeam = { id: smFixture.homeTeamId || 0, name: smFixture.homeTeam, logo: smFixture.homeTeamLogo || '' };
-            awayTeam = { id: smFixture.awayTeamId || 0, name: smFixture.awayTeam, logo: smFixture.awayTeamLogo || '' };
-            league = { name: smFixture.league, id: smFixture.leagueId, logo: smFixture.leagueLogo };
-            venue = { name: smFixture.venue, city: smFixture.venueCity };
-            kickoff = smFixture.kickoff;
-            status = { short: smFixture.status };
-            fixture = { teams: { home: homeTeam, away: awayTeam }, league: league, fixture: { venue: venue, date: kickoff, status: status } };
-
-            // Fetch H2H from SportMonks
-            try {
-              var smH2H = await sportMonks.getH2H(smFixture.homeTeamId, smFixture.awayTeamId);
-              h2hMatches = (smH2H || []).map(function(m) {
-                return { teams: { home: { id: m.homeTeamId, name: m.homeTeam }, away: { id: m.awayTeamId, name: m.awayTeam } }, goals: { home: m.homeGoals, away: m.awayGoals }, fixture: { date: m.kickoff } };
+            var smDate = smFixture.kickoff.split('T')[0];
+            console.log('[Match Intelligence] Resolving SportMonks ID ' + fixtureId + ' → searching API-Football for ' + smFixture.homeTeam + ' vs ' + smFixture.awayTeam + ' on ' + smDate);
+            var searchData = await footballSource._apiGet('/fixtures?date=' + smDate + '&timezone=Europe/London');
+            if (searchData.response) {
+              var found = searchData.response.find(function(f) {
+                var hName = f.teams.home.name.toLowerCase();
+                var aName = f.teams.away.name.toLowerCase();
+                var smHome = smFixture.homeTeam.toLowerCase();
+                var smAway = smFixture.awayTeam.toLowerCase();
+                return (hName.indexOf(smHome) !== -1 || smHome.indexOf(hName) !== -1) &&
+                       (aName.indexOf(smAway) !== -1 || smAway.indexOf(aName) !== -1);
               });
-            } catch(e) {}
+              if (found) {
+                fixtureData = { response: [found] };
+                fixtureId = found.fixture.id;
+                console.log('[Match Intelligence] Resolved to API-Football fixture ID: ' + fixtureId);
+              }
+            }
           }
         } catch(smErr) {
-          console.log('[Match Intelligence] SportMonks failed for fixture ' + fixtureId + ':', smErr.message);
+          console.log('[Match Intelligence] SportMonks resolve failed:', smErr.message);
         }
       }
 
-      // Fallback to API-Football if SportMonks didn't work
-      if (!usedSportMonks) {
-        if (!footballSource || !process.env.API_FOOTBALL_KEY) {
-          return res.status(503).json({ error: 'Football API not available.' });
-        }
-        var fixtureData = await footballSource._apiGet('/fixtures?id=' + fixtureId);
-        if (!fixtureData.response || !fixtureData.response.length) {
-          return res.status(404).json({ error: 'Fixture not found.' });
-        }
-        fixture = fixtureData.response[0];
-        homeTeam = fixture.teams.home;
-        awayTeam = fixture.teams.away;
-        league = fixture.league;
-        venue = fixture.fixture.venue;
-        kickoff = fixture.fixture.date;
-        status = fixture.fixture.status;
-
-        // Fetch H2H + form + injuries from API-Football
-        var parallelResults = await Promise.allSettled([
-          footballSource._apiGet('/fixtures/headtohead?h2h=' + homeTeam.id + '-' + awayTeam.id + '&last=10'),
-          footballSource._apiGet('/fixtures?team=' + homeTeam.id + '&last=10'),
-          footballSource._apiGet('/fixtures?team=' + awayTeam.id + '&last=10'),
-          footballSource.fetchInjuries(parseInt(fixtureId)),
-          footballSource.fetchPredictions(parseInt(fixtureId)),
-          footballSource.fetchTeamStats(homeTeam.id, league.id, '2025'),
-          footballSource.fetchTeamStats(awayTeam.id, league.id, '2025'),
-        ]);
-
-        h2hMatches = (parallelResults[0].status === 'fulfilled' ? parallelResults[0].value : { response: [] }).response || [];
-        homeFixtures = (parallelResults[1].status === 'fulfilled' ? parallelResults[1].value : { response: [] }).response || [];
-        awayFixtures = (parallelResults[2].status === 'fulfilled' ? parallelResults[2].value : { response: [] }).response || [];
-        injuriesList = (parallelResults[3].status === 'fulfilled' ? parallelResults[3].value : { response: [] }).response || [];
-        predictionsObj = (parallelResults[4].status === 'fulfilled' && parallelResults[4].value.response && parallelResults[4].value.response.length > 0) ? parallelResults[4].value.response[0] : null;
-        homeTeamSeasonStats = (parallelResults[5].status === 'fulfilled' ? parallelResults[5].value : { response: null }).response || null;
-        awayTeamSeasonStats = (parallelResults[6].status === 'fulfilled' ? parallelResults[6].value : { response: null }).response || null;
+      if (!fixtureData.response || !fixtureData.response.length) {
+        return res.status(404).json({ error: 'Fixture not found.' });
       }
 
-      // Ensure variables are set for the analysis builder below
-      injuriesList = injuriesList || [];
-      predictionsObj = predictionsObj || null;
+      fixture = fixtureData.response[0];
+      homeTeam = fixture.teams.home;
+      awayTeam = fixture.teams.away;
+      league = fixture.league;
+      venue = fixture.fixture.venue;
+      kickoff = fixture.fixture.date;
+      status = fixture.fixture.status;
+
+      // 3. Fetch all deep data from API-Football in parallel
+      var parallelResults = await Promise.allSettled([
+        footballSource._apiGet('/fixtures/headtohead?h2h=' + homeTeam.id + '-' + awayTeam.id + '&last=10'),
+        footballSource._apiGet('/fixtures?team=' + homeTeam.id + '&last=10'),
+        footballSource._apiGet('/fixtures?team=' + awayTeam.id + '&last=10'),
+        footballSource.fetchInjuries(parseInt(fixtureId)),
+        footballSource.fetchPredictions(parseInt(fixtureId)),
+        footballSource.fetchTeamStats(homeTeam.id, league.id, '2025'),
+        footballSource.fetchTeamStats(awayTeam.id, league.id, '2025'),
+      ]);
+
+      h2hMatches = (parallelResults[0].status === 'fulfilled' ? parallelResults[0].value : { response: [] }).response || [];
+      homeFixtures = (parallelResults[1].status === 'fulfilled' ? parallelResults[1].value : { response: [] }).response || [];
+      awayFixtures = (parallelResults[2].status === 'fulfilled' ? parallelResults[2].value : { response: [] }).response || [];
+      injuriesList = (parallelResults[3].status === 'fulfilled' ? parallelResults[3].value : { response: [] }).response || [];
+      predictionsObj = (parallelResults[4].status === 'fulfilled' && parallelResults[4].value.response && parallelResults[4].value.response.length > 0) ? parallelResults[4].value.response[0] : null;
+      homeTeamSeasonStats = (parallelResults[5].status === 'fulfilled' ? parallelResults[5].value : { response: null }).response || null;
+      awayTeamSeasonStats = (parallelResults[6].status === 'fulfilled' ? parallelResults[6].value : { response: null }).response || null;
 
       // --- Build analysis (wrapped in try/catch — returns basic info if deep analysis fails) ---
       try {
