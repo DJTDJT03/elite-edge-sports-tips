@@ -92,50 +92,80 @@ module.exports = function(deps) {
 
       var fixtureId = req.params.fixtureId;
 
-      // 1. Fetch fixture details
-      var fixtureData = await footballSource._apiGet('/fixtures?id=' + fixtureId);
-      if (!fixtureData.response || !fixtureData.response.length) {
-        return res.status(404).json({ error: 'Fixture not found.' });
+      // Try SportMonks first for fixture detail (handles SportMonks IDs)
+      var fixture, homeTeam, awayTeam, league, venue, kickoff, status;
+      var homeFixtures = [], awayFixtures = [];
+      var h2hMatches = [];
+      var injuriesList = [], predictionsObj = null;
+      var homeTeamSeasonStats = null, awayTeamSeasonStats = null;
+      var usedSportMonks = false;
+
+      if (sportMonks && sportMonks.isAvailable()) {
+        try {
+          var smFixture = await sportMonks.getFixture(fixtureId);
+          if (smFixture && smFixture.homeTeam) {
+            usedSportMonks = true;
+            homeTeam = { id: smFixture.homeTeamId, name: smFixture.homeTeam, logo: smFixture.homeTeamLogo };
+            awayTeam = { id: smFixture.awayTeamId, name: smFixture.awayTeam, logo: smFixture.awayTeamLogo };
+            league = { name: smFixture.league, id: smFixture.leagueId, logo: smFixture.leagueLogo };
+            venue = { name: smFixture.venue, city: smFixture.venueCity };
+            kickoff = smFixture.kickoff;
+            status = { short: smFixture.status };
+            fixture = { teams: { home: homeTeam, away: awayTeam }, league: league, fixture: { venue: venue, date: kickoff, status: status } };
+
+            // Fetch H2H from SportMonks
+            try {
+              var smH2H = await sportMonks.getH2H(smFixture.homeTeamId, smFixture.awayTeamId);
+              h2hMatches = (smH2H || []).map(function(m) {
+                return { teams: { home: { id: m.homeTeamId, name: m.homeTeam }, away: { id: m.awayTeamId, name: m.awayTeam } }, goals: { home: m.homeGoals, away: m.awayGoals }, fixture: { date: m.kickoff } };
+              });
+            } catch(e) {}
+          }
+        } catch(smErr) {
+          console.log('[Match Intelligence] SportMonks failed for fixture ' + fixtureId + ':', smErr.message);
+        }
       }
-      var fixture = fixtureData.response[0];
-      var homeTeam = fixture.teams.home;
-      var awayTeam = fixture.teams.away;
-      var league = fixture.league;
-      var venue = fixture.fixture.venue;
-      var kickoff = fixture.fixture.date;
-      var status = fixture.fixture.status;
 
-      // 2. Fetch H2H data
-      var h2hData = await footballSource._apiGet(
-        '/fixtures/headtohead?h2h=' + homeTeam.id + '-' + awayTeam.id + '&last=10'
-      );
-      var h2hMatches = h2hData.response || [];
+      // Fallback to API-Football if SportMonks didn't work
+      if (!usedSportMonks) {
+        if (!footballSource || !process.env.API_FOOTBALL_KEY) {
+          return res.status(503).json({ error: 'Football API not available.' });
+        }
+        var fixtureData = await footballSource._apiGet('/fixtures?id=' + fixtureId);
+        if (!fixtureData.response || !fixtureData.response.length) {
+          return res.status(404).json({ error: 'Fixture not found.' });
+        }
+        fixture = fixtureData.response[0];
+        homeTeam = fixture.teams.home;
+        awayTeam = fixture.teams.away;
+        league = fixture.league;
+        venue = fixture.fixture.venue;
+        kickoff = fixture.fixture.date;
+        status = fixture.fixture.status;
 
-      // 3. Fetch last 10 fixtures for each team + enhanced data (in parallel)
-      var parallelResults = await Promise.allSettled([
-        footballSource._apiGet('/fixtures?team=' + homeTeam.id + '&last=10'),
-        footballSource._apiGet('/fixtures?team=' + awayTeam.id + '&last=10'),
-        footballSource.fetchInjuries(parseInt(fixtureId)),
-        footballSource.fetchPredictions(parseInt(fixtureId)),
-        footballSource.fetchTeamStats(homeTeam.id, league.id, '2025'),
-        footballSource.fetchTeamStats(awayTeam.id, league.id, '2025'),
-      ]);
+        // Fetch H2H + form + injuries from API-Football
+        var parallelResults = await Promise.allSettled([
+          footballSource._apiGet('/fixtures/headtohead?h2h=' + homeTeam.id + '-' + awayTeam.id + '&last=10'),
+          footballSource._apiGet('/fixtures?team=' + homeTeam.id + '&last=10'),
+          footballSource._apiGet('/fixtures?team=' + awayTeam.id + '&last=10'),
+          footballSource.fetchInjuries(parseInt(fixtureId)),
+          footballSource.fetchPredictions(parseInt(fixtureId)),
+          footballSource.fetchTeamStats(homeTeam.id, league.id, '2025'),
+          footballSource.fetchTeamStats(awayTeam.id, league.id, '2025'),
+        ]);
 
-      var homeFixturesData = parallelResults[0].status === 'fulfilled' ? parallelResults[0].value : { response: [] };
-      var awayFixturesData = parallelResults[1].status === 'fulfilled' ? parallelResults[1].value : { response: [] };
-      var injuriesData = parallelResults[2].status === 'fulfilled' ? parallelResults[2].value : { response: [] };
-      var predictionsData = parallelResults[3].status === 'fulfilled' ? parallelResults[3].value : { response: [] };
-      var homeTeamStatsData = parallelResults[4].status === 'fulfilled' ? parallelResults[4].value : { response: null };
-      var awayTeamStatsData = parallelResults[5].status === 'fulfilled' ? parallelResults[5].value : { response: null };
+        h2hMatches = (parallelResults[0].status === 'fulfilled' ? parallelResults[0].value : { response: [] }).response || [];
+        homeFixtures = (parallelResults[1].status === 'fulfilled' ? parallelResults[1].value : { response: [] }).response || [];
+        awayFixtures = (parallelResults[2].status === 'fulfilled' ? parallelResults[2].value : { response: [] }).response || [];
+        injuriesList = (parallelResults[3].status === 'fulfilled' ? parallelResults[3].value : { response: [] }).response || [];
+        predictionsObj = (parallelResults[4].status === 'fulfilled' && parallelResults[4].value.response && parallelResults[4].value.response.length > 0) ? parallelResults[4].value.response[0] : null;
+        homeTeamSeasonStats = (parallelResults[5].status === 'fulfilled' ? parallelResults[5].value : { response: null }).response || null;
+        awayTeamSeasonStats = (parallelResults[6].status === 'fulfilled' ? parallelResults[6].value : { response: null }).response || null;
+      }
 
-      var homeFixtures = homeFixturesData.response || [];
-      var awayFixtures = awayFixturesData.response || [];
-
-      // Parse enhanced data
-      var injuriesList = injuriesData.response || [];
-      var predictionsObj = (predictionsData.response && predictionsData.response.length > 0) ? predictionsData.response[0] : null;
-      var homeTeamSeasonStats = homeTeamStatsData.response || null;
-      var awayTeamSeasonStats = awayTeamStatsData.response || null;
+      // Ensure variables are set for the analysis builder below
+      injuriesList = injuriesList || [];
+      predictionsObj = predictionsObj || null;
 
       // --- Build analysis ---
 

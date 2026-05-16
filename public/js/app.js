@@ -11971,12 +11971,12 @@ const App = {
       // 2. Live football fixtures (upcoming games not yet published as tips)
       // Also store all fixtures for result checking on acca legs
       try {
-        var liveData = await this.fetchLiveFootball();
+        var liveData = await this.fetchLiveFootball(true); // Force fresh — no cache
         var fixtures = liveData && liveData.fixtures ? liveData.fixtures : [];
         this._accaFixtures = fixtures;
         fixtures.forEach(function(f) {
           if (!f.homeTeam || !f.awayTeam) return;
-          if (f.status === 'FT' || f.status === 'LIVE') return; // skip finished/live
+          if (f.status === 'FT' || f.status === 'AET' || f.status === 'PEN') return; // skip finished
           var matchName = f.homeTeam + ' vs ' + f.awayTeam;
           var key = matchName.toLowerCase();
 
