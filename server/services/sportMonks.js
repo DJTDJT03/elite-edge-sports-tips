@@ -223,15 +223,28 @@ function normaliseFixture(f) {
   }
 
   // Map state to our status format
+  // SportMonks state can be: nested object with .state/.developer_name, or just state_id on fixture
   var state = f.state || {};
-  var stateName = (state.state || state.developer_name || '').toUpperCase();
-  var status = 'NS'; // not started
-  if (['LIVE', '1ST_HALF', '2ND_HALF', 'HT', 'ET', 'PEN_LIVE', 'BREAK'].indexOf(stateName) !== -1 ||
-      (state.id && [2, 3, 4, 5, 22, 23, 24].indexOf(state.id) !== -1)) {
-    status = stateName === 'HT' ? 'HT' : stateName === '1ST_HALF' ? '1H' : stateName === '2ND_HALF' ? '2H' : 'LIVE';
-  } else if (['FT', 'AET', 'FT_PEN', 'POSTP', 'CANC', 'ABAN', 'AWARDED', 'WO'].indexOf(stateName) !== -1 ||
-             (state.id && [5, 8, 9, 10, 11, 12, 13, 14, 15].indexOf(state.id) !== -1)) {
-    status = stateName === 'AET' ? 'AET' : stateName === 'FT_PEN' ? 'PEN' : 'FT';
+  var stateId = state.id || f.state_id || null;
+  var stateName = (state.state || state.developer_name || state.short_name || '').toUpperCase();
+
+  // SportMonks state IDs: 1=NS, 2=LIVE, 3=HT, 4=ET, 5=PEN, 6=FT, 7=AET, 8=FT_PEN
+  // 9=POSTP, 10=SUSP, 11=INT, 12=ABAN, 13=CANC, 14=AWARDED, 15=WO, 22=BREAK, 25=AU
+  var status = 'NS';
+  var finishedIds = [5, 6, 7, 8, 14, 15]; // PEN, FT, AET, FT_PEN, AWARDED, WO
+  var liveIds = [2, 3, 4, 11, 22, 25]; // LIVE, HT, ET, INT, BREAK, AU
+  var finishedNames = ['FT', 'AET', 'FT_PEN', 'FINISHED', 'ENDED', 'AWARDED', 'WO', 'PEN'];
+  var liveNames = ['LIVE', '1ST_HALF', '2ND_HALF', 'HT', 'ET', 'PEN_LIVE', 'BREAK', 'INPLAY', 'INT'];
+
+  if (finishedNames.indexOf(stateName) !== -1 || (stateId && finishedIds.indexOf(stateId) !== -1)) {
+    status = stateName === 'AET' ? 'AET' : (stateName === 'FT_PEN' || stateId === 8) ? 'PEN' : 'FT';
+  } else if (liveNames.indexOf(stateName) !== -1 || (stateId && liveIds.indexOf(stateId) !== -1)) {
+    status = stateName === 'HT' || stateId === 3 ? 'HT' : stateName === '1ST_HALF' ? '1H' : stateName === '2ND_HALF' ? '2H' : 'LIVE';
+  }
+
+  // Extra fallback: if we have scores and result_info, it's probably finished
+  if (status === 'NS' && f.result_info && homeGoals !== null) {
+    status = 'FT';
   }
 
   // Extract league info
