@@ -4787,14 +4787,14 @@ module.exports = function startScheduler(deps) {
   // Reviews performance data, adjusts weight modifiers for each analyst
   // =========================================================================
 
-  async function autoTuneAnalysts() {
+  async function autoTuneAnalysts(force) {
     var uk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
     var hour = uk.getHours();
     var dateStr = uk.toISOString().split('T')[0];
     var day = uk.getDate();
 
-    // Run daily at 11pm UK (after all racing and most football has settled)
-    if (hour !== 23 || lastAutoTuneDate === dateStr) return;
+    // Run daily at 11pm UK — or immediately if force=true (admin manual trigger)
+    if (!force && (hour !== 23 || lastAutoTuneDate === dateStr)) return;
     lastAutoTuneDate = dateStr;
 
     // FIX: require analystProfiles in scope (was previously undefined, crashing AutoTune)

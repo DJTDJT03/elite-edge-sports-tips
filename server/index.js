@@ -868,6 +868,55 @@ app.post('/api/admin/trigger/settle', deps.authenticate, deps.requireAdmin, asyn
   }
 });
 
+// Admin: manual AutoTune trigger + tuning status
+app.post('/api/admin/trigger/autotune', deps.authenticate, deps.requireAdmin, async (req, res) => {
+  try {
+    console.log('[Admin] Manual AutoTune triggered');
+    await scheduler.autoTuneAnalysts(true); // true = force bypass time check
+    res.json({ ok: true, message: 'AutoTune cycle completed' });
+  } catch (err) {
+    console.error('[Admin] Manual AutoTune error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/tuning-status', deps.authenticate, deps.requireAdmin, async (req, res) => {
+  try {
+    var fs = require('fs');
+    var path = require('path');
+    var stateFile = path.join(__dirname, 'analyst_state.json');
+    var logFile = path.join(__dirname, 'tuning_log.jsonl');
+
+    var state = null;
+    if (fs.existsSync(stateFile)) {
+      state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    }
+
+    var recentLogs = [];
+    if (fs.existsSync(logFile)) {
+      var lines = fs.readFileSync(logFile, 'utf8').trim().split('\n').filter(Boolean);
+      recentLogs = lines.slice(-7).map(function(line) { try { return JSON.parse(line); } catch(e) { return null; } }).filter(Boolean);
+    }
+
+    // Get latest audit_log entry for auto_tune
+    var lastDbTune = null;
+    try {
+      var { rows } = await db.query("SELECT details, timestamp FROM audit_log WHERE action = 'auto_tune' ORDER BY timestamp DESC LIMIT 1");
+      if (rows.length > 0) lastDbTune = { timestamp: rows[0].timestamp, report: JSON.parse(rows[0].details || '[]') };
+    } catch(e) {}
+
+    res.json({
+      stateFileExists: !!state,
+      currentWeights: state,
+      recentTuningCycles: recentLogs,
+      lastDatabaseTune: lastDbTune,
+      nextScheduled: '23:00 UK tonight',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Start server + graceful shutdown
 // ---------------------------------------------------------------------------
