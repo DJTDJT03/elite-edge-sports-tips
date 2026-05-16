@@ -115,7 +115,7 @@ module.exports = function(deps) {
           var smFixture = await sportMonks.getFixture(fixtureId);
           if (smFixture && smFixture.homeTeam && smFixture.kickoff) {
             usedSportMonks = true;
-            var smDate = smFixture.kickoff.split('T')[0];
+            var smDate = smFixture.kickoff.toString().split('T')[0].split(' ')[0].substring(0, 10);
             var smHome = smFixture.homeTeam.toLowerCase().replace(/\s*(fc|afc|sc|cf)$/i, '').trim();
             var smAway = smFixture.awayTeam.toLowerCase().replace(/\s*(fc|afc|sc|cf)$/i, '').trim();
             console.log('[Match Intelligence] Resolving: ' + smFixture.homeTeam + ' vs ' + smFixture.awayTeam + ' on ' + smDate);
