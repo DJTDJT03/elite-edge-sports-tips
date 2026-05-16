@@ -8662,15 +8662,24 @@ const App = {
     if (prompt) prompt.style.display = 'none';
   },
 
-  toggleNotifDropdown() {
+  toggleNotifDropdown(e) {
+    if (e) e.stopPropagation();
     const dd = document.getElementById('notif-dropdown');
     if (!dd) return;
     var wasOpen = dd.style.display !== 'none';
     dd.style.display = wasOpen ? 'none' : 'block';
     if (!wasOpen) {
-      // Re-fetch fresh before rendering
       this.fetchServerNotifications();
       this.renderNotifList();
+      // Close on click outside
+      var closeHandler = function(ev) {
+        var wrapper = document.getElementById('notif-wrapper');
+        if (wrapper && !wrapper.contains(ev.target)) {
+          dd.style.display = 'none';
+          document.removeEventListener('click', closeHandler);
+        }
+      };
+      setTimeout(function() { document.addEventListener('click', closeHandler); }, 10);
     }
   },
 
@@ -8679,9 +8688,26 @@ const App = {
     if (!notif) return;
     notif.read = true;
     this._markNotifRead(id);
+
+    // Fade out the item then remove it from the visible list
+    var itemEl = document.querySelector('.notif-item[data-notif-id="' + id + '"]');
+    if (itemEl) {
+      itemEl.style.transition = 'opacity 0.3s, max-height 0.3s, padding 0.3s';
+      itemEl.style.opacity = '0';
+      itemEl.style.maxHeight = '0';
+      itemEl.style.paddingTop = '0';
+      itemEl.style.paddingBottom = '0';
+      itemEl.style.overflow = 'hidden';
+    }
+
     localStorage.setItem('ee_notifications', JSON.stringify(this.notifications));
     this.updateNotifBadge();
-    this.renderNotifList();
+
+    // After animation, re-render list without the read item
+    setTimeout(function() {
+      App.renderNotifList();
+    }, 350);
+
     // If the notification has a tipId, navigate to it
     if (notif.tipId) {
       var dd = document.getElementById('notif-dropdown');
@@ -8693,15 +8719,22 @@ const App = {
   renderNotifList() {
     const list = document.getElementById('notif-list');
     if (!list) return;
-    if (!this.notifications.length) {
-      list.innerHTML = '<p class="text-muted text-sm" style="padding:12px;">No notifications yet</p>' +
-        '<div style="padding:8px 12px;border-top:1px solid var(--border);"><a href="#/account?alerts" onclick="var dd=document.getElementById(\'notif-dropdown\');if(dd)dd.style.display=\'none\';" style="color:var(--gold);font-size:12px;text-decoration:none;">Manage Alerts</a></div>';
+    // Show unread first, then recently read (last 5 mins)
+    var fiveMinsAgo = Date.now() - 5 * 60 * 1000;
+    var visible = this.notifications.filter(function(n) {
+      if (!n.read) return true;
+      // Show recently read briefly so user sees the transition
+      return false;
+    });
+    if (!visible.length) {
+      list.innerHTML = '<p class="text-muted text-sm" style="padding:16px;text-align:center;">All caught up!</p>' +
+        '<div style="padding:8px 12px;border-top:1px solid var(--border);text-align:center;"><a href="#/account?alerts" onclick="var dd=document.getElementById(\'notif-dropdown\');if(dd)dd.style.display=\'none\';" style="color:var(--gold);font-size:12px;text-decoration:none;">Manage Alerts</a></div>';
       return;
     }
     var self = this;
-    list.innerHTML = this.notifications.slice(0, 20).map(function(n) {
+    list.innerHTML = visible.slice(0, 20).map(function(n) {
       var safeText = (n.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      return '<div class="notif-item ' + (n.read ? '' : 'unread') + '" onclick="App.clickNotification(\'' + n.id + '\')">' +
+      return '<div class="notif-item unread" data-notif-id="' + n.id + '" onclick="App.clickNotification(\'' + n.id + '\')">' +
         '<div>' + safeText + '</div>' +
         '<div class="notif-time">' + self.timeAgo(n.time) + '</div>' +
       '</div>';
