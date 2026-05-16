@@ -103,10 +103,10 @@ module.exports = function(deps) {
       if (sportMonks && sportMonks.isAvailable()) {
         try {
           var smFixture = await sportMonks.getFixture(fixtureId);
-          if (smFixture && smFixture.homeTeam) {
+          if (smFixture && smFixture.homeTeam && smFixture.awayTeam && smFixture.homeTeam !== '' && smFixture.awayTeam !== '') {
             usedSportMonks = true;
-            homeTeam = { id: smFixture.homeTeamId, name: smFixture.homeTeam, logo: smFixture.homeTeamLogo };
-            awayTeam = { id: smFixture.awayTeamId, name: smFixture.awayTeam, logo: smFixture.awayTeamLogo };
+            homeTeam = { id: smFixture.homeTeamId || 0, name: smFixture.homeTeam, logo: smFixture.homeTeamLogo || '' };
+            awayTeam = { id: smFixture.awayTeamId || 0, name: smFixture.awayTeam, logo: smFixture.awayTeamLogo || '' };
             league = { name: smFixture.league, id: smFixture.leagueId, logo: smFixture.leagueLogo };
             venue = { name: smFixture.venue, city: smFixture.venueCity };
             kickoff = smFixture.kickoff;
@@ -167,7 +167,8 @@ module.exports = function(deps) {
       injuriesList = injuriesList || [];
       predictionsObj = predictionsObj || null;
 
-      // --- Build analysis ---
+      // --- Build analysis (wrapped in try/catch — returns basic info if deep analysis fails) ---
+      try {
 
       // Form analysis: last 5 results for each team
       function getForm(fixtures, teamId) {
@@ -548,23 +549,24 @@ module.exports = function(deps) {
 
       res.json({
         fixtureId: parseInt(fixtureId),
+        source: usedSportMonks ? 'sportmonks' : 'api-football',
         match: {
-          homeTeam: homeTeam.name,
-          homeTeamId: homeTeam.id,
-          homeTeamLogo: homeTeam.logo,
-          awayTeam: awayTeam.name,
-          awayTeamId: awayTeam.id,
-          awayTeamLogo: awayTeam.logo,
-          league: league.name,
-          leagueLogo: league.logo,
-          country: league.country,
-          venue: venue ? venue.name : '',
-          city: venue ? venue.city : '',
+          homeTeam: homeTeam.name || homeTeam || '',
+          homeTeamId: homeTeam.id || 0,
+          homeTeamLogo: homeTeam.logo || '',
+          awayTeam: awayTeam.name || awayTeam || '',
+          awayTeamId: awayTeam.id || 0,
+          awayTeamLogo: awayTeam.logo || '',
+          league: league.name || league || '',
+          leagueLogo: league.logo || '',
+          country: league.country || '',
+          venue: venue ? (venue.name || venue || '') : '',
+          city: venue ? (venue.city || '') : '',
           kickoff: kickoff,
-          status: status.short,
-          statusLong: status.long,
-          homeGoals: fixture.goals.home,
-          awayGoals: fixture.goals.away
+          status: status ? (status.short || status) : '',
+          statusLong: status ? (status.long || '') : '',
+          homeGoals: fixture && fixture.goals ? fixture.goals.home : null,
+          awayGoals: fixture && fixture.goals ? fixture.goals.away : null
         },
         form: {
           home: homeForm,
@@ -621,6 +623,31 @@ module.exports = function(deps) {
         },
         generatedAt: new Date().toISOString()
       });
+
+      } catch (analysisErr) {
+        // Deep analysis failed — return basic fixture info instead of crashing
+        console.error('[match-intelligence] Analysis builder failed:', analysisErr.message);
+        res.json({
+          fixtureId: parseInt(fixtureId),
+          source: usedSportMonks ? 'sportmonks' : 'api-football',
+          match: {
+            homeTeam: homeTeam ? (homeTeam.name || homeTeam || '') : '',
+            awayTeam: awayTeam ? (awayTeam.name || awayTeam || '') : '',
+            league: league ? (league.name || league || '') : '',
+            venue: venue ? (venue.name || venue || '') : '',
+            kickoff: kickoff || '',
+            status: status ? (status.short || '') : '',
+          },
+          form: { home: [], away: [] },
+          h2h: { matches: [], homeWins: 0, awayWins: 0, draws: 0 },
+          stats: { home: {}, away: {} },
+          injuries: { home: [], away: [] },
+          predictions: null,
+          verdict: { market: 'Match Result', pick: 'Analysis unavailable', reason: 'Deep analysis is loading — try again shortly.', confidence: 5 },
+          analysis: { overview: 'Match data is available but detailed analysis could not be generated. The data source may be warming up.', form: '', h2h: '', injuries: '' },
+          generatedAt: new Date().toISOString()
+        });
+      }
 
     } catch (err) {
       console.error('[match-intelligence] Error:', err.message);
