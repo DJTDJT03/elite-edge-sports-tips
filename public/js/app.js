@@ -118,6 +118,8 @@ const App = {
     this.loadAnalytics();
     this.initChatTease();
     this.initInstallPrompt();
+    // Real-time engine — keeps dashboard alive without manual refresh
+    this._initRealTimeEngine();
     // Feature flags — show/hide World Cup nav
     this.api('/status').then(function(data) {
       if (data && data.features && data.features.worldCup) {
@@ -125,6 +127,109 @@ const App = {
         if (wcNav) wcNav.style.display = '';
       }
     }).catch(function() {});
+  },
+
+  // -----------------------------------------------------------------------
+  // REAL-TIME ENGINE — keeps all screens alive without manual refresh
+  // Per Master Prompt: no stale dashboards, no frozen stats, everything alive
+  // -----------------------------------------------------------------------
+  _rtLastTipCount: 0,
+  _rtLastResultCount: 0,
+
+  _initRealTimeEngine() {
+    var self = this;
+
+    // 1. Live scores refresh — every 30 seconds on football/dashboard pages
+    setInterval(function() {
+      var page = self.currentPage;
+      if (page === 'football' || page === 'dashboard' || page === 'live') {
+        self._rtRefreshLiveScores();
+      }
+    }, 30000);
+
+    // 2. Settlement + tip check — every 2 minutes on any page
+    setInterval(function() {
+      self._rtCheckForUpdates();
+    }, 120000);
+
+    // 3. Daily stats bar — refresh every 60 seconds
+    setInterval(function() {
+      self.loadDailyStats();
+    }, 60000);
+  },
+
+  async _rtRefreshLiveScores() {
+    try {
+      var data = await this.fetchLiveFootball(true); // force fresh
+      if (!data || !data.fixtures) return;
+      var fixtures = data.fixtures;
+
+      // Update any live score elements on the current page
+      fixtures.forEach(function(f) {
+        if (f.status === 'FT' || f.status === 'AET' || f.status === 'PEN' ||
+            f.status === '1H' || f.status === '2H' || f.status === 'HT' || f.status === 'LIVE') {
+          // Find fixture cards on the page and update scores
+          var cards = document.querySelectorAll('.fixture-card, .wc-fixture-card');
+          cards.forEach(function(card) {
+            var teamsEl = card.querySelector('.fixture-teams');
+            if (!teamsEl) return;
+            var text = teamsEl.textContent.toLowerCase();
+            if (text.indexOf(f.homeTeam.toLowerCase()) !== -1 || text.indexOf(f.awayTeam.toLowerCase()) !== -1) {
+              var scoreEl = card.querySelector('.fixture-score');
+              if (scoreEl && f.homeGoals !== null) {
+                scoreEl.textContent = f.homeGoals + ' - ' + f.awayGoals;
+              }
+              // Update status badge
+              var liveBadge = card.querySelector('.fixture-live-badge');
+              if (liveBadge && (f.status === 'FT' || f.status === 'AET')) {
+                liveBadge.textContent = 'FT';
+                liveBadge.style.background = 'var(--text-muted)';
+              }
+            }
+          });
+        }
+      });
+    } catch(e) { /* silent — non-critical */ }
+  },
+
+  async _rtCheckForUpdates() {
+    try {
+      // Check if tips count changed (new tips published)
+      var tips = await this.api('/tips');
+      if (Array.isArray(tips)) {
+        var footballToday = tips.filter(function(t) {
+          return t.sport === 'football' && t.status === 'active' && !t.isWeeklyAcca;
+        });
+        if (footballToday.length > this._rtLastTipCount && this._rtLastTipCount > 0) {
+          this.showToast('New tips published! ' + footballToday.length + ' selections live.', 'success');
+          this.loadDailyStats();
+        }
+        this._rtLastTipCount = footballToday.length;
+        this.tips = tips;
+      }
+
+      // Check if results changed (new settlements)
+      var results = await this.api('/results?sport=football&days=1');
+      if (Array.isArray(results)) {
+        if (results.length > this._rtLastResultCount && this._rtLastResultCount > 0) {
+          var newResults = results.length - this._rtLastResultCount;
+          this.showToast(newResults + ' tip' + (newResults === 1 ? '' : 's') + ' just settled. Check Results.', 'info');
+          this.loadDailyStats();
+          // Update daily stats bar P&L
+          var todayResults = results;
+          var wins = todayResults.filter(function(r) { return r.result === 'won'; }).length;
+          var pnl = todayResults.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+          var statsBar = document.getElementById('daily-stats-bar');
+          if (statsBar) {
+            var wonEl = statsBar.querySelector('[data-stat="won"]');
+            var pnlEl = statsBar.querySelector('[data-stat="pnl"]');
+            if (wonEl) wonEl.textContent = wins;
+            if (pnlEl) { pnlEl.textContent = (pnl >= 0 ? '+' : '') + pnl.toFixed(2); pnlEl.style.color = pnl >= 0 ? '#22c55e' : '#ef4444'; }
+          }
+        }
+        this._rtLastResultCount = results.length;
+      }
+    } catch(e) { /* silent */ }
   },
 
   // -----------------------------------------------------------------------
