@@ -109,30 +109,44 @@ module.exports = function(deps) {
       // 1. Try direct API-Football lookup first
       var fixtureData = await footballSource._apiGet('/fixtures?id=' + fixtureId);
 
-      // 2. If that fails (SportMonks ID), resolve team names via SportMonks, then search API-Football by date
+      // 2. If direct lookup fails (SportMonks ID), resolve via SportMonks then search API-Football
       if ((!fixtureData.response || !fixtureData.response.length) && sportMonks && sportMonks.isAvailable()) {
         try {
           var smFixture = await sportMonks.getFixture(fixtureId);
           if (smFixture && smFixture.homeTeam && smFixture.kickoff) {
             usedSportMonks = true;
             var smDate = smFixture.kickoff.split('T')[0];
-            console.log('[Match Intelligence] Resolving SportMonks ID ' + fixtureId + ' → searching API-Football for ' + smFixture.homeTeam + ' vs ' + smFixture.awayTeam + ' on ' + smDate);
+            var smHome = smFixture.homeTeam.toLowerCase().replace(/\s*(fc|afc|sc|cf)$/i, '').trim();
+            var smAway = smFixture.awayTeam.toLowerCase().replace(/\s*(fc|afc|sc|cf)$/i, '').trim();
+            console.log('[Match Intelligence] Resolving: ' + smFixture.homeTeam + ' vs ' + smFixture.awayTeam + ' on ' + smDate);
+
             var searchData = await footballSource._apiGet('/fixtures?date=' + smDate + '&timezone=Europe/London');
-            if (searchData.response) {
+            if (searchData.response && searchData.response.length > 0) {
+              console.log('[Match Intelligence] API-Football returned ' + searchData.response.length + ' fixtures for ' + smDate);
+              // Fuzzy match: strip FC/AFC/SC suffixes, use first 4 chars as fallback
               var found = searchData.response.find(function(f) {
-                var hName = f.teams.home.name.toLowerCase();
-                var aName = f.teams.away.name.toLowerCase();
-                var smHome = smFixture.homeTeam.toLowerCase();
-                var smAway = smFixture.awayTeam.toLowerCase();
-                return (hName.indexOf(smHome) !== -1 || smHome.indexOf(hName) !== -1) &&
-                       (aName.indexOf(smAway) !== -1 || smAway.indexOf(aName) !== -1);
+                var hName = f.teams.home.name.toLowerCase().replace(/\s*(fc|afc|sc|cf)$/i, '').trim();
+                var aName = f.teams.away.name.toLowerCase().replace(/\s*(fc|afc|sc|cf)$/i, '').trim();
+                // Exact substring match
+                if ((hName.indexOf(smHome) !== -1 || smHome.indexOf(hName) !== -1) &&
+                    (aName.indexOf(smAway) !== -1 || smAway.indexOf(aName) !== -1)) return true;
+                // First 4 chars match (handles "Hibernian" vs "Hibernian FC" etc)
+                if (hName.substring(0, 4) === smHome.substring(0, 4) &&
+                    aName.substring(0, 4) === smAway.substring(0, 4)) return true;
+                return false;
               });
               if (found) {
                 fixtureData = { response: [found] };
                 fixtureId = found.fixture.id;
-                console.log('[Match Intelligence] Resolved to API-Football fixture ID: ' + fixtureId);
+                console.log('[Match Intelligence] Resolved to API-Football ID: ' + fixtureId + ' (' + found.teams.home.name + ' vs ' + found.teams.away.name + ')');
+              } else {
+                console.log('[Match Intelligence] No match found in API-Football. API-Football teams: ' + searchData.response.slice(0, 5).map(function(f) { return f.teams.home.name + ' vs ' + f.teams.away.name; }).join(', '));
               }
+            } else {
+              console.log('[Match Intelligence] API-Football returned 0 fixtures for date ' + smDate);
             }
+          } else {
+            console.log('[Match Intelligence] SportMonks returned no team data for fixture ' + fixtureId);
           }
         } catch(smErr) {
           console.log('[Match Intelligence] SportMonks resolve failed:', smErr.message);
@@ -140,7 +154,7 @@ module.exports = function(deps) {
       }
 
       if (!fixtureData.response || !fixtureData.response.length) {
-        return res.status(404).json({ error: 'Fixture not found.' });
+        return res.status(404).json({ error: 'Fixture not found. This league may not be covered by our deep analysis API.' });
       }
 
       fixture = fixtureData.response[0];
