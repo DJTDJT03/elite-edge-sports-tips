@@ -11859,9 +11859,11 @@ const App = {
       });
 
       // 2. Live football fixtures (upcoming games not yet published as tips)
+      // Also store all fixtures for result checking on acca legs
       try {
         var liveData = await this.fetchLiveFootball();
         var fixtures = liveData && liveData.fixtures ? liveData.fixtures : [];
+        this._accaFixtures = fixtures;
         fixtures.forEach(function(f) {
           if (!f.homeTeam || !f.awayTeam) return;
           if (f.status === 'FT' || f.status === 'LIVE') return; // skip finished/live
@@ -12074,8 +12076,23 @@ const App = {
       var leagueInfo = tip.league || tip.meeting || '';
       var kickoffInfo = tip.kickoff || '';
 
+      // Check if this leg's match has a result
+      var legResult = self._checkAccaLegResult(tip);
+      var resultBadge = '';
+      var legBorderStyle = '';
+      if (legResult === 'won') {
+        resultBadge = '<div style="background:#22c55e;color:#000;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;white-space:nowrap;">WON &#10003;</div>';
+        legBorderStyle = 'border-left:3px solid #22c55e;';
+      } else if (legResult === 'lost') {
+        resultBadge = '<div style="background:#ef4444;color:#fff;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;white-space:nowrap;">LOST &#10007;</div>';
+        legBorderStyle = 'border-left:3px solid #ef4444;';
+      } else if (legResult === 'live') {
+        resultBadge = '<div style="background:#22c55e;color:#000;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:800;white-space:nowrap;animation:pulse 2s infinite;">LIVE</div>';
+        legBorderStyle = 'border-left:3px solid #22c55e;';
+      }
+
       legsHtml +=
-        '<div class="acca-leg">' +
+        '<div class="acca-leg" style="' + legBorderStyle + '">' +
           '<div class="acca-leg-number">' + (i + 1) + '</div>' +
           '<div class="acca-leg-info">' +
             (fixtureName ? '<div style="font-size:13px;font-weight:700;color:#d4a843;margin-bottom:2px;">' + fixtureName + '</div>' : '') +
@@ -12090,7 +12107,10 @@ const App = {
               '<span>' + analystLabel + '</span>' +
             '</div>' +
           '</div>' +
-          '<div class="acca-leg-odds">' + self.formatOdds(decOdds) + '</div>' +
+          '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">' +
+            '<div class="acca-leg-odds">' + self.formatOdds(decOdds) + '</div>' +
+            resultBadge +
+          '</div>' +
         '</div>';
     }
 
@@ -12251,6 +12271,88 @@ const App = {
   _setAccaMarket(tipId, marketIdx) {
     if (!this._accaMarketOverrides) this._accaMarketOverrides = {};
     this._accaMarketOverrides[tipId] = marketIdx;
+  },
+
+  _checkAccaLegResult(tip) {
+    var fixtures = this._accaFixtures || [];
+    var selection = (tip.selection || '').toLowerCase();
+    var event = (tip.event || tip.match || '').toLowerCase();
+
+    // Find matching fixture by team names
+    var match = fixtures.find(function(f) {
+      if (!f.homeTeam || !f.awayTeam) return false;
+      var home = f.homeTeam.toLowerCase();
+      var away = f.awayTeam.toLowerCase();
+      return event.indexOf(home) !== -1 || event.indexOf(away) !== -1 ||
+             (selection.indexOf(home) !== -1 || selection.indexOf(away) !== -1);
+    });
+
+    if (!match) {
+      // Also check published tip result directly
+      if (tip.result === 'won' || tip.result === 'win') return 'won';
+      if (tip.result === 'lost' || tip.result === 'loss') return 'lost';
+      return null;
+    }
+
+    // Match is live
+    if (match.status === 'LIVE' || match.status === '1H' || match.status === '2H' || match.status === 'HT') {
+      return 'live';
+    }
+
+    // Match is finished
+    if (match.status !== 'FT' && match.status !== 'AET' && match.status !== 'PEN') return null;
+
+    var homeGoals = parseInt(match.homeGoals) || 0;
+    var awayGoals = parseInt(match.awayGoals) || 0;
+    var totalGoals = homeGoals + awayGoals;
+    var market = (tip.market || '').toLowerCase();
+
+    // Match Result
+    if (market.indexOf('match result') !== -1 || market === 'win') {
+      if (selection.indexOf('draw') !== -1) {
+        return homeGoals === awayGoals ? 'won' : 'lost';
+      }
+      var homeWin = homeGoals > awayGoals;
+      var awayWin = awayGoals > homeGoals;
+      // Check if selection mentions home team winning
+      if (selection.indexOf(match.homeTeam.toLowerCase()) !== -1 && selection.indexOf('win') !== -1) {
+        return homeWin ? 'won' : 'lost';
+      }
+      if (selection.indexOf(match.awayTeam.toLowerCase()) !== -1 && selection.indexOf('win') !== -1) {
+        return awayWin ? 'won' : 'lost';
+      }
+      // Fallback: if selection contains home team name, assume home win pick
+      if (selection.indexOf(match.homeTeam.toLowerCase()) !== -1) return homeWin ? 'won' : 'lost';
+      if (selection.indexOf(match.awayTeam.toLowerCase()) !== -1) return awayWin ? 'won' : 'lost';
+    }
+
+    // Over/Under 2.5
+    if (market.indexOf('over') !== -1 && market.indexOf('under') === -1) {
+      return totalGoals > 2 ? 'won' : 'lost';
+    }
+    if (market.indexOf('under') !== -1) {
+      return totalGoals < 3 ? 'won' : 'lost';
+    }
+
+    // BTTS
+    if (market.indexOf('btts') !== -1 || market.indexOf('both teams') !== -1) {
+      var bttsYes = homeGoals > 0 && awayGoals > 0;
+      if (selection.indexOf('yes') !== -1) return bttsYes ? 'won' : 'lost';
+      if (selection.indexOf('no') !== -1) return !bttsYes ? 'won' : 'lost';
+      return bttsYes ? 'won' : 'lost';
+    }
+
+    // Double Chance
+    if (market.indexOf('double chance') !== -1) {
+      if (selection.indexOf('1x') !== -1 || (selection.indexOf(match.homeTeam.toLowerCase()) !== -1 && selection.indexOf('draw') !== -1)) {
+        return homeGoals >= awayGoals ? 'won' : 'lost';
+      }
+      if (selection.indexOf('x2') !== -1 || (selection.indexOf(match.awayTeam.toLowerCase()) !== -1 && selection.indexOf('draw') !== -1)) {
+        return awayGoals >= homeGoals ? 'won' : 'lost';
+      }
+    }
+
+    return null;
   },
 
   _toggleAccaSport(sport) {
