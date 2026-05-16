@@ -80,7 +80,7 @@ SportMonks.prototype._request = function(path, params) {
 // =========================================================================
 SportMonks.prototype.getLivescores = function() {
   return this._request('/livescores', {
-    include: 'participants;scores;events;state;league;venue;odds',
+    include: 'participants;scores;events;state;league;venue',
   }).then(function(data) {
     return (data.data || []).map(normaliseFixture);
   });
@@ -91,7 +91,7 @@ SportMonks.prototype.getLivescores = function() {
 // =========================================================================
 SportMonks.prototype.getFixturesByDate = function(dateStr) {
   return this._request('/fixtures/date/' + dateStr, {
-    include: 'participants;scores;state;league;venue;odds',
+    include: 'participants;scores;state;league;venue',
     per_page: 50,
   }).then(function(data) {
     return (data.data || []).map(normaliseFixture);
