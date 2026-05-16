@@ -6644,7 +6644,13 @@ const App = {
 
         <!-- Results Sponsor -->
         <div class="results-sponsor" id="sponsor-results" style="font-size:12px;color:var(--text-muted);text-align:center;margin-bottom:16px;">
-          All results verified via live API data &mdash; settled automatically every 5 minutes
+          All results verified via live API data &mdash; settled automatically in near real-time
+        </div>
+
+        <!-- Day-by-Day Archive -->
+        <div class="section">
+          <div class="section-title"><span class="icon">&#128197;</span> Daily Results Archive</div>
+          <div id="results-archive" style="margin-bottom:24px;">Loading archive...</div>
         </div>
 
         <!-- Profit Calendar (GitHub-style heatmap) -->
@@ -6780,6 +6786,73 @@ const App = {
 
     // Render profit calendar after DOM is ready
     this.renderProfitCalendar(results);
+
+    // Load and render the day-by-day archive
+    this._loadResultsArchive();
+  },
+
+  async _loadResultsArchive() {
+    var container = document.getElementById('results-archive');
+    if (!container) return;
+    try {
+      var data = await this.api('/results/archive?sport=football&days=30');
+      if (!data || !data.archive || data.archive.length === 0) {
+        container.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px;">No settled results yet. Results appear here automatically after matches finish.</p>';
+        return;
+      }
+      var self = this;
+      var html = data.archive.map(function(day) {
+        var dateLabel = new Date(day.date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+        var total = day.wins + day.losses + day.voids;
+        var sr = total > 0 ? Math.round((day.wins / total) * 100) : 0;
+        var pnlColor = day.pnl >= 0 ? '#22c55e' : '#ef4444';
+        var pnlSign = day.pnl >= 0 ? '+' : '';
+
+        var summaryBar = '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;cursor:pointer;margin-bottom:2px;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\'">' +
+          '<div><strong style="color:#fff;">' + dateLabel + '</strong> <span style="color:var(--text-muted);font-size:12px;margin-left:8px;">' + total + ' tips</span></div>' +
+          '<div style="display:flex;gap:12px;align-items:center;">' +
+            '<span style="color:#22c55e;font-weight:700;font-size:13px;">' + day.wins + 'W</span>' +
+            '<span style="color:#ef4444;font-weight:700;font-size:13px;">' + day.losses + 'L</span>' +
+            '<span style="font-weight:800;color:' + pnlColor + ';font-size:14px;">' + pnlSign + day.pnl.toFixed(2) + 'u</span>' +
+            '<span style="color:var(--text-muted);font-size:12px;">' + sr + '%</span>' +
+            '<span style="color:var(--text-muted);font-size:11px;">&#9660;</span>' +
+          '</div>' +
+        '</div>';
+
+        var detailRows = day.results.map(function(r) {
+          var isWon = r.result === 'won' || r.result === 'placed';
+          var isLost = r.result === 'lost';
+          var icon = isWon ? '<span style="color:#22c55e;">&#10003;</span>' : isLost ? '<span style="color:#ef4444;">&#10007;</span>' : '<span style="color:var(--text-muted);">&#8212;</span>';
+          var rPnl = r.pnl !== undefined ? (r.pnl >= 0 ? '<span style="color:#22c55e;">+' + r.pnl.toFixed(2) + '</span>' : '<span style="color:#ef4444;">' + r.pnl.toFixed(2) + '</span>') : '';
+          return '<div style="display:flex;align-items:center;gap:10px;padding:8px 18px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:13px;">' +
+            '<div style="width:20px;text-align:center;">' + icon + '</div>' +
+            '<div style="flex:1;min-width:0;">' +
+              '<div style="font-weight:600;color:#fff;">' + (r.event || r.selection) + '</div>' +
+              (r.actualOutcome ? '<div style="font-size:12px;color:' + (isWon ? '#22c55e' : isLost ? '#ef4444' : 'var(--text-muted)') + ';font-weight:700;">' + r.actualOutcome + '</div>' : '') +
+              '<div style="font-size:11px;color:var(--text-muted);">Pick: ' + r.selection + ' &bull; ' + r.market + ' &bull; ' + self.formatOdds(r.odds) + (r.analyst ? ' &bull; ' + r.analyst : '') + '</div>' +
+            '</div>' +
+            '<div style="text-align:right;white-space:nowrap;">' +
+              '<div style="font-size:13px;font-weight:700;">' + rPnl + 'u</div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+
+        return summaryBar + '<div style="display:none;background:rgba(255,255,255,0.01);border-radius:0 0 10px 10px;margin-bottom:8px;overflow:hidden;">' + detailRows + '</div>';
+      }).join('');
+
+      // Add summary header
+      var s = data.summary;
+      var summaryHtml = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;">' +
+        '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:900;color:#d4a843;">' + s.strikeRate + '%</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Strike Rate</div></div>' +
+        '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:900;color:' + (s.pnl >= 0 ? '#22c55e' : '#ef4444') + ';">' + (s.pnl >= 0 ? '+' : '') + s.pnl.toFixed(2) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">P&L (units)</div></div>' +
+        '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:900;color:#fff;">' + s.totalTips + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Total Tips</div></div>' +
+        '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:900;color:#fff;">' + s.days + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Days Tracked</div></div>' +
+      '</div>';
+
+      container.innerHTML = summaryHtml + html;
+    } catch(e) {
+      container.innerHTML = '<p style="color:var(--text-muted);text-align:center;">Failed to load archive.</p>';
+    }
   },
 
   updateCharts() {

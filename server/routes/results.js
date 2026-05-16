@@ -113,14 +113,85 @@ module.exports = function(deps) {
   router.get('/results', async (req, res) => {
     try {
       const results = await db.getResults();
-      const { sport, market } = req.query;
+      const { sport, market, date, league, analyst, confidence, days } = req.query;
       let filtered = results;
       if (sport) filtered = filtered.filter(r => r.sport === sport);
-      if (market) filtered = filtered.filter(r => r.market === market);
+      if (market) filtered = filtered.filter(r => (r.market || '').toLowerCase().indexOf(market.toLowerCase()) !== -1);
+      if (date) filtered = filtered.filter(r => r.date && r.date.toString().substring(0, 10) === date);
+      if (league) filtered = filtered.filter(r => (r.event || '').toLowerCase().indexOf(league.toLowerCase()) !== -1 || (r.league || '').toLowerCase().indexOf(league.toLowerCase()) !== -1);
+      if (analyst) filtered = filtered.filter(r => (r.tipsterProfile || '').toLowerCase().indexOf(analyst.toLowerCase()) !== -1);
+      if (confidence) filtered = filtered.filter(r => r.confidence >= parseInt(confidence));
+      if (days) {
+        var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - parseInt(days));
+        var cutoffStr = cutoff.toISOString().split('T')[0];
+        filtered = filtered.filter(r => r.date && r.date.toString().substring(0, 10) >= cutoffStr);
+      }
       res.json(filtered);
     } catch (err) {
       console.error('[Results] GET /results error:', err.message);
       res.status(500).json({ error: 'Failed to fetch results' });
+    }
+  });
+
+  // GET /api/results/archive — grouped by date with daily summaries
+  router.get('/results/archive', async (req, res) => {
+    try {
+      const results = await db.getResults();
+      const { sport, days } = req.query;
+      var maxDays = parseInt(days) || 30;
+      var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - maxDays);
+      var cutoffStr = cutoff.toISOString().split('T')[0];
+
+      var filtered = results.filter(function(r) {
+        if (sport && r.sport !== sport) return false;
+        if (!r.date) return false;
+        return r.date.toString().substring(0, 10) >= cutoffStr;
+      });
+
+      // Group by date
+      var byDate = {};
+      filtered.forEach(function(r) {
+        var d = r.date.toString().substring(0, 10);
+        if (!byDate[d]) byDate[d] = { date: d, results: [], wins: 0, losses: 0, voids: 0, pnl: 0 };
+        byDate[d].results.push({
+          id: r.id, tipId: r.tipId, sport: r.sport, event: r.event, selection: r.selection,
+          market: r.market, odds: r.odds, result: r.result, pnl: r.pnl,
+          confidence: r.confidence, analyst: r.tipsterProfile || 'Elite Edge',
+          actualOutcome: r.actualOutcome, isPremium: r.isPremium,
+        });
+        if (r.result === 'won' || r.result === 'placed') byDate[d].wins++;
+        else if (r.result === 'lost') byDate[d].losses++;
+        else byDate[d].voids++;
+        byDate[d].pnl += (r.pnl || 0);
+      });
+
+      // Convert to sorted array (newest first)
+      var archive = Object.values(byDate).sort(function(a, b) { return b.date.localeCompare(a.date); });
+
+      // Calculate running totals
+      var totalWins = 0, totalLosses = 0, totalPnl = 0, totalTips = 0;
+      filtered.forEach(function(r) {
+        totalTips++;
+        if (r.result === 'won' || r.result === 'placed') totalWins++;
+        else if (r.result === 'lost') totalLosses++;
+        totalPnl += (r.pnl || 0);
+      });
+
+      res.json({
+        archive: archive,
+        summary: {
+          totalTips: totalTips,
+          wins: totalWins,
+          losses: totalLosses,
+          strikeRate: totalTips > 0 ? Math.round((totalWins / totalTips) * 100) : 0,
+          pnl: Math.round(totalPnl * 100) / 100,
+          roi: totalTips > 0 ? Math.round((totalPnl / totalTips) * 100) : 0,
+          days: archive.length,
+        }
+      });
+    } catch (err) {
+      console.error('[Results] GET /results/archive error:', err.message);
+      res.status(500).json({ error: 'Failed to fetch archive' });
     }
   });
 
