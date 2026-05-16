@@ -97,6 +97,7 @@ var TOKEN_BUDGET = {
   'per-tip-racing':   { maxInput: 800, maxOutput: 800 },
   'per-tip-clocker':    { maxInput: 1000, maxOutput: 1200 },  // Larger budget for deep research
   'per-tip-tactician': { maxInput: 1000, maxOutput: 1200 },  // Larger budget for deep research
+  'per-tip-worldcup':  { maxInput: 1200, maxOutput: 1500 },  // World Cup deep preview — 12 signals
   'per-tip-football':  { maxInput: 800, maxOutput: 600 },
   'bulletin':         { maxInput: 1000, maxOutput: 800 },
   'replay':           { maxInput: 600, maxOutput: 500 },
@@ -108,6 +109,7 @@ var TEMPERATURE = {
   'per-tip-racing':   0,
   'per-tip-clocker':    0,
   'per-tip-tactician': 0,
+  'per-tip-worldcup':  0,
   'per-tip-football':  0,
   'bulletin':         0.3,
   'replay':           0.3,

@@ -322,6 +322,9 @@ app.use('/', require('./routes/public')(deps));
           'CREATE INDEX IF NOT EXISTS idx_wcp_fixture ON world_cup_predictions(fixture_id)',
           "CREATE TABLE IF NOT EXISTS world_cup_nations (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL UNIQUE, country TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW())",
           'CREATE INDEX IF NOT EXISTS idx_wcn_country ON world_cup_nations(country)',
+          "CREATE TABLE IF NOT EXISTS world_cup_previews (id SERIAL PRIMARY KEY, fixture_id INTEGER NOT NULL REFERENCES world_cup_fixtures(id) UNIQUE, stage TEXT, home_team TEXT, away_team TEXT, kickoff TIMESTAMPTZ, venue TEXT, signals JSONB DEFAULT '{}', citations JSONB DEFAULT '[]', predicted_scoreline TEXT, verdict TEXT, verdict_market TEXT, verdict_selection TEXT, verdict_odds TEXT, confidence INTEGER, generated_at TIMESTAMPTZ DEFAULT NOW())",
+          'CREATE INDEX IF NOT EXISTS idx_wcprev_fixture ON world_cup_previews(fixture_id)',
+          'CREATE INDEX IF NOT EXISTS idx_wcprev_kickoff ON world_cup_previews(kickoff)',
         ] : []),
       ];
       for (var ci = 0; ci < alterCols.length; ci++) {

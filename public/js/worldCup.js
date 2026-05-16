@@ -11,8 +11,10 @@ var WorldCup = (function() {
   var _tournament = null;
   var _predictions = [];
   var _leaderboard = [];
+  var _previews = {};
   var _myNation = null;
   var _nationRankings = [];
+  var _expandedPreview = null;
 
   // Country flag emoji map (FIFA 2026 qualifiers)
   var FLAGS = {
@@ -55,11 +57,16 @@ var WorldCup = (function() {
         api('/fixtures'),
         api('/groups'),
         api('/predictions/leaderboard'),
+        api('/previews'),
       ]);
       _tournament = results[0] && results[0].tournament;
       _fixtures = (results[1] && results[1].fixtures) || [];
       _groups = (results[2] && results[2].groups) || [];
       _leaderboard = (results[3] && results[3].leaderboard) || [];
+      // Index previews by fixture ID
+      var previewList = (results[4] && results[4].previews) || [];
+      _previews = {};
+      previewList.forEach(function(p) { _previews[p.fixtureId] = p; });
 
       // Load user predictions if logged in
       if (App.user) {
@@ -141,6 +148,79 @@ var WorldCup = (function() {
 
       var venue = f.venue ? '<div style="text-align:center;font-size:11px;color:rgba(255,255,255,0.3);margin-top:8px;">' + f.venue + '</div>' : '';
 
+      // AI Preview card (generated 48 hours before kickoff)
+      var previewHtml = '';
+      var preview = _previews[f.id];
+      if (preview) {
+        var isExpanded = _expandedPreview === f.id;
+        var signals = preview.signals || {};
+
+        // Compact verdict bar (always visible)
+        var verdictBar = '';
+        if (preview.verdict) {
+          verdictBar = '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(212,168,67,0.04));border:1px solid rgba(212,168,67,0.25);border-radius:8px;padding:10px 14px;margin-top:10px;">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+              '<div style="display:flex;align-items:center;gap:8px;">' +
+                '<span style="font-size:14px;">&#129504;</span>' +
+                '<span style="font-size:12px;font-weight:700;color:#d4a843;">OUR PICK</span>' +
+                (preview.verdictSelection ? '<span style="font-size:13px;font-weight:600;color:#fff;">' + preview.verdictSelection + '</span>' : '') +
+                (preview.verdictOdds ? '<span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;">' + preview.verdictOdds + '</span>' : '') +
+              '</div>' +
+              '<button onclick="event.stopPropagation();WorldCup.togglePreview(' + f.id + ')" style="background:none;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;">' + (isExpanded ? 'Hide' : 'Full Analysis') + '</button>' +
+            '</div>' +
+            (preview.predictedScoreline ? '<div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:6px;">Predicted: ' + preview.predictedScoreline + '</div>' : '') +
+          '</div>';
+        }
+
+        // Expanded deep analysis
+        var expandedHtml = '';
+        if (isExpanded) {
+          var signalKeys = [
+            { key: 'squad_news', icon: '&#128101;', label: 'Squad News' },
+            { key: 'manager_tactics', icon: '&#128200;', label: 'Manager Tactics' },
+            { key: 'group_implications', icon: '&#127942;', label: 'Group Implications' },
+            { key: 'tournament_form', icon: '&#128293;', label: 'Tournament Form' },
+            { key: 'key_player_battle', icon: '&#9917;', label: 'Key Player Battle' },
+            { key: 'h2h_history', icon: '&#128218;', label: 'Head to Head' },
+            { key: 'motivation_pressure', icon: '&#128170;', label: 'Motivation & Pressure' },
+            { key: 'conditions_venue', icon: '&#127967;', label: 'Conditions & Venue' },
+            { key: 'referee_profile', icon: '&#129717;', label: 'Referee Profile' },
+            { key: 'betting_market', icon: '&#128176;', label: 'Market Intelligence' },
+          ];
+
+          var signalCards = signalKeys.map(function(sk) {
+            var sig = signals[sk.key];
+            if (!sig || !sig.value) return '';
+            return '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 12px;margin-bottom:6px;">' +
+              '<div style="font-size:11px;font-weight:700;color:#d4a843;margin-bottom:4px;">' + sk.icon + ' ' + sk.label + '</div>' +
+              '<div style="font-size:12px;color:rgba(255,255,255,0.75);line-height:1.5;">' + sig.value + '</div>' +
+            '</div>';
+          }).filter(function(s) { return s; }).join('');
+
+          var verdictDetail = '';
+          if (preview.verdict) {
+            verdictDetail = '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.08),rgba(212,168,67,0.08));border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:12px;margin-bottom:6px;">' +
+              '<div style="font-size:11px;font-weight:700;color:#22c55e;margin-bottom:4px;">&#127919; ELITE EDGE VERDICT</div>' +
+              '<div style="font-size:13px;color:#fff;line-height:1.5;font-weight:500;">' + preview.verdict + '</div>' +
+            '</div>';
+          }
+
+          var citationHtml = '';
+          if (preview.citations && preview.citations.length > 0) {
+            citationHtml = '<div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:8px;border-top:1px solid rgba(255,255,255,0.05);padding-top:6px;">Sources: ' +
+              preview.citations.slice(0, 5).map(function(c, i) { return '<a href="' + c + '" target="_blank" rel="noopener" style="color:rgba(212,168,67,0.5);">[' + (i+1) + ']</a>'; }).join(' ') +
+            '</div>';
+          }
+
+          expandedHtml = '<div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;">' +
+            verdictDetail + signalCards + citationHtml +
+            '<div style="text-align:center;margin-top:6px;font-size:10px;color:rgba(255,255,255,0.25);">Generated ' + new Date(preview.generatedAt).toLocaleString('en-GB') + ' by The Tactician AI</div>' +
+          '</div>';
+        }
+
+        previewHtml = verdictBar + expandedHtml;
+      }
+
       // Prediction form for scheduled matches (logged in users)
       var predictForm = '';
       if (f.status === 'scheduled' && App.user) {
@@ -162,7 +242,7 @@ var WorldCup = (function() {
         }
       }
 
-      return '<div class="' + cls + '" data-fixture-id="' + f.id + '">' + meta + teams + venue + predictForm + '</div>';
+      return '<div class="' + cls + '" data-fixture-id="' + f.id + '">' + meta + teams + venue + previewHtml + predictForm + '</div>';
     }).join('');
   }
 
@@ -423,6 +503,12 @@ var WorldCup = (function() {
     }
   }
 
+  function togglePreview(fixtureId) {
+    _expandedPreview = _expandedPreview === fixtureId ? null : fixtureId;
+    var content = document.getElementById('wc-content');
+    if (content) content.innerHTML = renderTabContent();
+  }
+
   function cleanup() {
     if (WorldCup._countdownInterval) {
       clearInterval(WorldCup._countdownInterval);
@@ -435,6 +521,7 @@ var WorldCup = (function() {
     switchTab: switchTab,
     submitPrediction: submitPrediction,
     setNation: setNation,
+    togglePreview: togglePreview,
     cleanup: cleanup,
     _countdownInterval: null,
   };

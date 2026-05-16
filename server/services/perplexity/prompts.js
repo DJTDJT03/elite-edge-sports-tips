@@ -455,7 +455,47 @@ function buildTacticianPrompt(scored) {
 }
 
 // ---------------------------------------------------------------------------
+// WORLD CUP TACTICIAN — Tournament-Specific Deep Intelligence (12 signals)
+// ---------------------------------------------------------------------------
+
+function buildWorldCupPreviewPrompt(fixture) {
+  var uk = _ukNow();
+
+  var user =
+    'Today is ' + uk.date + ' at ' + uk.time + ' UK time.\n' +
+    'TOURNAMENT: FIFA World Cup 2026 (USA, Canada, Mexico)\n' +
+    'Match: ' + _slot('homeTeam', fixture.home_team || fixture.homeTeam) + ' vs ' + _slot('awayTeam', fixture.away_team || fixture.awayTeam) + '\n' +
+    'Stage: ' + _optSlot(fixture.stage, 'Group') + (fixture.group_letter ? ' | Group ' + fixture.group_letter : '') + '\n' +
+    'Kickoff: ' + _optSlot(fixture.kickoff, 'TBC') + '\n' +
+    'Venue: ' + _optSlot(fixture.venue, 'TBC') + '\n\n' +
+    'You are a world-class football intelligence analyst covering the FIFA World Cup. Search for the following specific data about this match. Return a JSON object with ONLY these keys (omit any without a citable fact):\n\n' +
+    '{\n' +
+    '  "squad_news": {"value": "confirmed squad, key absentees, star players available, any last-minute call-ups or withdrawals", "citation_index": 0},\n' +
+    '  "manager_tactics": {"value": "expected formation, tactical approach from both managers, any system changes from last match, press conference quotes", "citation_index": 1},\n' +
+    '  "group_implications": {"value": "what does each team need from this match to qualify — scenarios for advancement, elimination, or group winners", "citation_index": 2},\n' +
+    '  "tournament_form": {"value": "how each team has performed in this World Cup so far — goals scored/conceded, xG, dominant performances or lucky escapes", "citation_index": 3},\n' +
+    '  "key_player_battle": {"value": "the decisive individual matchup — e.g. striker vs centre-back, playmaker vs defensive midfielder — with stats and context", "citation_index": 4},\n' +
+    '  "h2h_history": {"value": "head-to-head record including previous World Cup meetings with scorelines, any psychological edge", "citation_index": 5},\n' +
+    '  "motivation_pressure": {"value": "psychological factors — knockout stage nerves, defending champions pressure, nation expectations, underdog mentality, grudge matches", "citation_index": 6},\n' +
+    '  "conditions_venue": {"value": "stadium altitude, heat, playing surface, timezone travel for teams, crowd factor — home continent advantage for USA/Canada/Mexico", "citation_index": 7},\n' +
+    '  "referee_profile": {"value": "assigned referee and nationality, officiating style, average cards/penalties, any controversy history with these teams", "citation_index": 8},\n' +
+    '  "betting_market": {"value": "current odds and market movement — where the money is going, any significant drift or shortening, Asian handicap line", "citation_index": 9},\n' +
+    '  "predicted_scoreline": {"value": "most likely scoreline based on data analysis — include xG-based prediction and reasoning", "citation_index": 10},\n' +
+    '  "elite_edge_verdict": {"value": "the single best betting angle for this match — market, selection, and why the value exists. Be specific with odds and edge", "citation_index": 11}\n' +
+    '}\n\n' +
+    'Rules:\n' +
+    '- citation_index must be an integer referencing your citations array\n' +
+    '- Cite: BBC Sport, Sky Sports, The Athletic, Guardian, ESPN, FIFA.com, FBRef, Transfermarkt, WhoScored, Flashscore, official FA/federation sites\n' +
+    '- Be specific with numbers — not "good form" but "W2 D1 L0 in group, 5 goals scored, xG 4.2"\n' +
+    '- For group_implications, include mathematical scenarios (e.g. "a draw eliminates X if Y beats Z")\n' +
+    '- Do not hedge — give a clear, data-backed verdict';
+
+  return { system: SYSTEM_PER_TIP_JSON, user: user, callSiteKey: 'per-tip-worldcup' };
+}
+
+// ---------------------------------------------------------------------------
 module.exports = {
+  buildWorldCupPreviewPrompt: buildWorldCupPreviewPrompt,
   buildTacticianPrompt: buildTacticianPrompt,
   buildClockerPrompt: buildClockerPrompt,
   buildRacingTipPrompt: buildRacingTipPrompt,

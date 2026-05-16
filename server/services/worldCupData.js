@@ -204,6 +204,105 @@ module.exports = function(deps) {
     }
   }
 
+  // =========================================================================
+  // WORLD CUP PREVIEWS — Deep AI analysis 48 hours before kickoff
+  // =========================================================================
+
+  async function generatePreviews() {
+    if (!db.isAvailable || !db.isAvailable()) return { generated: 0 };
+    var perplexityClient = deps.perplexityClient;
+    var prompts = require('./perplexity/prompts');
+    if (!perplexityClient || !prompts.buildWorldCupPreviewPrompt) {
+      console.log('[WorldCup] Perplexity client not available — skipping previews');
+      return { generated: 0 };
+    }
+
+    // Find fixtures within the next 48 hours that don't have previews yet
+    var { rows: upcoming } = await db.query(
+      `SELECT f.* FROM world_cup_fixtures f
+       LEFT JOIN world_cup_previews p ON f.id = p.fixture_id
+       WHERE f.status = 'scheduled'
+         AND f.kickoff IS NOT NULL
+         AND f.kickoff > NOW()
+         AND f.kickoff <= NOW() + INTERVAL '48 hours'
+         AND p.id IS NULL
+       ORDER BY f.kickoff ASC
+       LIMIT 6`
+    );
+
+    if (upcoming.length === 0) {
+      console.log('[WorldCup] No fixtures need previews right now');
+      return { generated: 0 };
+    }
+
+    var generated = 0;
+    for (var i = 0; i < upcoming.length; i++) {
+      var fixture = upcoming[i];
+      try {
+        var prompt = prompts.buildWorldCupPreviewPrompt(fixture);
+
+        // Call Perplexity Sonar directly
+        var enrichResult = null;
+        if (perplexityClient.enrichTip) {
+          // Use enrichTip with a fake scored object
+          enrichResult = await perplexityClient.enrichTip({
+            scored: { fixture: { homeTeam: fixture.home_team, awayTeam: fixture.away_team, league: 'FIFA World Cup 2026', kickoff: fixture.kickoff, venue: fixture.venue }, selectedMarket: 'Match Result', selectedSelection: 'TBC' },
+            sport: 'football',
+            tipId: 'wc_preview_' + fixture.id,
+            analyst: 'worldcup',
+            _customPrompt: prompt,
+          });
+        }
+
+        var signals = {};
+        var citations = [];
+        var predicted = null;
+        var verdict = null;
+        var verdictMarket = null;
+        var verdictSelection = null;
+        var verdictOdds = null;
+        var confidence = 7;
+
+        if (enrichResult && enrichResult.signals) {
+          signals = enrichResult.signals;
+          citations = enrichResult.citations || [];
+          if (signals.predicted_scoreline && signals.predicted_scoreline.value) {
+            predicted = signals.predicted_scoreline.value;
+          }
+          if (signals.elite_edge_verdict && signals.elite_edge_verdict.value) {
+            verdict = signals.elite_edge_verdict.value;
+            // Try to parse market/selection from verdict
+            var v = verdict.toLowerCase();
+            if (v.indexOf('over') !== -1 && v.indexOf('2.5') !== -1) { verdictMarket = 'Over 2.5 Goals'; verdictSelection = 'Over 2.5'; }
+            else if (v.indexOf('btts') !== -1 || v.indexOf('both teams') !== -1) { verdictMarket = 'Both Teams to Score'; verdictSelection = 'BTTS - Yes'; }
+            else if (v.indexOf('under') !== -1 && v.indexOf('2.5') !== -1) { verdictMarket = 'Under 2.5 Goals'; verdictSelection = 'Under 2.5'; }
+            else if (v.indexOf(fixture.home_team.toLowerCase()) !== -1 && v.indexOf('win') !== -1) { verdictMarket = 'Match Result'; verdictSelection = fixture.home_team + ' Win'; }
+            else if (v.indexOf(fixture.away_team.toLowerCase()) !== -1 && v.indexOf('win') !== -1) { verdictMarket = 'Match Result'; verdictSelection = fixture.away_team + ' Win'; }
+            else if (v.indexOf('draw') !== -1) { verdictMarket = 'Match Result'; verdictSelection = 'Draw'; }
+            // Extract odds if mentioned
+            var oddsMatch = verdict.match(/(\d+\/\d+|\d+\.\d+)/);
+            if (oddsMatch) verdictOdds = oddsMatch[1];
+          }
+        }
+
+        await db.query(
+          `INSERT INTO world_cup_previews (fixture_id, stage, home_team, away_team, kickoff, venue, signals, citations, predicted_scoreline, verdict, verdict_market, verdict_selection, verdict_odds, confidence)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+           ON CONFLICT (fixture_id) DO UPDATE SET signals = $7, citations = $8, predicted_scoreline = $9, verdict = $10, verdict_market = $11, verdict_selection = $12, verdict_odds = $13, confidence = $14, generated_at = NOW()`,
+          [fixture.id, fixture.stage, fixture.home_team, fixture.away_team, fixture.kickoff, fixture.venue,
+           JSON.stringify(signals), JSON.stringify(citations), predicted, verdict, verdictMarket, verdictSelection, verdictOdds, confidence]
+        );
+        generated++;
+        console.log('[WorldCup] Preview generated: ' + fixture.home_team + ' vs ' + fixture.away_team);
+      } catch(err) {
+        console.error('[WorldCup] Preview failed for fixture ' + fixture.id + ':', err.message);
+      }
+    }
+
+    console.log('[WorldCup] Generated ' + generated + ' previews');
+    return { generated: generated };
+  }
+
   // Seed tournament + groups with real WC 2026 data (runs on startup, idempotent)
   async function seedTournament() {
     if (!db.isAvailable || !db.isAvailable()) return;
@@ -312,5 +411,6 @@ module.exports = function(deps) {
     syncFixtures: syncFixtures,
     scorePredictions: scorePredictions,
     seedTournament: seedTournament,
+    generatePreviews: generatePreviews,
   };
 };

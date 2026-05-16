@@ -130,6 +130,68 @@ module.exports = function(deps) {
     }
   });
 
+  // GET /api/world-cup/previews — all available match previews
+  router.get('/previews', async function(req, res) {
+    try {
+      var { rows } = await wcQuery(
+        'SELECT * FROM world_cup_previews ORDER BY kickoff ASC'
+      );
+      res.json({
+        previews: rows.map(function(p) {
+          return {
+            id: p.id, fixtureId: p.fixture_id, stage: p.stage,
+            homeTeam: p.home_team, awayTeam: p.away_team,
+            kickoff: p.kickoff, venue: p.venue,
+            signals: p.signals || {}, citations: p.citations || [],
+            predictedScoreline: p.predicted_scoreline,
+            verdict: p.verdict, verdictMarket: p.verdict_market,
+            verdictSelection: p.verdict_selection, verdictOdds: p.verdict_odds,
+            confidence: p.confidence, generatedAt: p.generated_at,
+          };
+        })
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch previews' });
+    }
+  });
+
+  // GET /api/world-cup/previews/:fixtureId — single fixture preview
+  router.get('/previews/:fixtureId', async function(req, res) {
+    try {
+      var { rows } = await wcQuery(
+        'SELECT * FROM world_cup_previews WHERE fixture_id = $1', [req.params.fixtureId]
+      );
+      if (rows.length === 0) return res.status(404).json({ error: 'Preview not yet available' });
+      var p = rows[0];
+      res.json({
+        preview: {
+          id: p.id, fixtureId: p.fixture_id, stage: p.stage,
+          homeTeam: p.home_team, awayTeam: p.away_team,
+          kickoff: p.kickoff, venue: p.venue,
+          signals: p.signals || {}, citations: p.citations || [],
+          predictedScoreline: p.predicted_scoreline,
+          verdict: p.verdict, verdictMarket: p.verdict_market,
+          verdictSelection: p.verdict_selection, verdictOdds: p.verdict_odds,
+          confidence: p.confidence, generatedAt: p.generated_at,
+        }
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to fetch preview' });
+    }
+  });
+
+  // POST /api/world-cup/admin/generate-previews — manually trigger preview generation
+  router.post('/admin/generate-previews', authenticate, requireAdmin, async function(req, res) {
+    try {
+      var worldCupData = deps.worldCupData;
+      if (!worldCupData) return res.status(503).json({ error: 'World Cup data service not available' });
+      var result = await worldCupData.generatePreviews();
+      res.json({ ok: true, generated: result.generated });
+    } catch (err) {
+      res.status(500).json({ error: 'Preview generation failed: ' + err.message });
+    }
+  });
+
   // GET /api/world-cup/bracket — knockout bracket
   router.get('/bracket', async function(req, res) {
     try {
