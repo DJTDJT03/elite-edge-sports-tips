@@ -412,8 +412,8 @@ module.exports = function startScheduler(deps) {
 
     var allCandidates = [];
 
-    // --- RACING SELECTIONS ---
-    if (racingSource && process.env.RACING_API_KEY) {
+    // --- RACING SELECTIONS --- (DISABLED — football-only focus to perfect the system)
+    if (false && racingSource && process.env.RACING_API_KEY) {
       try {
         console.log('[Auto-Tips] Fetching racing cards...');
         var raceData = await racingSource.fetch();
@@ -1376,55 +1376,20 @@ module.exports = function startScheduler(deps) {
       return c.scored && c.scored.selectedOdds >= MIN_MAIN_TIP_ODDS && c.scored.selectedOdds <= MAX_MAIN_TIP_ODDS && c.confidence >= MIN_MAIN_CONFIDENCE;
     }).sort(function(a, b) { return (b.confidence - a.confidence) || (b.edge - a.edge); });
 
-    // Select: 1 per meeting for racing, up to 4 main racing tips
-    var usedMeetings = {};
-    var selectedRacing = [];
-    racingMain.forEach(function(c) {
-      var meeting = c.scored && c.scored.race ? (c.scored.race.meeting || '').toLowerCase() : '';
-      if (meeting && usedMeetings[meeting]) return;
-      if (selectedRacing.length >= 4) return; // up to 4 racing tips
-      selectedRacing.push(c);
-      if (meeting) usedMeetings[meeting] = true;
-    });
-    // Football: up to 4 tips, max 2 per league (allow same league if strong confidence)
+    // FOOTBALL-ONLY FOCUS — racing disabled while we perfect the football pipeline
+    // Select: up to 4 football tips, max 2 per league
     var leagueCounts = {};
     var selectedFootball = [];
     footballMain.forEach(function(c) {
       var league = c.scored && c.scored.fixture ? (c.scored.fixture.league || '').toLowerCase() : '';
       var leagueCount = leagueCounts[league] || 0;
       if (league && leagueCount >= 2) return; // max 2 per league
-      if (selectedFootball.length >= 4) return; // up to 4 football tips
+      if (selectedFootball.length >= 4) return; // top 4 football tips
       selectedFootball.push(c);
       if (league) leagueCounts[league] = leagueCount + 1;
     });
-    var selected = selectedRacing.concat(selectedFootball);
-
-    // Add one EW Outsider of the Day (if available, mark it specially)
-    var outsider = null;
-    if (racingOutsider.length > 0) {
-      // Find best outsider from a meeting we haven't already picked from
-      outsider = racingOutsider.find(function(c) {
-        var mtg = c.scored && c.scored.race ? (c.scored.race.meeting || '').toLowerCase() : '';
-        return !usedMeetings[mtg];
-      }) || racingOutsider[0]; // fallback to best if all meetings used
-      var outsiderId = outsider.scored && outsider.scored.runner ? outsider.scored.runner.horseName : null;
-      var alreadyPicked = selected.some(function(s) {
-        return s.scored && s.scored.runner && s.scored.runner.horseName === outsiderId;
-      });
-      if (!alreadyPicked) {
-        outsider._isOutsider = true;
-        selected.push(outsider);
-      }
-    }
-
-    // Cap at 12 total (4 racing + 4 football + 1 NBA + 1 rugby + 1 NFL + 1 tennis + 1 outsider)
-    selected = selected.slice(0, 12);
-
-    // If we have fewer than 3 main tips, try to fill from football
-    if (selected.filter(function(s) { return !s._isOutsider; }).length < 3 && footballMain.length > 2) {
-      selected.splice(selected.length - (outsider ? 1 : 0), 0, footballMain[2]);
-      selected = selected.slice(0, 5);
-    }
+    var selected = selectedFootball;
+    var outsider = null; // No racing outsider — football only
 
     // NAP must be a MAIN tip with confidence >= 7 (never the outsider)
     var napIdx = -1;
@@ -3168,7 +3133,8 @@ module.exports = function startScheduler(deps) {
       // Only include active, non-voided tips with valid data (non-runners already removed by this point)
       var todayTips = tips.filter(function(t) {
         return normDate(t.date) === dateStr && t.status === 'active' && !t.isWeeklyAcca
-          && t.selection && t.selection !== 'Unknown' && t.market && t.odds && t.odds > 0;
+          && t.selection && t.selection !== 'Unknown' && t.market && t.odds && t.odds > 0
+          && t.sport === 'football'; // Football-only focus
       });
       if (todayTips.length === 0) {
         console.log('[Bulletin] No tips for ' + dateStr + ' — skipping');
