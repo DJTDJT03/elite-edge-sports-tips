@@ -8671,6 +8671,20 @@ const App = {
     if (!wasOpen) {
       this.fetchServerNotifications();
       this.renderNotifList();
+      // Auto-mark all as read after 2 seconds of being open
+      var self = this;
+      this._notifAutoReadTimer = setTimeout(function() {
+        var hadUnread = self.notifications.some(function(n) { return !n.read; });
+        self.notifications.forEach(function(n) {
+          if (n && n.id && !n.read) {
+            n.read = true;
+            self._markNotifRead(n.id);
+          }
+        });
+        localStorage.setItem('ee_notifications', JSON.stringify(self.notifications));
+        self.updateNotifBadge();
+        if (hadUnread) self.renderNotifList();
+      }, 2000);
       // Close on click outside
       var closeHandler = function(ev) {
         var wrapper = document.getElementById('notif-wrapper');
@@ -8680,6 +8694,9 @@ const App = {
         }
       };
       setTimeout(function() { document.addEventListener('click', closeHandler); }, 10);
+    } else {
+      // Closing — cancel auto-read if still pending
+      if (this._notifAutoReadTimer) { clearTimeout(this._notifAutoReadTimer); this._notifAutoReadTimer = null; }
     }
   },
 
