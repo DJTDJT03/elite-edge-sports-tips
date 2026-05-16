@@ -994,9 +994,13 @@ const App = {
       clearInterval(this._liveRaceInterval);
       this._liveRaceInterval = null;
     }
-    // Clear World Cup countdown
+    // Clear World Cup countdowns
     if (typeof WorldCup !== 'undefined' && WorldCup._countdownInterval) {
       WorldCup.cleanup();
+    }
+    if (this._wcDashInterval) {
+      clearInterval(this._wcDashInterval);
+      this._wcDashInterval = null;
     }
 
     // Update active nav
@@ -2724,6 +2728,20 @@ const App = {
           ${this._loginStreak >= 2 ? '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:18px;">&#128293;</span><span style="font-weight:800;color:#d4a843;">' + this._loginStreak + '-day streak</span>' + (this._loginStreak >= 7 ? '<span style="font-size:11px;color:#22c55e;font-weight:600;">Best: ' + (this._bestStreak || this._loginStreak) + '</span>' : '') + '</div>' : ''}
         </div>
 
+        <!-- WORLD CUP COUNTDOWN BANNER -->
+        ${typeof WorldCup !== 'undefined' && document.getElementById('nav-world-cup') && document.getElementById('nav-world-cup').style.display !== 'none' ? `
+        <div onclick="window.location.hash='#/world-cup'" style="background:linear-gradient(135deg,#1a0a2e 0%,#0a0e1a 40%,#0a2a1a 100%);border:2px solid rgba(34,197,94,0.3);border-radius:14px;padding:20px 24px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;">
+          <div style="position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle at 30% 50%,rgba(34,197,94,0.06),transparent 50%),radial-gradient(circle at 70% 50%,rgba(212,168,67,0.06),transparent 50%);"></div>
+          <div style="position:relative;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+            <div>
+              <div style="font-size:20px;font-weight:900;background:linear-gradient(135deg,#d4a843,#f0d078);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">&#9917; FIFA World Cup 2026</div>
+              <div style="color:rgba(255,255,255,0.6);font-size:13px;margin-top:4px;">USA &#127482;&#127480; Canada &#127464;&#127462; Mexico &#127474;&#127485; — Predict, Compete & Represent Your Nation</div>
+            </div>
+            <div id="wc-dash-countdown" style="display:flex;gap:8px;"></div>
+          </div>
+        </div>
+        ` : ''}
+
         <!-- 2. NAP OF THE DAY — Hero product, first thing you see -->
         ${napTip ? (this.isPremium() ? `
         <div class="nap-card-wrapper">
@@ -3012,6 +3030,25 @@ const App = {
         </div>
       </div>
     `;
+
+    // World Cup dashboard countdown
+    var wcCountdownEl = document.getElementById('wc-dash-countdown');
+    if (wcCountdownEl) {
+      var wcTarget = new Date('2026-06-11T20:00:00Z');
+      function updateWcCountdown() {
+        var now = new Date();
+        var diff = wcTarget - now;
+        if (diff <= 0) { wcCountdownEl.innerHTML = '<span style="color:#22c55e;font-weight:900;font-size:16px;">UNDERWAY</span>'; return; }
+        var d = Math.floor(diff / 86400000);
+        var h = Math.floor((diff / 3600000) % 24);
+        var m = Math.floor((diff / 60000) % 60);
+        var s = Math.floor((diff / 1000) % 60);
+        function unit(n, l) { return '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(212,168,67,0.2);border-radius:8px;padding:6px 10px;text-align:center;min-width:48px;"><div style="font-size:18px;font-weight:900;color:#d4a843;">' + n + '</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.4);">' + l + '</div></div>'; }
+        wcCountdownEl.innerHTML = unit(d,'Days') + unit(h,'Hrs') + unit(m,'Min') + unit(s,'Sec');
+      }
+      updateWcCountdown();
+      App._wcDashInterval = setInterval(updateWcCountdown, 1000);
+    }
 
     // Render bankroll chart after DOM update
     var self = this;

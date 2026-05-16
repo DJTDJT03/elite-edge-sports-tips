@@ -97,6 +97,7 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
   width: 20px; height: 2px; background: var(--gold); border-radius: 1px;
 }
 .nav-link-admin { color: var(--purple) !important; font-size: 12px; }
+.nav-link-worldcup { color: #22c55e !important; font-weight: 700 !important; background: rgba(34,197,94,0.08); border-radius: 6px; }
 /* Nav dropdown menus */
 .nav-dropdown { position: relative; display: flex; align-items: center; }
 .nav-dropdown > .nav-link { cursor: pointer; }

@@ -204,8 +204,113 @@ module.exports = function(deps) {
     }
   }
 
+  // Seed tournament + groups with real WC 2026 data (runs on startup, idempotent)
+  async function seedTournament() {
+    if (!db.isAvailable || !db.isAvailable()) return;
+    try {
+      // Check if tournament already exists
+      var { rows } = await db.query('SELECT id FROM world_cup_tournaments WHERE year = 2026');
+      var tournamentId;
+      if (rows.length > 0) {
+        tournamentId = rows[0].id;
+        // Ensure dates are set
+        await db.query(
+          "UPDATE world_cup_tournaments SET start_date = '2026-06-11', end_date = '2026-07-19', status = 'upcoming', name = 'FIFA World Cup 2026' WHERE id = $1 AND start_date IS NULL",
+          [tournamentId]
+        );
+      } else {
+        var { rows: newT } = await db.query(
+          "INSERT INTO world_cup_tournaments (name, year, start_date, end_date, status, config) VALUES ('FIFA World Cup 2026', 2026, '2026-06-11', '2026-07-19', 'upcoming', $1) RETURNING id",
+          [JSON.stringify({ hosts: ['USA', 'Canada', 'Mexico'], teams: 48, groups: 12, format: '12 groups of 4, top 2 + 8 best 3rd qualify for round of 32' })]
+        );
+        tournamentId = newT[0].id;
+      }
+
+      // Real WC 2026 groups (drawn Dec 13, 2025)
+      var groups = {
+        A: ['Mexico', 'South Africa', 'South Korea', 'Czech Republic'],
+        B: ['Canada', 'Switzerland', 'Qatar', 'Bosnia & Herzegovina'],
+        C: ['Brazil', 'Morocco', 'Haiti', 'Scotland'],
+        D: ['USA', 'Paraguay', 'Australia', 'Turkey'],
+        E: ['Germany', 'Curacao', 'Ivory Coast', 'Ecuador'],
+        F: ['Netherlands', 'Japan', 'Sweden', 'Tunisia'],
+        G: ['Belgium', 'Egypt', 'Iran', 'New Zealand'],
+        H: ['Spain', 'Cape Verde', 'Saudi Arabia', 'Uruguay'],
+        I: ['France', 'Senegal', 'Norway', 'Iraq'],
+        J: ['Argentina', 'Algeria', 'Austria', 'Jordan'],
+        K: ['Portugal', 'DR Congo', 'Uzbekistan', 'Colombia'],
+        L: ['England', 'Croatia', 'Ghana', 'Panama'],
+      };
+
+      // Opening fixtures (Day 1-3 — one per host)
+      var openingFixtures = [
+        { stage: 'group', group: 'A', home: 'Mexico', away: 'South Africa', kickoff: '2026-06-11T20:00:00Z', venue: 'Estadio Azteca, Mexico City' },
+        { stage: 'group', group: 'B', home: 'Canada', away: 'Bosnia & Herzegovina', kickoff: '2026-06-12T17:00:00Z', venue: 'BMO Field, Toronto' },
+        { stage: 'group', group: 'D', home: 'USA', away: 'Paraguay', kickoff: '2026-06-12T21:00:00Z', venue: 'SoFi Stadium, Los Angeles' },
+        { stage: 'group', group: 'C', home: 'Brazil', away: 'Morocco', kickoff: '2026-06-13T18:00:00Z', venue: 'MetLife Stadium, New Jersey' },
+        { stage: 'group', group: 'L', home: 'England', away: 'Croatia', kickoff: '2026-06-13T21:00:00Z', venue: 'Lincoln Financial Field, Philadelphia' },
+        { stage: 'group', group: 'F', home: 'Netherlands', away: 'Japan', kickoff: '2026-06-13T00:00:00Z', venue: 'AT&T Stadium, Dallas' },
+        { stage: 'group', group: 'J', home: 'Argentina', away: 'Algeria', kickoff: '2026-06-14T18:00:00Z', venue: 'Hard Rock Stadium, Miami' },
+        { stage: 'group', group: 'I', home: 'France', away: 'Senegal', kickoff: '2026-06-14T21:00:00Z', venue: 'Lumen Field, Seattle' },
+        { stage: 'group', group: 'H', home: 'Spain', away: 'Cape Verde', kickoff: '2026-06-14T00:00:00Z', venue: 'Mercedes-Benz Stadium, Atlanta' },
+        { stage: 'group', group: 'K', home: 'Portugal', away: 'DR Congo', kickoff: '2026-06-15T18:00:00Z', venue: 'Gillette Stadium, Boston' },
+        { stage: 'group', group: 'G', home: 'Belgium', away: 'Egypt', kickoff: '2026-06-15T21:00:00Z', venue: 'NRG Stadium, Houston' },
+        { stage: 'group', group: 'E', home: 'Germany', away: 'Curacao', kickoff: '2026-06-15T00:00:00Z', venue: 'BC Place, Vancouver' },
+      ];
+
+      // Seed groups
+      for (var letter in groups) {
+        var standings = groups[letter].map(function(team, i) {
+          return { team: team, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0, rank: i + 1 };
+        });
+        await db.query(
+          'INSERT INTO world_cup_groups (tournament_id, group_letter, standings) VALUES ($1, $2, $3) ON CONFLICT (tournament_id, group_letter) DO NOTHING',
+          [tournamentId, letter, JSON.stringify(standings)]
+        );
+      }
+
+      // Seed opening fixtures
+      for (var i = 0; i < openingFixtures.length; i++) {
+        var f = openingFixtures[i];
+        await db.query(
+          `INSERT INTO world_cup_fixtures (tournament_id, stage, group_letter, home_team, away_team, kickoff, venue, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled')
+           ON CONFLICT DO NOTHING`,
+          [tournamentId, f.stage, f.group, f.home, f.away, f.kickoff, f.venue]
+        );
+      }
+
+      // Seed remaining group stage fixtures (each team plays 3 matches)
+      for (var letter in groups) {
+        var t = groups[letter];
+        var matchups = [[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]]; // round robin
+        for (var m = 0; m < matchups.length; m++) {
+          var home = t[matchups[m][0]];
+          var away = t[matchups[m][1]];
+          // Skip if already seeded as opening fixture
+          var alreadySeeded = openingFixtures.some(function(of) { return of.home === home && of.away === away; });
+          if (alreadySeeded) continue;
+          await db.query(
+            `INSERT INTO world_cup_fixtures (tournament_id, stage, group_letter, home_team, away_team, status)
+             VALUES ($1, 'group', $2, $3, $4, 'scheduled')
+             ON CONFLICT DO NOTHING`,
+            [tournamentId, letter, home, away]
+          );
+        }
+      }
+
+      console.log('[WorldCup] Tournament seeded — 12 groups, 48 teams, group stage fixtures');
+    } catch(err) {
+      console.error('[WorldCup] Seed error:', err.message);
+    }
+  }
+
+  // Auto-seed on startup
+  seedTournament();
+
   return {
     syncFixtures: syncFixtures,
     scorePredictions: scorePredictions,
+    seedTournament: seedTournament,
   };
 };
