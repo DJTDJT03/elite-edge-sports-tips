@@ -5518,7 +5518,8 @@ const App = {
     try {
       var fetches = [
         this.api('/tips?sport=football'),
-        this.fetchLiveFootball()
+        this.fetchLiveFootball(),
+        this.api('/results?sport=football'),
       ];
       // On Fri/Sat/Sun, also fetch weekend fixtures
       if (isFriday || new Date().getDay() === 6 || new Date().getDay() === 0) {
@@ -5527,7 +5528,8 @@ const App = {
       var results = await Promise.all(fetches);
       this.tips = results[0];
       liveData = results[1];
-      weekendFixtures = results[2] || null;
+      this._footballResults = results[2] || [];
+      weekendFixtures = results[3] || null;
     } catch { try { this.tips = await this.api('/tips?sport=football'); } catch {} }
 
     var todayDate = this._getToday();
@@ -5554,6 +5556,9 @@ const App = {
     // Date tabs with state
     var today = this._getToday();
     var tomorrow = this._getTomorrow();
+    var yesterday = this._getYesterday();
+    // Day before yesterday
+    var dayBeforeYesterday = (function() { var d = new Date(); d.setDate(d.getDate() - 2); return d.toISOString().split('T')[0]; })();
     var weekendDates = this._getWeekendDates();
     var dateTab = this._footballDateTab || 'today';
     var tomorrowTips = this.tips.filter(function(t) { return t.sport === 'football' && t.status === 'active' && App._normDate(t.date) === tomorrow && !t.isWeeklyAcca; });
@@ -5565,6 +5570,12 @@ const App = {
       displayTips = tomorrowTips;
     } else if (dateTab === 'weekend') {
       displayTips = weekendTips;
+    } else if (dateTab === 'yesterday') {
+      var allFootball = (this._footballResults || []).concat(this.tips || []);
+      displayTips = allFootball.filter(function(t) { return t.sport === 'football' && App._normDate(t.date) === yesterday && !t.isWeeklyAcca; });
+    } else if (dateTab === 'day-before') {
+      var allFootball2 = (this._footballResults || []).concat(this.tips || []);
+      displayTips = allFootball2.filter(function(t) { return t.sport === 'football' && App._normDate(t.date) === dayBeforeYesterday && !t.isWeeklyAcca; });
     } else {
       displayTips = tips.filter(function(t) { return App._normDate(t.date) === today; });
       // If no today tips, show all upcoming
@@ -5593,7 +5604,9 @@ const App = {
         </div>
 
         <!-- Date Tabs -->
-        <div class="date-tabs">
+        <div class="date-tabs" style="overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;">
+          <button class="date-tab ${dateTab === 'day-before' ? 'active' : ''}" onclick="App._footballDateTab='day-before';App.renderFootball()">${new Date(dayBeforeYesterday).toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'})}</button>
+          <button class="date-tab ${dateTab === 'yesterday' ? 'active' : ''}" onclick="App._footballDateTab='yesterday';App.renderFootball()">Yesterday</button>
           <button class="date-tab ${dateTab === 'today' ? 'active' : ''}" onclick="App._footballDateTab='today';App.renderFootball()">Today</button>
           ${tomorrowTips.length ? '<button class="date-tab ' + (dateTab === 'tomorrow' ? 'active' : '') + '" onclick="App._footballDateTab=\'tomorrow\';App.renderFootball()">Tomorrow (' + tomorrowTips.length + ')</button>' : ''}
           <button class="date-tab ${dateTab === 'weekend' ? 'active' : ''}" onclick="App._footballDateTab='weekend';App.renderFootball()">This Weekend${weekendTips.length ? ' (' + weekendTips.length + ')' : ''}</button>
@@ -11924,43 +11937,7 @@ const App = {
         });
       } catch (liveErr) { /* non-fatal — published tips still available */ }
 
-      // 3. Racing from today's live cards (flat array of races, not nested meetings)
-      try {
-        var racingData = await this.api('/racing/live-cards').catch(function() { return { racecards: [] }; });
-        var racecards = racingData && racingData.racecards ? racingData.racecards : [];
-
-        racecards.forEach(function(race) {
-          if (!race.time || !isUpcoming(race.time, todayStr)) return;
-          var runners = race.runners || [];
-          if (runners.length === 0) return;
-
-          // Get top 3 by shortest odds (favourites) as acca options
-          var topRunners = runners.filter(function(r) { return r.odds && parseFloat(r.odds) > 1; })
-            .sort(function(a, b) { return (parseFloat(a.odds) || 999) - (parseFloat(b.odds) || 999); })
-            .slice(0, 3);
-
-          topRunners.forEach(function(runner) {
-            var key = ((runner.horseName || '') + '|' + (race.meeting || '')).toLowerCase();
-            if (seenEvents[key]) return;
-            seenEvents[key] = true;
-            var runnerOdds = parseFloat(runner.odds) || 3.0;
-            selections.push({
-              id: 'race_' + (runner.horseId || Math.random().toString(36).slice(2)),
-              selection: runner.horseName || '',
-              event: (race.meeting || '') + ' ' + (race.time || '') + ' - ' + (race.raceName || race.raceClass || ''),
-              match: (race.meeting || '') + ' ' + (race.time || ''),
-              league: race.meeting || '',
-              kickoff: race.time || '',
-              market: 'Win',
-              odds: runnerOdds,
-              modelProbability: Math.min(1 / runnerOdds * 1.1, 0.8),
-              confidence: 6,
-              edge: Math.max(0.02, (1 / runnerOdds * 1.1) - (1 / runnerOdds)),
-              analyst: 'Elite Edge', sport: 'racing', isPublishedTip: false,
-            });
-          });
-        });
-      } catch (racingErr) { /* non-fatal */ }
+      // Racing removed — acca builder is football only
 
     } catch (e) {
       app.innerHTML = '<div class="container">' + this.renderApiError('Acca Generator', e.message) + '</div>';
@@ -11977,16 +11954,8 @@ const App = {
     var activeTips = this._accaAllTips || [];
     var foldCount = this._accaFoldCount || 4;
 
-    // Build sport filter from multi-select toggles
-    var sportToggles = this._accaSportToggles || { racing: true, football: true, basketball: true, tennis: true, rugby: true, 'american-football': true };
-    var activeToggles = Object.keys(sportToggles).filter(function(k) { return sportToggles[k]; });
-    var sportFilter = activeToggles.length === 6 ? 'all' : activeToggles.join(',');
-
-    var filtered = activeTips;
-    if (sportFilter && sportFilter !== 'all') {
-      var allowedSports = sportFilter.split(',');
-      filtered = filtered.filter(function(t) { return allowedSports.indexOf(t.sport) !== -1; });
-    }
+    // Football only — filter out any non-football selections
+    var filtered = activeTips.filter(function(t) { return t.sport === 'football'; });
 
     // Sort by edge (model prob vs implied) — surfaces the best value, not just bankers
     filtered.sort(function(a, b) {
@@ -12038,23 +12007,11 @@ const App = {
       return '<button class="acca-fold-btn' + (n === foldCount ? ' active' : '') + '" onclick="App._accaFoldCount=' + n + ';App._renderAccaPage();">' + n + '-fold</button>';
     }).join('');
 
-    // Build sport multi-select toggle buttons
-    var sportOptions = [
-      { key: 'racing', label: '&#127943; Racing' },
-      { key: 'football', label: '&#9917; Football' },
-      { key: 'basketball', label: '&#127936; NBA' },
-      { key: 'tennis', label: '&#127934; Tennis' },
-      { key: 'rugby', label: '&#127945; Rugby' },
-      { key: 'american-football', label: '&#127944; NFL' },
-    ];
-    var sportBtns = sportOptions.map(function(s) {
-      var isOn = sportToggles[s.key];
-      return '<button class="acca-fold-btn' + (isOn ? ' active' : '') + '" onclick="App._toggleAccaSport(\'' + s.key + '\');App._renderAccaPage();">' + s.label + '</button>';
-    }).join('');
+    // Sport filter removed — football only
 
-    // League sub-filter for football — only show when football is toggled on
+    // League sub-filter for football
     var leagueFilterHtml = '';
-    if (sportToggles.football) {
+    if (true) {
       var leagueToggles = this._accaLeagueToggles || {};
       // Get all unique leagues from football tips
       var availableLeagues = {};
@@ -12275,10 +12232,6 @@ const App = {
           '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Fold Count</div>' +
           '<div class="acca-fold-selector">' + foldBtns + '</div>' +
         '</div>' : '') +
-        '<div style="margin-bottom:16px;">' +
-          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Sports</div>' +
-          '<div class="acca-fold-selector" style="flex-wrap:wrap;">' + sportBtns + '</div>' +
-        '</div>' +
         leagueFilterHtml +
         manualPickerHtml +
         (notEnough ? notEnoughMsg : '') +
