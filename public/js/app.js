@@ -5541,24 +5541,41 @@ const App = {
 
     var liveData = null;
     var weekendFixtures = null;
+    var pastFixtureData = null;
+    var tomorrowFixtureData = null;
     var isFriday = this._isFriday();
-    // On Friday, default to weekend tab so punters can plan weekend bets
     if (!this._footballDateTab && isFriday) this._footballDateTab = 'weekend';
+    var dateTab = this._footballDateTab || 'today';
+    var yesterdayDate = this._getYesterday();
+    var dayBeforeDate = (function() { var d = new Date(); d.setDate(d.getDate() - 2); return d.toISOString().split('T')[0]; })();
+    var tomorrowDate = this._getTomorrow();
     try {
       var fetches = [
         this.api('/tips?sport=football'),
         this.fetchLiveFootball(),
         this.api('/results?sport=football'),
       ];
-      // On Fri/Sat/Sun, also fetch weekend fixtures
-      if (isFriday || new Date().getDay() === 6 || new Date().getDay() === 0) {
+      // Fetch fixtures for the selected past date
+      if (dateTab === 'yesterday') {
+        fetches.push(this.fetchLiveFootball(false, yesterdayDate));
+      } else if (dateTab === 'day-before') {
+        fetches.push(this.fetchLiveFootball(false, dayBeforeDate));
+      } else if (dateTab === 'tomorrow') {
+        fetches.push(this.fetchLiveFootball(false, tomorrowDate));
+      } else if (isFriday || new Date().getDay() === 6 || new Date().getDay() === 0) {
         fetches.push(this.fetchWeekendFootball());
       }
       var results = await Promise.all(fetches);
       this.tips = results[0];
       liveData = results[1];
       this._footballResults = results[2] || [];
-      weekendFixtures = results[3] || null;
+      if (dateTab === 'yesterday' || dateTab === 'day-before') {
+        pastFixtureData = results[3] || null;
+      } else if (dateTab === 'tomorrow') {
+        tomorrowFixtureData = results[3] || null;
+      } else {
+        weekendFixtures = results[3] || null;
+      }
     } catch { try { this.tips = await this.api('/tips?sport=football'); } catch {} }
 
     var todayDate = this._getToday();
@@ -5584,12 +5601,10 @@ const App = {
 
     // Date tabs with state
     var today = this._getToday();
-    var tomorrow = this._getTomorrow();
-    var yesterday = this._getYesterday();
-    // Day before yesterday
-    var dayBeforeYesterday = (function() { var d = new Date(); d.setDate(d.getDate() - 2); return d.toISOString().split('T')[0]; })();
+    var tomorrow = tomorrowDate;
+    var yesterday = yesterdayDate;
+    var dayBeforeYesterday = dayBeforeDate;
     var weekendDates = this._getWeekendDates();
-    var dateTab = this._footballDateTab || 'today';
     var tomorrowTips = this.tips.filter(function(t) { return t.sport === 'football' && t.status === 'active' && App._normDate(t.date) === tomorrow && !t.isWeeklyAcca; });
     var weekendTips = this.tips.filter(function(t) { return t.sport === 'football' && t.status === 'active' && weekendDates.indexOf(t.date) !== -1 && !t.isWeeklyAcca; });
 
@@ -5659,44 +5674,92 @@ const App = {
           <button class="date-tab ${dateTab === 'weekend' ? 'active' : ''}" onclick="App._footballDateTab='weekend';App.renderFootball()">This Weekend${weekendTips.length ? ' (' + weekendTips.length + ')' : ''}</button>
         </div>
 
-        <!-- Live Fixtures -->
-        ${hasLiveFixtures ? `
-        <div class="section">
-          <div class="live-data-header">
-            <span class="live-badge">Live Fixtures</span>
-            <div class="live-updated">
-              ${liveUpdatedAt ? 'Updated ' + this.timeAgo(liveUpdatedAt.toISOString()) : ''}
-              <button class="refresh-btn" onclick="App.refreshFootballData(this)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                Refresh
-              </button>
-            </div>
-          </div>
-          ${Object.keys(fixturesByLeague).sort(function(a, b) {
-            var aIsPL = a.toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
-            var bIsPL = b.toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
-            if (aIsPL !== bIsPL) return aIsPL - bIsPL;
-            return a.localeCompare(b);
-          }).map(function(leagueName) {
-            var leagueFixtures = fixturesByLeague[leagueName];
-            return '<div class="meeting-card"><h3>\u26bd ' + leagueName + '</h3><div style="display:grid;gap:8px;">' +
-              leagueFixtures.map(function(f) {
-                var isLive = f.status === '1H' || f.status === '2H' || f.status === 'HT' || f.status === 'LIVE';
-                var isFT = f.status === 'FT';
-                var kickoffTime = f.kickoff ? new Date(f.kickoff).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '';
-                return '<div class="fixture-card fixture-card-clickable" onclick="App.openMatchIntelligence(' + f.id + ', this)" title="Click for match analysis">' +
-                  '<div style="flex:1;">' +
-                    '<div class="fixture-league">' + leagueName + '</div>' +
-                    '<div class="fixture-teams">' + f.homeTeam + ' <span class="fixture-vs">vs</span> ' + f.awayTeam + '</div>' +
-                    '<div class="fixture-meta">' + (f.venue || '') + (kickoffTime ? ' | ' + kickoffTime : '') + '</div>' +
-                  '</div>' +
-                  (isLive ? '<div><div class="fixture-live-badge">LIVE ' + (f.elapsed || '') + '\'</div><div class="fixture-score">' + (f.homeGoals != null ? f.homeGoals : '-') + ' - ' + (f.awayGoals != null ? f.awayGoals : '-') + '</div></div>' :
-                   isFT ? '<div><div style="font-size:10px;color:var(--text-muted);">FT</div><div class="fixture-score" style="color:var(--text-primary);">' + (f.homeGoals||0) + ' - ' + (f.awayGoals||0) + '</div></div>' :
-                   '<div class="fixture-meta">' + kickoffTime + '</div>') +
+        <!-- Fixtures Section — date-aware -->
+        ${(() => {
+          // Determine which fixtures to show based on selected tab
+          var tabFixtures = [];
+          var sectionLabel = 'Live Fixtures';
+          var showRefresh = false;
+          if (dateTab === 'yesterday' || dateTab === 'day-before') {
+            // Past dates — show finished fixtures with scores
+            tabFixtures = pastFixtureData && pastFixtureData.fixtures ? pastFixtureData.fixtures : [];
+            sectionLabel = dateTab === 'yesterday' ? 'Yesterday\'s Results' : new Date(dayBeforeYesterday).toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'short'}) + ' Results';
+          } else if (dateTab === 'tomorrow') {
+            tabFixtures = tomorrowFixtureData && tomorrowFixtureData.fixtures ? tomorrowFixtureData.fixtures : [];
+            sectionLabel = 'Tomorrow\'s Fixtures';
+          } else {
+            tabFixtures = fixtures;
+            sectionLabel = 'Live Fixtures';
+            showRefresh = true;
+          }
+          if (tabFixtures.length === 0) return '';
+          // Group by league
+          var tabByLeague = {};
+          tabFixtures.forEach(function(f) {
+            var key = f.league || 'Other';
+            if (!tabByLeague[key]) tabByLeague[key] = [];
+            tabByLeague[key].push(f);
+          });
+          // Build our results lookup for past tabs — match results to our picks
+          var ourResults = {};
+          if (isPastTab) {
+            displayTips.forEach(function(r) {
+              var evt = (r.event || '').toLowerCase();
+              ourResults[evt] = r;
+            });
+          }
+          return '<div class="section">' +
+            '<div class="live-data-header">' +
+              '<span class="live-badge">' + sectionLabel + '</span>' +
+              (showRefresh ? '<div class="live-updated">' +
+                (liveUpdatedAt ? 'Updated ' + App.timeAgo(liveUpdatedAt.toISOString()) : '') +
+                '<button class="refresh-btn" onclick="App.refreshFootballData(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</button>' +
+              '</div>' : '') +
+            '</div>' +
+            Object.keys(tabByLeague).sort(function(a, b) {
+              var aIsPL = a.toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
+              var bIsPL = b.toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
+              return aIsPL !== bIsPL ? aIsPL - bIsPL : a.localeCompare(b);
+            }).map(function(leagueName) {
+              var leagueFixtures = tabByLeague[leagueName];
+              return '<div class="meeting-card"><h3>&#9917; ' + leagueName + '</h3><div style="display:grid;gap:8px;">' +
+                leagueFixtures.map(function(f) {
+                  var isLive = f.status === '1H' || f.status === '2H' || f.status === 'HT' || f.status === 'LIVE';
+                  var isFT = f.status === 'FT' || f.status === 'AET' || f.status === 'PEN';
+                  var kickoffTime = f.kickoff ? new Date(f.kickoff).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '';
+                  // Check if we had a pick on this fixture
+                  var ourPick = null;
+                  var matchKey = ((f.homeTeam || '') + ' vs ' + (f.awayTeam || '')).toLowerCase();
+                  Object.keys(ourResults).forEach(function(k) {
+                    if (k.indexOf((f.homeTeam || '').toLowerCase()) !== -1 || k.indexOf((f.awayTeam || '').toLowerCase()) !== -1) {
+                      ourPick = ourResults[k];
+                    }
+                  });
+                  var pickBadge = '';
+                  if (ourPick && isFT) {
+                    var isWon = ourPick.result === 'won' || ourPick.result === 'placed';
+                    var isLost = ourPick.result === 'lost';
+                    pickBadge = '<div style="font-size:11px;margin-top:4px;padding:4px 8px;border-radius:4px;' +
+                      (isWon ? 'background:rgba(34,197,94,0.12);color:#22c55e;' : isLost ? 'background:rgba(239,68,68,0.12);color:#ef4444;' : 'color:rgba(255,255,255,0.4);') + '">' +
+                      'Our Pick: <strong>' + (ourPick.selection || '') + '</strong> @ ' + App.formatOdds(ourPick.odds || 0) +
+                      (isWon ? ' &#10003; WON' : isLost ? ' &#10007; LOST' : '') +
+                    '</div>';
+                  }
+                  return '<div class="fixture-card fixture-card-clickable" onclick="App.openMatchIntelligence(' + (f.id || 0) + ', this)" title="Click for match analysis">' +
+                    '<div style="flex:1;">' +
+                      '<div class="fixture-league">' + leagueName + '</div>' +
+                      '<div class="fixture-teams">' + (f.homeTeam||'') + ' <span class="fixture-vs">vs</span> ' + (f.awayTeam||'') + '</div>' +
+                      '<div class="fixture-meta">' + (f.venue || '') + (kickoffTime ? ' | ' + kickoffTime : '') + '</div>' +
+                      pickBadge +
+                    '</div>' +
+                    (isLive ? '<div><div class="fixture-live-badge">LIVE ' + (f.elapsed || '') + '\'</div><div class="fixture-score">' + (f.homeGoals != null ? f.homeGoals : '-') + ' - ' + (f.awayGoals != null ? f.awayGoals : '-') + '</div></div>' :
+                     isFT ? '<div><div style="font-size:10px;color:var(--text-muted);">FT</div><div class="fixture-score" style="color:var(--text-primary);font-size:18px;font-weight:900;">' + (f.homeGoals||0) + ' - ' + (f.awayGoals||0) + '</div></div>' :
+                     '<div class="fixture-meta" style="font-size:14px;font-weight:600;">' + kickoffTime + '</div>') +
                   '</div>';
-              }).join('') + '</div></div>';
-          }).join('')}
-        </div>` : ''}
+                }).join('') + '</div></div>';
+            }).join('') +
+          '</div>';
+        })()}
 
         <div class="filter-bar">
           <select onchange="App.filterFootball(this.value, 'league')">
