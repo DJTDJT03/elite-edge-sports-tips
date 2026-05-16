@@ -5986,7 +5986,7 @@ const App = {
       '</div>' +
       '<div class="match-intel-teams-row">' +
         '<div class="match-intel-team">' +
-          (m.homeTeamLogo ? '<img src="' + m.homeTeamLogo + '" alt="" class="match-intel-team-logo">' : '') +
+          (m.homeTeamLogo ? '<img src="' + m.homeTeamLogo + '" alt="' + (m.homeTeam || '')[0] + '" class="match-intel-team-logo" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><div style="display:none;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#1a2a4a,#0a1a3a);align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#d4a843;">' + (m.homeTeam || '?')[0] + '</div>' : '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#1a2a4a,#0a1a3a);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#d4a843;">' + (m.homeTeam || '?')[0] + '</div>') +
           '<span class="match-intel-team-name">' + m.homeTeam + '</span>' +
         '</div>' +
         '<div class="match-intel-vs">' +
@@ -5994,7 +5994,7 @@ const App = {
           '<div class="match-intel-kickoff">' + kickoffStr + '</div>' +
         '</div>' +
         '<div class="match-intel-team">' +
-          (m.awayTeamLogo ? '<img src="' + m.awayTeamLogo + '" alt="" class="match-intel-team-logo">' : '') +
+          (m.awayTeamLogo ? '<img src="' + m.awayTeamLogo + '" alt="' + (m.awayTeam || '')[0] + '" class="match-intel-team-logo" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><div style="display:none;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#1a2a4a,#0a1a3a);align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#d4a843;">' + (m.awayTeam || '?')[0] + '</div>' : '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#1a2a4a,#0a1a3a);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#d4a843;">' + (m.awayTeam || '?')[0] + '</div>') +
           '<span class="match-intel-team-name">' + m.awayTeam + '</span>' +
         '</div>' +
       '</div>' +
