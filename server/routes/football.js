@@ -153,8 +153,62 @@ module.exports = function(deps) {
         }
       }
 
+      // If API-Football doesn't cover this league, build analysis from SportMonks data
       if (!fixtureData.response || !fixtureData.response.length) {
-        return res.status(404).json({ error: 'Fixture not found. This league may not be covered by our deep analysis API.' });
+        if (usedSportMonks) {
+          // We have SportMonks data — build a clean analysis from it
+          var smF = await sportMonks.getFixture(fixtureId);
+          if (smF && smF.homeTeam) {
+            var smH2H = [];
+            try { smH2H = await sportMonks.getH2H(smF.homeTeamId, smF.awayTeamId) || []; } catch(e) {}
+            var smH2HHomeWins = 0, smH2HAwayWins = 0, smH2HDraws = 0, smH2HTotalGoals = 0;
+            smH2H.forEach(function(m) {
+              if (m.homeGoals > m.awayGoals) { if (m.homeTeamId === smF.homeTeamId) smH2HHomeWins++; else smH2HAwayWins++; }
+              else if (m.awayGoals > m.homeGoals) { if (m.awayTeamId === smF.awayTeamId) smH2HAwayWins++; else smH2HHomeWins++; }
+              else smH2HDraws++;
+              smH2HTotalGoals += (m.homeGoals || 0) + (m.awayGoals || 0);
+            });
+            var smH2HAvg = smH2H.length > 0 ? (smH2HTotalGoals / smH2H.length).toFixed(1) : '2.5';
+
+            return res.json({
+              fixtureId: parseInt(fixtureId),
+              source: 'sportmonks',
+              match: {
+                homeTeam: smF.homeTeam, homeTeamId: smF.homeTeamId, homeTeamLogo: smF.homeTeamLogo || '',
+                awayTeam: smF.awayTeam, awayTeamId: smF.awayTeamId, awayTeamLogo: smF.awayTeamLogo || '',
+                league: smF.league, leagueLogo: smF.leagueLogo || '', country: '',
+                venue: smF.venue || '', city: smF.venueCity || '',
+                kickoff: smF.kickoff, status: smF.status,
+                homeGoals: smF.homeGoals, awayGoals: smF.awayGoals,
+              },
+              form: { home: [], away: [] },
+              h2h: {
+                matches: smH2H.slice(0, 5).map(function(m) { return { home: m.homeTeam, away: m.awayTeam, homeGoals: m.homeGoals, awayGoals: m.awayGoals, date: m.kickoff }; }),
+                homeWins: smH2HHomeWins, awayWins: smH2HAwayWins, draws: smH2HDraws, avgGoals: smH2HAvg,
+              },
+              stats: { home: {}, away: {} },
+              injuries: { home: [], away: [] },
+              predictions: null,
+              seasonStats: { home: null, away: null },
+              verdict: {
+                market: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Total Goals' : 'Match Result',
+                pick: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Over 2.5 Goals' : (smH2HHomeWins > smH2HAwayWins ? smF.homeTeam + ' Win' : smF.awayTeam + ' or Draw'),
+                reason: 'Based on head-to-head record: ' + smH2HHomeWins + ' home wins, ' + smH2HAwayWins + ' away wins, ' + smH2HDraws + ' draws across ' + smH2H.length + ' meetings. Average ' + smH2HAvg + ' goals per game.',
+                confidence: 6,
+                riskLevel: 'medium',
+                riskText: 'Moderate risk — limited data depth for this league.',
+              },
+              analysis: {
+                overview: smF.homeTeam + ' host ' + smF.awayTeam + ' at ' + (smF.venue || 'their home ground') + ' in the ' + smF.league + '.',
+                form: 'Detailed form data requires API-Football coverage. H2H record shows ' + smH2HHomeWins + ' wins for ' + smF.homeTeam + ', ' + smH2HAwayWins + ' for ' + smF.awayTeam + ', and ' + smH2HDraws + ' draws.',
+                h2h: smH2H.length > 0 ? 'In ' + smH2H.length + ' previous meetings, these sides have averaged ' + smH2HAvg + ' goals per game.' : 'No head-to-head history available.',
+                injuries: '',
+              },
+              generatedAt: new Date().toISOString(),
+            });
+          }
+        }
+        return res.status(404).json({ error: 'Fixture not found in any data source.' });
       }
 
       fixture = fixtureData.response[0];
