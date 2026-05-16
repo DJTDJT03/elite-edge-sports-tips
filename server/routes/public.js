@@ -25,6 +25,7 @@ module.exports = function(deps) {
         },
         racingOdds: { connected: !!(racingOddsSource && process.env.ODDS_API_KEY) },
         movementTracker: movementStatus,
+        sportMonks: { connected: !!(deps.sportMonks && deps.sportMonks.isAvailable()) },
         ingestion: dataIngestion.getStatus ? dataIngestion.getStatus() : {},
         features: {
           worldCup: process.env.ENABLE_WORLD_CUP === 'true',

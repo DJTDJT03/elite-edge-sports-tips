@@ -28,6 +28,8 @@ const telegramBot = require('./services/telegramBot');
 const newsService = require('./services/newsService');
 const stripeService = require('./services/stripeService');
 const footballData = require('./services/footballData');
+const SportMonks = require('./services/sportMonks');
+const sportMonks = new SportMonks();
 const understatService = require('./services/understatService');
 const basketballData = require('./services/basketballData');
 const rugbyData = require('./services/rugbyData');
@@ -152,6 +154,7 @@ const deps = {
   newsService,
   stripeService,
   footballData,
+  sportMonks,
   understatService,
   basketballData,
   rugbyData,

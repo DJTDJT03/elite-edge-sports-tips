@@ -1,32 +1,59 @@
 module.exports = function(deps) {
   const router = require('express').Router();
-  const { footballSource, oddsSource, betfairSource, scoringModel, authenticate, db, aiReports, footballData, understatService } = deps;
+  const { footballSource, oddsSource, betfairSource, scoringModel, authenticate, db, aiReports, footballData, understatService, sportMonks } = deps;
   const { storeOddsSnapshot, analyseOddsMovement } = deps.oddsHelpers;
 
   // ---------------------------------------------------------------------------
-  // LIVE FOOTBALL DATA (API-Football)
+  // LIVE FOOTBALL DATA — SportMonks primary, API-Football fallback
   // ---------------------------------------------------------------------------
 
   router.get('/football/live-fixtures', async (req, res) => {
     try {
-      if (!footballSource || !process.env.API_FOOTBALL_KEY) {
-        return res.json({ live: false, message: 'API-Football not configured. Set API_FOOTBALL_KEY.', fixtures: [] });
-      }
       var date = req.query.date || new Date().toISOString().split('T')[0];
+
+      // Try SportMonks first (faster, better data)
+      if (sportMonks && sportMonks.isAvailable()) {
+        try {
+          var smFixtures = await sportMonks.getFixturesByDate(date);
+          if (smFixtures && smFixtures.length > 0) {
+            return res.json({ live: true, fixtures: smFixtures, source: 'sportmonks', fetchedAt: new Date().toISOString() });
+          }
+        } catch(smErr) {
+          console.log('[Football] SportMonks failed, falling back to API-Football:', smErr.message);
+        }
+      }
+
+      // Fallback to API-Football
+      if (!footballSource || !process.env.API_FOOTBALL_KEY) {
+        return res.json({ live: false, message: 'No football API configured.', fixtures: [] });
+      }
       var raw = await footballSource.fetchFixturesByDate(date);
       var normalised = footballSource.normalise(raw);
-      res.json({ live: true, fixtures: normalised, fetchedAt: new Date().toISOString() });
+      res.json({ live: true, fixtures: normalised, source: 'api-football', fetchedAt: new Date().toISOString() });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
   router.get('/football/live-scores', async (req, res) => {
     try {
+      // Try SportMonks livescores first (15-second updates)
+      if (sportMonks && sportMonks.isAvailable()) {
+        try {
+          var smLive = await sportMonks.getLivescores();
+          if (smLive) {
+            return res.json({ live: true, fixtures: smLive, source: 'sportmonks', fetchedAt: new Date().toISOString() });
+          }
+        } catch(smErr) {
+          console.log('[Football] SportMonks livescores failed:', smErr.message);
+        }
+      }
+
+      // Fallback to API-Football
       if (!footballSource || !process.env.API_FOOTBALL_KEY) {
         return res.json({ live: false, fixtures: [] });
       }
       var raw = await footballSource.fetchLiveScores();
       var normalised = footballSource.normalise(raw);
-      res.json({ live: true, fixtures: normalised, fetchedAt: new Date().toISOString() });
+      res.json({ live: true, fixtures: normalised, source: 'api-football', fetchedAt: new Date().toISOString() });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
