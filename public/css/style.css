@@ -85,6 +85,10 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
 .logo-sub { display: block; font-size: 9px; font-weight: 600; color: var(--gold); text-transform: uppercase; letter-spacing: 1.5px; }
 .nav-links { display: flex; gap: 1px; align-items: center; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; flex: 1; min-width: 0; }
 .nav-links::-webkit-scrollbar { display: none; }
+/* Mobile-only auth sections inside nav — always hidden on desktop */
+#nav-auth-top-guest, #nav-auth-top-user { display: none !important; }
+.nav-auth-hidden { display: none !important; }
+.nav-links .mobile-menu-tools { display: none; }
 .nav-link {
   padding: 6px 10px; border-radius: var(--radius-sm);
   font-size: 13px; font-weight: 500; color: var(--text-secondary);
@@ -824,6 +828,8 @@ ul, ol { list-style: none; padding: 0; margin: 0; }
   .nav-link.nav-link-mybets .nav-link-icon { display: none !important; }
   .nav-link.nav-link-mybets .nav-link-text { display: inline !important; }
   .nav-links.open { display: flex; }
+  .nav-links.open #nav-auth-top-guest:not(.nav-auth-hidden) { display: block !important; }
+  .nav-links.open #nav-auth-top-user:not(.nav-auth-hidden) { display: block !important; }
   .nav-links .nav-link {
     padding: 16px 20px; font-size: 15px; font-weight: 500;
     border-bottom: 1px solid rgba(255,255,255,0.05);
