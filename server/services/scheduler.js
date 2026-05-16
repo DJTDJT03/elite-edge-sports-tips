@@ -1415,6 +1415,26 @@ module.exports = function startScheduler(deps) {
     // Pass 1: Assign analysts, generate tip IDs, collect enrichment inputs
     // ---------------------------------------------------------------
     var analystProfiles = require('./analystProfiles');
+    // Load tuned weights from last AutoTune cycle (if analyst_state.json exists)
+    try {
+      var _fs = require('fs');
+      var _path = require('path');
+      var _stateFile = _path.join(__dirname, '..', 'analyst_state.json');
+      if (_fs.existsSync(_stateFile)) {
+        var _savedState = JSON.parse(_fs.readFileSync(_stateFile, 'utf8'));
+        Object.keys(_savedState).forEach(function(key) {
+          if (analystProfiles.profiles[key]) {
+            var saved = _savedState[key];
+            var profile = analystProfiles.profiles[key];
+            if (saved.oddsRange) profile.oddsRange = saved.oddsRange;
+            if (saved.racingWeightModifiers) profile.racingWeightModifiers = saved.racingWeightModifiers;
+            if (saved.footballWeightModifiers) profile.footballWeightModifiers = saved.footballWeightModifiers;
+            if (saved.preferredMarkets) profile.preferredMarkets = saved.preferredMarkets;
+          }
+        });
+        console.log('[Auto-Tips] Loaded tuned analyst weights from analyst_state.json');
+      }
+    } catch(e) { /* First run — no state file yet, use defaults */ }
     var enrichmentInputs = [];
     for (var si = 0; si < selected.length; si++) {
       var cand = selected[si];
@@ -4754,6 +4774,35 @@ module.exports = function startScheduler(deps) {
     if (hour !== 23 || lastAutoTuneDate === dateStr) return;
     lastAutoTuneDate = dateStr;
 
+    // FIX: require analystProfiles in scope (was previously undefined, crashing AutoTune)
+    var analystProfiles = require('./analystProfiles');
+    var fs = require('fs');
+    var path = require('path');
+    var stateFile = path.join(__dirname, '..', 'analyst_state.json');
+    var logFile = path.join(__dirname, '..', 'tuning_log.jsonl');
+
+    // Load persisted state if it exists — overrides hardcoded defaults
+    try {
+      if (fs.existsSync(stateFile)) {
+        var savedState = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+        Object.keys(savedState).forEach(function(key) {
+          if (analystProfiles.profiles[key]) {
+            var saved = savedState[key];
+            var profile = analystProfiles.profiles[key];
+            if (saved.oddsRange) profile.oddsRange = saved.oddsRange;
+            if (saved.racingWeightModifiers) profile.racingWeightModifiers = saved.racingWeightModifiers;
+            if (saved.footballWeightModifiers) profile.footballWeightModifiers = saved.footballWeightModifiers;
+            if (saved.preferredMarkets) profile.preferredMarkets = saved.preferredMarkets;
+          }
+        });
+        console.log('[AutoTune] Loaded analyst state from ' + stateFile);
+      } else {
+        console.log('[AutoTune] No analyst_state.json found — using defaults (first run)');
+      }
+    } catch(e) {
+      console.log('[AutoTune] Failed to load analyst state: ' + e.message + ' — using defaults');
+    }
+
     var isMonday = uk.getDay() === 1;
     console.log('[AutoTune] Starting daily analyst review...' + (isMonday ? ' (Monday — full report + email)' : ''));
 
@@ -5073,6 +5122,42 @@ module.exports = function startScheduler(deps) {
 
       console.log('[AutoTune] ' + name + ': ' + sr + '% SR, ' + roi + '% ROI, ' + pnl.toFixed(2) + 'u P/L');
       actions.forEach(function(a) { console.log('[AutoTune]   → ' + a); });
+    }
+
+    // --- PERSIST ANALYST STATE (the learning that actually sticks) ---
+    try {
+      var stateToSave = {};
+      var profileKeys = ['professor', 'scout', 'clocker', 'tactician', 'edge'];
+      profileKeys.forEach(function(key) {
+        var p = analystProfiles.profiles[key];
+        if (p) {
+          stateToSave[key] = {
+            oddsRange: p.oddsRange,
+            racingWeightModifiers: p.racingWeightModifiers,
+            footballWeightModifiers: p.footballWeightModifiers,
+            preferredMarkets: p.preferredMarkets,
+            lastTuned: dateStr,
+          };
+        }
+      });
+      fs.writeFileSync(stateFile, JSON.stringify(stateToSave, null, 2));
+      console.log('[AutoTune] Saved analyst state to ' + stateFile);
+    } catch(e) {
+      console.error('[AutoTune] Failed to save analyst state: ' + e.message);
+    }
+
+    // --- APPEND TO TUNING LOG (immutable history of every cycle) ---
+    try {
+      var logEntry = {
+        date: dateStr,
+        timestamp: new Date().toISOString(),
+        isMonday: isMonday,
+        analysts: tuningReport,
+      };
+      fs.appendFileSync(logFile, JSON.stringify(logEntry) + '\n');
+      console.log('[AutoTune] Appended tuning cycle to ' + logFile);
+    } catch(e) {
+      console.error('[AutoTune] Failed to write tuning log: ' + e.message);
     }
 
     // Store the tuning report in the database for admin review
