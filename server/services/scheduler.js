@@ -1376,20 +1376,39 @@ module.exports = function startScheduler(deps) {
       return c.scored && c.scored.selectedOdds >= MIN_MAIN_TIP_ODDS && c.scored.selectedOdds <= MAX_MAIN_TIP_ODDS && c.confidence >= MIN_MAIN_CONFIDENCE;
     }).sort(function(a, b) { return (b.confidence - a.confidence) || (b.edge - a.edge); });
 
-    // FOOTBALL-ONLY FOCUS — racing disabled while we perfect the football pipeline
-    // Select: up to 4 football tips, max 2 per league
+    // FOOTBALL-ONLY FOCUS — always publish at least 2 tips when fixtures exist
     var leagueCounts = {};
     var selectedFootball = [];
     footballMain.forEach(function(c) {
       var league = c.scored && c.scored.fixture ? (c.scored.fixture.league || '').toLowerCase() : '';
       var leagueCount = leagueCounts[league] || 0;
-      if (league && leagueCount >= 2) return; // max 2 per league
-      if (selectedFootball.length >= 4) return; // top 4 football tips
+      if (league && leagueCount >= 2) return;
+      if (selectedFootball.length >= 4) return;
       selectedFootball.push(c);
       if (league) leagueCounts[league] = leagueCount + 1;
     });
+
+    // FALLBACK: if strict filters produced <2 tips but we have candidates, relax and pick best available
+    if (selectedFootball.length < 2 && footballCandidatesFinal.length > 0) {
+      console.log('[Auto-Tips] Strict filter produced ' + selectedFootball.length + ' tips — falling back to best available from ' + footballCandidatesFinal.length + ' candidates');
+      var fallbackCandidates = footballCandidatesFinal.sort(function(a, b) {
+        return (b.confidence - a.confidence) || (b.edge - a.edge);
+      });
+      leagueCounts = {};
+      selectedFootball = [];
+      fallbackCandidates.forEach(function(c) {
+        var league = c.scored && c.scored.fixture ? (c.scored.fixture.league || '').toLowerCase() : '';
+        var leagueCount = leagueCounts[league] || 0;
+        if (league && leagueCount >= 2) return;
+        if (selectedFootball.length >= 4) return;
+        selectedFootball.push(c);
+        if (league) leagueCounts[league] = leagueCount + 1;
+      });
+      console.log('[Auto-Tips] Fallback selected ' + selectedFootball.length + ' tips');
+    }
+
     var selected = selectedFootball;
-    var outsider = null; // No racing outsider — football only
+    var outsider = null;
 
     // NAP must be a MAIN tip with confidence >= 7 (never the outsider)
     var napIdx = -1;
