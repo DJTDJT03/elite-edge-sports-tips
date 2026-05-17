@@ -682,12 +682,13 @@ app.use('/', require('./routes/public')(deps));
 (async function seedHistoricalResults() {
   try {
     if (!db.isAvailable()) return;
-    // Remove old fake seed data (hist_ prefix) and reseed with real matches
+    // Check if historical data already exists — don't reseed if it does
+    var { rows } = await db.query("SELECT COUNT(*) as cnt FROM results WHERE id LIKE 'res_hist_%'");
+    if (parseInt(rows[0].cnt) >= 15) return; // Already seeded
+    // Clean and reseed
     await db.query("DELETE FROM results WHERE id LIKE 'res_hist_%'");
     await db.query("DELETE FROM tips WHERE id LIKE 'hist_%'");
-    var { rows } = await db.query("SELECT COUNT(*) as cnt FROM results WHERE id NOT LIKE 'res_hist_%'");
-    if (parseInt(rows[0].cnt) >= 15) return; // Already has real data
-    console.log('[Startup] Seeding verified historical football results...');
+    console.log('[Startup] Seeding verified historical results...');
 
     // REAL Premier League results from May 2026 (verified via Sky Sports/ESPN)
     var historicalData = [

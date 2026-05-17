@@ -1881,9 +1881,10 @@ module.exports = function startScheduler(deps) {
     } catch(e) {}
 
     // Push notification if available
-    if (pushService && pushService.isAvailable) {
+    var pushSvc = deps.pushService;
+    if (pushSvc && pushSvc.isAvailable) {
       var napName = newTips.find(function(t) { return t.isNap; });
-      pushService.broadcast(db, {
+      pushSvc.broadcast(db, {
         title: newTips.length + ' football tips published',
         body: (napName ? 'NAP: ' + napName.selection + ' — ' : '') + 'Check your dashboard for today\'s selections.',
         url: '/#/dashboard',
