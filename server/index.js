@@ -607,9 +607,10 @@ app.use('/', require('./routes/public')(deps));
       await db.query("UPDATE results SET sport = 'racing' WHERE sport = 'football' AND (event LIKE '%Ffos Las%' OR event LIKE '%Hereford%' OR event LIKE '%Wolverhampton%' OR event LIKE '%Gowran%' OR event LIKE '%Curragh%' OR event LIKE '%Newmarket%' OR event LIKE '%Ascot%' OR event LIKE '%York%' OR event LIKE '%Ayr%' OR event LIKE '%Haydock%' OR event LIKE '%Killarney%' OR event LIKE '%Lingfield%' OR event LIKE '%Hexham%' OR event LIKE '%Ripon%' OR event LIKE '%Market Rasen%' OR event LIKE '%Chester%' OR event LIKE '%Newton%' OR event LIKE '%Kempton%' OR event LIKE '%Doncaster%' OR event LIKE '%Epsom%' OR event LIKE '%Newbury%')");
       // Fix tips with racing events wrongly labelled as football
       await db.query("UPDATE tips SET sport = 'racing' WHERE sport = 'football' AND (event LIKE '%Haydock%' OR event LIKE '%Ascot%' OR event LIKE '%Killarney%' OR event LIKE '%Lingfield%' OR event LIKE '%Hexham%' OR event LIKE '%Wolverhampton%' OR event LIKE '%Ripon%' OR event LIKE '%Market Rasen%' OR event LIKE '%Chester%' OR event LIKE '%Newton%' OR event LIKE '%Kempton%' OR event LIKE '%Doncaster%' OR event LIKE '%Epsom%' OR event LIKE '%Newbury%' OR event LIKE '%Newmarket%' OR event LIKE '%York%' OR event LIKE '%Ayr%' OR event LIKE '%Gowran%' OR event LIKE '%Curragh%')");
-      // CLEANUP: only remove truly broken data (null market/odds), NOT date-based purge
+      // CLEANUP: remove broken data and stale weekly accas
       await db.query("DELETE FROM results WHERE market IS NULL AND odds IS NULL AND pnl = 0");
       await db.query("DELETE FROM tips WHERE market IS NULL AND id LIKE 'auto_%' AND odds IS NULL");
+      await db.query("DELETE FROM tips WHERE is_weekly_acca = true"); // Old stale accas — Acca Builder page replaces this
       console.log('[Startup] Cleaned up null/broken tips and misclassified sports');
     }
   } catch(e) {}

@@ -3006,7 +3006,7 @@ const App = {
         </div>` : ''}
 
         <!-- 11. PREMIUM ACCA + YESTERDAY'S WINNER -->
-        ${this.isPremium() ? '<div id="premium-acca-container"></div>' : ''}
+        <!-- Premium acca moved to dedicated Acca Builder page -->
         <div id="yesterday-winner-showcase"></div>
 
         <!-- 12. ENGAGEMENT TOOLS — bankroll, recovery, streaks, targets -->
@@ -3165,8 +3165,8 @@ const App = {
     // Render dynamic big winner banner
     this.renderBigWinnerBanner();
 
-    // Render premium weekend acca (premium users only)
-    this.renderPremiumAcca();
+    // Premium weekend acca — DISABLED (replaced by Smart Acca Generator page)
+    // this.renderPremiumAcca();
 
     // Render yesterday's winner showcase (all users)
     this.renderYesterdayShowcase();
