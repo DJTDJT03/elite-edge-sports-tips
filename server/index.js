@@ -712,8 +712,14 @@ app.use('/', require('./routes/public')(deps));
       { date: '2026-05-10', event: 'West Ham vs Arsenal', selection: 'Arsenal Win', market: 'Match Result', odds: 1.80, result: 'won', pnl: 1.60, sport: 'football', confidence: 8, tipsterProfile: 'The Tactician', actualOutcome: 'West Ham 0-1 Arsenal', isPremium: true },
       { date: '2026-05-10', event: 'Crystal Palace vs Everton', selection: 'Under 2.5 Goals', market: 'Total Goals', odds: 1.90, result: 'lost', pnl: -2.00, sport: 'football', confidence: 6, tipsterProfile: 'The Edge', actualOutcome: 'Crystal Palace 2-2 Everton', isPremium: true },
       { date: '2026-05-10', event: 'Burnley vs Aston Villa', selection: 'Aston Villa Win', market: 'Match Result', odds: 2.10, result: 'lost', pnl: -2.00, sport: 'football', confidence: 7, tipsterProfile: 'The Scout', actualOutcome: 'Burnley 2-2 Aston Villa', isPremium: true },
-      // Mon 11 May
-      { date: '2026-05-11', event: 'Tottenham vs Leeds United', selection: 'Tottenham Win', market: 'Match Result', odds: 1.70, result: 'lost', pnl: -2.00, sport: 'football', confidence: 7, tipsterProfile: 'The Tactician', actualOutcome: 'Tottenham 1-1 Leeds United', isPremium: true },
+      // Wed 14 May — Racing (York)
+      { date: '2026-05-14', event: 'York 13:45', selection: 'Persian Spring', market: 'Win', odds: 5.00, result: 'won', pnl: 8.00, sport: 'racing', confidence: 7, tipsterProfile: 'The Clocker', actualOutcome: 'Persian Spring won at 4/1', isPremium: true },
+      { date: '2026-05-14', event: 'York 15:30', selection: 'See The Fire', market: 'Win', odds: 1.83, result: 'won', pnl: 1.66, sport: 'racing', confidence: 8, tipsterProfile: 'The Clocker', actualOutcome: 'See The Fire won at 5/6', isPremium: true },
+      { date: '2026-05-14', event: 'York 16:05', selection: 'Arc Ole Ole', market: 'Win', odds: 5.00, result: 'won', pnl: 8.00, sport: 'racing', confidence: 7, tipsterProfile: 'The Clocker', actualOutcome: 'Arc Ole Ole won at 4/1', isPremium: true },
+      // Wed 14 May — Football
+      { date: '2026-05-14', event: 'Bolton vs Bradford City', selection: 'Bolton Win', market: 'Match Result', odds: 2.75, result: 'won', pnl: 3.50, sport: 'football', confidence: 7, tipsterProfile: 'The Tactician', actualOutcome: 'Bolton Win', isPremium: true },
+      { date: '2026-05-14', event: 'Valencia vs Rayo Vallecano', selection: 'BTTS - Yes', market: 'Both Teams to Score', odds: 2.00, result: 'won', pnl: 2.00, sport: 'football', confidence: 7, tipsterProfile: 'The Edge', actualOutcome: 'BTTS Yes', isPremium: true },
+      { date: '2026-05-14', event: 'Girona vs Real Sociedad', selection: 'Draw', market: 'Match Result', odds: 3.70, result: 'won', pnl: 5.40, sport: 'football', confidence: 6, tipsterProfile: 'The Scout', actualOutcome: 'Draw', isPremium: true },
       // Wed 13 May
       { date: '2026-05-13', event: 'Manchester City vs Crystal Palace', selection: 'Manchester City Win', market: 'Match Result', odds: 1.25, result: 'won', pnl: 0.50, sport: 'football', confidence: 9, tipsterProfile: 'The Professor', actualOutcome: 'Manchester City 3-0 Crystal Palace', isPremium: true },
       // Thu 15 May
