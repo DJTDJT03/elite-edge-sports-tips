@@ -2342,6 +2342,8 @@ module.exports = function startScheduler(deps) {
             console.log('[Auto-Settle] Found ' + fbResults.length + ' finished fixtures across ' + datesToSettle.length + ' date(s)');
           }
 
+          var resultVerifier = require('./resultVerifier');
+
           for (var fti = 0; fti < activeTips.length; fti++) {
             var ftip = activeTips[fti];
             if (ftip.sport !== 'football') continue;
@@ -2350,6 +2352,27 @@ module.exports = function startScheduler(deps) {
               return eventLower.indexOf(f.homeTeam.toLowerCase()) !== -1 || eventLower.indexOf(f.awayTeam.toLowerCase()) !== -1;
             });
             if (fmatch) {
+              // RECONCILIATION: verify score across multiple sources before settling
+              try {
+                var verification = await resultVerifier.verifyResult(
+                  { homeTeam: fmatch.homeTeam, awayTeam: fmatch.awayTeam, date: normDate(ftip.date) },
+                  { sportMonks: sportMonks, footballSource: footballSource }
+                );
+                if (verification.conflict) {
+                  console.log('[Auto-Settle] CONFLICT for ' + fmatch.homeTeam + ' vs ' + fmatch.awayTeam + ': ' + verification.reason + ' — HOLDING settlement');
+                  continue; // Skip this tip — don't settle with conflicting data
+                }
+                if (verification.verified && verification.confidence !== 'low') {
+                  // Use verified score (may differ from primary source if corrected)
+                  fmatch.homeGoals = verification.homeGoals;
+                  fmatch.awayGoals = verification.awayGoals;
+                  console.log('[Auto-Settle] Verified: ' + fmatch.homeTeam + ' ' + verification.homeGoals + '-' + verification.awayGoals + ' ' + fmatch.awayTeam + ' (' + verification.confidence + ' confidence, ' + verification.reason + ')');
+                }
+              } catch(verifyErr) {
+                // Verification failed — proceed with primary source data (SportMonks/API-Football)
+                console.log('[Auto-Settle] Verification skipped for ' + fmatch.homeTeam + ' vs ' + fmatch.awayTeam + ': ' + verifyErr.message);
+              }
+
               var homeGoals = fmatch.homeGoals || 0;
               var awayGoals = fmatch.awayGoals || 0;
               var totalGoals = homeGoals + awayGoals;
