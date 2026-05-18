@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0e1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 40px; display: flex; flex-wrap: wrap; gap: 40px; justify-content: center; }
+
+.card {
+  width: 400px; height: 500px; background: #0a0e1a; border-radius: 20px; overflow: hidden; position: relative;
+  border: 2px solid rgba(212,168,67,0.3); box-shadow: 0 0 60px rgba(212,168,67,0.1);
+}
+.card-bg { position: absolute; inset: 0; background-image: linear-gradient(rgba(212,168,67,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(212,168,67,0.02) 1px, transparent 1px); background-size: 30px 30px; }
+.card-glow { position: absolute; top: -100px; left: 50%; transform: translateX(-50%); width: 400px; height: 300px; background: radial-gradient(ellipse, rgba(34,197,94,0.12), transparent 70%); }
+
+.card-content { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; text-align: center; }
+
+.confetti { position: absolute; width: 8px; height: 8px; border-radius: 2px; z-index: 0; }
+
+.trophy { font-size: 56px; margin-bottom: 12px; }
+.winner-label { font-size: 28px; font-weight: 900; color: #22c55e; letter-spacing: 4px; margin-bottom: 20px; }
+.selection { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 6px; }
+.event { font-size: 13px; color: #94a3b8; margin-bottom: 16px; }
+.odds { font-size: 36px; font-weight: 900; color: #d4a843; margin-bottom: 4px; }
+.pnl { font-size: 20px; font-weight: 800; color: #22c55e; margin-bottom: 20px; }
+.analyst { background: rgba(212,168,67,0.15); color: #d4a843; padding: 4px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; margin-bottom: 20px; display: inline-block; }
+.brand { display: flex; align-items: center; gap: 8px; }
+.brand-icon { width: 28px; height: 28px; background: linear-gradient(135deg, #d4a843, #b8902f); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 11px; color: #0a0e1a; }
+.brand-text { font-size: 11px; font-weight: 700; color: #d4a843; letter-spacing: 1px; }
+.brand-sub { font-size: 9px; color: #475569; }
+</style></head>
+<body>
+
+<!-- CARD 1: True Love -->
+<div class="card">
+  <div class="card-bg"></div>
+  <div class="card-glow"></div>
+  <div style="position:absolute;top:12px;left:20px;width:6px;height:6px;background:#d4a843;border-radius:50%;"></div>
+  <div style="position:absolute;top:40px;right:30px;width:8px;height:8px;background:#22c55e;border-radius:2px;transform:rotate(45deg);"></div>
+  <div style="position:absolute;top:80px;left:60px;width:5px;height:5px;background:#fff;border-radius:50%;opacity:0.5;"></div>
+  <div style="position:absolute;bottom:100px;right:50px;width:7px;height:7px;background:#d4a843;border-radius:2px;transform:rotate(30deg);"></div>
+  <div style="position:absolute;bottom:60px;left:40px;width:6px;height:6px;background:#22c55e;border-radius:50%;"></div>
+  <div style="position:absolute;top:200px;right:20px;width:5px;height:5px;background:#f5d77a;border-radius:2px;transform:rotate(60deg);"></div>
+  <div style="position:absolute;top:150px;left:30px;width:8px;height:8px;background:#4ade80;border-radius:50%;opacity:0.6;"></div>
+  <div style="position:absolute;bottom:150px;right:80px;width:6px;height:6px;background:#fff;border-radius:2px;transform:rotate(15deg);opacity:0.4;"></div>
+  <div class="card-content">
+    <div class="trophy">&#127881;</div>
+    <div class="winner-label">WINNER</div>
+    <div class="selection">True Love</div>
+    <div class="event">Newmarket &bull; 1000 Guineas (Group 1)</div>
+    <div class="odds">@ 15/2</div>
+    <div class="pnl">+11.25 units</div>
+    <div class="analyst">&#127943; Racing &bull; 3 May 2026</div>
+    <div class="brand"><div class="brand-icon">EE</div><div><div class="brand-text">ELITE EDGE</div><div class="brand-sub">eliteedgesports.co.uk</div></div></div>
+  </div>
+</div>
+
+<!-- CARD 2: Jancis -->
+<div class="card">
+  <div class="card-bg"></div>
+  <div class="card-glow"></div>
+  <div style="position:absolute;top:20px;right:40px;width:7px;height:7px;background:#d4a843;border-radius:50%;"></div>
+  <div style="position:absolute;top:60px;left:25px;width:6px;height:6px;background:#22c55e;border-radius:2px;transform:rotate(30deg);"></div>
+  <div style="position:absolute;bottom:80px;left:50px;width:8px;height:8px;background:#fff;border-radius:50%;opacity:0.4;"></div>
+  <div style="position:absolute;bottom:120px;right:35px;width:5px;height:5px;background:#f5d77a;border-radius:2px;"></div>
+  <div style="position:absolute;top:120px;right:60px;width:6px;height:6px;background:#4ade80;border-radius:50%;opacity:0.6;"></div>
+  <div class="card-content">
+    <div class="trophy">&#127881;</div>
+    <div class="winner-label">WINNER</div>
+    <div class="selection">Jancis</div>
+    <div class="event">Newmarket &bull; Dahlia Stakes (Group 2)</div>
+    <div class="odds">@ 17/1</div>
+    <div class="pnl">+17.00 units</div>
+    <div class="analyst">&#127943; Racing &bull; 3 May 2026</div>
+    <div class="brand"><div class="brand-icon">EE</div><div><div class="brand-text">ELITE EDGE</div><div class="brand-sub">eliteedgesports.co.uk</div></div></div>
+  </div>
+</div>
+
+<!-- CARD 3: Division -->
+<div class="card">
+  <div class="card-bg"></div>
+  <div class="card-glow"></div>
+  <div style="position:absolute;top:30px;left:35px;width:7px;height:7px;background:#22c55e;border-radius:50%;"></div>
+  <div style="position:absolute;top:90px;right:25px;width:6px;height:6px;background:#d4a843;border-radius:2px;transform:rotate(45deg);"></div>
+  <div style="position:absolute;bottom:70px;right:60px;width:5px;height:5px;background:#fff;border-radius:50%;opacity:0.5;"></div>
+  <div class="card-content">
+    <div class="trophy">&#127881;</div>
+    <div class="winner-label">WINNER</div>
+    <div class="selection">Division</div>
+    <div class="event">Ascot &bull; Commonwealth Cup Trial (Group 3)</div>
+    <div class="odds">@ 16/1</div>
+    <div class="pnl">+8.00 units</div>
+    <div class="analyst">&#127943; Racing &bull; 1 May 2026</div>
+    <div class="brand"><div class="brand-icon">EE</div><div><div class="brand-text">ELITE EDGE</div><div class="brand-sub">eliteedgesports.co.uk</div></div></div>
+  </div>
+</div>
+
+<!-- CARD 4: Duke Silver -->
+<div class="card">
+  <div class="card-bg"></div>
+  <div class="card-glow"></div>
+  <div style="position:absolute;top:15px;right:30px;width:8px;height:8px;background:#d4a843;border-radius:2px;transform:rotate(20deg);"></div>
+  <div style="position:absolute;bottom:90px;left:30px;width:6px;height:6px;background:#22c55e;border-radius:50%;"></div>
+  <div class="card-content">
+    <div class="trophy">&#127881;</div>
+    <div class="winner-label">WINNER</div>
+    <div class="selection">Duke Silver</div>
+    <div class="event">Punchestown &bull; Listed Handicap Hurdle</div>
+    <div class="odds">@ 20/1</div>
+    <div class="pnl">+10.00 units</div>
+    <div class="analyst">&#127943; Racing &bull; 30 Apr 2026</div>
+    <div class="brand"><div class="brand-icon">EE</div><div><div class="brand-text">ELITE EDGE</div><div class="brand-sub">eliteedgesports.co.uk</div></div></div>
+  </div>
+</div>
+
+<!-- CARD 5: Football Multi -->
+<div class="card" style="border-color:rgba(34,197,94,0.4);">
+  <div class="card-bg"></div>
+  <div class="card-glow"></div>
+  <div style="position:absolute;top:25px;left:40px;width:6px;height:6px;background:#22c55e;border-radius:50%;"></div>
+  <div style="position:absolute;bottom:100px;right:40px;width:7px;height:7px;background:#d4a843;border-radius:2px;transform:rotate(35deg);"></div>
+  <div class="card-content">
+    <div class="trophy">&#9917;</div>
+    <div class="winner-label">4 FROM 4</div>
+    <div class="selection" style="font-size:17px;">Braga Win @ 1.55 &#10003;<br>Levante Win @ 2.50 &#10003;<br>Stuttgart BTTS @ 1.57 &#10003;<br>Salford Win @ 1.91 &#10003;</div>
+    <div class="event" style="margin-top:12px;">23 April 2026 &bull; Clean Sweep</div>
+    <div class="odds" style="font-size:28px;">+7.06 units</div>
+    <div class="pnl" style="font-size:16px;">100% strike rate on the day</div>
+    <div class="analyst">&#9917; Football &bull; 23 Apr 2026</div>
+    <div class="brand"><div class="brand-icon">EE</div><div><div class="brand-text">ELITE EDGE</div><div class="brand-sub">eliteedgesports.co.uk</div></div></div>
+  </div>
+</div>
+
+</body>
+</html>

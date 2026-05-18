@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+  body { font-family: 'Inter', sans-serif; background: #0a0e1a; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+  .card {
+    width: 1080px; height: 1080px;
+    background: linear-gradient(160deg, #0a0e1a 0%, #111827 40%, #0a0e1a 100%);
+    border: 3px solid rgba(212,168,67,0.4);
+    border-radius: 24px;
+    padding: 48px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute; top: -200px; right: -200px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(212,168,67,0.08), transparent 70%);
+  }
+  .card::after {
+    content: '';
+    position: absolute; bottom: -150px; left: -150px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(34,197,94,0.06), transparent 70%);
+  }
+  .header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 32px; position: relative; z-index: 1;
+  }
+  .logo-area { display: flex; align-items: center; gap: 14px; }
+  .logo-diamond {
+    width: 52px; height: 52px; position: relative;
+    border: 2px solid #d4a843; transform: rotate(45deg);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo-text-inner { transform: rotate(-45deg); color: #d4a843; font-weight: 900; font-size: 18px; }
+  .brand-name { font-size: 22px; font-weight: 900; color: #fff; letter-spacing: -0.5px; }
+  .brand-sub { font-size: 10px; color: #d4a843; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+  .date-badge {
+    background: rgba(212,168,67,0.12); border: 1px solid rgba(212,168,67,0.3);
+    padding: 10px 20px; border-radius: 10px; text-align: right;
+  }
+  .date-badge .day { font-size: 14px; font-weight: 800; color: #d4a843; }
+  .date-badge .full-date { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+  .hero {
+    text-align: center; margin-bottom: 28px; position: relative; z-index: 1;
+  }
+  .hero h1 {
+    font-size: 42px; font-weight: 900; color: #22c55e;
+    text-shadow: 0 0 40px rgba(34,197,94,0.3);
+  }
+  .hero .subtitle { font-size: 16px; color: rgba(255,255,255,0.5); margin-top: 6px; font-weight: 600; }
+  .stats-row {
+    display: flex; justify-content: center; gap: 32px;
+    margin-bottom: 28px; position: relative; z-index: 1;
+  }
+  .stat {
+    text-align: center; background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
+    padding: 14px 28px;
+  }
+  .stat .num { font-size: 28px; font-weight: 900; color: #22c55e; }
+  .stat .label { font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 2px; }
+  .results {
+    display: flex; flex-direction: column; gap: 8px;
+    position: relative; z-index: 1;
+  }
+  .result-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 18px;
+    background: rgba(255,255,255,0.02);
+    border-left: 4px solid #22c55e;
+    border-radius: 0 10px 10px 0;
+  }
+  .result-icon { font-size: 20px; }
+  .result-info { flex: 1; }
+  .result-event { font-size: 14px; font-weight: 700; color: #fff; }
+  .result-pick { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+  .result-analyst { font-size: 10px; color: rgba(212,168,67,0.7); margin-top: 2px; }
+  .result-odds {
+    font-size: 18px; font-weight: 900; color: #d4a843;
+    background: rgba(212,168,67,0.1); padding: 6px 14px; border-radius: 8px;
+  }
+  .result-pnl { font-size: 14px; font-weight: 800; color: #22c55e; min-width: 70px; text-align: right; }
+  .footer {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 24px; position: relative; z-index: 1;
+    border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;
+  }
+  .footer .url { font-size: 14px; font-weight: 700; color: #d4a843; }
+  .footer .disclaimer { font-size: 9px; color: rgba(255,255,255,0.25); }
+  .footer .cta {
+    background: linear-gradient(135deg, #d4a843, #b8902f);
+    color: #0a0e1a; padding: 10px 24px; border-radius: 8px;
+    font-weight: 800; font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="logo-area">
+      <div class="logo-diamond"><span class="logo-text-inner">EE</span></div>
+      <div>
+        <div class="brand-name">Elite Edge</div>
+        <div class="brand-sub">Data-Driven Betting Intelligence</div>
+      </div>
+    </div>
+    <div class="date-badge">
+      <div class="day">WEDNESDAY</div>
+      <div class="full-date">14 May 2026</div>
+    </div>
+  </div>
+
+  <div class="hero">
+    <h1>6 FROM 6 WINNERS</h1>
+    <div class="subtitle">AI-Powered Selections &mdash; Verified Results</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat"><div class="num">100%</div><div class="label">Strike Rate</div></div>
+    <div class="stat"><div class="num">+28.56u</div><div class="label">Day's Profit</div></div>
+    <div class="stat"><div class="num">6/6</div><div class="label">Winners</div></div>
+  </div>
+
+  <div class="results">
+    <div class="result-row">
+      <div class="result-icon">&#127943;</div>
+      <div class="result-info">
+        <div class="result-event">Persian Spring &mdash; York 13:45</div>
+        <div class="result-pick">Win Market</div>
+        <div class="result-analyst">The Clocker</div>
+      </div>
+      <div class="result-odds">4/1</div>
+      <div class="result-pnl">+8.00u</div>
+    </div>
+    <div class="result-row">
+      <div class="result-icon">&#127943;</div>
+      <div class="result-info">
+        <div class="result-event">See The Fire &mdash; York 15:30</div>
+        <div class="result-pick">Win Market</div>
+        <div class="result-analyst">The Clocker</div>
+      </div>
+      <div class="result-odds">5/6</div>
+      <div class="result-pnl">+1.66u</div>
+    </div>
+    <div class="result-row">
+      <div class="result-icon">&#127943;</div>
+      <div class="result-info">
+        <div class="result-event">Arc Ole Ole &mdash; York 16:05</div>
+        <div class="result-pick">Win Market</div>
+        <div class="result-analyst">The Clocker</div>
+      </div>
+      <div class="result-odds">4/1</div>
+      <div class="result-pnl">+8.00u</div>
+    </div>
+    <div class="result-row">
+      <div class="result-icon">&#9917;</div>
+      <div class="result-info">
+        <div class="result-event">Bolton vs Bradford City</div>
+        <div class="result-pick">Bolton Win</div>
+        <div class="result-analyst">The Tactician</div>
+      </div>
+      <div class="result-odds">7/4</div>
+      <div class="result-pnl">+3.50u</div>
+    </div>
+    <div class="result-row">
+      <div class="result-icon">&#9917;</div>
+      <div class="result-info">
+        <div class="result-event">Valencia vs Rayo Vallecano</div>
+        <div class="result-pick">Both Teams to Score &mdash; Yes</div>
+        <div class="result-analyst">The Edge</div>
+      </div>
+      <div class="result-odds">EVS</div>
+      <div class="result-pnl">+2.00u</div>
+    </div>
+    <div class="result-row">
+      <div class="result-icon">&#9917;</div>
+      <div class="result-info">
+        <div class="result-event">Girona vs Real Sociedad</div>
+        <div class="result-pick">Draw</div>
+        <div class="result-analyst">The Scout</div>
+      </div>
+      <div class="result-odds">27/10</div>
+      <div class="result-pnl">+5.40u</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>
+      <div class="url">eliteedgesports.co.uk</div>
+      <div class="disclaimer">18+ | BeGambleAware.org | Entertainment purposes only</div>
+    </div>
+    <div class="cta">START FREE TRIAL</div>
+  </div>
+</div>
+</body>
+</html>
