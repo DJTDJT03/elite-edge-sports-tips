@@ -947,30 +947,54 @@ class ScoringModel {
       selectedSelection = fixture.awayTeam + ' Win';
       selectedOdds = awayOdds;
     } else if (totalGoalsExpected > 2.5) {
-      // High-scoring expected — over 2.5
       selectedMarket = 'Over 2.5 Goals';
       selectedSelection = 'Over 2.5 Goals';
-      selectedOdds = 1.85; // typical over 2.5 price
+      selectedOdds = 1.85; // fallback
     } else if (Math.abs(homeProb - awayProb) < 0.1) {
-      // Tight match — BTTS
       selectedMarket = 'Both Teams to Score';
       selectedSelection = 'BTTS - Yes';
-      selectedOdds = 1.75;
+      selectedOdds = 1.75; // fallback
     } else {
-      // Default — double chance on stronger side
       if (homeProb > awayProb) {
         selectedMarket = 'Double Chance';
         selectedSelection = fixture.homeTeam + ' or Draw (1X)';
-        selectedOdds = 1.35;
+        selectedOdds = 1.35; // fallback
       } else {
         selectedMarket = 'Double Chance';
         selectedSelection = fixture.awayTeam + ' or Draw (X2)';
-        selectedOdds = 1.55;
+        selectedOdds = 1.55; // fallback
       }
     }
 
-    // Override selectedOdds with real bookmaker odds if available for the market
-    // For match result, we already have them; for others, use estimates
+    // Override with REAL bookmaker odds from Odds API when available
+    if (matchOdds && matchOdds.markets) {
+      var mkts = matchOdds.markets;
+      // Over 2.5 Goals — from 'totals' market
+      if (selectedMarket === 'Over 2.5 Goals' && mkts.totals) {
+        var firstTotalsBook = Object.keys(mkts.totals)[0];
+        if (firstTotalsBook && mkts.totals[firstTotalsBook]) {
+          var overPrice = mkts.totals[firstTotalsBook]['Over 2.5'] || mkts.totals[firstTotalsBook]['Over'];
+          if (overPrice && overPrice > 1) selectedOdds = overPrice;
+        }
+      }
+      // BTTS — from 'btts' market (if available)
+      if (selectedMarket === 'Both Teams to Score' && mkts.btts) {
+        var firstBttsBook = Object.keys(mkts.btts)[0];
+        if (firstBttsBook && mkts.btts[firstBttsBook]) {
+          var bttsPrice = mkts.btts[firstBttsBook]['Yes'] || mkts.btts[firstBttsBook]['yes'];
+          if (bttsPrice && bttsPrice > 1) selectedOdds = bttsPrice;
+        }
+      }
+      // Double Chance — from 'double_chance' market (if available)
+      if (selectedMarket === 'Double Chance' && mkts.double_chance) {
+        var firstDcBook = Object.keys(mkts.double_chance)[0];
+        if (firstDcBook && mkts.double_chance[firstDcBook]) {
+          var dcKey = selectedSelection.indexOf('1X') !== -1 ? '1X' : 'X2';
+          var dcPrice = mkts.double_chance[firstDcBook][dcKey] || mkts.double_chance[firstDcBook][fixture.homeTeam + ' or Draw'];
+          if (dcPrice && dcPrice > 1) selectedOdds = dcPrice;
+        }
+      }
+    }
 
     const factors = {
       xG: Math.round(xgScore * 100) / 100,
