@@ -1274,16 +1274,27 @@ async function settleMatchPredictions(footballResults) {
   var settled = 0;
   for (var i = 0; i < footballResults.length; i++) {
     var match = footballResults[i];
-    if (match.homeScore === null || match.awayScore === null) continue;
-    var homeGoals = parseInt(match.homeScore) || 0;
-    var awayGoals = parseInt(match.awayScore) || 0;
+    var hg = match.homeScore !== undefined ? match.homeScore : match.homeGoals;
+    var ag = match.awayScore !== undefined ? match.awayScore : match.awayGoals;
+    if (hg === null || hg === undefined || ag === null || ag === undefined) continue;
+    var homeGoals = parseInt(hg) || 0;
+    var awayGoals = parseInt(ag) || 0;
     var totalGoals = homeGoals + awayGoals;
 
-    // Find prediction for this fixture
+    // Find prediction for this fixture — try fixture ID first, then team name match
+    var fxId = match.fixtureId || match.id;
     var { rows } = await query(
       'SELECT * FROM match_predictions WHERE fixture_id = $1 AND result IS NULL',
-      [match.fixtureId || match.id]
+      [fxId]
     );
+    // Fallback: match by team names if fixture ID doesn't match (different API sources)
+    if (rows.length === 0 && match.homeTeam && match.awayTeam) {
+      var teamResult = await query(
+        "SELECT * FROM match_predictions WHERE result IS NULL AND LOWER(home_team) LIKE $1 AND LOWER(away_team) LIKE $2 ORDER BY date DESC LIMIT 1",
+        ['%' + match.homeTeam.toLowerCase().substring(0, 8) + '%', '%' + match.awayTeam.toLowerCase().substring(0, 8) + '%']
+      );
+      rows = teamResult.rows;
+    }
     if (rows.length === 0) continue;
 
     var pred = rows[0];
