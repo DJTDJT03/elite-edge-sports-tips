@@ -27,6 +27,7 @@ module.exports = function startScheduler(deps) {
   var REFRESH_HOURS = [1, 11, 17, 23]; // 1am, 11am, 5pm, 11pm UK
 
   var lastDailyBulletinDate = '';
+  var lastTelegramBulletinDate = '';
   var lastWeeklySummaryDate = '';
   var lastWeeklyPerformanceDate = '';
   var lastReengagementDate = '';
@@ -380,10 +381,9 @@ module.exports = function startScheduler(deps) {
         return normDate(t.date) === today && t.id && t.id.toString().indexOf('auto_') === 0
           && t.selection && t.selection !== 'Unknown' && t.market && t.odds && t.odds > 0;
       });
-      if (todayValidTips.length >= 3) {
+      if (todayValidTips.length >= 1) {
         lastAutoTipDate = today;
-        console.log('[Auto-Tips] Valid tips exist for ' + today + ' (' + todayValidTips.length + ') — skipping');
-        return;
+        return; // Tips already generated today — don't regenerate or re-send notifications
       }
     }
     // Always delete broken auto tips from today before generating
@@ -1924,11 +1924,11 @@ module.exports = function startScheduler(deps) {
       }
     }
 
-    // --- Telegram: Send daily bulletin immediately when tips are published ---
-    // Per Master Prompt: when picks are released, all channels must update simultaneously
-    if (telegramBot && telegramBot.isAvailable()) {
+    // --- Telegram: Send daily bulletin ONCE when tips are published ---
+    if (telegramBot && telegramBot.isAvailable() && newTips.length > 0 && lastTelegramBulletinDate !== today) {
       try {
         await telegramBot.sendDailyBulletin(newTips);
+        lastTelegramBulletinDate = today;
         console.log('[Auto-Tips] Telegram daily bulletin sent — ' + newTips.length + ' tips');
       } catch (tgErr) {
         console.error('[Auto-Tips] Telegram error (non-fatal):', tgErr.message);
