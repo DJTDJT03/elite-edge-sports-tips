@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+  html, body { width: 1080px; height: 1080px; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; background: linear-gradient(160deg, #0a0e1a 0%, #0f1528 50%, #0a0e1a 100%); position: relative; }
+  body::before { content: ''; position: absolute; top: -200px; left: -200px; width: 500px; height: 500px; background: radial-gradient(circle, rgba(212,168,67,0.06), transparent 70%); }
+  .pad { padding: 48px; position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; }
+  .logo-row { display: flex; align-items: center; gap: 12px; }
+  .diamond { width: 44px; height: 44px; border: 2px solid #d4a843; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; }
+  .diamond span { transform: rotate(-45deg); color: #d4a843; font-weight: 900; font-size: 16px; }
+  .brand { font-size: 20px; font-weight: 900; color: #fff; }
+  .brand-sub { font-size: 9px; color: #d4a843; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+  .date-pill { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); padding: 8px 16px; border-radius: 8px; color: #22c55e; font-size: 12px; font-weight: 700; }
+  .hero-text { font-size: 34px; font-weight: 900; color: #22c55e; margin-bottom: 6px; line-height: 1.2; }
+  .hero-sub { font-size: 15px; color: rgba(255,255,255,0.4); margin-bottom: 28px; font-weight: 600; }
+  .winners { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+  .win-row { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-left: 4px solid #22c55e; background: rgba(34,197,94,0.04); border-radius: 0 10px 10px 0; }
+  .win-info { flex: 1; }
+  .win-sel { font-size: 18px; font-weight: 700; color: #fff; }
+  .win-evt { font-size: 13px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+  .win-analyst { font-size: 11px; color: rgba(212,168,67,0.7); margin-top: 2px; }
+  .win-odds { font-size: 22px; font-weight: 900; color: #d4a843; background: rgba(212,168,67,0.1); padding: 8px 18px; border-radius: 8px; }
+  .win-pnl { font-size: 18px; font-weight: 800; color: #22c55e; min-width: 70px; text-align: right; }
+  .tagline { text-align: center; margin-top: auto; padding-top: 20px; }
+  .tagline .main { font-size: 16px; color: rgba(255,255,255,0.4); font-style: italic; margin-bottom: 6px; }
+  .tagline .sub { font-size: 14px; color: rgba(255,255,255,0.35); }
+  .footer { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.05); }
+  .footer-url { font-size: 14px; font-weight: 700; color: #d4a843; }
+  .footer-disc { font-size: 9px; color: rgba(255,255,255,0.2); }
+  .footer-cta { background: linear-gradient(135deg, #d4a843, #b8902f); color: #0a0e1a; padding: 10px 20px; border-radius: 8px; font-weight: 800; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="pad">
+  <div class="header">
+    <div class="logo-row"><div class="diamond"><span>EE</span></div><div><div class="brand">Elite Edge</div><div class="brand-sub">Data-Driven Intelligence</div></div></div>
+    <div class="date-pill">VALUE WINNERS</div>
+  </div>
+  <div class="hero-text">THE MODEL FINDS VALUE<br>OTHERS MISS</div>
+  <div class="hero-sub">Biggest-priced winners &mdash; May 2026</div>
+  <div class="winners">
+    <div class="win-row">
+      <div style="font-size:24px;">&#127943;</div>
+      <div class="win-info"><div class="win-sel">Persian Spring</div><div class="win-evt">York 13:45 &bull; Wed 14 May</div><div class="win-analyst">The Clocker</div></div>
+      <div class="win-odds">4/1</div><div class="win-pnl">+8.00u</div>
+    </div>
+    <div class="win-row">
+      <div style="font-size:24px;">&#127943;</div>
+      <div class="win-info"><div class="win-sel">Arc Ole Ole</div><div class="win-evt">York 16:05 &bull; Wed 14 May</div><div class="win-analyst">The Clocker</div></div>
+      <div class="win-odds">4/1</div><div class="win-pnl">+8.00u</div>
+    </div>
+    <div class="win-row">
+      <div style="font-size:24px;">&#9917;</div>
+      <div class="win-info"><div class="win-sel">Draw</div><div class="win-evt">Girona vs Real Sociedad &bull; Wed 14 May</div><div class="win-analyst">The Scout &mdash; Value Hunter</div></div>
+      <div class="win-odds">27/10</div><div class="win-pnl">+5.40u</div>
+    </div>
+    <div class="win-row">
+      <div style="font-size:24px;">&#9917;</div>
+      <div class="win-info"><div class="win-sel">Bolton Win</div><div class="win-evt">Bolton vs Bradford City &bull; Wed 14 May</div><div class="win-analyst">The Tactician</div></div>
+      <div class="win-odds">7/4</div><div class="win-pnl">+3.50u</div>
+    </div>
+    <div class="win-row">
+      <div style="font-size:24px;">&#9917;</div>
+      <div class="win-info"><div class="win-sel">Bournemouth Win</div><div class="win-evt">Bournemouth vs Crystal Palace &bull; Sat 3 May</div><div class="win-analyst">The Edge</div></div>
+      <div class="win-odds">EVS</div><div class="win-pnl">+2.00u</div>
+    </div>
+  </div>
+  <div class="tagline">
+    <div class="main">"Emotion says one thing. Data says another."</div>
+    <div class="sub">Subscribers had every one of these picks before kickoff.</div>
+  </div>
+  <div class="footer"><div><div class="footer-url">eliteedgesports.co.uk</div><div class="footer-disc">18+ | BeGambleAware.org | Past performance does not guarantee future results</div></div><div class="footer-cta">DON'T FOLLOW BLIND</div></div>
+</div>
+</body>
+</html>

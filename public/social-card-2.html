@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+  html, body { width: 1080px; height: 1080px; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; background: linear-gradient(160deg, #0a0e1a 0%, #0f1528 50%, #0a0e1a 100%); position: relative; }
+  body::before { content: ''; position: absolute; top: -200px; right: -200px; width: 500px; height: 500px; background: radial-gradient(circle, rgba(168,85,247,0.06), transparent 70%); }
+  .pad { padding: 48px; position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+  .logo-row { display: flex; align-items: center; gap: 12px; }
+  .diamond { width: 44px; height: 44px; border: 2px solid #d4a843; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; }
+  .diamond span { transform: rotate(-45deg); color: #d4a843; font-weight: 900; font-size: 16px; }
+  .brand { font-size: 20px; font-weight: 900; color: #fff; }
+  .brand-sub { font-size: 9px; color: #d4a843; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+  .date-pill { background: rgba(168,85,247,0.1); border: 1px solid rgba(168,85,247,0.3); padding: 8px 16px; border-radius: 8px; color: #a855f7; font-size: 12px; font-weight: 700; }
+  .hero-text { font-size: 38px; font-weight: 900; color: #a855f7; margin-bottom: 6px; }
+  .hero-sub { font-size: 15px; color: rgba(255,255,255,0.4); margin-bottom: 24px; font-weight: 600; }
+  .big-stat { text-align: center; margin: 20px 0 30px; }
+  .big-stat .num { font-size: 64px; font-weight: 900; color: #a855f7; }
+  .big-stat .lbl { font-size: 14px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 2px; }
+  .winners { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+  .win-row { display: flex; align-items: center; gap: 12px; padding: 18px 20px; border-left: 4px solid #a855f7; background: rgba(168,85,247,0.04); border-radius: 0 8px 8px 0; }
+  .win-info { flex: 1; }
+  .win-sel { font-size: 18px; font-weight: 700; color: #fff; }
+  .win-evt { font-size: 13px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+  .win-odds { font-size: 24px; font-weight: 900; color: #d4a843; background: rgba(212,168,67,0.1); padding: 8px 20px; border-radius: 6px; }
+  .win-pnl { font-size: 18px; font-weight: 800; color: #22c55e; min-width: 70px; text-align: right; }
+  .note { text-align: center; margin-top: auto; padding-top: 24px; font-size: 14px; color: rgba(255,255,255,0.5); line-height: 1.6; }
+  .footer { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.05); }
+  .footer-url { font-size: 14px; font-weight: 700; color: #d4a843; }
+  .footer-disc { font-size: 9px; color: rgba(255,255,255,0.2); }
+  .footer-cta { background: linear-gradient(135deg, #a855f7, #7c3aed); color: #fff; padding: 10px 20px; border-radius: 8px; font-weight: 800; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="pad">
+  <div class="header">
+    <div class="logo-row"><div class="diamond"><span>EE</span></div><div><div class="brand">Elite Edge</div><div class="brand-sub">Data-Driven Intelligence</div></div></div>
+    <div class="date-pill">THE CLOCKER</div>
+  </div>
+  <div class="hero-text">3 FROM 3 AT YORK</div>
+  <div class="hero-sub">Deep Racing Intelligence &mdash; Wednesday 14 May</div>
+  <div class="big-stat"><div class="num">+17.66u</div><div class="lbl">Single Day Profit</div></div>
+  <div class="winners">
+    <div class="win-row">
+      <div class="win-info"><div class="win-sel">Persian Spring</div><div class="win-evt">13:45 &bull; Harry's Half Million By Goffs</div></div>
+      <div class="win-odds">4/1</div><div class="win-pnl">+8.00u</div>
+    </div>
+    <div class="win-row">
+      <div class="win-info"><div class="win-sel">See The Fire</div><div class="win-evt">15:30 &bull; York Stakes</div></div>
+      <div class="win-odds">5/6</div><div class="win-pnl">+1.66u</div>
+    </div>
+    <div class="win-row">
+      <div class="win-info"><div class="win-sel">Arc Ole Ole</div><div class="win-evt">16:05 &bull; Westow Stakes</div></div>
+      <div class="win-odds">4/1</div><div class="win-pnl">+8.00u</div>
+    </div>
+  </div>
+  <div class="note">The Clocker analyses trainer form, going conditions, course records,<br>jockey bookings &amp; stable confidence. Not words &mdash; intelligence.</div>
+  <div class="footer"><div><div class="footer-url">eliteedgesports.co.uk</div><div class="footer-disc">18+ | BeGambleAware.org</div></div><div class="footer-cta">MEET THE ANALYSTS</div></div>
+</div>
+</body>
+</html>
