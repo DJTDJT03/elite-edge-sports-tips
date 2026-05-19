@@ -256,7 +256,7 @@ module.exports = function(deps) {
         .map(function(r) { return { selection: r.selection, event: r.event, odds: r.odds, pnl: Math.round(r.pnl * 100) / 100, date: r.date, sport: r.sport }; });
 
       // Longest winning streak
-      var sorted = counted.slice().sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+      var sorted = counted.slice().sort(function(a, b) { return String(a.date || '').substring(0, 10).localeCompare(String(b.date || '').substring(0, 10)); });
       var maxStreak = 0, currentStreak = 0;
       sorted.forEach(function(r) {
         if (r.result === 'won' || r.result === 'placed') { currentStreak++; if (currentStreak > maxStreak) maxStreak = currentStreak; }
@@ -268,7 +268,7 @@ module.exports = function(deps) {
       try { if (db.getMatchPredictionStats) matchPredStats = await db.getMatchPredictionStats(365); } catch(e) {}
 
       // First and latest tip dates
-      var dates = counted.map(function(r) { return r.date || ''; }).filter(Boolean).sort();
+      var dates = counted.map(function(r) { return r.date ? String(r.date).substring(0, 10) : ''; }).filter(Boolean).sort();
 
       res.json({
         overview: {
