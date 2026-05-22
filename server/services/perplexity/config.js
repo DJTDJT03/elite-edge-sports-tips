@@ -26,7 +26,7 @@ var STALE_THRESHOLD_MS = Math.max((TIMEOUT_MS * (MAX_RETRIES + 1)) + 5000, 30000
 // ---------------------------------------------------------------------------
 // Latency budget — hard cutoff for parallel enrichment batch
 // ---------------------------------------------------------------------------
-var ENRICHMENT_BUDGET_MS = 15000;
+var ENRICHMENT_BUDGET_MS = 30000; // 30s budget — allows deeper research per tip
 
 // ---------------------------------------------------------------------------
 // Cost rates (Sonar model, per-token)
@@ -40,8 +40,8 @@ var DEFAULT_REQUEST_FEE = 0.005;
 // ---------------------------------------------------------------------------
 // Spend caps
 // ---------------------------------------------------------------------------
-var DAILY_CAP_USD = 0.50;
-var PER_TIP_CAP_USD = 0.05;
+var DAILY_CAP_USD = 10.00;  // Pro plan — room for 100+ searches/day
+var PER_TIP_CAP_USD = 0.50; // Allow deep multi-signal research per tip
 
 // ---------------------------------------------------------------------------
 // Suppression — derived from ledger, not stored separately

@@ -4096,6 +4096,115 @@ module.exports = function startScheduler(deps) {
   setInterval(safeRun('DataRefresh', scheduledDataRefresh), 10 * 60 * 1000);
   setTimeout(safeRun('DataRefresh', scheduledDataRefresh), 45000);
 
+  // ---------------------------------------------------------------------------
+  // CONTINUOUS INTELLIGENCE — re-search Perplexity every 2 hours for fresh intel
+  // Covers: injuries, team news, press conferences, lineup leaks, tactical changes
+  // ---------------------------------------------------------------------------
+  var lastIntelRefreshHour = -1;
+  async function continuousIntelligence() {
+    var uk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+    var hour = uk.getHours();
+    var today = uk.toISOString().split('T')[0];
+
+    // Run at 10am, 12pm, 2pm, 4pm (after initial 7:30am tip generation)
+    var refreshHours = [10, 12, 14, 16];
+    if (refreshHours.indexOf(hour) === -1 || lastIntelRefreshHour === hour) return;
+    lastIntelRefreshHour = hour;
+
+    var perplexityClient = deps.perplexityClient;
+    if (!perplexityClient) return;
+
+    try {
+      var tips = await db.getTips();
+      var activeTips = tips.filter(function(t) {
+        return normDate(t.date) === today && t.status === 'active' && t.sport === 'football';
+      });
+
+      if (activeTips.length === 0) return;
+      console.log('[Intelligence] Refreshing intel for ' + activeTips.length + ' active tip(s) at ' + hour + ':00');
+
+      for (var i = 0; i < activeTips.length; i++) {
+        var tip = activeTips[i];
+        try {
+          var prompts = require('./perplexity/prompts');
+          var fixture = {
+            homeTeam: (tip.event || '').split(' vs ')[0] || tip.event,
+            awayTeam: (tip.event || '').split(' vs ')[1] || '',
+            league: tip.league || '',
+            kickoff: tip.kickoff || '',
+            venue: tip.venue || '',
+          };
+
+          // Build a focused search for breaking team news
+          var prompt = {
+            system: 'You are a football intelligence analyst. Return ONLY JSON.',
+            user: 'Search for the LATEST news about ' + fixture.homeTeam + ' vs ' + fixture.awayTeam + ' today (' + today + ').\n\n' +
+              'Find:\n' +
+              '{\n' +
+              '  "injury_news": {"value": "any new injuries, fitness doubts, or returns confirmed TODAY", "citation_index": 0},\n' +
+              '  "team_selection": {"value": "any confirmed or leaked lineup information, expected changes", "citation_index": 1},\n' +
+              '  "manager_comments": {"value": "any press conference quotes from today about this match", "citation_index": 2},\n' +
+              '  "tactical_news": {"value": "any formation changes, tactical adjustments mentioned in media", "citation_index": 3},\n' +
+              '  "weather_conditions": {"value": "weather forecast for the match venue at kickoff time", "citation_index": 4}\n' +
+              '}\n\n' +
+              'Rules:\n' +
+              '- Only include information from TODAY or the last 24 hours\n' +
+              '- Cite: BBC Sport, Sky Sports, The Athletic, Guardian, ESPN, official club sites\n' +
+              '- CRITICAL: Verify the current manager name before attributing quotes\n' +
+              '- If no new information exists for a field, omit it entirely\n' +
+              '- Return ONLY valid JSON',
+            callSiteKey: 'per-tip-tactician',
+          };
+
+          var result = await perplexityClient.enrichTip({
+            scored: { fixture: fixture, selectedMarket: tip.market, selectedSelection: tip.selection },
+            sport: 'football',
+            tipId: tip.id + '_refresh_' + hour,
+            analyst: 'tactician',
+            _customPrompt: prompt,
+          });
+
+          if (result && result.signals && Object.keys(result.signals).length > 0) {
+            // Update the tip's analysis with fresh intel
+            var existingAnalysis = tip.analysis || {};
+            var freshSignals = result.signals;
+            var updates = [];
+
+            if (freshSignals.injury_news && freshSignals.injury_news.value) {
+              existingAnalysis.latestInjuryNews = freshSignals.injury_news.value;
+              updates.push('injuries');
+            }
+            if (freshSignals.team_selection && freshSignals.team_selection.value) {
+              existingAnalysis.latestTeamNews = freshSignals.team_selection.value;
+              updates.push('team selection');
+            }
+            if (freshSignals.manager_comments && freshSignals.manager_comments.value) {
+              existingAnalysis.latestManagerComments = freshSignals.manager_comments.value;
+              updates.push('manager quotes');
+            }
+            if (freshSignals.tactical_news && freshSignals.tactical_news.value) {
+              existingAnalysis.latestTacticalNews = freshSignals.tactical_news.value;
+              updates.push('tactics');
+            }
+
+            if (updates.length > 0) {
+              existingAnalysis.lastIntelRefresh = new Date().toISOString();
+              await db.updateTip(tip.id, { analysis: existingAnalysis });
+              console.log('[Intelligence] Updated ' + tip.selection + ': ' + updates.join(', '));
+            }
+          }
+        } catch(tipErr) {
+          // Non-fatal — individual tip refresh failure
+        }
+      }
+    } catch(err) {
+      console.error('[Intelligence] Refresh error:', err.message);
+    }
+  }
+
+  setInterval(safeRun('Intelligence', continuousIntelligence), 30 * 60 * 1000); // Check every 30 mins
+  setTimeout(safeRun('Intelligence', continuousIntelligence), 60000); // First check 1 min after startup
+
   // Weekly blog review on startup
   setTimeout(safeRun('WeeklyBlog', updateWeeklyBlog), 5000);
 
