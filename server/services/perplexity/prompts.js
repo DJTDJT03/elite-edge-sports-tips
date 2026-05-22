@@ -449,6 +449,7 @@ function buildTacticianPrompt(scored) {
     '- citation_index must be an integer referencing your citations array\n' +
     '- Only cite BBC Sport, Sky Sports, The Athletic, Guardian, official club sites, FBRef, Understat, Transfermarkt\n' +
     '- Be specific with numbers — not "good form" but "W4 D1 L0 in last 5, xG 2.1 per game"\n' +
+    '- CRITICAL: Verify the CURRENT manager for each team. Managers change frequently. Search for the most recent appointment. Do not assume from memory.\n' +
     '- Do not predict the result or recommend a bet';
 
   return { system: SYSTEM_PER_TIP_JSON, user: user, callSiteKey: 'per-tip-tactician' };

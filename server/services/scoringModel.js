@@ -1827,7 +1827,7 @@ class ScoringModel {
     if (analyst === 'tactician') {
       let parts = [];
 
-      if (sig.manager_quotes) parts.push(`MANAGER SAYS: ${sv('manager_quotes')}`);
+      if (sig.manager_quotes) parts.push(`PRE-MATCH: ${sv('manager_quotes')}`);
       if (sig.expected_lineup) parts.push(`EXPECTED XI: ${sv('expected_lineup')}`);
       if (sig.tactical_setup) parts.push(`TACTICAL SETUP: ${sv('tactical_setup')}`);
       if (sig.motivation_context) parts.push(`WHAT'S AT STAKE: ${sv('motivation_context')}`);
