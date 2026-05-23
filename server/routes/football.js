@@ -316,12 +316,34 @@ module.exports = function(deps) {
       var h2hBttsPct = Math.round((h2hBtts / h2hCount) * 100);
       var h2hOver25Pct = Math.round((h2hOver25 / h2hCount) * 100);
 
-      // --- Auto-generate verdict ---
+      // --- Check if we have a published tip for this fixture first ---
       var verdictMarket = '';
       var verdictPick = '';
       var verdictReason = '';
       var confidence = 5;
       var riskLevel = 'Medium';
+
+      // PRIORITY: Use our actual published tip as the verdict (consistency with NAP/dashboard)
+      try {
+        var allTips = await db.getTips();
+        var today = new Date().toISOString().split('T')[0];
+        var matchingTip = allTips.find(function(t) {
+          if (t.sport !== 'football' || t.status !== 'active') return false;
+          var tipEvent = (t.event || '').toLowerCase();
+          var hName = (homeTeam.name || '').toLowerCase();
+          var aName = (awayTeam.name || '').toLowerCase();
+          return (tipEvent.indexOf(hName) !== -1 || tipEvent.indexOf(aName) !== -1) ||
+                 (hName.indexOf(tipEvent.split(' vs ')[0] || '') !== -1);
+        });
+        if (matchingTip) {
+          verdictMarket = matchingTip.market || '';
+          verdictPick = matchingTip.selection || '';
+          verdictReason = 'Our published selection for this fixture. Confidence ' + (matchingTip.confidence || 5) + '/10 with ' + ((matchingTip.edge || 0) * 100).toFixed(1) + '% edge. ' + (matchingTip.tipsterProfile ? 'Analyst: ' + matchingTip.tipsterProfile + '.' : '');
+          confidence = matchingTip.confidence || 6;
+          riskLevel = confidence >= 8 ? 'Low' : confidence >= 6 ? 'Medium' : 'High';
+          console.log('[Match Intelligence] Using published tip as verdict: ' + verdictPick + ' (' + verdictMarket + ')');
+        }
+      } catch(tipLookupErr) { /* non-fatal — fall through to auto-generate */ }
 
       // Ensure stats have safe defaults
       homeStats.cleanSheetPct = homeStats.cleanSheetPct || 0;
@@ -342,7 +364,10 @@ module.exports = function(deps) {
       var h2hDominance = Math.abs(h2hHomeWins - h2hAwayWins);
       var avgTotalGoals = (homeStats.avgScored + homeStats.avgConceded + awayStats.avgScored + awayStats.avgConceded) / 2;
 
-      if (combinedBttsPct >= 65 && homeStats.avgScored >= 1.0 && awayStats.avgScored >= 1.0) {
+      // Only auto-generate verdict if no published tip exists for this fixture
+      if (verdictMarket && verdictPick) {
+        // Already set from published tip — skip auto-generation
+      } else if (combinedBttsPct >= 65 && homeStats.avgScored >= 1.0 && awayStats.avgScored >= 1.0) {
         verdictMarket = 'Both Teams to Score';
         verdictPick = 'BTTS - Yes';
         verdictReason = 'Both sides have been finding the net consistently. ' +
