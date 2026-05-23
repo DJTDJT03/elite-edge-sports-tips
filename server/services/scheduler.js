@@ -661,7 +661,13 @@ module.exports = function startScheduler(deps) {
         var fbRaw = await footballSource.fetchFixturesByDate(today);
         var fixtures = footballSource.normalise(fbRaw);
         var topLeagueIds = [39, 40, 41, 42, 43, 45, 48, 179, 180, 2, 3, 848, 140, 135, 78, 61, 88, 94];
-        var topFixtures = fixtures.filter(function(f) { return topLeagueIds.indexOf(f.leagueId) !== -1; });
+        // Excluded leagues — unpredictable or insufficient data quality
+        var excludedLeagues = ['chance liga', 'czech liga', 'czech republic', 'fortuna liga'];
+        var topFixtures = fixtures.filter(function(f) {
+          if (topLeagueIds.indexOf(f.leagueId) === -1) return false;
+          var leagueName = (f.league || '').toLowerCase();
+          return !excludedLeagues.some(function(ex) { return leagueName.indexOf(ex) !== -1; });
+        });
         console.log('[Auto-Tips] Found ' + topFixtures.length + ' top-league fixtures to analyse (from ' + fixtures.length + ' total)');
 
         if (topFixtures.length === 0 && fixtures.length > 0) {
