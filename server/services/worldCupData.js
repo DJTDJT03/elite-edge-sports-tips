@@ -307,6 +307,13 @@ module.exports = function(deps) {
   async function seedTournament() {
     if (!db.isAvailable || !db.isAvailable()) return;
     try {
+      // Skip seeding if fixtures already exist (prevents duplicates on every deploy)
+      var { rows: fxCheck } = await db.query('SELECT COUNT(*) as cnt FROM world_cup_fixtures');
+      var fxCount = parseInt(fxCheck[0].cnt);
+      if (fxCount >= 60 && fxCount <= 100) {
+        return; // Already seeded correctly, skip
+      }
+
       // Check if tournament already exists
       var { rows } = await db.query('SELECT id FROM world_cup_tournaments WHERE year = 2026');
       var tournamentId;
@@ -397,6 +404,21 @@ module.exports = function(deps) {
           );
         }
       }
+
+      // Clean up duplicates (from previous deploys that didn't have unique constraints)
+      try {
+        var { rows: dupeCheck } = await db.query('SELECT COUNT(*) as cnt FROM world_cup_fixtures');
+        if (parseInt(dupeCheck[0].cnt) > 100) {
+          console.log('[WorldCup] Cleaning ' + dupeCheck[0].cnt + ' duplicate fixtures...');
+          await db.query(`
+            DELETE FROM world_cup_fixtures WHERE id NOT IN (
+              SELECT MIN(id) FROM world_cup_fixtures GROUP BY tournament_id, home_team, away_team
+            )
+          `);
+          var { rows: afterClean } = await db.query('SELECT COUNT(*) as cnt FROM world_cup_fixtures');
+          console.log('[WorldCup] Cleaned — ' + afterClean[0].cnt + ' fixtures remaining');
+        }
+      } catch(e) { console.log('[WorldCup] Dedup skipped:', e.message); }
 
       console.log('[WorldCup] Tournament seeded — 12 groups, 48 teams, group stage fixtures');
     } catch(err) {

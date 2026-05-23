@@ -322,7 +322,16 @@ function normaliseFixture(f) {
     status: status,
     elapsed: elapsed,
     kickoff: f.starting_at,
-    league: league.name || '',
+    league: (function() {
+      var name = league.name || '';
+      var country = league.country ? (league.country.name || '') : '';
+      // Disambiguate leagues with same name in different countries (Serie A, Pro League, etc.)
+      var ambiguous = ['Serie A', 'Serie B', 'Pro League', 'First Division', 'Super League', 'Primera Division'];
+      if (country && ambiguous.some(function(a) { return name === a; })) {
+        return name + ' (' + country + ')';
+      }
+      return name;
+    })(),
     leagueId: league.id,
     leagueLogo: league.image_path || null,
     venue: venue.name || '',
