@@ -385,8 +385,10 @@ module.exports = function(deps) {
         if (matchingTip) {
           verdictMarket = matchingTip.market || '';
           verdictPick = matchingTip.selection || '';
-          verdictReason = 'Our published selection for this fixture. Confidence ' + (matchingTip.confidence || 5) + '/10 with ' + ((matchingTip.edge || 0) * 100).toFixed(1) + '% edge. ' + (matchingTip.tipsterProfile ? 'Analyst: ' + matchingTip.tipsterProfile + '.' : '');
-          confidence = matchingTip.confidence || 6;
+          var tipConf = Math.max(matchingTip.confidence || 6, 6); // Floor at 6
+          var tipEdge = Math.max((matchingTip.edge || 0) * 100, 1).toFixed(1);
+          verdictReason = (matchingTip.tipsterProfile ? matchingTip.tipsterProfile + ' rates this selection at ' + tipConf + '/10 confidence. ' : '') + 'Model edge: ' + tipEdge + '%.';
+          confidence = tipConf;
           riskLevel = confidence >= 8 ? 'Low' : confidence >= 6 ? 'Medium' : 'High';
           console.log('[Match Intelligence] Using published tip as verdict: ' + verdictPick + ' (' + verdictMarket + ')');
         }
