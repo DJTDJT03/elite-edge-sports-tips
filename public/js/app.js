@@ -9197,15 +9197,22 @@ const App = {
       '</div>';
     }
 
-    // Streak
+    // Streak — always show the positive (best run), not current losses
     var streakHtml = '';
-    if (roi.streak && roi.streak.count >= 2) {
-      var sCol = roi.streak.type === 'win' ? '#22c55e' : '#ef4444';
-      var sIcon = roi.streak.type === 'win' ? '&#128293;' : '&#10060;';
-      streakHtml = '<div style="background:' + sCol + '15;border:1px solid ' + sCol + '33;border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
-        '<span style="font-size:24px;">' + sIcon + '</span>' +
-        '<span style="font-size:15px;font-weight:700;color:' + sCol + ';">' + roi.streak.count + '-bet ' + roi.streak.type + ' streak</span>' +
-        (roi.bestRun > 2 ? '<span style="font-size:12px;color:#94a3b8;margin-left:auto;">Best run: ' + roi.bestRun + ' winners</span>' : '') +
+    var bestRun = roi.bestRun || 0;
+    var isWinStreak = roi.streak && roi.streak.type === 'win' && roi.streak.count >= 2;
+    if (isWinStreak) {
+      // Currently on a winning streak — show it proudly
+      streakHtml = '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
+        '<span style="font-size:24px;">&#128293;</span>' +
+        '<span style="font-size:15px;font-weight:700;color:#22c55e;">' + roi.streak.count + '-bet win streak</span>' +
+        (bestRun > roi.streak.count ? '<span style="font-size:12px;color:#94a3b8;margin-left:auto;">Best ever: ' + bestRun + ' winners</span>' : '<span style="font-size:12px;color:#d4a843;margin-left:auto;">Personal best!</span>') +
+      '</div>';
+    } else if (bestRun >= 2) {
+      // Not on a win streak — show best run as motivation
+      streakHtml = '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
+        '<span style="font-size:24px;">&#127942;</span>' +
+        '<span style="font-size:15px;font-weight:700;color:#d4a843;">Best run: ' + bestRun + ' consecutive winners</span>' +
       '</div>';
     }
 
