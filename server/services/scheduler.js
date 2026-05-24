@@ -1507,6 +1507,13 @@ module.exports = function startScheduler(deps) {
       var tipsterProfile = candidate._tipsterProfile;
       var adjustedFactors = candidate._adjustedFactors;
 
+      // CONFIDENCE FLOOR: if we're publishing, minimum confidence is 6/10
+      // A published tip with confidence 2 undermines the entire platform
+      if ((candidate.confidence || 0) < 6) {
+        candidate.confidence = 6;
+        if (scored) scored.confidence = 6;
+      }
+
       // Get enrichment signals for this tip (may be empty/skipped)
       var enrichResult = enrichmentResults.get(tipId) || { signals: {}, skipped: true };
       var enrichSignals = (!enrichResult.skipped && !enrichResult.lowQuality && !enrichResult.parseError)
