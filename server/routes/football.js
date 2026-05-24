@@ -696,10 +696,23 @@ module.exports = function(deps) {
         match: {
           homeTeam: homeTeam.name || homeTeam || '',
           homeTeamId: homeTeam.id || 0,
-          homeTeamLogo: homeTeam.logo || '',
+          homeTeamLogo: homeTeam.logo || (function() {
+            // Fallback: try to find logo from SportMonks fixture list
+            if (sportMonks && sportMonks.isAvailable() && sportMonks._lastFixtures) {
+              var smF = sportMonks._lastFixtures.find(function(f) { return f.homeTeam && f.homeTeam.toLowerCase().indexOf((homeTeam.name || '').toLowerCase().substring(0,6)) !== -1; });
+              if (smF) return smF.homeTeamLogo || '';
+            }
+            return '';
+          })(),
           awayTeam: awayTeam.name || awayTeam || '',
           awayTeamId: awayTeam.id || 0,
-          awayTeamLogo: awayTeam.logo || '',
+          awayTeamLogo: awayTeam.logo || (function() {
+            if (sportMonks && sportMonks.isAvailable() && sportMonks._lastFixtures) {
+              var smF = sportMonks._lastFixtures.find(function(f) { return f.awayTeam && f.awayTeam.toLowerCase().indexOf((awayTeam.name || '').toLowerCase().substring(0,6)) !== -1; });
+              if (smF) return smF.awayTeamLogo || '';
+            }
+            return '';
+          })(),
           league: league.name || league || '',
           leagueLogo: league.logo || '',
           country: league.country || '',

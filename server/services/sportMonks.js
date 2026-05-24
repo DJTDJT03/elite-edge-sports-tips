@@ -90,11 +90,14 @@ SportMonks.prototype.getLivescores = function() {
 // FIXTURES BY DATE — past, today, or future
 // =========================================================================
 SportMonks.prototype.getFixturesByDate = function(dateStr) {
+  var self = this;
   return this._request('/fixtures/date/' + dateStr, {
     include: 'participants;scores;state;league;venue',
     per_page: 50,
   }).then(function(data) {
-    return (data.data || []).map(normaliseFixture);
+    var fixtures = (data.data || []).map(normaliseFixture);
+    self._lastFixtures = fixtures; // Cache for logo fallback in match intelligence
+    return fixtures;
   });
 };
 
