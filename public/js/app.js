@@ -12209,10 +12209,9 @@ const App = {
             markets.push({ sel: 'Both Teams to Score — Yes', market: 'BTTS', odds: bttsOdds, prob: 1 / bttsOdds });
           }
 
-          // If no odds data available, add a generic home win
-          if (markets.length === 0) {
-            markets.push({ sel: f.homeTeam + ' Win', market: 'Match Result', odds: 2.0, prob: 0.5 });
-          }
+          // If no real odds data available, SKIP this fixture entirely
+          // Never show fake evens — destroys credibility
+          if (markets.length === 0) return;
 
           // Sort by edge (model prob vs implied) — pick the market with the best value, not just the most likely
           markets.forEach(function(m) {
