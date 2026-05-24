@@ -472,6 +472,10 @@ module.exports = function(deps) {
         }
       }
 
+      // Confidence floor — never show below 6 or above 9 in auto-generated verdicts
+      if (confidence < 6) confidence = 6;
+      if (confidence > 9) confidence = 9;
+
       // Generate written analysis paragraphs
       var overviewText = homeTeam.name + ' welcome ' + awayTeam.name + ' to ' +
         (venue ? venue.name : 'their home ground') + ' in ' + league.name + ' action. ' +
@@ -690,29 +694,35 @@ module.exports = function(deps) {
         });
       } catch(e) { /* non-fatal — duplicate or DB error */ }
 
+      // Fetch SportMonks logos as fallback when API-Football is missing them
+      var _smLogos = { home: '', away: '' };
+      if ((!homeTeam.logo || !awayTeam.logo) && sportMonks && sportMonks.isAvailable()) {
+        try {
+          var _smFixtures = sportMonks._lastFixtures || [];
+          if (_smFixtures.length === 0) {
+            _smFixtures = await sportMonks.getFixturesByDate(new Date().toISOString().split('T')[0]);
+          }
+          var hName = (homeTeam.name || '').toLowerCase().substring(0, 6);
+          var aName = (awayTeam.name || '').toLowerCase().substring(0, 6);
+          _smFixtures.forEach(function(sf) {
+            if (sf.homeTeam && sf.homeTeam.toLowerCase().indexOf(hName) !== -1) _smLogos.home = sf.homeTeamLogo || '';
+            if (sf.awayTeam && sf.awayTeam.toLowerCase().indexOf(aName) !== -1) _smLogos.away = sf.awayTeamLogo || '';
+            if (sf.homeTeam && sf.homeTeam.toLowerCase().indexOf(aName) !== -1) _smLogos.away = sf.homeTeamLogo || '';
+            if (sf.awayTeam && sf.awayTeam.toLowerCase().indexOf(hName) !== -1) _smLogos.home = sf.awayTeamLogo || '';
+          });
+        } catch(e) {}
+      }
+
       res.json({
         fixtureId: parseInt(fixtureId),
         source: usedSportMonks ? 'sportmonks' : 'api-football',
         match: {
           homeTeam: homeTeam.name || homeTeam || '',
           homeTeamId: homeTeam.id || 0,
-          homeTeamLogo: homeTeam.logo || (function() {
-            // Fallback: try to find logo from SportMonks fixture list
-            if (sportMonks && sportMonks.isAvailable() && sportMonks._lastFixtures) {
-              var smF = sportMonks._lastFixtures.find(function(f) { return f.homeTeam && f.homeTeam.toLowerCase().indexOf((homeTeam.name || '').toLowerCase().substring(0,6)) !== -1; });
-              if (smF) return smF.homeTeamLogo || '';
-            }
-            return '';
-          })(),
+          homeTeamLogo: homeTeam.logo || _smLogos.home || '',
           awayTeam: awayTeam.name || awayTeam || '',
           awayTeamId: awayTeam.id || 0,
-          awayTeamLogo: awayTeam.logo || (function() {
-            if (sportMonks && sportMonks.isAvailable() && sportMonks._lastFixtures) {
-              var smF = sportMonks._lastFixtures.find(function(f) { return f.awayTeam && f.awayTeam.toLowerCase().indexOf((awayTeam.name || '').toLowerCase().substring(0,6)) !== -1; });
-              if (smF) return smF.awayTeamLogo || '';
-            }
-            return '';
-          })(),
+          awayTeamLogo: awayTeam.logo || _smLogos.away || '',
           league: league.name || league || '',
           leagueLogo: league.logo || '',
           country: league.country || '',
