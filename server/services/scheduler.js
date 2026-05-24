@@ -902,6 +902,40 @@ module.exports = function startScheduler(deps) {
           console.log('[Auto-Tips] Odds movement analysis skipped:', omErr.message);
         }
 
+        // =====================================================================
+        // MULTI-AGENT CONSENSUS — all agents debate each fixture
+        // =====================================================================
+        var ConsensusEngine = require('./consensusEngine');
+        var consensus = new ConsensusEngine(deps);
+        var consensusResults = [];
+
+        for (var ci = 0; ci < allScoredFixtures.length; ci++) {
+          var cEntry = allScoredFixtures[ci];
+          try {
+            var cResult = await consensus.analyse(cEntry.scored, oddsNormalised);
+            if (cResult && cResult.selection) {
+              // Override the scored fixture with consensus pick
+              cEntry.scored.selectedMarket = cResult.market;
+              cEntry.scored.selectedSelection = cResult.selection;
+              cEntry.scored.selectedOdds = cResult.odds;
+              cEntry.scored.modelProbability = cResult.modelProbability;
+              cEntry.scored.impliedProbability = cResult.impliedProbability;
+              cEntry.scored.edge = cResult.edge;
+              cEntry.confidence = cResult.confidence;
+              cEntry.edge = cResult.edge;
+              cEntry._consensus = {
+                level: cResult.agreementLabel,
+                agents: cResult.agentsAgreeing,
+                debate: cResult.debate,
+                gptVerdict: cResult.gptVerdict,
+              };
+              console.log('[Consensus] ' + cResult.fixture + ': ' + cResult.agreementLabel + ' → ' + cResult.selection + ' @ ' + cResult.odds.toFixed(2) + ' (conf ' + cResult.confidence + ', agents: ' + cResult.agentsAgreeing.join('+') + ')');
+            }
+          } catch(cErr) {
+            // Non-fatal — use original scoring
+          }
+        }
+
         // Primary filter: edge > 4% AND confidence >= 6
         footballCandidates = allScoredFixtures.filter(function(c) {
           return c.edge > 0.04 && c.confidence >= 6;
@@ -1519,6 +1553,17 @@ module.exports = function startScheduler(deps) {
 
       // Generate analysis — enrichment signals woven inline into template fields
       var analysis = scoringModel.generateAnalysis(scored, sport, enrichSignals, candidate._analystKey);
+
+      // Store consensus debate in analysis (visible to users)
+      if (candidate._consensus) {
+        analysis.consensus = candidate._consensus.level;
+        analysis.agentsAgreeing = candidate._consensus.agents;
+        analysis.debate = candidate._consensus.debate;
+        if (candidate._consensus.gptVerdict) {
+          analysis.gptVerdict = candidate._consensus.gptVerdict.agrees ? 'GPT agrees' : 'GPT cautions';
+          analysis.gptReasoning = candidate._consensus.gptVerdict.reasoning || '';
+        }
+      }
 
       // Odds movement explainer — if this selection has been shortening, ask Sonar why
       if (candidate._movement && candidate._movement.direction === 'shortening' && perplexityClient) {

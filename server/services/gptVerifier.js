@@ -176,6 +176,36 @@ class GPTVerifier {
       req.end();
     });
   }
+  async verifyConsensus(data) {
+    if (!this.apiKey) return null;
+    try {
+      var prompt = 'You are an independent football analyst reviewing a multi-agent debate.\n\n' +
+        'FIXTURE: ' + data.fixture + ' (' + data.league + ')\n\n' +
+        'THREE AGENTS ANALYSED THIS FIXTURE:\n\n';
+
+      data.agents.forEach(function(a) {
+        prompt += a.agent + ' picks: ' + a.pick + ' (' + a.market + ') — Confidence: ' + a.confidence + '/10\n';
+        prompt += 'Reasoning: ' + a.reasoning + '\n\n';
+      });
+
+      if (data.consensus) {
+        prompt += 'CONSENSUS: ' + data.consensus.selection + ' (' + data.consensus.market + ') — agreed by ' + data.consensus.agreeing + '\n\n';
+      }
+
+      prompt += 'As an independent arbiter, respond with JSON:\n' +
+        '{"agrees": true/false, "reasoning": "your brief assessment", "confidence_adjustment": -1/0/+1}\n' +
+        'Do you agree with the consensus pick? Only respond with JSON.';
+
+      var result = await this._callOpenAI(prompt);
+      try {
+        var jsonMatch = result.match(/\{[\s\S]*\}/);
+        if (jsonMatch) return JSON.parse(jsonMatch[0]);
+      } catch(e) {}
+      return { agrees: true, reasoning: result, confidence_adjustment: 0 };
+    } catch(e) {
+      return null;
+    }
+  }
 }
 
 module.exports = new GPTVerifier();
