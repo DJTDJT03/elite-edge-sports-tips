@@ -1416,16 +1416,18 @@ module.exports = function startScheduler(deps) {
     var selected = selectedFootball;
     var outsider = null;
 
-    // NAP must be a MAIN tip with confidence >= 7 (never the outsider)
+    // NAP = highest confidence tip (must be >= 5 to qualify as NAP)
+    // Sort selected by confidence descending to find the strongest pick
     var napIdx = -1;
+    var bestConf = 0;
     for (var ni = 0; ni < selected.length; ni++) {
-      if (!selected[ni]._isOutsider && selected[ni].confidence >= 7) { napIdx = ni; break; }
-    }
-    if (napIdx === -1) {
-      for (var ni2 = 0; ni2 < selected.length; ni2++) {
-        if (!selected[ni2]._isOutsider) { napIdx = ni2; break; }
+      if (!selected[ni]._isOutsider && (selected[ni].confidence || 0) > bestConf) {
+        bestConf = selected[ni].confidence || 0;
+        napIdx = ni;
       }
     }
+    // Don't mark NAP if best confidence is below 5 — no tip deserves NAP status at that level
+    if (bestConf < 5) napIdx = -1;
 
     // --- LOG SELECTED TIPS ---
     console.log('[Auto-Tips] Selected ' + selected.length + ' tips for publication:');
@@ -3233,7 +3235,8 @@ module.exports = function startScheduler(deps) {
         return;
       }
 
-      var nap = todayTips.sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); })[0] || null;
+      // Use the tip already marked as NAP (same as dashboard) — don't re-sort
+      var nap = todayTips.find(function(t) { return t.isNap; }) || null;
       var premiumTips = todayTips.filter(function(t) { return t.isPremium; });
 
       // Get yesterday's results
