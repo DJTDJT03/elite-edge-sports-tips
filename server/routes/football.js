@@ -16,6 +16,53 @@ module.exports = function(deps) {
         try {
           var smFixtures = await sportMonks.getFixturesByDate(date);
           if (smFixtures && smFixtures.length > 0) {
+            // Merge real odds from Odds API into SportMonks fixtures
+            if (oddsSource && process.env.ODDS_API_KEY && date === new Date().toISOString().split('T')[0]) {
+              try {
+                var oddsRaw = await oddsSource.fetch();
+                var oddsData = oddsSource.normalise(oddsRaw);
+                if (oddsData && oddsData.length > 0) {
+                  smFixtures.forEach(function(f) {
+                    if (f.homeOdds) return; // Already has odds
+                    var match = oddsData.find(function(o) {
+                      var oH = (o.homeTeam || '').toLowerCase();
+                      var oA = (o.awayTeam || '').toLowerCase();
+                      var fH = (f.homeTeam || '').toLowerCase();
+                      var fA = (f.awayTeam || '').toLowerCase();
+                      return (oH.indexOf(fH.substring(0, 6)) !== -1 || fH.indexOf(oH.substring(0, 6)) !== -1) &&
+                             (oA.indexOf(fA.substring(0, 6)) !== -1 || fA.indexOf(oA.substring(0, 6)) !== -1);
+                    });
+                    if (match && match.bookmakerOdds) {
+                      var bk = match.bookmakerOdds;
+                      var firstBk = Object.keys(bk)[0];
+                      if (firstBk && bk[firstBk]) {
+                        f.homeOdds = bk[firstBk][f.homeTeam] || bk[firstBk][Object.keys(bk[firstBk])[0]] || null;
+                        f.drawOdds = bk[firstBk]['Draw'] || bk[firstBk]['draw'] || null;
+                        f.awayOdds = bk[firstBk][f.awayTeam] || bk[firstBk][Object.keys(bk[firstBk])[2]] || null;
+                      }
+                      // Over/Under + BTTS from markets
+                      if (match.markets) {
+                        if (match.markets.totals) {
+                          var tBk = Object.keys(match.markets.totals)[0];
+                          if (tBk) {
+                            f.overOdds = match.markets.totals[tBk]['Over 2.5'] || match.markets.totals[tBk]['Over'] || null;
+                            f.underOdds = match.markets.totals[tBk]['Under 2.5'] || match.markets.totals[tBk]['Under'] || null;
+                          }
+                        }
+                        if (match.markets.btts) {
+                          var bBk = Object.keys(match.markets.btts)[0];
+                          if (bBk) {
+                            f.bttsOdds = match.markets.btts[bBk]['Yes'] || match.markets.btts[bBk]['yes'] || null;
+                          }
+                        }
+                      }
+                    }
+                  });
+                }
+              } catch(oddsErr) {
+                // Non-fatal — fixtures still show, just without odds
+              }
+            }
             return res.json({ live: true, fixtures: smFixtures, source: 'sportmonks', fetchedAt: new Date().toISOString() });
           }
         } catch(smErr) {

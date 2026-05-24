@@ -12209,8 +12209,7 @@ const App = {
             markets.push({ sel: 'Both Teams to Score — Yes', market: 'BTTS', odds: bttsOdds, prob: 1 / bttsOdds });
           }
 
-          // If no real odds data available, SKIP this fixture entirely
-          // Never show fake evens — destroys credibility
+          // Skip fixtures with no real odds — never show fake prices
           if (markets.length === 0) return;
 
           // Sort by edge (model prob vs implied) — pick the market with the best value, not just the most likely
