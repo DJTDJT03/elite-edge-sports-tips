@@ -258,13 +258,20 @@ function assignAnalyst(scored, sport) {
     if (factors.homeAway && factors.homeAway >= 0.85) return 'tactician';
   }
 
-  // The Scout gets big-price value plays and class droppers
+  // FOOTBALL: The Tactician is the default for all football — it's our specialist sport
+  if (sport === 'football') {
+    // Scout gets genuine big-price value plays only
+    if (odds >= 5.0) return 'scout';
+    // Everything else in football goes to The Tactician
+    return 'tactician';
+  }
+
+  // RACING: The Scout gets big-price value plays and class droppers
   if (odds >= 5.0) return 'scout';
   if (factors.class && factors.class >= 0.8 && odds >= 3.0) return 'scout';
 
   // The Professor gets data-strong, shorter-priced selections
   if (odds <= 3.0 && factors.form && factors.form >= 0.7) return 'professor';
-  if (sport === 'football' && factors.xG && factors.xG >= 0.7) return 'professor'; // strong xG
   if (factors.speedRatings && factors.speedRatings >= 0.7 && odds <= 4.0) return 'professor';
 
   // The Edge gets everything else — balanced middle-ground plays
