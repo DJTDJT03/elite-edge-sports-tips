@@ -966,23 +966,19 @@ app.post('/api/admin/trigger/autotune', deps.authenticate, deps.requireAdmin, as
 
 app.get('/api/admin/tuning-status', deps.authenticate, deps.requireAdmin, async (req, res) => {
   try {
-    var fs = require('fs');
-    var path = require('path');
-    var stateFile = path.join(__dirname, 'analyst_state.json');
-    var logFile = path.join(__dirname, 'tuning_log.jsonl');
-
+    // All state now in database — no filesystem dependency
     var state = null;
-    if (fs.existsSync(stateFile)) {
-      state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-    }
+    try {
+      var { rows: stateRows } = await db.query("SELECT details, timestamp FROM audit_log WHERE action = 'analyst_state' ORDER BY timestamp DESC LIMIT 1");
+      if (stateRows.length > 0) state = { weights: JSON.parse(stateRows[0].details), savedAt: stateRows[0].timestamp };
+    } catch(e) {}
 
     var recentLogs = [];
-    if (fs.existsSync(logFile)) {
-      var lines = fs.readFileSync(logFile, 'utf8').trim().split('\n').filter(Boolean);
-      recentLogs = lines.slice(-7).map(function(line) { try { return JSON.parse(line); } catch(e) { return null; } }).filter(Boolean);
-    }
+    try {
+      var { rows: logRows } = await db.query("SELECT details, timestamp FROM audit_log WHERE action = 'tuning_log' ORDER BY timestamp DESC LIMIT 7");
+      recentLogs = logRows.map(function(r) { try { return JSON.parse(r.details); } catch(e) { return null; } }).filter(Boolean);
+    } catch(e) {}
 
-    // Get latest audit_log entry for auto_tune
     var lastDbTune = null;
     try {
       var { rows } = await db.query("SELECT details, timestamp FROM audit_log WHERE action = 'auto_tune' ORDER BY timestamp DESC LIMIT 1");
@@ -990,8 +986,9 @@ app.get('/api/admin/tuning-status', deps.authenticate, deps.requireAdmin, async 
     } catch(e) {}
 
     res.json({
-      stateFileExists: !!state,
-      currentWeights: state,
+      stateExists: !!state,
+      currentWeights: state ? state.weights : null,
+      lastStateSaved: state ? state.savedAt : null,
       recentTuningCycles: recentLogs,
       lastDatabaseTune: lastDbTune,
       nextScheduled: '23:00 UK tonight',
