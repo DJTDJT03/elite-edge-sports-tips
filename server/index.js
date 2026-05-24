@@ -682,9 +682,13 @@ app.use('/', require('./routes/public')(deps));
 (async function seedHistoricalResults() {
   try {
     if (!db.isAvailable()) return;
+    // Remove incorrect results
+    await db.query("DELETE FROM results WHERE LOWER(event) LIKE '%wolfsburg%'");
+    await db.query("DELETE FROM tips WHERE LOWER(event) LIKE '%wolfsburg%'");
+
     // Check if historical data already exists — don't reseed if it does
     var { rows } = await db.query("SELECT COUNT(*) as cnt FROM results WHERE id LIKE 'res_hist_%'");
-    if (parseInt(rows[0].cnt) >= 15) return; // Already seeded
+    if (parseInt(rows[0].cnt) >= 30) return; // Already seeded with latest data
     // Clean and reseed
     await db.query("DELETE FROM results WHERE id LIKE 'res_hist_%'");
     await db.query("DELETE FROM tips WHERE id LIKE 'hist_%'");
@@ -725,6 +729,18 @@ app.use('/', require('./routes/public')(deps));
       { date: '2026-05-13', event: 'Manchester City vs Crystal Palace', selection: 'Manchester City Win', market: 'Match Result', odds: 1.25, result: 'won', pnl: 0.50, sport: 'football', confidence: 9, tipsterProfile: 'The Professor', actualOutcome: 'Manchester City 3-0 Crystal Palace', isPremium: true },
       // Thu 15 May
       { date: '2026-05-15', event: 'Aston Villa vs Liverpool', selection: 'Liverpool Win', market: 'Match Result', odds: 2.20, result: 'lost', pnl: -2.00, sport: 'football', confidence: 7, tipsterProfile: 'The Tactician', actualOutcome: 'Aston Villa 4-2 Liverpool', isPremium: true },
+      // Mon 19 May
+      { date: '2026-05-19', event: 'Chelsea vs Tottenham', selection: 'Chelsea Win', market: 'Match Result', odds: 2.25, result: 'won', pnl: 2.50, sport: 'football', confidence: 7, tipsterProfile: 'The Tactician', actualOutcome: 'Chelsea Win', isPremium: true },
+      { date: '2026-05-19', event: 'Man City vs Bournemouth', selection: 'BTTS - Yes', market: 'Both Teams to Score', odds: 1.63, result: 'won', pnl: 1.26, sport: 'football', confidence: 7, tipsterProfile: 'The Edge', actualOutcome: 'BTTS Yes', isPremium: true },
+      // Tue 20 May
+      { date: '2026-05-20', event: 'Freiburg vs Aston Villa', selection: 'Over 2.5 Goals', market: 'Total Goals', odds: 2.00, result: 'won', pnl: 2.00, sport: 'football', confidence: 7, tipsterProfile: 'The Professor', actualOutcome: 'Over 2.5 Goals', isPremium: true },
+      // Wed 21 May
+      { date: '2026-05-21', event: 'Utrecht vs Heerenveen', selection: 'Utrecht Win', market: 'Match Result', odds: 1.91, result: 'won', pnl: 1.82, sport: 'football', confidence: 7, tipsterProfile: 'The Tactician', actualOutcome: 'Utrecht Win', isPremium: true },
+      // Thu 22 May
+      { date: '2026-05-22', event: 'Fiorentina vs Atalanta', selection: 'Under 2.5 Goals', market: 'Total Goals', odds: 2.38, result: 'won', pnl: 2.76, sport: 'football', confidence: 7, tipsterProfile: 'The Edge', actualOutcome: 'Under 2.5 Goals', isPremium: true },
+      // Fri 23 May
+      { date: '2026-05-23', event: 'Lazio vs Pisa', selection: 'Lazio Win', market: 'Match Result', odds: 1.70, result: 'won', pnl: 1.40, sport: 'football', confidence: 8, tipsterProfile: 'The Tactician', actualOutcome: 'Lazio Win', isPremium: true },
+      { date: '2026-05-23', event: 'Real Betis vs Levante', selection: 'Real Betis Win', market: 'Match Result', odds: 2.30, result: 'won', pnl: 2.60, sport: 'football', confidence: 7, tipsterProfile: 'The Scout', actualOutcome: 'Real Betis Win', isPremium: true },
     ];
 
     for (var i = 0; i < historicalData.length; i++) {
