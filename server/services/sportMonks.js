@@ -324,7 +324,7 @@ function normaliseFixture(f) {
     awayGoals: awayGoals,
     status: status,
     elapsed: elapsed,
-    kickoff: f.starting_at,
+    kickoff: f.starting_at ? (f.starting_at.indexOf('T') === -1 && f.starting_at.indexOf('Z') === -1 ? f.starting_at.replace(' ', 'T') + 'Z' : f.starting_at) : null,
     league: (function() {
       var name = league.name || '';
       var country = league.country ? (league.country.name || '') : '';
