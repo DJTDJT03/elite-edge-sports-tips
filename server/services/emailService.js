@@ -640,6 +640,21 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
           </div>` : ''}
           ${isNapValue ? `<p style="color:#f59e0b;font-size:12px;font-weight:700;margin:8px 0 0;"><span style="background:#f59e0b;color:#0a0e1a;padding:2px 6px;border-radius:3px;font-size:10px;margin-right:6px;">VALUE PICK</span> This is a value selection at a bigger price &mdash; not a banker. Our model has identified a significant edge in the pricing.</p>` : ''}
           ${napEwAdvice ? `<p style="color:#3b82f6;font-size:12px;font-weight:600;margin:${isNapValue ? '4' : '8'}px 0 0;">&#9432; Advised each-way (E/W) at this price</p>` : ''}
+          ${nap.analysis ? (() => {
+            var a = nap.analysis;
+            var sections = [];
+            if (a.form) sections.push('<strong>FORM:</strong> ' + this._esc(String(a.form).substring(0, 200)));
+            if (a.headToHead || a.h2h) sections.push('<strong>H2H:</strong> ' + this._esc(String(a.headToHead || a.h2h).substring(0, 200)));
+            if (a.injuries) sections.push('<strong>INJURIES:</strong> ' + this._esc(String(a.injuries).substring(0, 200)));
+            if (a.tacticianInsight) sections.push('<strong>TACTICAL:</strong> ' + this._esc(String(a.tacticianInsight).substring(0, 200)));
+            if (a.riskNotes) sections.push('<strong>RISK:</strong> ' + this._esc(String(a.riskNotes).substring(0, 150)));
+            if (a.latestInjuryNews) sections.push('<strong style="color:#22c55e;">BREAKING INJURY NEWS:</strong> ' + this._esc(String(a.latestInjuryNews).substring(0, 200)));
+            if (a.latestTeamNews) sections.push('<strong style="color:#22c55e;">TEAM NEWS:</strong> ' + this._esc(String(a.latestTeamNews).substring(0, 200)));
+            if (sections.length > 0) {
+              return '<div style="margin-top:12px;padding:12px;background:#151929;border-radius:6px;border-left:3px solid #d4a843;"><p style="color:#d4a843;font-size:11px;font-weight:700;margin:0 0 8px;">DETAILED ANALYSIS:</p>' + sections.map(s => '<p style="color:#cbd5e1;font-size:12px;margin:4px 0;line-height:1.6;">' + s + '</p>').join('') + '</div>';
+            }
+            return '';
+          })() : ''}
         </div>`;
     })() : '';
 
@@ -662,7 +677,21 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
               ${tip.analysis && tip.analysis.consensus ? `<br><span style="background:${tip.analysis.consensus === 'UNANIMOUS' ? '#22c55e' : '#d4a843'};color:#0a0e1a;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;">${tip.analysis.consensus}</span> <span style="color:#94a3b8;font-size:11px;">${(tip.analysis.agentsAgreeing || []).join(' + ')} agree on this pick</span>` : ''}
               ${tip.analysis && tip.analysis.debate ? tip.analysis.debate.map(d => `<br><span style="color:#64748b;font-size:11px;"><strong style="color:#d4a843;">${this._esc(d.agent)}:</strong> ${this._esc(d.pick)} (${d.market}) &mdash; ${this._esc((d.reasoning || '').substring(0, 100))}</span>`).join('') : ''}
               ${tip.analysis && tip.analysis.gptVerdict ? `<br><span style="color:#60a5fa;font-size:11px;">&#129302; ${this._esc(tip.analysis.gptVerdict)}${tip.analysis.gptReasoning ? ': ' + this._esc(tip.analysis.gptReasoning.substring(0, 80)) : ''}</span>` : ''}
-              ${tip.analysis && tip.analysis.summary && !tip.analysis.debate ? `<br><span style="color:#94a3b8;font-size:12px;">${this._esc(tip.analysis.summary.substring(0, 200))}</span>` : ''}
+              ${tip.analysis ? (() => {
+                var a = tip.analysis;
+                var sections = [];
+                if (a.form) sections.push('<strong style="color:#d4a843;">FORM:</strong> ' + this._esc(String(a.form).substring(0, 150)));
+                if (a.headToHead || a.h2h) sections.push('<strong style="color:#d4a843;">H2H:</strong> ' + this._esc(String(a.headToHead || a.h2h).substring(0, 150)));
+                if (a.injuries) sections.push('<strong style="color:#d4a843;">INJURIES:</strong> ' + this._esc(String(a.injuries).substring(0, 150)));
+                if (a.tacticianInsight) sections.push('<strong style="color:#d4a843;">TACTICAL:</strong> ' + this._esc(String(a.tacticianInsight).substring(0, 150)));
+                if (a.latestInjuryNews) sections.push('<strong style="color:#22c55e;">BREAKING:</strong> ' + this._esc(String(a.latestInjuryNews).substring(0, 150)));
+                if (a.latestTeamNews) sections.push('<strong style="color:#22c55e;">TEAM NEWS:</strong> ' + this._esc(String(a.latestTeamNews).substring(0, 150)));
+                if (a.summary && !a.debate) sections.push(this._esc(String(a.summary).substring(0, 200)));
+                if (sections.length > 0) {
+                  return '<div style="margin-top:8px;padding:8px 10px;background:#151929;border-radius:4px;border-left:2px solid #2a2e3d;">' + sections.map(s => '<p style="color:#94a3b8;font-size:11px;margin:3px 0;line-height:1.5;">' + s + '</p>').join('') + '</div>';
+                }
+                return '';
+              })() : ''}
             </td>
           </tr>`;
       }).join('');
