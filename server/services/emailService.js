@@ -632,7 +632,12 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
         <div style="background:#1e2235;padding:16px;border-radius:8px;margin:16px 0;border-left:3px solid #d4a843;">
           <p style="color:#d4a843;font-size:12px;font-weight:700;text-transform:uppercase;margin:0 0 8px;">&#127919; NAP OF THE DAY</p>
           <h3 style="color:#ffffff;margin:0 0 4px;font-size:18px;">${this._esc(nap.selection)} @ ${nap.odds}</h3>
-          <p style="color:#94a3b8;font-size:13px;margin:0;">${this._esc(nap.event)} | Confidence: ${nap.confidence}/10</p>
+          <p style="color:#94a3b8;font-size:13px;margin:0;">${this._esc(nap.event)} | Confidence: ${nap.confidence}/10${nap.analysis && nap.analysis.consensus ? ' | ' + nap.analysis.consensus : ''}</p>
+          ${nap.analysis && nap.analysis.debate ? `<div style="margin-top:10px;padding:10px;background:#151929;border-radius:6px;">
+            <p style="color:#d4a843;font-size:11px;font-weight:700;margin:0 0 6px;">AGENT ANALYSIS:</p>
+            ${nap.analysis.debate.map(d => `<p style="color:#94a3b8;font-size:12px;margin:2px 0;line-height:1.5;"><strong style="color:#fff;">${this._esc(d.agent)}:</strong> ${this._esc(d.pick)} &mdash; ${this._esc((d.reasoning || '').substring(0, 120))}</p>`).join('')}
+            ${nap.analysis.gptVerdict ? `<p style="color:#60a5fa;font-size:12px;margin:6px 0 0;">&#129302; <strong>GPT Arbiter:</strong> ${this._esc(nap.analysis.gptVerdict)}${nap.analysis.gptReasoning ? ' &mdash; ' + this._esc(nap.analysis.gptReasoning.substring(0, 100)) : ''}</p>` : ''}
+          </div>` : ''}
           ${isNapValue ? `<p style="color:#f59e0b;font-size:12px;font-weight:700;margin:8px 0 0;"><span style="background:#f59e0b;color:#0a0e1a;padding:2px 6px;border-radius:3px;font-size:10px;margin-right:6px;">VALUE PICK</span> This is a value selection at a bigger price &mdash; not a banker. Our model has identified a significant edge in the pricing.</p>` : ''}
           ${napEwAdvice ? `<p style="color:#3b82f6;font-size:12px;font-weight:600;margin:${isNapValue ? '4' : '8'}px 0 0;">&#9432; Advised each-way (E/W) at this price</p>` : ''}
         </div>`;
@@ -654,7 +659,10 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
               ${ewAdvice ? '<span style="color:#3b82f6;font-weight:700;font-size:11px;"> E/W</span>' : ''}
               <span style="color:#94a3b8;"> &mdash; ${this._esc(tip.event)}</span>
               ${isValue ? '<br><span style="background:#f59e0b;color:#0a0e1a;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;">VALUE PICK</span> <span style="color:#f59e0b;font-size:11px;">Bigger price &mdash; not a banker. Model edge identified in the pricing.</span>' : ''}
-              ${tip.analysis && tip.analysis.summary ? `<br><span style="color:#94a3b8;font-size:12px;">${this._esc(tip.analysis.summary.substring(0, 120))}</span>` : ''}
+              ${tip.analysis && tip.analysis.consensus ? `<br><span style="background:${tip.analysis.consensus === 'UNANIMOUS' ? '#22c55e' : '#d4a843'};color:#0a0e1a;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;">${tip.analysis.consensus}</span> <span style="color:#94a3b8;font-size:11px;">${(tip.analysis.agentsAgreeing || []).join(' + ')} agree on this pick</span>` : ''}
+              ${tip.analysis && tip.analysis.debate ? tip.analysis.debate.map(d => `<br><span style="color:#64748b;font-size:11px;"><strong style="color:#d4a843;">${this._esc(d.agent)}:</strong> ${this._esc(d.pick)} (${d.market}) &mdash; ${this._esc((d.reasoning || '').substring(0, 100))}</span>`).join('') : ''}
+              ${tip.analysis && tip.analysis.gptVerdict ? `<br><span style="color:#60a5fa;font-size:11px;">&#129302; ${this._esc(tip.analysis.gptVerdict)}${tip.analysis.gptReasoning ? ': ' + this._esc(tip.analysis.gptReasoning.substring(0, 80)) : ''}</span>` : ''}
+              ${tip.analysis && tip.analysis.summary && !tip.analysis.debate ? `<br><span style="color:#94a3b8;font-size:12px;">${this._esc(tip.analysis.summary.substring(0, 200))}</span>` : ''}
             </td>
           </tr>`;
       }).join('');

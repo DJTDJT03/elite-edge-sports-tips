@@ -276,10 +276,23 @@ class TelegramBot {
         var tip = tips[i];
         var napLabel = tip.isNap ? ' \u2B50 <b>NAP</b>' : '';
         var confBar = tip.confidence >= 8 ? '\uD83D\uDD25' : tip.confidence >= 7 ? '\u2705' : '\u26A1';
-        text += confBar + ' <b>' + (tip.selection || '') + '</b>' + napLabel + '\n';
+        var analysis = tip.analysis || {};
+        var consensusLabel = analysis.consensus ? ' [' + analysis.consensus + ']' : '';
+        text += confBar + ' <b>' + (tip.selection || '') + '</b>' + napLabel + consensusLabel + '\n';
         text += '   ' + (tip.event || '') + '\n';
         text += '   ' + (tip.market || '') + ' @ <b>' + (tip.odds || '-') + '</b> | Conf: ' + (tip.confidence || '-') + '/10\n';
-        if (tip.tipsterProfile) text += '   Analyst: ' + tip.tipsterProfile + '\n';
+        // Show agent debate
+        if (analysis.debate && analysis.debate.length > 0) {
+          analysis.debate.forEach(function(d) {
+            var emoji = d.pick === tip.selection ? '\u2705' : '\u274C';
+            text += '   ' + emoji + ' ' + d.agent + ': ' + d.pick + '\n';
+          });
+          if (analysis.gptVerdict) {
+            text += '   \uD83E\uDD16 GPT: ' + analysis.gptVerdict + '\n';
+          }
+        } else if (tip.tipsterProfile) {
+          text += '   Analyst: ' + tip.tipsterProfile + '\n';
+        }
         text += '\n';
       }
 
