@@ -375,11 +375,106 @@ var WorldCup = (function() {
     return picker + rankings;
   }
 
+  function renderOurPicks() {
+    var groupPicks = {
+      A: { winner: 'Mexico', runnerUp: 'South Korea', reasoning: 'Home advantage at Estadio Azteca gives Mexico the edge. Son Heung-min carries South Korea through.' },
+      B: { winner: 'Switzerland', runnerUp: 'Canada', reasoning: 'Swiss tactical discipline wins the group. Canada benefit from home soil in Toronto.' },
+      C: { winner: 'Brazil', runnerUp: 'Morocco', reasoning: 'Brazilian talent overcomes Ancelotti\'s limited prep time. Morocco are genuine — 2022 semi-finalists.' },
+      D: { winner: 'USA', runnerUp: 'Turkey', reasoning: 'Home crowd across 11 venues. Pulisic, McKennie, Reyna. Turkey are dark horses with Calhanoglu + Yildiz.' },
+      E: { winner: 'Germany', runnerUp: 'Ecuador', reasoning: 'Musiala + Wirtz make Germany genuine contenders. Ecuador\'s South American quality underrated.' },
+      F: { winner: 'Netherlands', runnerUp: 'Japan', reasoning: 'Dutch class tells. Japan are genuine dark horses — beat Germany and Spain in 2022.' },
+      G: { winner: 'Belgium', runnerUp: 'Egypt', reasoning: 'Golden generation\'s last shot. De Bruyne, Doku. Salah carries Egypt.' },
+      H: { winner: 'Spain', runnerUp: 'Uruguay', reasoning: 'Euro 2024 champions. Best squad in tournament. Rodri + Pedri + Yamal.' },
+      I: { winner: 'France', runnerUp: 'Senegal', reasoning: 'Mbapp\u00e9 era. Deepest talent pool in Europe. Senegal\'s AFCON quality.' },
+      J: { winner: 'Argentina', runnerUp: 'Austria', reasoning: 'Defending champions. Messi\'s farewell. Rangnick\'s Austria will push them.' },
+      K: { winner: 'Portugal', runnerUp: 'Colombia', reasoning: 'Ronaldo\'s farewell tournament. Squad depth beyond CR7. Colombia\'s D\u00edaz electric.' },
+      L: { winner: 'England', runnerUp: 'Croatia', reasoning: 'Most talented squad in decades. Bellingham, Saka, Foden. Modric\'s last dance for Croatia.' },
+    };
+
+    var knockoutPicks = [
+      { stage: 'Quarter-Finals', matches: [
+        { home: 'France', away: 'Netherlands', pick: 'France', conf: 7 },
+        { home: 'Brazil', away: 'England', pick: 'England', conf: 7 },
+        { home: 'Spain', away: 'USA', pick: 'Spain', conf: 9 },
+        { home: 'Argentina', away: 'Portugal', pick: 'Argentina', conf: 7 },
+      ]},
+      { stage: 'Semi-Finals', matches: [
+        { home: 'France', away: 'England', pick: 'England', conf: 6 },
+        { home: 'Spain', away: 'Argentina', pick: 'Spain', conf: 7 },
+      ]},
+      { stage: 'THE FINAL', matches: [
+        { home: 'Spain', away: 'England', pick: 'Spain', conf: 8, score: '2-1' },
+      ]},
+    ];
+
+    var html = '<div style="margin-bottom:24px;">' +
+      '<div style="display:inline-block;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);padding:6px 14px;border-radius:6px;font-size:12px;color:#22c55e;font-weight:700;margin-bottom:16px;">MULTI-AGENT CONSENSUS \u2014 The Tactician + The Professor + The Scout + GPT Arbiter</div>' +
+      '<h3 style="font-size:20px;font-weight:900;color:#d4a843;margin-bottom:4px;">Predicted Group Winners</h3>' +
+      '<p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:16px;">Our AI analysts predict who tops each group and qualifies for the knockouts</p>' +
+    '</div>';
+
+    // Group predictions grid
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-bottom:28px;">';
+    for (var letter in groupPicks) {
+      var gp = groupPicks[letter];
+      html += '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px;">' +
+        '<div style="font-size:11px;font-weight:800;color:#d4a843;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;">Group ' + letter + '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+          '<span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;">WINNER</span>' +
+          '<span style="font-size:14px;font-weight:700;color:#fff;">' + getFlag(gp.winner) + ' ' + gp.winner + '</span>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
+          '<span style="background:rgba(212,168,67,0.15);color:#d4a843;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;">QUALIFY</span>' +
+          '<span style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.7);">' + getFlag(gp.runnerUp) + ' ' + gp.runnerUp + '</span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.4;">' + gp.reasoning + '</div>' +
+      '</div>';
+    }
+    html += '</div>';
+
+    // Knockout predictions
+    knockoutPicks.forEach(function(round) {
+      var isFinal = round.stage === 'THE FINAL';
+      html += '<div style="margin-bottom:20px;">' +
+        '<div style="font-size:12px;font-weight:800;color:#d4a843;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(212,168,67,0.15);">' + round.stage + '</div>';
+
+      round.matches.forEach(function(m) {
+        var pickIsHome = m.pick === m.home;
+        html += '<div style="' + (isFinal ? 'background:linear-gradient(135deg,rgba(212,168,67,0.1),rgba(212,168,67,0.04));border:2px solid rgba(212,168,67,0.3);' : 'background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);') + 'border-radius:10px;padding:14px 18px;margin-bottom:8px;display:flex;align-items:center;gap:14px;">' +
+          '<div style="flex:1;display:flex;align-items:center;gap:8px;">' +
+            '<span style="font-size:15px;font-weight:' + (pickIsHome ? '900;color:#22c55e' : '600;color:rgba(255,255,255,0.5)') + ';">' + getFlag(m.home) + ' ' + m.home + '</span>' +
+            '<span style="color:rgba(255,255,255,0.2);font-size:12px;">vs</span>' +
+            '<span style="font-size:15px;font-weight:' + (!pickIsHome ? '900;color:#22c55e' : '600;color:rgba(255,255,255,0.5)') + ';">' + m.away + ' ' + getFlag(m.away) + '</span>' +
+          '</div>' +
+          (m.score ? '<div style="font-size:24px;font-weight:900;color:#d4a843;">' + m.score + '</div>' : '') +
+          '<div style="text-align:right;">' +
+            '<div style="font-size:12px;font-weight:800;color:#22c55e;background:rgba(34,197,94,0.1);padding:3px 10px;border-radius:4px;">' + m.pick + '</div>' +
+            '<div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px;">Conf: ' + m.conf + '/10</div>' +
+          '</div>' +
+        '</div>';
+      });
+
+      if (isFinal) {
+        html += '<div style="text-align:center;margin-top:12px;font-size:16px;font-weight:900;color:#d4a843;">SPAIN \u2014 WORLD CHAMPIONS 2026</div>' +
+          '<div style="text-align:center;font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">Yamal 23\' | Bellingham 58\' | Pedri 76\'</div>';
+      }
+      html += '</div>';
+    });
+
+    html += '<div style="text-align:center;padding:16px;background:rgba(255,255,255,0.02);border-radius:10px;margin-top:12px;">' +
+      '<div style="font-size:13px;color:rgba(255,255,255,0.4);font-style:italic;">Emotion says France or England. Data says Spain.</div>' +
+      '<div style="font-size:11px;color:rgba(255,255,255,0.25);margin-top:4px;">Full analysis: eliteedgesports.co.uk | 18+ | BeGambleAware.org</div>' +
+    '</div>';
+
+    return html;
+  }
+
   function renderTabContent() {
     switch (_tab) {
       case 'fixtures': return renderFixtures();
       case 'groups': return renderGroups();
       case 'bracket': return renderBracket();
+      case 'our-picks': return renderOurPicks();
       case 'leaderboard': return renderLeaderboard();
       case 'predictions': return renderMyPredictions();
       case 'nations': return renderNationWars();
@@ -400,7 +495,7 @@ var WorldCup = (function() {
           renderCountdown() +
         '</div>' +
         '<div class="wc-tabs">' +
-          ['fixtures', 'groups', 'bracket', 'predictions', 'leaderboard', 'nations'].map(function(t) {
+          ['fixtures', 'groups', 'bracket', 'our-picks', 'predictions', 'leaderboard', 'nations'].map(function(t) {
             var label = t.charAt(0).toUpperCase() + t.slice(1);
             if (t === 'nations') label = 'Nation Wars';
             return '<div class="wc-tab' + (_tab === t ? ' active' : '') + '" onclick="WorldCup.switchTab(\'' + t + '\')">' + label + '</div>';

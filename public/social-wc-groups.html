@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+  html, body { width: 1080px; overflow-x: hidden; }
+  body { font-family: 'Inter', sans-serif; background: #0a0e1a; color: #fff; }
+  .page { width: 1080px; min-height: 1080px; padding: 48px; position: relative; }
+  .page::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #d4a843, #b8902f, #d4a843); }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; }
+  .logo-row { display: flex; align-items: center; gap: 14px; }
+  .diamond { width: 48px; height: 48px; border: 2.5px solid #d4a843; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; }
+  .diamond span { transform: rotate(-45deg); color: #d4a843; font-weight: 900; font-size: 18px; }
+  .brand { font-size: 22px; font-weight: 900; }
+  .brand-sub { font-size: 10px; color: #d4a843; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+  .badge { background: rgba(212,168,67,0.1); border: 1px solid rgba(212,168,67,0.3); padding: 8px 16px; border-radius: 8px; }
+  .badge .main { font-size: 13px; font-weight: 800; color: #d4a843; }
+  .badge .sub { font-size: 10px; color: rgba(255,255,255,0.4); }
+  .title { font-size: 32px; font-weight: 900; color: #22c55e; margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: rgba(255,255,255,0.4); margin-bottom: 28px; }
+  .groups { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .group { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 14px; }
+  .group-letter { font-size: 11px; font-weight: 800; color: #d4a843; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; }
+  .group-team { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px; }
+  .group-team.winner { color: #22c55e; font-weight: 700; }
+  .group-team.runner { color: #d4a843; font-weight: 600; }
+  .group-team.out { color: rgba(255,255,255,0.25); }
+  .pos { font-size: 10px; font-weight: 800; min-width: 16px; color: rgba(255,255,255,0.3); }
+  .pos.w { color: #22c55e; }
+  .pos.r { color: #d4a843; }
+  .tag { font-size: 9px; padding: 2px 6px; border-radius: 3px; margin-left: auto; font-weight: 700; }
+  .tag.win { background: rgba(34,197,94,0.15); color: #22c55e; }
+  .tag.qual { background: rgba(212,168,67,0.15); color: #d4a843; }
+  .footer { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.05); }
+  .footer-url { font-size: 14px; font-weight: 700; color: #d4a843; }
+  .footer-disc { font-size: 9px; color: rgba(255,255,255,0.2); }
+  .footer-cta { background: linear-gradient(135deg, #d4a843, #b8902f); color: #0a0e1a; padding: 10px 20px; border-radius: 8px; font-weight: 800; font-size: 12px; }
+  .consensus { display: inline-block; background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.2); padding: 4px 10px; border-radius: 6px; font-size: 11px; color: #22c55e; font-weight: 700; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="logo-row">
+      <div class="diamond"><span>EE</span></div>
+      <div><div class="brand">Elite Edge</div><div class="brand-sub">AI Sports Intelligence</div></div>
+    </div>
+    <div class="badge"><div class="main">WORLD CUP 2026</div><div class="sub">Group Stage Predictions</div></div>
+  </div>
+
+  <div class="title">GROUP WINNERS PREDICTED</div>
+  <div class="subtitle">Multi-agent consensus analysis — The Tactician, The Professor, The Scout</div>
+  <div class="consensus">POWERED BY 3 AI ANALYSTS + GPT VERIFICATION</div>
+
+  <div class="groups">
+    <div class="group">
+      <div class="group-letter">Group A</div>
+      <div class="group-team winner"><span class="pos w">1</span> Mexico <span class="tag win">WINNER</span></div>
+      <div class="group-team runner"><span class="pos r">2</span> South Korea <span class="tag qual">QUALIFY</span></div>
+      <div class="group-team out"><span class="pos">3</span> Czech Republic</div>
+      <div class="group-team out"><span class="pos">4</span> South Africa</div>
+    </div>
+    <div class="group">
+      <div class="group-letter">Group B</div>
+      <div class="group-team winner"><span class="pos w">1</span> Switzerland <span class="tag win">WINNER</span></div>
+      <div class="group-team runner"><span class="pos r">2</span> Canada <span class="tag qual">QUALIFY</span></div>
+      <div class="group-team out"><span class="pos">3</span> Bosnia & Herz.</div>
+      <div class="group-team out"><span class="pos">4</span> Qatar</div>
+    </div>
+    <div class="group">
+      <div class="group-letter">Group C</div>
+      <div class="group-team winner"><span class="pos w">1</span> Brazil <span class="tag win">WINNER</span></div>
+      <div class="group-team runner"><span class="pos r">2</span> Morocco <span class="tag qual">QUALIFY</span></div>
+      <div class="group-team out"><span class="pos">3</span> Scotland</div>
+      <div class="group-team out"><span class="pos">4</span> Haiti</div>
+    </div>
+    <div class="group">
+      <div class="group-letter">Group D</div>
+      <div class="group-team winner"><span class="pos w">1</span> USA <span class="tag win">WINNER</span></div>
+      <div class="group-team runner"><span class="pos r">2</span> Turkey <span class="tag qual">QUALIFY</span></div>
+      <div class="group-team out"><span class="pos">3</span> Australia</div>
+      <div class="group-team out"><span class="pos">4</span> Paraguay</div>
+    </div>
+    <div class="group">
+      <div class="group-letter">Group E</div>
+      <div class="group-team winner"><span class="pos w">1</span> Germany <span class="tag win">WINNER</span></div>
+      <div class="group-team runner"><span class="pos r">2</span> Ecuador <span class="tag qual">QUALIFY</span></div>
+      <div class="group-team out"><span class="pos">3</span> Ivory Coast</div>
+      <div class="group-team out"><span class="pos">4</span> Curacao</div>
+    </div>
+    <div class="group">
+      <div class="group-letter">Group F</div>
+      <div class="group-team winner"><span class="pos w">1</span> Netherlands <span class="tag win">WINNER</span></div>
+      <div class="group-team runner"><span class="pos r">2</span> Japan <span class="tag qual">QUALIFY</span></div>
+      <div class="group-team out"><span class="pos">3</span> Sweden</div>
+      <div class="group-team out"><span class="pos">4</span> Tunisia</div>
+    </div>
+    <div class="group">
+      <div class="group-letter">Group G</div>
+      <div class="group-team winner"><span class="pos w">1</span> Belgium <span class="tag win">WINNER</span></div>
+      <div class="group-team runner"><span class="pos r">2</span> Egypt <span class="tag qual">QUALIFY</span></div>
+      <div class="group-team out"><span class="pos">3</span> Iran</div>
+      <div class="group-team out"><span class="pos">4</span> New Zealand</div>
+    </div>
+    <div class="group">
+      <div class="group-letter">Group H</div>
+      <div class="group-team winner"><span class="pos w">1</span> Spain <span class="tag win">WINNER</span></div>
+      <div class="group-team runner"><span class="pos r">2</span> Uruguay <span class="tag qual">QUALIFY</span></div>
+      <div class="group-team out"><span class="pos">3</span> Saudi Arabia</div>
+      <div class="group-team out"><span class="pos">4</span> Cape Verde</div>
+    </div>
+    <div class="group">
+      <div class="group-letter">Group I</div>
+      <div class="group-team winner"><span class="pos w">1</span> France <span class="tag win">WINNER</span></div>
+      <div class="group-team runner"><span class="pos r">2</span> Senegal <span class="tag qual">QUALIFY</span></div>
+      <div class="group-team out"><span class="pos">3</span> Norway</div>
+      <div class="group-team out"><span class="pos">4</span> Iraq</div>
+    </div>
+    <div class="group">
+      <div class="group-letter">Group J</div>
+      <div class="group-team winner"><span class="pos w">1</span> Argentina <span class="tag win">WINNER</span></div>
+      <div class="group-team runner"><span class="pos r">2</span> Austria <span class="tag qual">QUALIFY</span></div>
+      <div class="group-team out"><span class="pos">3</span> Algeria</div>
+      <div class="group-team out"><span class="pos">4</span> Jordan</div>
+    </div>
+    <div class="group">
+      <div class="group-letter">Group K</div>
+      <div class="group-team winner"><span class="pos w">1</span> Portugal <span class="tag win">WINNER</span></div>
+      <div class="group-team runner"><span class="pos r">2</span> Colombia <span class="tag qual">QUALIFY</span></div>
+      <div class="group-team out"><span class="pos">3</span> Uzbekistan</div>
+      <div class="group-team out"><span class="pos">4</span> DR Congo</div>
+    </div>
+    <div class="group">
+      <div class="group-letter">Group L</div>
+      <div class="group-team winner"><span class="pos w">1</span> England <span class="tag win">WINNER</span></div>
+      <div class="group-team runner"><span class="pos r">2</span> Croatia <span class="tag qual">QUALIFY</span></div>
+      <div class="group-team out"><span class="pos">3</span> Ghana</div>
+      <div class="group-team out"><span class="pos">4</span> Panama</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div><div class="footer-url">eliteedgesports.co.uk</div><div class="footer-disc">18+ | BeGambleAware.org | Predictions not guarantees</div></div>
+    <div class="footer-cta">SEE FULL TOURNAMENT ANALYSIS</div>
+  </div>
+</div>
+</body>
+</html>
