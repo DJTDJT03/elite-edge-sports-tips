@@ -696,23 +696,29 @@ module.exports = function(deps) {
         });
       } catch(e) { /* non-fatal — duplicate or DB error */ }
 
-      // Fetch SportMonks logos as fallback when API-Football is missing them
+      // Fetch SportMonks logos — always try, using the fixture's actual date
       var _smLogos = { home: '', away: '' };
-      if ((!homeTeam.logo || !awayTeam.logo) && sportMonks && sportMonks.isAvailable()) {
+      if (sportMonks && sportMonks.isAvailable()) {
         try {
-          var _smFixtures = sportMonks._lastFixtures || [];
-          if (_smFixtures.length === 0) {
-            _smFixtures = await sportMonks.getFixturesByDate(new Date().toISOString().split('T')[0]);
-          }
-          var hName = (homeTeam.name || '').toLowerCase().substring(0, 6);
-          var aName = (awayTeam.name || '').toLowerCase().substring(0, 6);
-          _smFixtures.forEach(function(sf) {
-            if (sf.homeTeam && sf.homeTeam.toLowerCase().indexOf(hName) !== -1) _smLogos.home = sf.homeTeamLogo || '';
-            if (sf.awayTeam && sf.awayTeam.toLowerCase().indexOf(aName) !== -1) _smLogos.away = sf.awayTeamLogo || '';
-            if (sf.homeTeam && sf.homeTeam.toLowerCase().indexOf(aName) !== -1) _smLogos.away = sf.homeTeamLogo || '';
-            if (sf.awayTeam && sf.awayTeam.toLowerCase().indexOf(hName) !== -1) _smLogos.home = sf.awayTeamLogo || '';
+          // Use the fixture's kickoff date, not today (could be viewing yesterday's match)
+          var fixtureDate = kickoff ? kickoff.toString().split('T')[0].split(' ')[0].substring(0, 10) : new Date().toISOString().split('T')[0];
+          var _smFixtures = await sportMonks.getFixturesByDate(fixtureDate);
+          var hName = (homeTeam.name || '').toLowerCase().substring(0, 5);
+          var aName = (awayTeam.name || '').toLowerCase().substring(0, 5);
+          (_smFixtures || []).forEach(function(sf) {
+            var sfH = (sf.homeTeam || '').toLowerCase();
+            var sfA = (sf.awayTeam || '').toLowerCase();
+            if (sfH.indexOf(hName) !== -1 || hName.indexOf(sfH.substring(0,5)) !== -1) _smLogos.home = _smLogos.home || sf.homeTeamLogo || '';
+            if (sfA.indexOf(aName) !== -1 || aName.indexOf(sfA.substring(0,5)) !== -1) _smLogos.away = _smLogos.away || sf.awayTeamLogo || '';
+            if (sfH.indexOf(aName) !== -1 || aName.indexOf(sfH.substring(0,5)) !== -1) _smLogos.away = _smLogos.away || sf.homeTeamLogo || '';
+            if (sfA.indexOf(hName) !== -1 || hName.indexOf(sfA.substring(0,5)) !== -1) _smLogos.home = _smLogos.home || sf.awayTeamLogo || '';
           });
-        } catch(e) {}
+          if (_smLogos.home || _smLogos.away) {
+            console.log('[Match Intelligence] SportMonks logos: home=' + (!!_smLogos.home) + ' away=' + (!!_smLogos.away));
+          }
+        } catch(e) {
+          // Non-fatal
+        }
       }
 
       res.json({
@@ -721,10 +727,10 @@ module.exports = function(deps) {
         match: {
           homeTeam: homeTeam.name || homeTeam || '',
           homeTeamId: homeTeam.id || 0,
-          homeTeamLogo: homeTeam.logo || _smLogos.home || '',
+          homeTeamLogo: _smLogos.home || homeTeam.logo || '',
           awayTeam: awayTeam.name || awayTeam || '',
           awayTeamId: awayTeam.id || 0,
-          awayTeamLogo: awayTeam.logo || _smLogos.away || '',
+          awayTeamLogo: _smLogos.away || awayTeam.logo || '',
           league: league.name || league || '',
           leagueLogo: league.logo || '',
           country: league.country || '',
