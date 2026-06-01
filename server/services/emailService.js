@@ -263,8 +263,16 @@ ${preheader ? `<span style="display:none;font-size:1px;color:#0a0e1a;line-height
     </tr>
     <tr>
       <td style="padding:20px 24px;text-align:center;background:#0a0e1a;border-top:1px solid #2a2e3d;">
-        <p style="color:#64748b;font-size:11px;margin:0 0 8px;">Elite Edge Sports Tips Ltd.</p>
-        <p style="color:#64748b;font-size:11px;margin:0 0 8px;">123 Business Address, London, UK (placeholder)</p>
+        <p style="color:#64748b;font-size:11px;margin:0 0 12px;">Elite Edge Sports Tips Ltd.</p>
+        <p style="color:#64748b;font-size:11px;margin:0 0 12px;">
+          <a href="https://x.com/EliteEdgeLtd" style="color:#94a3b8;text-decoration:none;margin:0 8px;">X/Twitter</a>
+          &bull;
+          <a href="https://www.instagram.com/eliteedgeltd/" style="color:#94a3b8;text-decoration:none;margin:0 8px;">Instagram</a>
+          &bull;
+          <a href="https://www.linkedin.com/company/elite-edge-sports-ltd/" style="color:#94a3b8;text-decoration:none;margin:0 8px;">LinkedIn</a>
+          &bull;
+          <a href="https://t.me/EliteEdgeSportsTips" style="color:#94a3b8;text-decoration:none;margin:0 8px;">Telegram</a>
+        </p>
         <p style="color:#64748b;font-size:11px;margin:0 0 8px;">
           <a href="https://eliteedgesports.co.uk/#/unsubscribe" style="color:#94a3b8;text-decoration:underline;">Unsubscribe</a>
           &nbsp;|&nbsp;
