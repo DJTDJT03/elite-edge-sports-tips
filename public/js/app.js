@@ -5797,7 +5797,7 @@ const App = {
             sectionLabel = 'Live Fixtures';
             showRefresh = true;
           }
-          if (tabFixtures.length === 0) return '';
+          if (tabFixtures.length === 0) return '<div class="section"><div style="text-align:center;padding:40px 20px;"><div style="font-size:40px;margin-bottom:12px;">&#9917;</div><div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">No Fixtures ' + (dateTab === 'today' ? 'Today' : 'For This Date') + '</div><div style="font-size:13px;color:rgba(255,255,255,0.4);max-width:400px;margin:0 auto;">Most European leagues are between seasons. The World Cup kicks off June 11 with 104 matches across 39 days. Our daily previews and AI analysis start then.</div><div style="margin-top:16px;"><a href="#/world-cup" style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;padding:10px 24px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">View World Cup Hub</a></div></div></div>';
           // Group by league
           var tabByLeague = {};
           tabFixtures.forEach(function(f) {
