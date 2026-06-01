@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+  html, body { width: 1080px; height: 1080px; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; background: linear-gradient(160deg, #0a0e1a 0%, #0f1528 50%, #0a0e1a 100%); position: relative; }
+  body::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #d4a843, #b8902f, #d4a843); }
+  body::after { content: ''; position: absolute; top: -200px; right: -200px; width: 500px; height: 500px; background: radial-gradient(circle, rgba(34,197,94,0.06), transparent 70%); }
+  .pad { padding: 48px; height: 100%; display: flex; flex-direction: column; position: relative; z-index: 1; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; }
+  .logo-row { display: flex; align-items: center; gap: 12px; }
+  .diamond { width: 44px; height: 44px; border: 2px solid #d4a843; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; }
+  .diamond span { transform: rotate(-45deg); color: #d4a843; font-weight: 900; font-size: 16px; }
+  .brand { font-size: 20px; font-weight: 900; color: #fff; }
+  .brand-sub { font-size: 9px; color: #d4a843; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+  .date-pill { background: rgba(212,168,67,0.1); border: 1px solid rgba(212,168,67,0.3); padding: 8px 16px; border-radius: 8px; color: #d4a843; font-size: 12px; font-weight: 700; }
+  .hero { font-size: 38px; font-weight: 900; color: #22c55e; margin-bottom: 4px; line-height: 1.1; }
+  .hero-sub { font-size: 15px; color: rgba(255,255,255,0.4); margin-bottom: 28px; font-weight: 600; }
+
+  .big-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+  .big-stat { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 22px 14px; text-align: center; }
+  .big-stat .num { font-size: 38px; font-weight: 900; line-height: 1; }
+  .big-stat .num.green { color: #22c55e; }
+  .big-stat .num.gold { color: #d4a843; }
+  .big-stat .num.white { color: #fff; }
+  .big-stat .lbl { font-size: 9px; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 1.5px; margin-top: 6px; }
+
+  .section-title { font-size: 12px; font-weight: 800; color: #d4a843; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; }
+  .analysts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+  .analyst-card { background: rgba(255,255,255,0.02); border-radius: 10px; padding: 14px; border-left: 3px solid; }
+  .analyst-name { font-size: 13px; font-weight: 800; margin-bottom: 4px; }
+  .analyst-stat { font-size: 22px; font-weight: 900; }
+  .analyst-detail { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+
+  .highlights { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+  .highlight { background: rgba(34,197,94,0.04); border-left: 3px solid #22c55e; border-radius: 0 8px 8px 0; padding: 12px 14px; }
+  .hl-sel { font-size: 14px; font-weight: 700; color: #fff; }
+  .hl-detail { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+  .hl-pnl { font-size: 13px; font-weight: 800; color: #22c55e; margin-top: 4px; }
+
+  .tagline { text-align: center; font-size: 16px; color: rgba(255,255,255,0.4); font-style: italic; margin-top: auto; padding-top: 12px; }
+  .footer { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.05); }
+  .footer-url { font-size: 14px; font-weight: 700; color: #d4a843; }
+  .footer-disc { font-size: 9px; color: rgba(255,255,255,0.2); }
+  .footer-cta { background: linear-gradient(135deg, #d4a843, #b8902f); color: #0a0e1a; padding: 10px 20px; border-radius: 8px; font-weight: 800; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="pad">
+  <div class="header">
+    <div class="logo-row"><div class="diamond"><span>EE</span></div><div><div class="brand">Elite Edge</div><div class="brand-sub">AI Sports Intelligence</div></div></div>
+    <div class="date-pill">MAY 2026 REVIEW</div>
+  </div>
+
+  <div class="hero">MAY PERFORMANCE REPORT</div>
+  <div class="hero-sub">31 winners from 42 verified selections &mdash; AI-powered football intelligence</div>
+
+  <div class="big-stats">
+    <div class="big-stat"><div class="num green">73.8%</div><div class="lbl">Strike Rate</div></div>
+    <div class="big-stat"><div class="num green">+49.20</div><div class="lbl">Units Profit</div></div>
+    <div class="big-stat"><div class="num gold">31</div><div class="lbl">Winners</div></div>
+    <div class="big-stat"><div class="num white">42</div><div class="lbl">Total Tips</div></div>
+  </div>
+
+  <div class="section-title">Analyst Performance</div>
+  <div class="analysts">
+    <div class="analyst-card" style="border-color:#ef4444;">
+      <div class="analyst-name" style="color:#ef4444;">The Tactician</div>
+      <div class="analyst-stat" style="color:#22c55e;">83%</div>
+      <div class="analyst-detail">10W 2L &bull; +14.52u</div>
+    </div>
+    <div class="analyst-card" style="border-color:#d4a843;">
+      <div class="analyst-name" style="color:#d4a843;">The Edge</div>
+      <div class="analyst-stat" style="color:#22c55e;">83%</div>
+      <div class="analyst-detail">5W 1L &bull; +7.62u</div>
+    </div>
+    <div class="analyst-card" style="border-color:#a855f7;">
+      <div class="analyst-name" style="color:#a855f7;">The Clocker</div>
+      <div class="analyst-stat" style="color:#22c55e;">100%</div>
+      <div class="analyst-detail">3W 0L &bull; +17.66u</div>
+    </div>
+  </div>
+
+  <div class="section-title">Best Wins</div>
+  <div class="highlights">
+    <div class="highlight"><div class="hl-sel">Persian Spring (4/1)</div><div class="hl-detail">York 13:45 &bull; 14 May</div><div class="hl-pnl">+8.00u</div></div>
+    <div class="highlight"><div class="hl-sel">Arc Ole Ole (4/1)</div><div class="hl-detail">York 16:05 &bull; 14 May</div><div class="hl-pnl">+8.00u</div></div>
+    <div class="highlight"><div class="hl-sel">Girona Draw (27/10)</div><div class="hl-detail">Girona vs Real Sociedad &bull; 14 May</div><div class="hl-pnl">+5.40u</div></div>
+    <div class="highlight"><div class="hl-sel">Bolton Win (7/4)</div><div class="hl-detail">Bolton vs Bradford &bull; 14 May</div><div class="hl-pnl">+3.50u</div></div>
+    <div class="highlight"><div class="hl-sel">Fiorentina U2.5 (11/8)</div><div class="hl-detail">Fiorentina vs Atalanta &bull; 22 May</div><div class="hl-pnl">+2.76u</div></div>
+    <div class="highlight"><div class="hl-sel">Real Betis Win (13/10)</div><div class="hl-detail">Betis vs Levante &bull; 23 May</div><div class="hl-pnl">+2.60u</div></div>
+  </div>
+
+  <div class="tagline">"The public watches football. We read it differently."</div>
+  <div class="footer"><div><div class="footer-url">eliteedgesports.co.uk</div><div class="footer-disc">18+ | BeGambleAware.org | Past performance does not guarantee future results</div></div><div class="footer-cta">SEE FULL TRACK RECORD</div></div>
+</div>
+</body>
+</html>
