@@ -473,6 +473,18 @@ module.exports = function(deps) {
     }
   });
 
+  // Custom email — send any subject/html to any address
+  router.post('/email/custom', authenticate, requireAdmin, async (req, res) => {
+    try {
+      const { to, subject, html } = req.body;
+      if (!to || !subject || !html) return res.status(400).json({ error: 'Missing to, subject, or html' });
+      const result = await emailService._sendEmail({ to, subject, html, emailType: 'custom' });
+      res.json({ success: true, result });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ---------------------------------------------------------------------------
   // EMAIL: Compose bulletin
   // ---------------------------------------------------------------------------
