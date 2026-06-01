@@ -1,0 +1,34 @@
+{
+  "id": "worldcup2026",
+  "name": "FIFA World Cup 2026",
+  "shortName": "World Cup 2026",
+  "hashtags": ["#WorldCup2026", "#WC2026", "#EliteEdge", "#FIFA"],
+  "startDate": "2026-06-11",
+  "endDate": "2026-07-19",
+  "hostNations": ["USA", "Canada", "Mexico"],
+  "heroTeam": "England",
+  "heroTeamHashtags": ["#ThreeLions", "#England", "#ItsComingHome"],
+  "rivalries": {
+    "England-Germany": { "hook": "Penalty trauma. Tournament pedigree. Unfinished business.", "tier": "hero" },
+    "Argentina-Brazil": { "hook": "The greatest rivalry in football. Messi's final act?", "tier": "hero" },
+    "France-Germany": { "hook": "European heavyweight collision. Tactical chess.", "tier": "hero" },
+    "England-Argentina": { "hook": "Hand of God. Beckham red card. History runs deep.", "tier": "hero" },
+    "Brazil-France": { "hook": "2006 quarter-final ghosts. Style vs structure.", "tier": "hero" },
+    "Spain-Portugal": { "hook": "Iberian derby. Neighbours at war.", "tier": "hero" }
+  },
+  "narratives": {
+    "itsComingHome": "The eternal England hope. Use sparingly — powerful when timed right.",
+    "messiFarewell": "Messi's last World Cup. The GOAT narrative. Every Argentina game carries weight.",
+    "mbappeEra": "Mbappé inheriting the crown. France defending champions. Pressure and expectation.",
+    "bellinghamRising": "Bellingham as England's talisman. Real Madrid form. Tournament stage.",
+    "usaHosting": "Home advantage. American football culture meets the beautiful game.",
+    "48teamFormat": "New format. More upsets. More chaos. More opportunity."
+  },
+  "brandVoice": {
+    "primary": "Emotion says one thing. Data says another. Elite Edge reads both.",
+    "secondary": "The public watches football. We read it differently.",
+    "cta": "Don't follow the tournament blind.",
+    "proof": "Subscribers already had this angle."
+  },
+  "responsibleGambling": "18+ only. Please gamble responsibly. BeGambleAware.org"
+}

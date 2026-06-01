@@ -33,6 +33,23 @@ class AIReportGenerator {
     return !!this.client;
   }
 
+  // Generic generation method — used by marketing engine and other modules
+  async generateCustom(system, user) {
+    if (!this.client) return null;
+    try {
+      var response = await this.client.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        system: system,
+        messages: [{ role: 'user', content: user }],
+      });
+      return response.content[0].text;
+    } catch(e) {
+      console.error('[AI Reports] generateCustom error:', e.message);
+      return null;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Cache helpers
   // ---------------------------------------------------------------------------

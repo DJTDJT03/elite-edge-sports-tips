@@ -200,6 +200,11 @@ if (process.env.ENABLE_WORLD_CUP === 'true') {
   app.use('/api/world-cup', require('./routes/worldCup')(deps));
   console.log('[Startup] World Cup Mode ENABLED');
 }
+// Marketing Engine — feature-flagged, standalone branch
+if (process.env.ENABLE_MARKETING === 'true') {
+  app.use('/api/marketing', require('./routes/marketing')(deps));
+  console.log('[Startup] Marketing Engine ENABLED (event: ' + (process.env.MARKETING_EVENT || 'worldcup2026') + ')');
+}
 app.use('/', require('./routes/public')(deps));
 
 // ---------------------------------------------------------------------------
@@ -327,7 +332,14 @@ app.use('/', require('./routes/public')(deps));
           'CREATE INDEX IF NOT EXISTS idx_wcn_country ON world_cup_nations(country)',
           "CREATE TABLE IF NOT EXISTS world_cup_previews (id SERIAL PRIMARY KEY, fixture_id INTEGER NOT NULL REFERENCES world_cup_fixtures(id) UNIQUE, stage TEXT, home_team TEXT, away_team TEXT, kickoff TIMESTAMPTZ, venue TEXT, signals JSONB DEFAULT '{}', citations JSONB DEFAULT '[]', predicted_scoreline TEXT, verdict TEXT, verdict_market TEXT, verdict_selection TEXT, verdict_odds TEXT, confidence INTEGER, generated_at TIMESTAMPTZ DEFAULT NOW())",
           'CREATE INDEX IF NOT EXISTS idx_wcprev_fixture ON world_cup_previews(fixture_id)',
-          'CREATE INDEX IF NOT EXISTS idx_wcprev_kickoff ON world_cup_previews(kickoff)',
+        ] : []),
+        // Marketing Engine tables (feature-flagged)
+        ...(process.env.ENABLE_MARKETING === 'true' ? [
+          "CREATE TABLE IF NOT EXISTS marketing_content (id SERIAL PRIMARY KEY, fixture_id TEXT NOT NULL, event_id TEXT NOT NULL, tier TEXT DEFAULT 'hygiene', content JSONB NOT NULL, generated_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(fixture_id, event_id))",
+          'CREATE INDEX IF NOT EXISTS idx_mc_event ON marketing_content(event_id)',
+          'CREATE INDEX IF NOT EXISTS idx_mc_date ON marketing_content(generated_at)',
+          "CREATE TABLE IF NOT EXISTS marketing_posts (id SERIAL PRIMARY KEY, fixture_id TEXT, post_type TEXT, platform TEXT, content JSONB, posted_at TIMESTAMPTZ DEFAULT NOW())",
+          'CREATE INDEX IF NOT EXISTS idx_mp_date ON marketing_posts(posted_at)',
         ] : []),
       ];
       for (var ci = 0; ci < alterCols.length; ci++) {
