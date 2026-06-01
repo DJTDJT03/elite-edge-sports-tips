@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+  html, body { width: 1080px; height: 1080px; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; background: linear-gradient(160deg, #0a0e1a 0%, #0f1528 50%, #0a0e1a 100%); position: relative; }
+  body::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #d4a843, #b8902f, #d4a843); }
+  .pad { padding: 48px; height: 100%; display: flex; flex-direction: column; position: relative; z-index: 1; }
+  .header { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+  .diamond { width: 44px; height: 44px; border: 2px solid #d4a843; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; }
+  .diamond span { transform: rotate(-45deg); color: #d4a843; font-weight: 900; font-size: 16px; }
+  .brand { font-size: 20px; font-weight: 900; color: #fff; }
+  .brand-sub { font-size: 9px; color: #d4a843; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+  .title { font-size: 30px; font-weight: 900; color: #d4a843; margin-bottom: 28px; }
+  .steps { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+  .step { display: flex; align-items: center; gap: 16px; padding: 18px 20px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
+  .step-num { font-size: 28px; font-weight: 900; color: #d4a843; min-width: 40px; }
+  .step-content { flex: 1; }
+  .step-title { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+  .step-desc { font-size: 12px; color: rgba(255,255,255,0.4); }
+  .step-icon { font-size: 28px; }
+  .result { text-align: center; margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); }
+  .result-text { font-size: 16px; color: rgba(255,255,255,0.5); font-style: italic; margin-bottom: 8px; }
+  .url { font-size: 14px; color: #d4a843; font-weight: 700; }
+  .disc { font-size: 9px; color: rgba(255,255,255,0.15); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="pad">
+  <div class="header"><div class="diamond"><span>EE</span></div><div><div class="brand">Elite Edge</div><div class="brand-sub">AI Sports Intelligence</div></div></div>
+  <div class="title">How We Pick a Tip</div>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-content"><div class="step-title">SportMonks sends live fixture data</div><div class="step-desc">29 leagues. Every match. Real-time scores and team data.</div></div><div class="step-icon">&#128225;</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-content"><div class="step-title">The Tactician analyses the context</div><div class="step-desc">Injuries, motivation, tactics, press conferences, team news.</div></div><div class="step-icon">&#129504;</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-content"><div class="step-title">The Professor runs the numbers</div><div class="step-desc">Form, xG, shots, H2H record, statistical patterns.</div></div><div class="step-icon">&#128200;</div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-content"><div class="step-title">The Scout hunts for value</div><div class="step-desc">Odds from 140+ bookmakers. Where is the market wrong?</div></div><div class="step-icon">&#128176;</div></div>
+    <div class="step"><div class="step-num">5</div><div class="step-content"><div class="step-title">Consensus or pass</div><div class="step-desc">2 or 3 agents agree? Publish. Split decision? We pass.</div></div><div class="step-icon">&#9989;</div></div>
+    <div class="step"><div class="step-num">6</div><div class="step-content"><div class="step-title">GPT verifies independently</div><div class="step-desc">Independent arbiter reviews the debate. Agrees or challenges.</div></div><div class="step-icon">&#129302;</div></div>
+  </div>
+  <div class="result">
+    <div class="result-text">That's not a guess. That's a process.</div>
+    <div class="url">eliteedgesports.co.uk</div>
+    <div class="disc">18+ | BeGambleAware.org</div>
+  </div>
+</div>
+</body>
+</html>

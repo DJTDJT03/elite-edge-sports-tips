@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+  html, body { width: 1080px; height: 1080px; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; background: linear-gradient(160deg, #0a0e1a 0%, #0f1528 50%, #0a0e1a 100%); position: relative; }
+  body::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #d4a843, #b8902f, #d4a843); }
+  .pad { padding: 48px; height: 100%; display: flex; flex-direction: column; position: relative; z-index: 1; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+  .logo-row { display: flex; align-items: center; gap: 12px; }
+  .diamond { width: 44px; height: 44px; border: 2px solid #d4a843; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; }
+  .diamond span { transform: rotate(-45deg); color: #d4a843; font-weight: 900; font-size: 16px; }
+  .brand { font-size: 20px; font-weight: 900; color: #fff; }
+  .brand-sub { font-size: 9px; color: #d4a843; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+  .title { font-size: 32px; font-weight: 900; color: #fff; margin-bottom: 24px; }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; }
+  .col { border-radius: 12px; padding: 24px; }
+  .col.chatgpt { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); }
+  .col.ee { background: rgba(34,197,94,0.04); border: 1px solid rgba(34,197,94,0.2); }
+  .col-title { font-size: 16px; font-weight: 800; margin-bottom: 16px; }
+  .col.chatgpt .col-title { color: rgba(255,255,255,0.4); }
+  .col.ee .col-title { color: #22c55e; }
+  .row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 14px; }
+  .icon { font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+  .chatgpt .icon { color: rgba(255,255,255,0.2); }
+  .ee .icon { color: #22c55e; }
+  .row-text { font-size: 13px; line-height: 1.5; }
+  .chatgpt .row-text { color: rgba(255,255,255,0.35); }
+  .ee .row-text { color: rgba(255,255,255,0.7); }
+  .bottom { text-align: center; margin-top: auto; padding-top: 16px; }
+  .stat-row { display: flex; justify-content: center; gap: 24px; margin-bottom: 12px; }
+  .stat { text-align: center; }
+  .stat .num { font-size: 28px; font-weight: 900; color: #22c55e; }
+  .stat .lbl { font-size: 9px; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 1px; }
+  .tagline { font-size: 14px; color: rgba(255,255,255,0.4); font-style: italic; margin-bottom: 6px; }
+  .url { font-size: 14px; color: #d4a843; font-weight: 700; }
+  .disc { font-size: 9px; color: rgba(255,255,255,0.15); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="pad">
+  <div class="header"><div class="logo-row"><div class="diamond"><span>EE</span></div><div><div class="brand">Elite Edge</div><div class="brand-sub">AI Sports Intelligence</div></div></div></div>
+  <div class="title">ChatGPT vs Elite Edge</div>
+  <div class="compare">
+    <div class="col chatgpt">
+      <div class="col-title">ChatGPT</div>
+      <div class="row"><div class="icon">&#10060;</div><div class="row-text">Uses training data (months old)</div></div>
+      <div class="row"><div class="icon">&#10060;</div><div class="row-text">No live injury news</div></div>
+      <div class="row"><div class="icon">&#10060;</div><div class="row-text">No real bookmaker odds</div></div>
+      <div class="row"><div class="icon">&#10060;</div><div class="row-text">One opinion in 3 seconds</div></div>
+      <div class="row"><div class="icon">&#10060;</div><div class="row-text">No track record</div></div>
+      <div class="row"><div class="icon">&#10060;</div><div class="row-text">Doesn't know who manages the team</div></div>
+      <div class="row"><div class="icon">&#10060;</div><div class="row-text">Same output as everyone else</div></div>
+    </div>
+    <div class="col ee">
+      <div class="col-title">Elite Edge</div>
+      <div class="row"><div class="icon">&#9989;</div><div class="row-text">Live data from SportMonks + Perplexity</div></div>
+      <div class="row"><div class="icon">&#9989;</div><div class="row-text">Injuries checked 4x daily</div></div>
+      <div class="row"><div class="icon">&#9989;</div><div class="row-text">Odds from 140+ bookmakers</div></div>
+      <div class="row"><div class="icon">&#9989;</div><div class="row-text">3 AI analysts debate every pick</div></div>
+      <div class="row"><div class="icon">&#9989;</div><div class="row-text">73.8% verified strike rate</div></div>
+      <div class="row"><div class="icon">&#9989;</div><div class="row-text">Every result tracked and settled</div></div>
+      <div class="row"><div class="icon">&#9989;</div><div class="row-text">Unique picks backed by consensus</div></div>
+    </div>
+  </div>
+  <div class="bottom">
+    <div class="stat-row">
+      <div class="stat"><div class="num">73.8%</div><div class="lbl">Strike Rate</div></div>
+      <div class="stat"><div class="num">+49.20</div><div class="lbl">May Profit (units)</div></div>
+      <div class="stat"><div class="num">31/42</div><div class="lbl">Winners</div></div>
+    </div>
+    <div class="tagline">Same pick. Different depth. That's the gap.</div>
+    <div class="url">eliteedgesports.co.uk</div>
+    <div class="disc">18+ | BeGambleAware.org</div>
+  </div>
+</div>
+</body>
+</html>

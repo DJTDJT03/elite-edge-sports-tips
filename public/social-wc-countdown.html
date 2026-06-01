@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+  html, body { width: 1080px; height: 1080px; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; background: linear-gradient(160deg, #0a0e1a 0%, #0f1528 50%, #0a0e1a 100%); position: relative; }
+  body::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #d4a843, #b8902f, #d4a843); }
+  .pad { padding: 48px; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; z-index: 1; text-align: center; }
+  .logo-row { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; }
+  .diamond { width: 44px; height: 44px; border: 2px solid #d4a843; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; }
+  .diamond span { transform: rotate(-45deg); color: #d4a843; font-weight: 900; font-size: 16px; }
+  .brand { font-size: 20px; font-weight: 900; color: #fff; }
+  .brand-sub { font-size: 9px; color: #d4a843; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+  .big-num { font-size: 140px; font-weight: 900; color: #d4a843; line-height: 1; margin-bottom: 8px; }
+  .big-label { font-size: 28px; font-weight: 800; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 6px; margin-bottom: 32px; }
+  .title { font-size: 36px; font-weight: 900; color: #fff; margin-bottom: 8px; }
+  .sub { font-size: 16px; color: rgba(255,255,255,0.4); margin-bottom: 32px; }
+  .features { display: flex; gap: 16px; margin-bottom: 40px; }
+  .feat { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 16px 20px; }
+  .feat .icon { font-size: 24px; margin-bottom: 6px; }
+  .feat .txt { font-size: 11px; color: rgba(255,255,255,0.5); font-weight: 600; }
+  .cta { background: linear-gradient(135deg, #d4a843, #b8902f); color: #0a0e1a; padding: 16px 40px; border-radius: 10px; font-weight: 800; font-size: 16px; }
+  .url { font-size: 14px; color: #d4a843; font-weight: 700; margin-top: 16px; }
+  .disc { font-size: 9px; color: rgba(255,255,255,0.2); margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="pad">
+  <div class="logo-row"><div class="diamond"><span>EE</span></div><div><div class="brand">Elite Edge</div><div class="brand-sub">AI Sports Intelligence</div></div></div>
+  <div class="big-num">10</div>
+  <div class="big-label">Days To Go</div>
+  <div class="title">FIFA World Cup 2026</div>
+  <div class="sub">USA &#127482;&#127480; Canada &#127464;&#127462; Mexico &#127474;&#127485;</div>
+  <div class="features">
+    <div class="feat"><div class="icon">&#129504;</div><div class="txt">Daily AI Previews</div></div>
+    <div class="feat"><div class="icon">&#127942;</div><div class="txt">Last Man Standing</div></div>
+    <div class="feat"><div class="icon">&#128200;</div><div class="txt">Live Settlement</div></div>
+    <div class="feat"><div class="icon">&#9917;</div><div class="txt">104 Matches</div></div>
+  </div>
+  <div class="cta">DON'T FOLLOW THE TOURNAMENT BLIND</div>
+  <div class="url">eliteedgesports.co.uk</div>
+  <div class="disc">18+ | BeGambleAware.org</div>
+</div>
+</body>
+</html>
