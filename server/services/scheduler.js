@@ -4259,6 +4259,195 @@ module.exports = function startScheduler(deps) {
   setInterval(safeRun('Intelligence', continuousIntelligence), 30 * 60 * 1000); // Check every 30 mins
   setTimeout(safeRun('Intelligence', continuousIntelligence), 60000); // First check 1 min after startup
 
+  // ---------------------------------------------------------------------------
+  // ANDY'S WEEKLY CONTENT PACK — sends every Monday at 9am
+  // 3 emails: (1) Overview + Mon-Wed, (2) Thu-Sun, (3) Image links
+  // ---------------------------------------------------------------------------
+  var lastAndyPackDate = '';
+  async function sendAndyWeeklyPack() {
+    var uk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+    var hour = uk.getHours();
+    var dayOfWeek = uk.getDay(); // 0=Sun, 1=Mon
+    var dateStr = uk.toISOString().split('T')[0];
+
+    // Only Monday at 9am
+    if (dayOfWeek !== 1 || hour !== 9 || lastAndyPackDate === dateStr) return;
+    lastAndyPackDate = dateStr;
+
+    var andyEmail = 'andy.heald@icloud.com';
+    console.log('[Andy Pack] Generating weekly content pack for ' + dateStr);
+
+    // Calculate campaign week (started June 2, 2026)
+    var campaignStart = new Date('2026-06-02');
+    var weekNum = Math.floor((uk - campaignStart) / (7 * 86400000)) + 1;
+    if (weekNum < 1 || weekNum > 12) {
+      console.log('[Andy Pack] Outside campaign window (week ' + weekNum + ') — skipping');
+      return;
+    }
+
+    // Get this week's dates
+    var weekDays = [];
+    for (var d = 0; d < 7; d++) {
+      var day = new Date(uk);
+      day.setDate(uk.getDate() + d);
+      weekDays.push({
+        name: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][d],
+        date: day.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+        full: day.toISOString().split('T')[0],
+      });
+    }
+
+    // Get latest performance stats for context
+    var results = await db.getResults();
+    var lastWeekResults = results.filter(function(r) {
+      var rd = (r.date || '').toString().substring(0, 10);
+      var weekAgo = new Date(uk); weekAgo.setDate(uk.getDate() - 7);
+      return rd >= weekAgo.toISOString().split('T')[0];
+    });
+    var lwWins = lastWeekResults.filter(function(r) { return r.result === 'won'; }).length;
+    var lwTotal = lastWeekResults.length;
+    var lwPnl = lastWeekResults.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+    var totalWins = results.filter(function(r) { return r.result === 'won'; }).length;
+    var totalAll = results.filter(function(r) { return r.result === 'won' || r.result === 'lost'; }).length;
+    var totalSR = totalAll > 0 ? Math.round((totalWins / totalAll) * 100 * 10) / 10 : 0;
+    var totalPnl = results.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+
+    // Campaign themes per week
+    var c1Themes = ['Pre-Tournament Hype','Opening Week','Group Stage MD2','Group Stage MD3','Round of 32','Round of 16 + QFs','Semi-Finals + Final','Post-Tournament','Tournament Wrap','Transition to PL','PL Season Preview','PL Opening Weekend'];
+    var c2Themes = ['May Performance Review','How We Are Different','Results Transparency','Analyst Spotlight','Track Record Update','ChatGPT Comparison','User Testimonials','Tournament Review','Monthly Stats','Our Tech Stack','Analyst Leaderboard','6 Months of Results'];
+    var c3Themes = ['Free Trial Push','WC Free Content','FOMO Engine','LMS Launch','LMS Updates','What Subscribers Get','Semi-Final Offer','Post-WC Retention','PL LMS Rollover','Referral Push','PL Free Trial','Conversion Push'];
+    var c4Themes = ['Transfer Window Opens','Transfer Tracker','Transfer Watch','Pre-Season Starts','Transfers + Model','Manager Changes','PL Title Preview','Relegation Preview','Top 4 Preview','Opening Weekend','Curtain Raisers','PL LAUNCH'];
+
+    var wi = weekNum - 1;
+    var c1 = c1Themes[wi] || 'Content';
+    var c2 = c2Themes[wi] || 'Content';
+    var c3 = c3Themes[wi] || 'Content';
+    var c4 = c4Themes[wi] || 'Content';
+
+    // Generate content via Claude AI
+    var contentPack = null;
+    if (aiReports && aiReports.isAvailable()) {
+      try {
+        var prompt = 'Generate a 7-day social media content pack for Elite Edge Sports Tips.\n\n' +
+          'WEEK ' + weekNum + ' of 12. Dates: ' + weekDays[0].name + ' ' + weekDays[0].date + ' to ' + weekDays[6].name + ' ' + weekDays[6].date + '.\n\n' +
+          'PERFORMANCE CONTEXT: Last week ' + lwWins + ' from ' + lwTotal + ' (' + (lwTotal > 0 ? Math.round(lwWins/lwTotal*100) : 0) + '%), +' + lwPnl.toFixed(2) + 'u. Overall: ' + totalSR + '% strike rate, +' + totalPnl.toFixed(2) + 'u profit.\n\n' +
+          'CAMPAIGN THEMES THIS WEEK:\n' +
+          'C1 (World Cup): ' + c1 + '\n' +
+          'C2 (Authority): ' + c2 + '\n' +
+          'C3 (Growth): ' + c3 + '\n' +
+          'C4 (Season): ' + c4 + '\n\n' +
+          'For EACH of the 7 days generate:\n' +
+          '- X/Twitter post (max 280 chars where possible)\n' +
+          '- Instagram caption\n' +
+          '- Which campaign(s) it covers\n\n' +
+          'Also generate 1 LinkedIn post for Monday.\n\n' +
+          'VOICE RULES: British, Northern, plain English. Confident but not arrogant. Phrases to use: no brainer, bang on, smashed it, get in, quality, different class, miles off it, off the mark, we move on. NEVER use: delve, leverage, comprehensive, seamless, groundbreaking, innovative, transformative. No AI slop. Read it aloud. If it sounds like a machine, rewrite it. Sound like a football fan who knows their stuff, not a press release.\n\n' +
+          'Return as JSON with this structure:\n' +
+          '{"days":[{"day":"Monday","date":"' + weekDays[0].date + '","campaigns":"C1+C2","x":"tweet text","instagram":"caption","linkedin":"post or null"},...]}\n\n' +
+          'Return ONLY valid JSON.';
+
+        var raw = await aiReports.generateCustom(
+          'You write social media content for a UK football intelligence platform. British voice. Anti-AI writing. No corporate fluff.',
+          prompt
+        );
+        try {
+          var jsonMatch = raw.match(/\{[\s\S]*\}/);
+          if (jsonMatch) contentPack = JSON.parse(jsonMatch[0]);
+        } catch(e) {}
+      } catch(e) {
+        console.log('[Andy Pack] AI generation failed:', e.message);
+      }
+    }
+
+    // Build email HTML helper
+    function dayHtml(day, campaigns, x, ig, li) {
+      var html = '<h2 style="color:#d4a843;font-size:14px;margin:16px 0 2px;">' + day + '</h2>' +
+        '<p style="color:#94a3b8;font-size:10px;margin:0 0 8px;">' + campaigns + '</p>';
+      if (x) html += '<p style="color:#22c55e;font-size:10px;font-weight:700;">X/TWITTER:</p><p style="color:#cbd5e1;font-size:12px;line-height:1.6;background:#111;padding:8px;border-radius:4px;margin:0 0 8px;">' + x.replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</p>';
+      if (ig) html += '<p style="color:#d4a843;font-size:10px;font-weight:700;">INSTAGRAM:</p><p style="color:#cbd5e1;font-size:12px;line-height:1.6;background:#111;padding:8px;border-radius:4px;margin:0 0 8px;">' + ig.replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</p>';
+      if (li) html += '<p style="color:#3b82f6;font-size:10px;font-weight:700;">LINKEDIN:</p><p style="color:#cbd5e1;font-size:12px;line-height:1.6;background:#111;padding:8px;border-radius:4px;margin:0 0 8px;">' + li.replace(/</g,'&lt;').replace(/\n/g,'<br>') + '</p>';
+      return html;
+    }
+
+    var wrapStart = '<div style="font-family:Inter,sans-serif;background:#0a0e1a;color:#e8e6e3;padding:24px;"><div style="max-width:600px;margin:0 auto;">';
+    var wrapEnd = '</div></div>';
+    var header = '<h1 style="color:#d4a843;font-size:18px;margin-bottom:2px;">Week ' + weekNum + ' Content Pack</h1>' +
+      '<p style="color:#94a3b8;font-size:12px;margin-bottom:4px;">' + weekDays[0].name + ' ' + weekDays[0].date + ' to ' + weekDays[6].name + ' ' + weekDays[6].date + '</p>' +
+      '<p style="color:#22c55e;font-size:11px;margin-bottom:12px;">Last week: ' + lwWins + '/' + lwTotal + ' | Overall: ' + totalSR + '% SR | +' + totalPnl.toFixed(2) + 'u</p>' +
+      '<p style="color:#94a3b8;font-size:11px;">C1: ' + c1 + ' | C2: ' + c2 + ' | C3: ' + c3 + ' | C4: ' + c4 + '</p><hr style="border-color:#333;margin:12px 0;">';
+
+    // Build 3 emails from content pack
+    var days = (contentPack && contentPack.days) || [];
+    var e1Body = '', e2Body = '';
+    for (var i = 0; i < days.length; i++) {
+      var dd = days[i];
+      var html = dayHtml(
+        (dd.day || weekDays[i].name) + ' ' + (dd.date || weekDays[i].date),
+        dd.campaigns || '',
+        dd.x || '', dd.instagram || '', dd.linkedin || null
+      );
+      if (i < 3) e1Body += html; // Mon-Wed
+      else e2Body += html; // Thu-Sun
+    }
+
+    // Fallback if AI didn't generate
+    if (days.length === 0) {
+      e1Body = '<p style="color:#ef4444;">AI content generation unavailable this week. Use last week as template and update with fresh stats. Themes: C1=' + c1 + ', C2=' + c2 + ', C3=' + c3 + ', C4=' + c4 + '</p>';
+      e2Body = e1Body;
+    }
+
+    // Image mapping
+    var imageLinks = [
+      { day: 'Monday', name: 'World Cup Countdown', url: 'https://eliteedgesports.co.uk/social-wc-countdown.html' },
+      { day: 'Monday', name: 'May/Monthly Review', url: 'https://eliteedgesports.co.uk/social-may-review.html' },
+      { day: 'Tuesday', name: 'ChatGPT vs Elite Edge', url: 'https://eliteedgesports.co.uk/social-chatgpt-vs-ee.html' },
+      { day: 'Wednesday', name: 'How We Pick a Tip', url: 'https://eliteedgesports.co.uk/social-how-we-pick.html' },
+      { day: 'Thursday', name: 'Last Man Standing', url: 'https://eliteedgesports.co.uk/social-lms-announce.html' },
+      { day: 'Friday', name: 'Group Predictions', url: 'https://eliteedgesports.co.uk/social-wc-groups.html' },
+      { day: 'Saturday', name: 'Knockout Bracket', url: 'https://eliteedgesports.co.uk/social-wc-bracket.html' },
+      { day: 'Sunday', name: 'Verified Stats', url: 'https://eliteedgesports.co.uk/social-stats.html' },
+      { day: 'Any', name: '6 from 6 Winners', url: 'https://eliteedgesports.co.uk/social-card-1.html' },
+      { day: 'Any', name: 'LinkedIn Banner', url: 'https://eliteedgesports.co.uk/linkedin-banner.html' },
+    ];
+    var imgHtml = imageLinks.map(function(img) {
+      return '<div style="background:#111;padding:10px;border-radius:6px;margin-bottom:6px;">' +
+        '<p style="color:#d4a843;font-size:12px;font-weight:700;margin:0 0 2px;">' + img.day + ': ' + img.name + '</p>' +
+        '<a style="color:#60a5fa;font-size:11px;" href="' + img.url + '">' + img.url.replace('https://','') + '</a></div>';
+    }).join('');
+
+    // Send 3 emails
+    try {
+      await emailService._sendEmail({
+        to: andyEmail,
+        subject: 'EE Week ' + weekNum + ' (1/3) Overview + Mon-Wed — ' + weekDays[0].date,
+        html: wrapStart + header + e1Body + '<p style="color:#94a3b8;font-size:10px;margin-top:12px;">Thu-Sun in next email.</p>' + wrapEnd,
+        emailType: 'andy_content_pack',
+      });
+      console.log('[Andy Pack] Email 1/3 sent');
+
+      await emailService._sendEmail({
+        to: andyEmail,
+        subject: 'EE Week ' + weekNum + ' (2/3) Thu-Sun — ' + weekDays[0].date,
+        html: wrapStart + '<h1 style="color:#d4a843;font-size:18px;">Week ' + weekNum + ' — Thu to Sun</h1><hr style="border-color:#333;margin:12px 0;">' + e2Body + '<p style="color:#94a3b8;font-size:10px;margin-top:12px;">Images in next email.</p>' + wrapEnd,
+        emailType: 'andy_content_pack',
+      });
+      console.log('[Andy Pack] Email 2/3 sent');
+
+      await emailService._sendEmail({
+        to: andyEmail,
+        subject: 'EE Week ' + weekNum + ' (3/3) Daily Images — ' + weekDays[0].date,
+        html: wrapStart + '<h1 style="color:#d4a843;font-size:18px;">Branded Images — Matched to Daily Posts</h1><p style="color:#94a3b8;font-size:11px;margin-bottom:12px;">Open link. Screenshot full page. Save as PNG. All 1080x1080.</p>' + imgHtml + '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.2);border-radius:8px;padding:12px;margin-top:12px;"><p style="color:#94a3b8;font-size:11px;margin:0;">Schedule via Buffer. Keep the voice. Read aloud. Questions? Reply or message Darren.</p></div>' + wrapEnd,
+        emailType: 'andy_content_pack',
+      });
+      console.log('[Andy Pack] Email 3/3 sent — Week ' + weekNum + ' complete');
+    } catch(emailErr) {
+      console.error('[Andy Pack] Email send error:', emailErr.message);
+    }
+  }
+
+  setInterval(safeRun('AndyPack', sendAndyWeeklyPack), 15 * 60 * 1000); // Check every 15 mins
+  setTimeout(safeRun('AndyPack', sendAndyWeeklyPack), 90000); // First check 90s after startup
+
   // Weekly blog review on startup
   setTimeout(safeRun('WeeklyBlog', updateWeeklyBlog), 5000);
 
