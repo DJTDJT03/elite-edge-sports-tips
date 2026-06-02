@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+  html,body{width:1080px;height:1080px;overflow:hidden}
+  body{font-family:'Inter',sans-serif;background:linear-gradient(160deg,#0a0e1a 0%,#1a0a0a 50%,#0a0e1a 100%);position:relative}
+  body::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#ef4444,#dc2626,#ef4444)}
+  .p{padding:48px;height:100%;display:flex;flex-direction:column;position:relative;z-index:1}
+  .h{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px}
+  .hr{display:flex;align-items:center;gap:12px}
+  .d{width:44px;height:44px;border:2px solid #d4a843;transform:rotate(45deg);display:flex;align-items:center;justify-content:center}
+  .d span{transform:rotate(-45deg);color:#d4a843;font-weight:900;font-size:16px}
+  .b{font-size:20px;font-weight:900;color:#fff}
+  .bs{font-size:9px;color:#d4a843;text-transform:uppercase;letter-spacing:2px;font-weight:700}
+  .pill{background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);padding:8px 16px;border-radius:8px;color:#ef4444;font-size:12px;font-weight:700}
+  .title{font-size:28px;font-weight:900;color:#fff;margin-bottom:4px}
+  .sub{font-size:14px;color:rgba(255,255,255,0.4);margin-bottom:32px}
+  .compare{display:flex;gap:20px;margin-bottom:32px}
+  .box{flex:1;border-radius:14px;padding:28px;text-align:center}
+  .box.pub{background:rgba(34,197,94,0.06);border:2px solid rgba(34,197,94,0.3)}
+  .box.shad{background:rgba(212,168,67,0.06);border:2px solid rgba(212,168,67,0.3)}
+  .box .label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px}
+  .box.pub .label{color:#22c55e}
+  .box.shad .label{color:#d4a843}
+  .box .big{font-size:72px;font-weight:900;line-height:1;margin-bottom:6px}
+  .box.pub .big{color:#22c55e}
+  .box.shad .big{color:#d4a843}
+  .box .detail{font-size:13px;color:rgba(255,255,255,0.4)}
+  .box .detail strong{color:#fff}
+  .arrow{display:flex;align-items:center;justify-content:center;margin-bottom:28px}
+  .arrow-box{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:20px 32px;text-align:center}
+  .arrow-box .num{font-size:36px;font-weight:900;color:#ef4444}
+  .arrow-box .txt{font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px}
+  .explain{flex:1;display:flex;flex-direction:column;gap:10px}
+  .exp{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;background:rgba(255,255,255,0.02);border-radius:8px}
+  .exp .icon{font-size:18px;flex-shrink:0}
+  .exp .text{font-size:13px;color:rgba(255,255,255,0.6);line-height:1.5}
+  .exp .text strong{color:#fff}
+  .tag{text-align:center;font-size:14px;color:rgba(255,255,255,0.35);font-style:italic;margin-top:auto;padding-top:12px}
+  .f{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05)}
+  .fu{font-size:14px;font-weight:700;color:#d4a843}
+  .fd{font-size:9px;color:rgba(255,255,255,0.2)}
+  .fc{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;padding:10px 20px;border-radius:8px;font-weight:800;font-size:12px}
+</style>
+</head>
+<body>
+<div class="p">
+  <div class="h">
+    <div class="hr"><div class="d"><span>EE</span></div><div><div class="b">Elite Edge</div><div class="bs">AI Sports Intelligence</div></div></div>
+    <div class="pill">THE TACTICIAN</div>
+  </div>
+
+  <div class="title">Published vs Shadow</div>
+  <div class="sub">What we publish vs what we score behind the scenes</div>
+
+  <div class="compare">
+    <div class="box pub">
+      <div class="label">Published Tips</div>
+      <div class="big">88%</div>
+      <div class="detail"><strong>15W 2L</strong> | +15.42u</div>
+      <div class="detail" style="margin-top:4px;">Only the strongest picks make it here</div>
+    </div>
+    <div class="box shad">
+      <div class="label">Shadow Scored</div>
+      <div class="big">54%</div>
+      <div class="detail"><strong>21W 18L</strong> | All fixtures scored</div>
+      <div class="detail" style="margin-top:4px;">Every game analysed, win or lose</div>
+    </div>
+  </div>
+
+  <div class="arrow">
+    <div class="arrow-box">
+      <div class="num">+34%</div>
+      <div class="txt">The selection filter adds 34% to strike rate</div>
+    </div>
+  </div>
+
+  <div class="explain">
+    <div class="exp"><div class="icon">&#129504;</div><div class="text"><strong>The Tactician scores every fixture.</strong> Injuries, tactics, motivation, xG. Every game gets a full analysis.</div></div>
+    <div class="exp"><div class="icon">&#128200;</div><div class="text"><strong>The Professor and Scout challenge it.</strong> Three agents debate. Only picks with consensus get published.</div></div>
+    <div class="exp"><div class="icon">&#129302;</div><div class="text"><strong>GPT verifies independently.</strong> Final check before anything goes live. The filter IS the edge.</div></div>
+  </div>
+
+  <div class="tag">"We score everything. We only publish the best."</div>
+  <div class="f"><div><div class="fu">eliteedgesports.co.uk</div><div class="fd">18+ | BeGambleAware.org</div></div><div class="fc">FULL TRACK RECORD</div></div>
+</div>
+</body>
+</html>
