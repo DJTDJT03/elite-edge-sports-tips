@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+  html,body{width:1080px;overflow-x:hidden}
+  body{font-family:'Inter',sans-serif;background:#0a0e1a;color:#e8e6e3}
+  .page{width:1080px;padding:40px;position:relative}
+  .page::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#ef4444,#dc2626,#ef4444)}
+  .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px}
+  .logo{display:flex;align-items:center;gap:12px}
+  .dm{width:40px;height:40px;border:2px solid #d4a843;transform:rotate(45deg);display:flex;align-items:center;justify-content:center}
+  .dm span{transform:rotate(-45deg);color:#d4a843;font-weight:900;font-size:14px}
+  .bn{font-size:18px;font-weight:900;color:#fff}
+  .bsub{font-size:8px;color:#d4a843;text-transform:uppercase;letter-spacing:2px;font-weight:700}
+  .pill{background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);padding:6px 14px;border-radius:6px;color:#ef4444;font-size:11px;font-weight:700}
+  .title{font-size:26px;font-weight:900;color:#ef4444;margin-bottom:4px}
+  .sub{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px}
+
+  /* Process */
+  .process{display:flex;gap:8px;margin-bottom:16px}
+  .step{flex:1;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px;text-align:center}
+  .step .num{font-size:18px;font-weight:900;color:#d4a843}
+  .step .icon{font-size:16px;margin:4px 0}
+  .step .txt{font-size:9px;color:rgba(255,255,255,0.4);font-weight:600;line-height:1.3}
+  .arrow-r{color:rgba(255,255,255,0.15);font-size:18px;display:flex;align-items:center}
+
+  /* Stats bar */
+  .stats{display:flex;gap:10px;margin-bottom:14px}
+  .stat{flex:1;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;text-align:center}
+  .stat .n{font-size:28px;font-weight:900}
+  .stat .n.gr{color:#22c55e}.stat .n.go{color:#d4a843}.stat .n.wh{color:#fff}
+  .stat .l{font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+
+  /* Tips list */
+  .tips{margin-bottom:14px}
+  .tip{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;margin-bottom:3px;font-size:11px}
+  .tip.won{border-left:3px solid #22c55e;background:rgba(34,197,94,0.03)}
+  .tip.lost{border-left:3px solid #ef4444;background:rgba(239,68,68,0.03)}
+  .tip .date{color:rgba(255,255,255,0.25);min-width:52px;font-size:10px}
+  .tip .sel{flex:1;font-weight:600;color:#fff;font-size:11px}
+  .tip .evt{color:rgba(255,255,255,0.3);font-size:10px;flex:1}
+  .tip .mkt{color:rgba(255,255,255,0.25);font-size:9px;min-width:65px}
+  .tip .odds{color:#d4a843;font-weight:800;min-width:36px;text-align:right;font-size:11px}
+  .tip .res{font-weight:800;min-width:38px;text-align:right;font-size:10px}
+  .tip.won .res{color:#22c55e}
+  .tip.lost .res{color:#ef4444}
+  .tip .pnl{min-width:44px;text-align:right;font-weight:700;font-size:10px}
+  .tip.won .pnl{color:#22c55e}
+  .tip.lost .pnl{color:#ef4444}
+
+  /* Shadow */
+  .shadow{background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:14px;margin-bottom:14px;display:flex;align-items:center;gap:16px}
+  .shadow .box{text-align:center;flex:1}
+  .shadow .box .n{font-size:24px;font-weight:900}
+  .shadow .box .l{font-size:9px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px}
+  .shadow .vs{color:rgba(255,255,255,0.15);font-size:14px;font-weight:700}
+
+  .tag{text-align:center;font-size:12px;color:rgba(255,255,255,0.3);font-style:italic;margin-bottom:10px}
+  .ftr{display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid rgba(255,255,255,0.05)}
+  .fu{font-size:12px;font-weight:700;color:#d4a843}
+  .fd{font-size:8px;color:rgba(255,255,255,0.2)}
+  .fc{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;padding:8px 16px;border-radius:6px;font-weight:800;font-size:10px}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="hdr">
+    <div class="logo"><div class="dm"><span>EE</span></div><div><div class="bn">Elite Edge</div><div class="bsub">AI Sports Intelligence</div></div></div>
+    <div class="pill">THE TACTICIAN</div>
+  </div>
+
+  <div class="title">THE TACTICIAN — FULL RECORD</div>
+  <div class="sub">Every tip. Every result. Published and shadow. Nothing hidden.</div>
+
+  <!-- Selection Process -->
+  <div class="process">
+    <div class="step"><div class="num">1</div><div class="icon">&#128225;</div><div class="txt">SportMonks<br>live data</div></div>
+    <div class="arrow-r">&#8594;</div>
+    <div class="step"><div class="num">2</div><div class="icon">&#129504;</div><div class="txt">Tactician<br>context + tactics</div></div>
+    <div class="arrow-r">&#8594;</div>
+    <div class="step"><div class="num">3</div><div class="icon">&#128200;</div><div class="txt">Professor<br>form + xG</div></div>
+    <div class="arrow-r">&#8594;</div>
+    <div class="step"><div class="num">4</div><div class="icon">&#128176;</div><div class="txt">Scout<br>value + odds</div></div>
+    <div class="arrow-r">&#8594;</div>
+    <div class="step"><div class="num">5</div><div class="icon">&#9989;</div><div class="txt">Consensus<br>2/3 must agree</div></div>
+    <div class="arrow-r">&#8594;</div>
+    <div class="step"><div class="num">6</div><div class="icon">&#129302;</div><div class="txt">GPT arbiter<br>final check</div></div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat"><div class="n gr">88%</div><div class="l">Strike Rate</div></div>
+    <div class="stat"><div class="n gr">15</div><div class="l">Winners</div></div>
+    <div class="stat"><div class="n" style="color:#ef4444;">2</div><div class="l">Losses</div></div>
+    <div class="stat"><div class="n gr">+15.42</div><div class="l">Units Profit</div></div>
+    <div class="stat"><div class="n go">17</div><div class="l">Total Tips</div></div>
+  </div>
+
+  <!-- Every tip -->
+  <div class="tips">
+    <div class="tip won"><div class="date">1 May</div><div class="sel">Leeds United Win</div><div class="evt">Leeds vs Burnley</div><div class="mkt">Match Result</div><div class="odds">1.90</div><div class="res">WON</div><div class="pnl">+1.80</div></div>
+    <div class="tip won"><div class="date">2 May</div><div class="sel">Newcastle Win</div><div class="evt">Newcastle vs Brighton</div><div class="mkt">Match Result</div><div class="odds">1.85</div><div class="res">WON</div><div class="pnl">+1.70</div></div>
+    <div class="tip won"><div class="date">3 May</div><div class="sel">Over 2.5 Goals</div><div class="evt">Man Utd vs Liverpool</div><div class="mkt">Total Goals</div><div class="odds">1.70</div><div class="res">WON</div><div class="pnl">+1.40</div></div>
+    <div class="tip lost"><div class="date">4 May</div><div class="sel">Chelsea Win</div><div class="evt">Chelsea vs Nott Forest</div><div class="mkt">Match Result</div><div class="odds">1.65</div><div class="res">LOST</div><div class="pnl">-2.00</div></div>
+    <div class="tip won"><div class="date">9 May</div><div class="sel">BTTS - Yes</div><div class="evt">Liverpool vs Chelsea</div><div class="mkt">BTTS</div><div class="odds">1.65</div><div class="res">WON</div><div class="pnl">+1.30</div></div>
+    <div class="tip won"><div class="date">9 May</div><div class="sel">Brighton Win</div><div class="evt">Brighton vs Wolves</div><div class="mkt">Match Result</div><div class="odds">1.75</div><div class="res">WON</div><div class="pnl">+1.50</div></div>
+    <div class="tip won"><div class="date">10 May</div><div class="sel">Arsenal Win</div><div class="evt">West Ham vs Arsenal</div><div class="mkt">Match Result</div><div class="odds">1.80</div><div class="res">WON</div><div class="pnl">+1.60</div></div>
+    <div class="tip won"><div class="date">14 May</div><div class="sel">Bolton Win</div><div class="evt">Bolton vs Bradford</div><div class="mkt">Match Result</div><div class="odds">2.75</div><div class="res">WON</div><div class="pnl">+3.50</div></div>
+    <div class="tip lost"><div class="date">15 May</div><div class="sel">Liverpool Win</div><div class="evt">Aston Villa vs Liverpool</div><div class="mkt">Match Result</div><div class="odds">2.20</div><div class="res">LOST</div><div class="pnl">-2.00</div></div>
+    <div class="tip won"><div class="date">19 May</div><div class="sel">Chelsea Win</div><div class="evt">Chelsea vs Tottenham</div><div class="mkt">Match Result</div><div class="odds">2.25</div><div class="res">WON</div><div class="pnl">+2.50</div></div>
+    <div class="tip won"><div class="date">21 May</div><div class="sel">Utrecht Win</div><div class="evt">Utrecht vs Heerenveen</div><div class="mkt">Match Result</div><div class="odds">1.91</div><div class="res">WON</div><div class="pnl">+1.82</div></div>
+    <div class="tip won"><div class="date">23 May</div><div class="sel">Lazio Win</div><div class="evt">Lazio vs Pisa</div><div class="mkt">Match Result</div><div class="odds">1.70</div><div class="res">WON</div><div class="pnl">+1.40</div></div>
+    <div class="tip won"><div class="date">25 May</div><div class="sel">Notts County 1X</div><div class="evt">Notts County vs Salford</div><div class="mkt">Double Chance</div><div class="odds">1.35</div><div class="res">WON</div><div class="pnl">+0.18</div></div>
+    <div class="tip won"><div class="date">26 May</div><div class="sel">St Etienne 1X</div><div class="evt">St Etienne vs Nice</div><div class="mkt">Double Chance</div><div class="odds">1.35</div><div class="res">WON</div><div class="pnl">+0.18</div></div>
+    <div class="tip won"><div class="date">27 May</div><div class="sel">Crystal Palace 1X</div><div class="evt">Palace vs Rayo Vallecano</div><div class="mkt">Double Chance</div><div class="odds">1.35</div><div class="res">WON</div><div class="pnl">+0.18</div></div>
+    <div class="tip won"><div class="date">28 May</div><div class="sel">Casa Pia 1X</div><div class="evt">Casa Pia vs Torreense</div><div class="mkt">Double Chance</div><div class="odds">1.35</div><div class="res">WON</div><div class="pnl">+0.18</div></div>
+    <div class="tip won"><div class="date">29 May</div><div class="sel">Nice 1X</div><div class="evt">Nice vs St Etienne</div><div class="mkt">Double Chance</div><div class="odds">1.35</div><div class="res">WON</div><div class="pnl">+0.18</div></div>
+  </div>
+
+  <!-- Shadow comparison -->
+  <div class="shadow">
+    <div class="box"><div class="n" style="color:#22c55e;">88%</div><div class="l">Published (15/17)</div></div>
+    <div class="vs">vs</div>
+    <div class="box"><div class="n" style="color:#d4a843;">54%</div><div class="l">Shadow (21/39)</div></div>
+    <div class="vs">=</div>
+    <div class="box"><div class="n" style="color:#ef4444;">+34%</div><div class="l">Filter Edge</div></div>
+  </div>
+
+  <div class="tag">"We score everything. We only publish when 3 AI analysts agree. The filter is the edge."</div>
+
+  <div class="ftr">
+    <div><div class="fu">eliteedgesports.co.uk</div><div class="fd">18+ | BeGambleAware.org | Past performance does not guarantee future results</div></div>
+    <div class="fc">FULL TRACK RECORD</div>
+  </div>
+</div>
+</body>
+</html>
