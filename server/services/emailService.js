@@ -915,6 +915,132 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
   }
 
   // -----------------------------------------------------------------------
+  // WIN-BACK 1 — Goodbye (day 1 after cancellation)
+  // Gracious, no hard sell. Door left open + a quick feedback ask.
+  // -----------------------------------------------------------------------
+  async sendWinbackGoodbye({ name, email, resubUrl }) {
+    const url = resubUrl || 'https://eliteedgesports.co.uk/#/pricing';
+    const subject = 'Sorry to see you go';
+
+    const html = this._wrapHTML(`
+        <h2 style="color:#ffffff;margin:0 0 16px;font-size:20px;">Hi ${this._esc(name)},</h2>
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">Your subscription's been cancelled and you're back on the free plan. No charges from here on — that's all sorted.</p>
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">Genuinely, thanks for giving us a go. If something wasn't right — the tips, the price, anything — I'd like to know. Just hit reply and tell me straight. I read every one.</p>
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">You'll still get the free picks, and the door's open whenever you fancy coming back.</p>
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${url}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">See What's On</a>
+        </div>
+        <p style="color:#cbd5e1;font-size:14px;"><strong style="color:#d4a843;">Darren &amp; the Elite Edge Team</strong></p>
+    `, 'No charges from here. Thanks for giving us a go.');
+
+    const text = `Hi ${name},
+
+Your subscription's been cancelled and you're back on the free plan. No charges from here on -- that's all sorted.
+
+Genuinely, thanks for giving us a go. If something wasn't right -- the tips, the price, anything -- I'd like to know. Just hit reply and tell me straight. I read every one.
+
+You'll still get the free picks, and the door's open whenever you fancy coming back: ${url}
+
+Darren & the Elite Edge Team
+
+18+ | Entertainment only | BeGambleAware.org
+Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
+
+    return this._sendEmail({ to: email, subject, html, text, emailType: 'winback_goodbye' });
+  }
+
+  // -----------------------------------------------------------------------
+  // WIN-BACK 2 — What you've missed (day 7 after cancellation)
+  // -----------------------------------------------------------------------
+  async sendWinbackMissing({ name, email, tipsPublished, winners, profit, bigWinner, resubUrl }) {
+    const url = resubUrl || 'https://eliteedgesports.co.uk/#/pricing';
+    const subject = "Here's what you've missed this week";
+
+    const bigWinHTML = bigWinner ? `
+        <div style="background:#1a2e1a;padding:16px;border-radius:8px;margin:16px 0;border-left:3px solid #22c55e;">
+          <p style="color:#22c55e;font-size:12px;font-weight:700;margin:0 0 4px;">PICK OF THE WEEK</p>
+          <p style="color:#ffffff;font-size:16px;font-weight:700;margin:0;">${this._esc(bigWinner.selection)} @ ${bigWinner.odds} &#10003;</p>
+        </div>` : '';
+
+    const html = this._wrapHTML(`
+        <h2 style="color:#ffffff;margin:0 0 16px;font-size:20px;">Hi ${this._esc(name)},</h2>
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">No sales pitch — just a quick look at what the lads have been up to since you left:</p>
+        <div style="background:#1e2235;padding:16px;border-radius:8px;margin:16px 0;">
+          <table cellpadding="0" cellspacing="0">
+            <tr><td style="color:#d4a843;padding:6px 10px 6px 0;font-size:15px;">&#128202;</td><td style="color:#cbd5e1;font-size:14px;padding:6px 0;">Tips published: <strong style="color:#ffffff;">${tipsPublished || 0}</strong></td></tr>
+            <tr><td style="color:#22c55e;padding:6px 10px 6px 0;font-size:15px;">&#10003;</td><td style="color:#cbd5e1;font-size:14px;padding:6px 0;">Winners: <strong style="color:#22c55e;">${winners || 0}</strong></td></tr>
+            <tr><td style="color:#d4a843;padding:6px 10px 6px 0;font-size:15px;">&#128176;</td><td style="color:#cbd5e1;font-size:14px;padding:6px 0;">Profit: <strong style="color:#22c55e;">+${(profit || 0).toFixed(2)} units</strong></td></tr>
+          </table>
+        </div>
+        ${bigWinHTML}
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">If you want back in on the full card, you know where we are.</p>
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${url}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Come Back</a>
+        </div>
+        <p style="color:#cbd5e1;font-size:14px;"><strong style="color:#d4a843;">Darren &amp; the Elite Edge Team</strong></p>
+    `, "A week of results since you left");
+
+    const text = `Hi ${name},
+
+No sales pitch -- just a quick look at what the lads have been up to since you left:
+
+Tips published: ${tipsPublished || 0}
+Winners: ${winners || 0}
+Profit: +${(profit || 0).toFixed(2)} units
+${bigWinner ? `\nPick of the week: ${bigWinner.selection} @ ${bigWinner.odds}\n` : ''}
+If you want back in on the full card, you know where we are: ${url}
+
+Darren & the Elite Edge Team
+
+18+ | Entertainment only | BeGambleAware.org
+Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
+
+    return this._sendEmail({ to: email, subject, html, text, emailType: 'winback_missing' });
+  }
+
+  // -----------------------------------------------------------------------
+  // WIN-BACK 3 — The offer (day 21 after cancellation)
+  // promoCode applied at checkout (Stripe promotion codes are enabled).
+  // -----------------------------------------------------------------------
+  async sendWinbackOffer({ name, email, promoCode, offerText, resubUrl }) {
+    const url = resubUrl || 'https://eliteedgesports.co.uk/#/pricing';
+    const code = promoCode || 'WELCOMEBACK';
+    const offer = offerText || '50% off your first month';
+    const subject = `A little something to tempt you back — ${offer}`;
+
+    const html = this._wrapHTML(`
+        <h2 style="color:#ffffff;margin:0 0 16px;font-size:20px;">Hi ${this._esc(name)},</h2>
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">I'll keep it short. We'd love to have you back, so here's ${this._esc(offer)} if you fancy another crack at it.</p>
+        <div style="background:#1e2235;padding:20px;border-radius:8px;margin:16px 0;text-align:center;border:1px dashed #d4a843;">
+          <p style="color:#94a3b8;font-size:12px;font-weight:700;text-transform:uppercase;margin:0 0 8px;">Use code at checkout</p>
+          <p style="color:#d4a843;font-size:26px;font-weight:800;letter-spacing:3px;margin:0;">${this._esc(code)}</p>
+        </div>
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">Same daily selections, same analysis, same honest record — wins and losses, all of it. No tie-in, cancel any time.</p>
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${url}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Claim the Offer</a>
+        </div>
+        <p style="color:#cbd5e1;font-size:14px;"><strong style="color:#d4a843;">Darren &amp; the Elite Edge Team</strong></p>
+    `, this._esc(offer) + ' with code ' + this._esc(code));
+
+    const text = `Hi ${name},
+
+I'll keep it short. We'd love to have you back, so here's ${offer} if you fancy another crack at it.
+
+Use code at checkout: ${code}
+
+Same daily selections, same analysis, same honest record -- wins and losses, all of it. No tie-in, cancel any time.
+
+Claim the offer: ${url}
+
+Darren & the Elite Edge Team
+
+18+ | Entertainment only | BeGambleAware.org
+Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
+
+    return this._sendEmail({ to: email, subject, html, text, emailType: 'winback_offer' });
+  }
+
+  // -----------------------------------------------------------------------
   // 6. SUBSCRIPTION EXPIRY WARNING (3 days before)
   // -----------------------------------------------------------------------
   async sendExpiryWarning({ name, email, expiryDate, tipsReceived, winners, pnl }) {

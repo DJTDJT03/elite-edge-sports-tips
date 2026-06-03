@@ -131,7 +131,20 @@ module.exports = function(deps) {
         trialEndDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
       }
 
-      await db.updateUser(user.id, {
+      // Win-back attribution: was this a churned subscriber coming back?
+      var winbackFields = {};
+      if (user.churnedAt) {
+        winbackFields = {
+          reactivatedAt: new Date().toISOString(),
+          winbackReactivation: true,
+          churnedAt: null,
+          churnedTier: null,
+          winbacksSent: [],
+        };
+        console.log('[Stripe] Win-back: churned user reactivated —', user.email, '(churned ' + user.churnedAt + ', offered ' + (user.churnedTier || '?') + ', returned ' + tier + ')');
+      }
+
+      await db.updateUser(user.id, Object.assign({
         subscription: tier,
         subscriptionExpiry: expiryDate.toISOString(),
         trialActive: !!trialEndDate,
@@ -142,7 +155,7 @@ module.exports = function(deps) {
         credits: creditAllowance,
         creditsMonthlyAllowance: creditAllowance,
         creditsResetDate: nextResetDate.toISOString().split('T')[0],
-      });
+      }, winbackFields));
 
       // Record the credit grant
       await db.recordCreditTransaction({ userId: user.id, amount: creditAllowance, balanceAfter: creditAllowance, type: 'subscription_grant', description: tier + ' plan — ' + creditAllowance + ' monthly credits' });
@@ -216,13 +229,25 @@ module.exports = function(deps) {
               } else {
                 expiry.setMonth(expiry.getMonth() + 1);
               }
-              await db.updateUser(user.id, {
+              // Win-back attribution (mirrors the success-redirect handler)
+              var wbFields = {};
+              if (user.churnedAt) {
+                wbFields = {
+                  reactivatedAt: new Date().toISOString(),
+                  winbackReactivation: true,
+                  churnedAt: null,
+                  churnedTier: null,
+                  winbacksSent: [],
+                };
+                console.log('[Stripe] Win-back (webhook): churned user reactivated —', user.email);
+              }
+              await db.updateUser(user.id, Object.assign({
                 subscription: tier,
                 subscriptionExpiry: expiry.toISOString(),
                 trialActive: false,
                 stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
                 stripeSubscriptionId: typeof session.subscription === 'string' ? session.subscription : null,
-              });
+              }, wbFields));
               console.log('[Stripe] Webhook: activated ' + tier + ' for', user.email);
             }
           }
@@ -259,16 +284,23 @@ module.exports = function(deps) {
         }
 
         case 'customer.subscription.deleted': {
-          // Subscription cancelled — downgrade to free
+          // Subscription cancelled — downgrade to free + start win-back sequence
           const sub = event.data.object;
           const users = await db.getUsers();
           const user = users.find(u => u.stripeSubscriptionId === sub.id);
           if (user) {
+            // Record the tier they're leaving from so the win-back offer can pitch it back
+            var churnedTier = (user.subscription === 'vip' || user.subscription === 'premium' || user.subscription === 'starter')
+              ? user.subscription
+              : 'premium';
             await db.updateUser(user.id, {
               subscription: 'free',
               stripeSubscriptionId: null,
+              churnedAt: new Date().toISOString(),
+              churnedTier: churnedTier,
+              winbacksSent: [],
             });
-            console.log('[Stripe] Webhook: subscription cancelled for', user.email);
+            console.log('[Stripe] Webhook: subscription cancelled for', user.email, '— win-back sequence armed (was ' + churnedTier + ')');
           }
           break;
         }

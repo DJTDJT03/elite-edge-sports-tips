@@ -402,9 +402,21 @@ module.exports = function(deps) {
     const results = await db.getResults();
 
     const totalUsers = users.length;
+    // Paying = any subscribed tier. The old metric only counted 'premium', which
+    // undercounted Starter and VIP — fixed here so conversion reflects real revenue.
+    const starterUsers = users.filter(u => u.subscription === 'starter').length;
     const premiumUsers = users.filter(u => u.subscription === 'premium').length;
-    const freeUsers = totalUsers - premiumUsers;
-    const conversionRate = totalUsers > 0 ? Math.round((premiumUsers / totalUsers) * 10000) / 100 : 0;
+    const vipUsers = users.filter(u => u.subscription === 'vip').length;
+    const trialingUsers = users.filter(u => u.trialActive === true).length;
+    const payingUsers = starterUsers + premiumUsers + vipUsers;
+    const freeUsers = totalUsers - payingUsers;
+    const conversionRate = totalUsers > 0 ? Math.round((payingUsers / totalUsers) * 10000) / 100 : 0;
+
+    // Win-back metrics
+    const churnedUsers = users.filter(u => u.churnedAt).length;       // currently in win-back sequence
+    const reactivatedUsers = users.filter(u => u.winbackReactivation === true).length;
+    const everChurned = churnedUsers + reactivatedUsers;              // total who ever cancelled (still-gone + recovered)
+    const winbackRate = everChurned > 0 ? Math.round((reactivatedUsers / everChurned) * 10000) / 100 : 0;
 
     const today = new Date().toISOString().split('T')[0];
     const tipsToday = tips.filter(t => t.date === today).length;
@@ -416,9 +428,17 @@ module.exports = function(deps) {
 
     res.json({
       totalUsers,
+      payingUsers,
+      starterUsers,
       premiumUsers,
+      vipUsers,
+      trialingUsers,
       freeUsers,
       conversionRate,
+      // Win-back
+      churnedUsers,
+      reactivatedUsers,
+      winbackRate,
       tipsToday,
       resultsThisWeek,
       totalPnL: Math.round(totalPnL * 100) / 100,

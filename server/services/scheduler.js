@@ -4466,6 +4466,14 @@ module.exports = function startScheduler(deps) {
         return dripService.checkAndSend(users, db, emailService, aiReports);
       }).catch(function(e) { console.error('[Drip] Error:', e.message); });
     } catch(e) { console.error('[Drip] Error:', e.message); }
+
+    // Win-back campaign check (cancelled subscribers)
+    try {
+      var winbackService = new (require('./winbackCampaign'))();
+      db.getUsers().then(function(users) {
+        return winbackService.checkAndSend(users, db, emailService);
+      }).catch(function(e) { console.error('[Winback] Error:', e.message); });
+    } catch(e) { console.error('[Winback] Error:', e.message); }
   });
   setInterval(runEmailSchedulers, 15 * 60 * 1000);
   setTimeout(runEmailSchedulers, 45000);
