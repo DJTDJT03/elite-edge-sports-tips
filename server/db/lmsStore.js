@@ -344,6 +344,40 @@ async function getUpcomingWcFixtures(days) {
   return rows;
 }
 
+// Fixtures for a specific LMS round — the actual matchups players pick from.
+// Group rounds (1-3): matchday N, derived per group by kickoff order (each
+// group has 6 fixtures across 3 matchdays, 2 per matchday). Knockout rounds
+// (4-8): by stage. Placeholders excluded. Consistent with settlement.
+async function getWcRoundFixtures(round) {
+  if (!available()) return [];
+  if (round <= 3) {
+    const { rows } = await db.query(
+      `SELECT id, home_team, away_team, kickoff, group_letter, status FROM (
+         SELECT id, home_team, away_team, kickoff, group_letter, status,
+           CEIL(ROW_NUMBER() OVER (PARTITION BY group_letter ORDER BY kickoff)::numeric / 2) AS md
+         FROM world_cup_fixtures
+         WHERE stage = 'group' AND group_letter IS NOT NULL
+           AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
+           AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'
+       ) x WHERE md = $1 ORDER BY kickoff ASC`,
+      [round]
+    );
+    return rows;
+  }
+  var stageMap = { 4: 'round-of-32', 5: 'round-of-16', 6: 'quarter-final', 7: 'semi-final', 8: 'final' };
+  var stage = stageMap[round];
+  if (!stage) return [];
+  const { rows } = await db.query(
+    `SELECT id, home_team, away_team, kickoff, group_letter, status FROM world_cup_fixtures
+     WHERE stage = $1
+       AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
+       AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'
+     ORDER BY kickoff ASC`,
+    [stage]
+  );
+  return rows;
+}
+
 // A team's next/current fixture for a given LMS round (for displaying who they play)
 async function getWcFixtureByKickoffIndex(team, isGroup, index) {
   var all = await getWcFixturesForTeam(team);
@@ -364,7 +398,7 @@ module.exports = {
   // purchases
   createPurchase, getPurchaseBySession, updatePurchase, countPaidPurchases,
   // settlement source
-  getWcFixturesForTeam, getWcTeams, getWcFixtureByKickoffIndex, getUpcomingWcFixtures,
+  getWcFixturesForTeam, getWcTeams, getWcFixtureByKickoffIndex, getUpcomingWcFixtures, getWcRoundFixtures,
   // mappers (exposed for tests)
   _map: { mapCompetition, mapEntry, mapPick, mapPurchase },
 };

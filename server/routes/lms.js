@@ -130,6 +130,7 @@ module.exports = function (deps) {
       // Team list for WC pick selection
       let teams = [];
       let fixtures = [];
+      let roundFixtures = [];
       if (c.phase === 'world_cup') {
         teams = await lmsStore.getWcTeams();
         // Upcoming fixtures so players can plan ahead (visible well in advance)
@@ -138,6 +139,14 @@ module.exports = function (deps) {
           return {
             homeTeam: f.home_team, awayTeam: f.away_team,
             kickoff: f.kickoff, stage: f.stage, group: f.group_letter, status: f.status,
+          };
+        });
+        // The actual matchups for THIS round — players pick a team from these
+        const rf = await lmsStore.getWcRoundFixtures(c.currentRound);
+        roundFixtures = rf.map(function (f) {
+          return {
+            fixtureId: f.id, homeTeam: f.home_team, awayTeam: f.away_team,
+            kickoff: f.kickoff, group: f.group_letter, status: f.status,
           };
         });
       }
@@ -155,6 +164,7 @@ module.exports = function (deps) {
         me: me,
         teams: teams,
         fixtures: fixtures,
+        roundFixtures: roundFixtures,
         extraTeam: { pricePence: EXTRA_TEAM_PRICE_PENCE, priceLabel: '£10', max: MAX_EXTRA_TEAMS },
       });
     } catch (e) {

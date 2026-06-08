@@ -217,22 +217,45 @@ window.LMS = {
     var current = me.currentPick;
     var locked = current && current.result !== 'pending';
 
-    var options = teams.map(function (t) {
-      var isUsed = used.indexOf(t) !== -1;
-      var label = LMS.esc(t) + (isUsed ? (allowancesLeft > 0 ? ' (used — needs extra team)' : ' (already used)') : '');
-      var disabled = isUsed && allowancesLeft <= 0 ? ' disabled' : '';
-      var sel = current && current.team === t ? ' selected' : '';
-      return '<option value="' + LMS.esc(t) + '"' + disabled + sel + '>' + label + '</option>';
-    }).join('');
-
-    var picker = locked
-      ? '<p style="color:var(--text-secondary);font-size:14px;">This round is locked. Your pick: <strong style="color:var(--text-primary);">' + this.esc(current.team) + '</strong></p>'
-      : '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">' +
+    var roundFixtures = d.roundFixtures || [];
+    var picker;
+    if (locked) {
+      picker = '<p style="color:var(--text-secondary);font-size:14px;">This round is locked. Your pick: <strong style="color:var(--text-primary);">' + this.esc(current.team) + '</strong></p>';
+    } else if (roundFixtures.length) {
+      // Round-by-round: tap the team you back in each of this round's fixtures
+      var teamBtn = function (team) {
+        var isUsed = used.indexOf(team) !== -1 && allowancesLeft <= 0;
+        var isPicked = current && current.team === team;
+        var style = isPicked ? 'background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;border-color:#d4a843;font-weight:800;'
+          : isUsed ? 'background:var(--bg);color:var(--text-secondary);opacity:0.45;text-decoration:line-through;cursor:not-allowed;'
+          : 'background:var(--bg);color:var(--text-primary);';
+        var onclick = isUsed ? '' : ' onclick="LMS.pickTeam(' + c.id + ',' + JSON.stringify(team).replace(/"/g, '&quot;') + ')"';
+        return '<button' + onclick + ' style="flex:1;min-width:0;padding:12px 8px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;' + style + '">' + LMS.esc(team) + (isPicked ? ' &#10003;' : '') + '</button>';
+      };
+      var cards = roundFixtures.map(function (fx) {
+        var ko = fx.kickoff ? new Date(fx.kickoff).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'TBC';
+        return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;">' +
+          '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">' + (fx.group ? 'Group ' + fx.group + ' &middot; ' : '') + ko + '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;">' + teamBtn(fx.homeTeam) + '<span style="color:var(--text-secondary);font-size:11px;">v</span>' + teamBtn(fx.awayTeam) + '</div>' +
+        '</div>';
+      }).join('');
+      picker = '<p style="color:var(--text-secondary);font-size:13px;margin:0 0 10px;">Tap the team you back to win their game this round' + (current ? ' (tap a different team to change)' : '') + ':</p>' + cards;
+    } else {
+      // Fallback dropdown (e.g. knockout teams not decided yet)
+      var options = teams.map(function (t) {
+        var isUsed = used.indexOf(t) !== -1;
+        var label = LMS.esc(t) + (isUsed ? (allowancesLeft > 0 ? ' (used — needs extra team)' : ' (already used)') : '');
+        var disabled = isUsed && allowancesLeft <= 0 ? ' disabled' : '';
+        var sel = current && current.team === t ? ' selected' : '';
+        return '<option value="' + LMS.esc(t) + '"' + disabled + sel + '>' + label + '</option>';
+      }).join('');
+      picker = '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">' +
           '<select id="lms-team" style="flex:1;min-width:200px;padding:11px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:14px;">' +
             '<option value="">— Choose your team —</option>' + options +
           '</select>' +
           '<button class="btn btn-gold" onclick="LMS.submitPick(' + c.id + ')">' + (current ? 'Change Pick' : 'Confirm Pick') + '</button>' +
         '</div>';
+    }
 
     var currentLine = current
       ? '<p style="color:var(--green,#22c55e);font-size:13px;margin:10px 0 0;">Current pick for ' + this.esc(c.roundLabel) + ': <strong>' + this.esc(current.team) + '</strong>' + (current.isReuse ? ' (extra team)' : '') + '</p>'
@@ -337,6 +360,12 @@ window.LMS = {
     var sel = document.getElementById('lms-team');
     var team = sel ? sel.value : '';
     if (!team) { this.toast('Pick a team first.', 'error'); return; }
+    return this.pickTeam(id, team);
+  },
+
+  // Tap-to-pick a specific team from a round fixture card
+  async pickTeam(id, team) {
+    if (!team) return;
     try {
       var r = await this.api('/competitions/' + id + '/pick', { method: 'POST', body: JSON.stringify({ team: team }) });
       this.toast(r.changed ? 'Pick changed to ' + team + '.' : team + ' locked in. Good luck.', 'success');

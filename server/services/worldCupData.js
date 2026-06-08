@@ -54,6 +54,7 @@ module.exports = function(deps) {
 
     var stage = 'group';
     if (hay.indexOf('group') !== -1) stage = 'group';
+    else if (hay.indexOf('32') !== -1) stage = 'round-of-32';
     else if (hay.indexOf('16') !== -1) stage = 'round-of-16';
     else if (hay.indexOf('quarter') !== -1) stage = 'quarter-final';
     else if (hay.indexOf('semi') !== -1) stage = 'semi-final';

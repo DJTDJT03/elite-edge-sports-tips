@@ -20,8 +20,9 @@
 
 const lmsStore = require('../db/lmsStore');
 
-// World Cup has 7 LMS rounds: 3 group matchdays + R16 + QF + SF + Final.
-const WC_TOTAL_ROUNDS = 7;
+// 2026 World Cup (48 teams) has 8 LMS rounds: 3 group matchdays + Round of 32
+// + Round of 16 + Quarter-Final + Semi-Final + Final.
+const WC_TOTAL_ROUNDS = 8;
 
 function isGroupRound(phase, round) {
   // World Cup: rounds 1-3 are group matchdays. PL: every round is a league GW
@@ -37,10 +38,11 @@ function roundLabel(phase, round) {
     case 1: return 'Group Matchday 1';
     case 2: return 'Group Matchday 2';
     case 3: return 'Group Matchday 3';
-    case 4: return 'Round of 16';
-    case 5: return 'Quarter-Final';
-    case 6: return 'Semi-Final';
-    case 7: return 'Final';
+    case 4: return 'Round of 32';
+    case 5: return 'Round of 16';
+    case 6: return 'Quarter-Final';
+    case 7: return 'Semi-Final';
+    case 8: return 'Final';
     default: return 'Round ' + round;
   }
 }
