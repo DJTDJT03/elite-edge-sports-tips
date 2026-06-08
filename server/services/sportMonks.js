@@ -173,6 +173,26 @@ SportMonks.prototype.getStandings = function(seasonId) {
 };
 
 // =========================================================================
+// PREDICTIONS — pre-match probabilities (All-In plan)
+// =========================================================================
+SportMonks.prototype.getPredictions = function(fixtureId) {
+  return this._request('/predictions/probabilities/fixtures/' + fixtureId, {})
+    .then(function(data) { return data.data || []; })
+    .catch(function() { return []; });
+};
+
+// =========================================================================
+// RAW FIXTURE — full fixture with chosen includes (for diagnostics + rich data)
+// Returns the raw SportMonks object (not normalised) so callers can read xG,
+// lineups, statistics, predictions etc. directly.
+// =========================================================================
+SportMonks.prototype.getFixtureRaw = function(fixtureId, includes) {
+  return this._request('/fixtures/' + fixtureId, {
+    include: includes || 'participants;scores;statistics.type;events;lineups;state;league;venue;predictions.type',
+  }).then(function(data) { return data.data || null; });
+};
+
+// =========================================================================
 // TEAM RECENT FIXTURES — a team's matches in a date range (for form + stats)
 // =========================================================================
 SportMonks.prototype.getTeamRecentFixtures = function(teamId, fromDate, toDate) {

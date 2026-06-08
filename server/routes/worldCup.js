@@ -373,6 +373,41 @@ module.exports = function(deps) {
     }
   });
 
+  // GET /api/world-cup/admin/fixture-data/:id? — inspect the rich All-In data
+  // available for a fixture (statistics/xG, lineups, predictions). If no id is
+  // given, uses the first upcoming WC fixture in the DB.
+  router.get('/admin/fixture-data/:id?', authenticate, requireAdmin, async function(req, res) {
+    try {
+      var sm = deps.sportMonks;
+      if (!sm || !sm.isAvailable()) return res.status(503).json({ error: 'SportMonks not available' });
+      var fixtureId = req.params.id;
+      if (!fixtureId && deps.db && deps.db.isAvailable && deps.db.isAvailable()) {
+        var r = await deps.db.query("SELECT external_fixture_id FROM world_cup_fixtures WHERE external_fixture_id IS NOT NULL ORDER BY kickoff ASC LIMIT 1");
+        if (r.rows.length) fixtureId = r.rows[0].external_fixture_id;
+      }
+      if (!fixtureId) return res.status(400).json({ error: 'No fixture id and none in DB — sync fixtures first.' });
+
+      var raw = null, predictions = [];
+      try { raw = await sm.getFixtureRaw(fixtureId); } catch (e) { return res.status(500).json({ error: 'Fixture fetch failed: ' + e.message, fixtureId: fixtureId }); }
+      try { predictions = await sm.getPredictions(fixtureId); } catch (e) {}
+
+      var summary = {
+        fixtureId: fixtureId,
+        teams: raw && raw.participants ? raw.participants.map(function(p) { return (p.meta ? p.meta.location : '') + ':' + p.name; }) : [],
+        statisticsTypes: raw && raw.statistics ? raw.statistics.map(function(s) { return (s.type && (s.type.developer_name || s.type.name)) || s.type_id; }).filter(function(v, i, a) { return a.indexOf(v) === i; }) : 'none',
+        lineupsCount: raw && raw.lineups ? raw.lineups.length : 0,
+        lineupSample: raw && raw.lineups && raw.lineups[0] ? Object.keys(raw.lineups[0]) : [],
+        predictionsCount: (predictions || []).length,
+        predictionTypes: (predictions || []).map(function(p) { return (p.type && (p.type.developer_name || p.type.name)) || p.type_id; }),
+        predictionSample: (predictions || []).slice(0, 6).map(function(p) { return { type: (p.type && p.type.developer_name) || p.type_id, predictions: p.predictions }; }),
+        topLevelKeys: raw ? Object.keys(raw) : [],
+      };
+      res.json({ ok: true, summary: summary });
+    } catch (err) {
+      res.status(500).json({ error: 'Fixture data diagnostic failed: ' + err.message });
+    }
+  });
+
   // GET /api/world-cup/admin/diagnose — verify the SportMonks World Cup feed
   router.get('/admin/diagnose', authenticate, requireAdmin, async function(req, res) {
     try {

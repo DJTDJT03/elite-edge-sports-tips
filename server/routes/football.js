@@ -244,6 +244,47 @@ module.exports = function(deps) {
                 smAwayForm = _computeTeamForm(_recent[1], smF.awayTeamId);
               } catch (e) { console.log('[Match Intelligence] SportMonks form fetch failed:', e.message); }
             }
+
+            // Pre-match win probabilities (All-In predictions) — defensive parse
+            var smProb = null;
+            if (sportMonks.getPredictions) {
+              try {
+                var _preds = await sportMonks.getPredictions(fixtureId);
+                (_preds || []).forEach(function(p) {
+                  var pv = p.predictions || {};
+                  if (pv.home != null && pv.away != null && pv.draw != null && !smProb) {
+                    smProb = { home: Math.round(pv.home), draw: Math.round(pv.draw), away: Math.round(pv.away) };
+                  }
+                });
+              } catch (e) { console.log('[Match Intelligence] SportMonks predictions failed:', e.message); }
+            }
+
+            // xG from fixture statistics — defensive key match (exact shape confirmed via diagnostic)
+            var smHomeXg = null, smAwayXg = null;
+            Object.keys(smF.stats || {}).forEach(function(k) {
+              if (/expected_goals|xg/i.test(k)) {
+                if (k.indexOf('home_') === 0) smHomeXg = smF.stats[k];
+                else if (k.indexOf('away_') === 0) smAwayXg = smF.stats[k];
+              }
+            });
+
+            // Build verdict — prefer the SportMonks model when available
+            var smVerdict;
+            if (smProb) {
+              var _best = (smProb.home >= smProb.draw && smProb.home >= smProb.away) ? 'home'
+                        : (smProb.away >= smProb.draw && smProb.away >= smProb.home) ? 'away' : 'draw';
+              var _top = Math.max(smProb.home, smProb.draw, smProb.away);
+              smVerdict = {
+                market: 'Match Result',
+                pick: _best === 'home' ? smF.homeTeam + ' Win' : _best === 'away' ? smF.awayTeam + ' Win'
+                      : (smProb.home >= smProb.away ? smF.homeTeam + ' or Draw' : smF.awayTeam + ' or Draw'),
+                reason: 'SportMonks model: ' + smF.homeTeam + ' ' + smProb.home + '%, Draw ' + smProb.draw + '%, ' + smF.awayTeam + ' ' + smProb.away + '%.'
+                        + (smHomeXg != null && smAwayXg != null ? ' Expected goals ' + smHomeXg + ' v ' + smAwayXg + '.' : ''),
+                confidence: Math.max(5, Math.min(9, Math.round(_top / 10))),
+                riskLevel: _top >= 55 ? 'low-medium' : 'medium',
+                riskText: _top >= 55 ? 'Model shows a clear favourite.' : 'Tight match on the model — moderate risk.',
+              };
+            }
             var smH2HHomeWins = 0, smH2HAwayWins = 0, smH2HDraws = 0, smH2HTotalGoals = 0;
             smH2H.forEach(function(m) {
               if (m.homeGoals > m.awayGoals) { if (m.homeTeamId === smF.homeTeamId) smH2HHomeWins++; else smH2HAwayWins++; }
@@ -273,7 +314,7 @@ module.exports = function(deps) {
               injuries: { home: [], away: [] },
               predictions: null,
               seasonStats: { home: null, away: null },
-              verdict: {
+              verdict: smVerdict || {
                 market: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Total Goals' : 'Match Result',
                 pick: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Over 2.5 Goals' : (smH2HHomeWins > smH2HAwayWins ? smF.homeTeam + ' Win' : smF.awayTeam + ' or Draw'),
                 reason: 'Based on head-to-head record: ' + smH2HHomeWins + ' home wins, ' + smH2HAwayWins + ' away wins, ' + smH2HDraws + ' draws across ' + smH2H.length + ' meetings. Average ' + smH2HAvg + ' goals per game.',
@@ -281,8 +322,12 @@ module.exports = function(deps) {
                 riskLevel: 'medium',
                 riskText: 'Moderate risk — limited data depth for this league.',
               },
+              winProbability: smProb || null,
+              xg: (smHomeXg != null && smAwayXg != null) ? { home: smHomeXg, away: smAwayXg } : null,
               analysis: {
-                overview: smF.homeTeam + ' host ' + smF.awayTeam + ' at ' + (smF.venue || 'their home ground') + ' in the ' + smF.league + '.',
+                overview: smF.homeTeam + ' host ' + smF.awayTeam + ' at ' + (smF.venue || 'their home ground') + ' in the ' + smF.league + '.'
+                  + (smProb ? ' The model makes it ' + smF.homeTeam + ' ' + smProb.home + '% / Draw ' + smProb.draw + '% / ' + smF.awayTeam + ' ' + smProb.away + '%.' : '')
+                  + (smHomeXg != null && smAwayXg != null ? ' Expected goals: ' + smHomeXg + ' v ' + smAwayXg + '.' : ''),
                 form: (smHomeForm.sampleSize || smAwayForm.sampleSize)
                   ? (smF.homeTeam + ' have ' + smHomeForm.form.filter(function(r){return r.result==='W';}).length + ' wins from their last ' + smHomeForm.form.length + ', ' +
                      smF.awayTeam + ' ' + smAwayForm.form.filter(function(r){return r.result==='W';}).length + ' from their last ' + smAwayForm.form.length + '. ' +
