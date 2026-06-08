@@ -10,10 +10,32 @@ module.exports = function(deps) {
   // ---------------------------------------------------------------------------
   router.post('/register', async (req, res) => {
     try {
-      let { email, password, name, mobile, agreementTimestamp } = req.body;
-      if (!email || !password || !name) {
-        return res.status(400).json({ error: 'Name, email, and password are required' });
+      let { email, password, name, firstName, surname, dateOfBirth, mobile, agreementTimestamp } = req.body;
+      firstName = (firstName || '').trim();
+      surname = (surname || '').trim();
+      dateOfBirth = (dateOfBirth || '').trim();
+      var cleanMobile = mobile ? String(mobile).replace(/[^\d\+]/g, '') : '';
+      // Backward-compat: if a single name was sent, split it
+      if ((!firstName || !surname) && name) {
+        var parts = name.trim().split(/\s+/);
+        firstName = firstName || parts[0] || '';
+        surname = surname || parts.slice(1).join(' ') || '';
       }
+
+      if (!firstName || !surname) return res.status(400).json({ error: 'First name and surname are required' });
+      if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+      if (!dateOfBirth) return res.status(400).json({ error: 'Date of birth is required' });
+      if (!cleanMobile || cleanMobile.replace(/\D/g, '').length < 7) return res.status(400).json({ error: 'A valid mobile number is required' });
+
+      // Age check — must be 18+
+      var dob = new Date(dateOfBirth);
+      if (isNaN(dob.getTime())) return res.status(400).json({ error: 'Please enter a valid date of birth' });
+      var ageMs = Date.now() - dob.getTime();
+      var age = Math.floor(ageMs / (365.25 * 24 * 60 * 60 * 1000));
+      if (age < 18) return res.status(400).json({ error: 'You must be 18 or over to register.' });
+      if (age > 120) return res.status(400).json({ error: 'Please enter a valid date of birth' });
+
+      name = firstName + ' ' + surname;
       email = email.trim().toLowerCase(); // Normalize email
 
       // Password strength validation
@@ -68,7 +90,10 @@ module.exports = function(deps) {
         referralCode: referralCode,
         referredBy: req.body.referralCode || null,
         referralCount: 0,
-        mobile: mobile ? String(mobile).replace(/[^\d\+]/g, '') : null,
+        mobile: cleanMobile || null,
+        firstName: firstName,
+        surname: surname,
+        dateOfBirth: dateOfBirth,
       };
 
       const user = await db.createUser(userData);

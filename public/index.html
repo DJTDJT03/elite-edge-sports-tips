@@ -300,8 +300,16 @@
     </div>
     <form onsubmit="App.register(event)">
       <div class="form-group">
-        <label>Name</label>
-        <input type="text" id="reg-name" required placeholder="Your name">
+        <label>First Name</label>
+        <input type="text" id="reg-first-name" required placeholder="First name">
+      </div>
+      <div class="form-group">
+        <label>Surname</label>
+        <input type="text" id="reg-surname" required placeholder="Surname">
+      </div>
+      <div class="form-group">
+        <label>Date of Birth <span style="font-size:11px;color:var(--text-muted);">(must be 18+)</span></label>
+        <input type="date" id="reg-dob" required>
       </div>
       <div class="form-group">
         <label>Email</label>
@@ -329,8 +337,8 @@
         <label class="radio-label"><input type="radio" name="reg-odds-format" value="decimal"> Decimal (e.g. 2.50)</label>
       </div>
       <div class="form-group">
-        <label>Mobile Number <span style="font-size:11px;color:var(--text-muted);">(optional — for SMS alerts &amp; Telegram invite)</span></label>
-        <input type="tel" id="reg-mobile" placeholder="e.g. 07123 456789" autocomplete="tel">
+        <label>Mobile Number <span style="font-size:11px;color:var(--text-muted);">(for SMS alerts &amp; your Telegram invite)</span></label>
+        <input type="tel" id="reg-mobile" required placeholder="e.g. 07123 456789" autocomplete="tel">
       </div>
       <div class="form-group">
         <label>Referral Code (optional)</label>
@@ -554,7 +562,7 @@
   <script src="/js/calculators.js?v=20260501c"></script>
   <script src="/js/worldCup.js?v=20260608b"></script>
   <script src="/js/lms.js?v=20260608d"></script>
-  <script src="/js/app.js?v=20260608i"></script>
+  <script src="/js/app.js?v=20260608j"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

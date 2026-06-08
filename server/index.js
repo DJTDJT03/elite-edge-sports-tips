@@ -263,6 +263,10 @@ app.use('/', require('./routes/public')(deps));
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_reward_claimed DATE',
         // Mobile number for SMS
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS mobile TEXT',
+        // Signup identity fields (mandatory at registration)
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS surname TEXT',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE',
         // User bets — server-side persistence for Personal ROI Dashboard
         "CREATE TABLE IF NOT EXISTS user_bets (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, tip_id TEXT NOT NULL, selection TEXT, event TEXT, sport TEXT, market TEXT, odds NUMERIC(8,2), confidence INTEGER, analyst TEXT, result TEXT, pnl NUMERIC(10,2), stake NUMERIC(8,2) DEFAULT 1, settled BOOLEAN DEFAULT FALSE, date DATE, backed_at TIMESTAMPTZ DEFAULT NOW(), settled_at TIMESTAMPTZ, UNIQUE(user_id, tip_id))",
         'CREATE INDEX IF NOT EXISTS idx_ub_user ON user_bets(user_id, date DESC)',

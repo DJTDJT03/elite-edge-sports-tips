@@ -826,9 +826,21 @@ const App = {
 
   async register(e) {
     e.preventDefault();
-    const name = document.getElementById('reg-name').value;
+    const firstName = (document.getElementById('reg-first-name').value || '').trim();
+    const surname = (document.getElementById('reg-surname').value || '').trim();
+    const dateOfBirth = (document.getElementById('reg-dob').value || '').trim();
     const email = document.getElementById('reg-email').value;
     const password = document.getElementById('reg-password').value;
+    const mobileEl = document.getElementById('reg-mobile');
+    const mobileVal = mobileEl ? mobileEl.value.trim() : '';
+
+    if (!firstName || !surname) { document.getElementById('reg-error').textContent = 'Please enter your first name and surname.'; return; }
+    if (!dateOfBirth) { document.getElementById('reg-error').textContent = 'Please enter your date of birth.'; return; }
+    if (!mobileVal || mobileVal.replace(/\D/g, '').length < 7) { document.getElementById('reg-error').textContent = 'Please enter a valid mobile number.'; return; }
+    // 18+ check
+    var _dob = new Date(dateOfBirth);
+    var _age = (Date.now() - _dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+    if (isNaN(_dob.getTime()) || _age < 18) { document.getElementById('reg-error').textContent = 'You must be 18 or over to register.'; return; }
 
     // Client-side password validation
     const { score } = this.validatePasswordClient(password);
@@ -854,11 +866,8 @@ const App = {
       var refCode = new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('ee_ref') || '';
       if (refCode) localStorage.setItem('ee_ref', refCode);
 
-      var mobileInput = document.getElementById('reg-mobile');
-      var mobile = mobileInput ? mobileInput.value.trim() : '';
-
       const data = await this.api('/auth/register', {
-        method: 'POST', body: JSON.stringify({ name, email, password, mobile: mobile || undefined, agreementTimestamp, referralCode: refCode || undefined })
+        method: 'POST', body: JSON.stringify({ firstName, surname, dateOfBirth, email, password, mobile: mobileVal, agreementTimestamp, referralCode: refCode || undefined })
       });
       this.token = data.token; this.user = data.user;
       localStorage.setItem('ee_token', data.token);
