@@ -351,14 +351,21 @@ async function getUpcomingWcFixtures(days) {
 async function getWcRoundFixtures(round) {
   if (!available()) return [];
   if (round <= 3) {
+    // Matchday = the home team's Nth group game by kickoff. Both teams in a
+    // fixture share the same matchday, and this matches settlement exactly
+    // (a team's round-N game = their Nth group fixture). No reliance on the
+    // group label, which can be wrong/missing in the feed.
     const { rows } = await db.query(
       `SELECT id, home_team, away_team, kickoff, group_letter, status FROM (
-         SELECT id, home_team, away_team, kickoff, group_letter, status,
-           CEIL(ROW_NUMBER() OVER (PARTITION BY group_letter ORDER BY kickoff)::numeric / 2) AS md
-         FROM world_cup_fixtures
-         WHERE stage = 'group' AND group_letter IS NOT NULL
-           AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
-           AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'
+         SELECT f.id, f.home_team, f.away_team, f.kickoff, f.group_letter, f.status,
+           (SELECT COUNT(*) FROM world_cup_fixtures f2
+             WHERE f2.stage = 'group'
+               AND (f2.home_team = f.home_team OR f2.away_team = f.home_team)
+               AND f2.kickoff <= f.kickoff) AS md
+         FROM world_cup_fixtures f
+         WHERE f.stage = 'group'
+           AND f.home_team NOT ILIKE '%group%' AND f.home_team !~ '^[0-9]'
+           AND f.away_team NOT ILIKE '%group%' AND f.away_team !~ '^[0-9]'
        ) x WHERE md = $1 ORDER BY kickoff ASC`,
       [round]
     );
