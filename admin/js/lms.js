@@ -55,7 +55,7 @@ window.LMSPage = {
           '<label style="display:flex;flex-direction:column;font-size:12px;color:#aaa;">Name<input id="lms-new-name" placeholder="World Cup 2026 LMS" style="padding:8px;min-width:220px;"></label>' +
           '<label style="display:flex;flex-direction:column;font-size:12px;color:#aaa;">Phase<select id="lms-new-phase" style="padding:8px;"><option value="world_cup">World Cup</option><option value="pl_rollover">PL Rollover</option></select></label>' +
           '<label style="display:flex;flex-direction:column;font-size:12px;color:#aaa;">Base prize (&pound;)<input id="lms-new-prize" type="number" value="250" style="padding:8px;width:120px;"></label>' +
-          '<label style="display:flex;flex-direction:column;font-size:12px;color:#aaa;">Access<select id="lms-new-access" style="padding:8px;"><option value="subscriber">Subscribers</option><option value="everyone">Everyone</option></select></label>' +
+          '<label style="display:flex;flex-direction:column;font-size:12px;color:#aaa;">Access<select id="lms-new-access" style="padding:8px;"><option value="everyone">Any registered member (incl. Free Tier)</option><option value="subscriber">Paid subscribers only</option></select></label>' +
           '<label style="display:flex;flex-direction:column;font-size:12px;color:#aaa;">Status<select id="lms-new-status" style="padding:8px;"><option value="open">Open</option><option value="active">Active</option></select></label>' +
           '<button class="btn-primary" onclick="LMSPage.create()">Create</button>' +
         '</div>' +
