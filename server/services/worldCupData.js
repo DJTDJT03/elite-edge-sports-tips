@@ -158,6 +158,7 @@ module.exports = function(deps) {
       if (!nf.homeTeam || !nf.awayTeam) continue;
 
       var sg = smStageAndGroup(rf);
+      var roundName = (rf.round && (rf.round.name || rf.round.id)) ? String(rf.round.name || rf.round.id) : null;
 
       // Map normalised status -> our status
       var st = 'scheduled';
@@ -177,16 +178,16 @@ module.exports = function(deps) {
       if (existing.rows.length) {
         await db.query(
           `UPDATE world_cup_fixtures SET tournament_id=$1, stage=$2, group_letter=$3, home_team=$4, away_team=$5,
-           kickoff=$6, venue=$7, home_goals=$8, away_goals=$9, result=$10, status=$11 WHERE external_fixture_id=$12`,
+           kickoff=$6, venue=$7, home_goals=$8, away_goals=$9, result=$10, status=$11, round_name=$13 WHERE external_fixture_id=$12`,
           [tournamentId, sg.stage, sg.groupLetter, nf.homeTeam, nf.awayTeam, nf.kickoff,
-           nf.venue || null, nf.homeGoals, nf.awayGoals, result, st, rf.id]
+           nf.venue || null, nf.homeGoals, nf.awayGoals, result, st, rf.id, roundName]
         );
       } else {
         await db.query(
-          `INSERT INTO world_cup_fixtures (tournament_id, stage, group_letter, home_team, away_team, kickoff, venue, home_goals, away_goals, result, status, external_fixture_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          `INSERT INTO world_cup_fixtures (tournament_id, stage, group_letter, home_team, away_team, kickoff, venue, home_goals, away_goals, result, status, external_fixture_id, round_name)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
           [tournamentId, sg.stage, sg.groupLetter, nf.homeTeam, nf.awayTeam, nf.kickoff,
-           nf.venue || null, nf.homeGoals, nf.awayGoals, result, st, rf.id]
+           nf.venue || null, nf.homeGoals, nf.awayGoals, result, st, rf.id, roundName]
         );
       }
       synced.fixtures++;

@@ -401,7 +401,19 @@ module.exports = function(deps) {
         predictionTypes: (predictions || []).map(function(p) { return (p.type && (p.type.developer_name || p.type.name)) || p.type_id; }),
         predictionSample: (predictions || []).slice(0, 6).map(function(p) { return { type: (p.type && p.type.developer_name) || p.type_id, predictions: p.predictions }; }),
         topLevelKeys: raw ? Object.keys(raw) : [],
+        round: raw && raw.round ? { id: raw.round.id, name: raw.round.name } : (raw ? { round_id: raw.round_id } : null),
       };
+      // Group-stage matchday tagging as stored in our DB (to verify grouping)
+      try {
+        if (deps.db && deps.db.isAvailable && deps.db.isAvailable()) {
+          var gr = await deps.db.query(
+            "SELECT round_name, COUNT(*)::int AS fixtures, MIN(kickoff) AS first_kickoff, MAX(kickoff) AS last_kickoff " +
+            "FROM world_cup_fixtures WHERE stage='group' AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]' " +
+            "GROUP BY round_name ORDER BY first_kickoff ASC"
+          );
+          summary.groupRoundsInDb = gr.rows;
+        }
+      } catch (e) { summary.groupRoundsError = e.message; }
       res.json({ ok: true, summary: summary });
     } catch (err) {
       res.status(500).json({ error: 'Fixture data diagnostic failed: ' + err.message });

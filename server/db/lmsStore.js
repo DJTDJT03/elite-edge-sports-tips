@@ -360,11 +360,35 @@ async function getUpcomingWcFixtures(days) {
 async function getWcRoundFixtures(round) {
   if (!available()) return [];
   if (round <= 3) {
-    // Matchday = the home team's Nth group game by kickoff. Both teams in a
-    // fixture share the same matchday, matching settlement exactly. We first
-    // DEDUPE to one row per matchup (the feed can contain duplicate fixtures
-    // from a prior sync source), otherwise a dupe both inflates the count and
-    // shows a team twice in a round.
+    // PREFER SportMonks' own matchday tagging (round_name). Take the distinct
+    // group rounds ordered by earliest kickoff; round N = the Nth of them.
+    try {
+      const rn = await db.query(
+        `SELECT round_name, MIN(kickoff) AS first_ko FROM world_cup_fixtures
+         WHERE stage = 'group' AND round_name IS NOT NULL
+           AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
+         GROUP BY round_name ORDER BY first_ko ASC`
+      );
+      if (rn.rows.length >= 3 && rn.rows[round - 1]) {
+        const target = rn.rows[round - 1].round_name;
+        const { rows } = await db.query(
+          `SELECT id, home_team, away_team, kickoff, group_letter, status FROM (
+             SELECT DISTINCT ON (LEAST(home_team, away_team), GREATEST(home_team, away_team))
+               id, home_team, away_team, kickoff, group_letter, status
+             FROM world_cup_fixtures
+             WHERE stage = 'group' AND round_name = $1
+               AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
+               AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'
+             ORDER BY LEAST(home_team, away_team), GREATEST(home_team, away_team), kickoff ASC
+           ) d ORDER BY d.kickoff ASC`,
+          [target]
+        );
+        return rows;
+      }
+    } catch (e) { /* fall through to kickoff-based derivation */ }
+
+    // Fallback (no round_name yet): matchday = the home team's Nth group game
+    // by kickoff, on a deduped set. Matches settlement.
     const { rows } = await db.query(
       `WITH g AS (
          SELECT DISTINCT ON (LEAST(home_team, away_team), GREATEST(home_team, away_team))
