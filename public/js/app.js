@@ -7809,7 +7809,9 @@ const App = {
           <div class="flex gap-8 mb-16">
             <button class="btn btn-gold btn-sm" onclick="App.adminAutoSettle()">Auto-Settle Results</button>
             <button class="btn btn-outline btn-sm" onclick="App.adminLoadLiveData()">Refresh All Live Data</button>
+            <button class="btn btn-outline btn-sm" onclick="App.adminCheckStripe()">Check Stripe</button>
           </div>
+          <div id="admin-stripe-health" style="display:none;margin-bottom:16px;padding:12px 14px;border-radius:8px;font-size:13px;"></div>
           <div id="admin-live-racing" class="mb-16"><div class="inline-spinner">Loading live racing data...</div></div>
           <div id="admin-live-football"><div class="inline-spinner">Loading live football data...</div></div>
         </div>
@@ -8092,6 +8094,26 @@ const App = {
   // -----------------------------------------------------------------------
   // ADMIN LIVE DATA
   // -----------------------------------------------------------------------
+  async adminCheckStripe() {
+    var box = document.getElementById('admin-stripe-health');
+    if (box) { box.style.display = 'block'; box.style.background = 'var(--bg-elevated)'; box.style.color = 'var(--text-secondary)'; box.textContent = 'Checking Stripe…'; }
+    try {
+      var r = await this.api('/stripe/health');
+      if (!box) return;
+      if (r.ok) {
+        box.style.background = 'rgba(34,197,94,0.12)';
+        box.style.color = '#22c55e';
+        box.innerHTML = '✅ <strong>Stripe healthy</strong> — key valid and talking to Stripe (' + (r.mode || '?') + ' mode). Webhook secret: ' + (r.webhookSecretSet ? 'set' : '<strong>missing</strong>') + '.';
+      } else {
+        box.style.background = 'rgba(239,68,68,0.12)';
+        box.style.color = '#ef4444';
+        box.innerHTML = '⚠️ <strong>Stripe problem</strong> — ' + this.escapeHtml(r.message || r.error || 'unknown') + (r.mode ? ' (key looks like ' + r.mode + ' mode)' : '');
+      }
+    } catch (e) {
+      if (box) { box.style.background = 'rgba(239,68,68,0.12)'; box.style.color = '#ef4444'; box.textContent = 'Check failed: ' + (e.message || e); }
+    }
+  },
+
   async adminLoadLiveData() {
     // Check API statuses and load live data
     var racingEl = document.getElementById('admin-live-racing');

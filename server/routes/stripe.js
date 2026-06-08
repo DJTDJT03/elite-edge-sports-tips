@@ -7,7 +7,7 @@
 
 module.exports = function(deps) {
   const router = require('express').Router();
-  const { db, authenticate, stripeService, emailService } = deps;
+  const { db, authenticate, requireAdmin, stripeService, emailService } = deps;
   const express = require('express');
 
   // ---------------------------------------------------------------------------
@@ -432,6 +432,39 @@ module.exports = function(deps) {
     } catch (err) {
       console.error('[Stripe] Status error:', err.message);
       res.status(500).json({ error: 'Unable to fetch subscription status' });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/stripe/health — admin: confirm the secret key is valid + reachable
+  // ---------------------------------------------------------------------------
+  router.get('/stripe/health', authenticate, requireAdmin, async (req, res) => {
+    var key = process.env.STRIPE_SECRET_KEY || '';
+    if (!key) return res.json({ ok: false, configured: false, message: 'STRIPE_SECRET_KEY not set in environment' });
+    var mode = key.indexOf('sk_live') === 0 ? 'live' : key.indexOf('sk_test') === 0 ? 'test' : 'unknown';
+    try {
+      var stripe = require('stripe')(key);
+      // Lightweight authenticated call — fails immediately if the key is invalid
+      var balance = await stripe.balance.retrieve();
+      res.json({
+        ok: true,
+        configured: true,
+        reachable: true,
+        mode: mode,
+        livemode: !!balance.livemode,
+        webhookSecretSet: !!process.env.STRIPE_WEBHOOK_SECRET,
+        message: 'Stripe key is valid and talking to Stripe (' + mode + ' mode).',
+      });
+    } catch (err) {
+      res.json({
+        ok: false,
+        configured: true,
+        reachable: false,
+        mode: mode,
+        webhookSecretSet: !!process.env.STRIPE_WEBHOOK_SECRET,
+        error: err.message,
+        message: 'Stripe rejected the key — it may be invalid, revoked, or rolled. Update STRIPE_SECRET_KEY in Railway.',
+      });
     }
   });
 
