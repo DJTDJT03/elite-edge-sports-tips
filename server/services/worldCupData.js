@@ -369,6 +369,70 @@ module.exports = function(deps) {
   // WORLD CUP PREVIEWS — Deep AI analysis 48 hours before kickoff
   // =========================================================================
 
+  // Compute a team's recent form summary from SportMonks fixtures
+  function _wcForm(fixtures, teamId) {
+    var finished = (fixtures || []).filter(function(f) {
+      return ['FT', 'AET', 'PEN'].indexOf(f.status) !== -1 && f.homeGoals != null && f.awayGoals != null;
+    }).sort(function(a, b) { return new Date(b.kickoff) - new Date(a.kickoff); });
+    var seq = [], scored = 0, conceded = 0, n = 0;
+    finished.forEach(function(f) {
+      var isHome = f.homeTeamId === teamId;
+      var gf = isHome ? f.homeGoals : f.awayGoals, ga = isHome ? f.awayGoals : f.homeGoals;
+      if (n < 6) { scored += gf; conceded += ga; n++; seq.push(gf > ga ? 'W' : gf < ga ? 'L' : 'D'); }
+    });
+    if (!n) return null;
+    return { formStr: seq.join(''), scored: (scored / n).toFixed(1), conceded: (conceded / n).toFixed(1) };
+  }
+
+  // Gather the SportMonks All-In model data for a fixture (by SportMonks id)
+  async function gatherWcModel(externalId) {
+    if (!externalId || !smAvailable()) return null;
+    var model = { winProb: null, score: null, btts: null, lineups: false, homeForm: null, awayForm: null };
+    try {
+      var raw = await sportMonks.getFixtureRaw(externalId);
+      if (!raw) return null;
+      var parts = raw.participants || [];
+      var home = parts.find(function(p) { return p.meta && p.meta.location === 'home'; }) || parts[0] || {};
+      var away = parts.find(function(p) { return p.meta && p.meta.location === 'away'; }) || parts[1] || {};
+      (raw.predictions || []).forEach(function(p) {
+        var pv = p.predictions || {};
+        if (p.type_id === 237 && pv.home != null) model.winProb = { home: Math.round(pv.home), draw: Math.round(pv.draw), away: Math.round(pv.away) };
+        else if (p.type_id === 231 && pv.yes != null) model.btts = Math.round(pv.yes);
+        else if (p.type_id === 240 && pv.scores) {
+          var b = null, bp = 0;
+          Object.keys(pv.scores).forEach(function(k) { if (k.indexOf('Other') === -1 && pv.scores[k] > bp) { bp = pv.scores[k]; b = k; } });
+          model.score = b;
+        }
+      });
+      if (raw.lineups && raw.lineups.length) model.lineups = true;
+      if (sportMonks.getTeamRecentFixtures && home.id && away.id) {
+        var from = new Date(); from.setDate(from.getDate() - 200);
+        var fromS = from.toISOString().split('T')[0], toS = new Date().toISOString().split('T')[0];
+        var rec = await Promise.all([
+          sportMonks.getTeamRecentFixtures(home.id, fromS, toS).catch(function() { return []; }),
+          sportMonks.getTeamRecentFixtures(away.id, fromS, toS).catch(function() { return []; }),
+        ]);
+        model.homeForm = _wcForm(rec[0], home.id);
+        model.awayForm = _wcForm(rec[1], away.id);
+      }
+    } catch (e) { console.log('[WorldCup] model gather failed:', e.message); }
+    return model;
+  }
+
+  // Build a prompt addendum so Perplexity reasons WITH the hard model data
+  function wcModelAddendum(model, fixture) {
+    if (!model) return '';
+    var s = '\n\nHARD MODEL DATA (SportMonks All-In) — weigh this alongside your live intelligence, do not just echo it:\n';
+    if (model.winProb) s += '- Win probability: ' + fixture.home_team + ' ' + model.winProb.home + '%, Draw ' + model.winProb.draw + '%, ' + fixture.away_team + ' ' + model.winProb.away + '%\n';
+    if (model.score) s += '- Model most-likely scoreline: ' + model.score + '\n';
+    if (model.btts != null) s += '- BTTS probability: ' + model.btts + '%\n';
+    if (model.homeForm) s += '- ' + fixture.home_team + ' recent form: ' + model.homeForm.formStr + ' (avg ' + model.homeForm.scored + ' scored / ' + model.homeForm.conceded + ' conceded)\n';
+    if (model.awayForm) s += '- ' + fixture.away_team + ' recent form: ' + model.awayForm.formStr + ' (avg ' + model.awayForm.scored + ' scored / ' + model.awayForm.conceded + ' conceded)\n';
+    if (model.lineups) s += '- Probable lineups are confirmed/available.\n';
+    s += 'Find where the genuine edge is versus this model and the market.\n';
+    return s;
+  }
+
   async function generatePreviews() {
     if (!db.isAvailable || !db.isAvailable()) return { generated: 0 };
     var perplexityClient = deps.perplexityClient;
@@ -400,7 +464,9 @@ module.exports = function(deps) {
     for (var i = 0; i < upcoming.length; i++) {
       var fixture = upcoming[i];
       try {
-        var prompt = prompts.buildWorldCupPreviewPrompt(fixture);
+        // Gather SportMonks model data and fold it into the analysis prompt
+        var wcModel = await gatherWcModel(fixture.external_fixture_id);
+        var prompt = prompts.buildWorldCupPreviewPrompt(fixture) + wcModelAddendum(wcModel, fixture);
 
         // Call Perplexity Sonar directly
         var enrichResult = null;
@@ -427,6 +493,24 @@ module.exports = function(deps) {
         if (enrichResult && enrichResult.signals) {
           signals = enrichResult.signals;
           citations = enrichResult.citations || [];
+        }
+
+        // Fold the SportMonks model into the stored signals + ground confidence in it
+        if (wcModel) {
+          signals.sportmonks_model = {
+            value: 'Win%: H ' + (wcModel.winProb ? wcModel.winProb.home : '-') + ' / D ' + (wcModel.winProb ? wcModel.winProb.draw : '-') + ' / A ' + (wcModel.winProb ? wcModel.winProb.away : '-')
+              + (wcModel.score ? ' | Score ' + wcModel.score : '') + (wcModel.btts != null ? ' | BTTS ' + wcModel.btts + '%' : ''),
+            winProb: wcModel.winProb, score: wcModel.score, btts: wcModel.btts,
+            homeForm: wcModel.homeForm, awayForm: wcModel.awayForm,
+          };
+          if (!predicted && wcModel.score) predicted = wcModel.score;
+          if (wcModel.winProb) {
+            var _top = Math.max(wcModel.winProb.home, wcModel.winProb.draw, wcModel.winProb.away);
+            confidence = _top >= 55 ? 8 : _top >= 45 ? 7 : 6; // model-grounded, 6/10 floor
+          }
+        }
+
+        if (enrichResult && enrichResult.signals) {
           if (signals.predicted_scoreline && signals.predicted_scoreline.value) {
             predicted = signals.predicted_scoreline.value;
           }
