@@ -2868,6 +2868,25 @@ const App = {
         <!-- LAST MAN STANDING BANNER (data-driven; filled by _loadLmsBanner) -->
         <div id="lms-banner-slot"></div>
 
+        <!-- ASK ELITE EDGE — natural-language assistant grounded in our engine -->
+        <div style="background:linear-gradient(135deg,#10131f,#0a0e1a);border:1px solid rgba(212,168,67,0.3);border-radius:14px;padding:18px 20px;margin-bottom:20px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <span style="font-size:20px;">&#128173;</span>
+            <div>
+              <div style="font-size:16px;font-weight:800;color:#fff;">Ask Elite Edge</div>
+              <div style="font-size:12px;color:var(--text-secondary);">Ask anything — our engine answers from its own predictions. "Who wins the 2.45 at Kempton?" · "How many goals in Arsenal v Wolves?"</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:nowrap;">
+            <input id="ee-ask-input" type="text" placeholder="Ask about any race or match…" onkeydown="if(event.key==='Enter'){App.askEliteEdge();}" style="flex:1;min-width:0;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text-primary);font-size:14px;">
+            <button onclick="App.askEliteEdge()" class="btn btn-gold" style="white-space:nowrap;padding:12px 22px;">Ask</button>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
+            ${["Who's your NAP today?","Best bet at the races?","Any value in the football?"].map(function(q){ return '<button onclick="App.askEliteEdge(' + JSON.stringify(q).replace(/"/g,'&quot;') + ')" style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);color:#d4a843;font-size:11px;padding:5px 10px;border-radius:14px;cursor:pointer;">' + q + '</button>'; }).join('')}
+          </div>
+          <div id="ee-ask-answer" style="display:none;margin-top:14px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:14px;line-height:1.6;color:var(--text-primary);"></div>
+        </div>
+
         <!-- 2. NAP OF THE DAY — Hero product, first thing you see -->
         ${napTip ? (this.isPremium() ? `
         <div class="nap-card-wrapper">
@@ -13552,6 +13571,27 @@ const App = {
         '<div class="heatmap-legend-item"><div class="heatmap-legend-dot" style="background:#1e293b;"></div> No Edge (&lt;5)</div>' +
       '</div>' +
     '</div>';
+  },
+
+  // Ask Elite Edge — natural-language assistant grounded in our selection engine
+  async askEliteEdge(presetQ) {
+    var input = document.getElementById('ee-ask-input');
+    if (presetQ && input) input.value = presetQ;
+    var q = (presetQ || (input ? input.value : '') || '').trim();
+    var out = document.getElementById('ee-ask-answer');
+    if (!q) { if (input) input.focus(); return; }
+    if (out) {
+      out.style.display = 'block';
+      out.innerHTML = '<span style="color:var(--text-secondary);">Elite Edge is thinking…</span>';
+    }
+    try {
+      var data = await this.api('/chat/ai', { method: 'POST', body: JSON.stringify({ message: q }) });
+      var reply = (data && data.reply) ? this.escapeHtml(data.reply).replace(/\n/g, '<br>') : 'No answer right now.';
+      if (out) out.innerHTML = '<div style="font-size:11px;font-weight:700;color:#d4a843;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#128173; Elite Edge says</div>' + reply +
+        '<div style="margin-top:10px;font-size:11px;color:var(--text-muted);">Statistical prediction for entertainment. 18+ · Please gamble responsibly.</div>';
+    } catch (e) {
+      if (out) out.innerHTML = '<span style="color:var(--red);">Sorry, couldn\'t answer that just now — try again in a moment.</span>';
+    }
   },
 
   // Data-driven Last Man Standing dashboard banner. Pulls the live competition

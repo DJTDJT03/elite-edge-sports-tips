@@ -240,6 +240,51 @@ module.exports = function(deps) {
             liveContext += '- ' + (r.selection || '') + ' @ ' + (r.odds || '') + ' = ' + (r.result || '') + ' (' + (r.pnl >= 0 ? '+' : '') + (r.pnl || 0).toFixed(2) + 'u)\n';
           });
         }
+
+        // Our Pick on EVERY race today (race_predictions) — lets the assistant
+        // answer "who wins the 2.45 at Kempton" even when not a published tip
+        try {
+          if (db.getRacePredictions) {
+            var racePreds = await db.getRacePredictions({ date: today });
+            if (racePreds && racePreds.length) {
+              liveContext += '\nTODAY\'S RACE PREDICTIONS — Our Pick on every race:\n';
+              racePreds.slice(0, 80).forEach(function(r) {
+                liveContext += '- ' + (r.race_time || '') + ' ' + (r.meeting || '') + (r.race_name ? ' (' + r.race_name + ')' : '') +
+                  ' — Our Pick: ' + (r.selection || '') + (r.odds ? ' @ ' + r.odds : '') + ' (confidence ' + (r.confidence || '?') + '/10)\n';
+              });
+            }
+          }
+        } catch (e) {}
+
+        // Our Take on EVERY football match today (match_predictions) — answers
+        // "who wins" / "how many goals" for any fixture, not just published tips
+        try {
+          if (db.getMatchPredictions) {
+            var matchPreds = await db.getMatchPredictions({ date: today });
+            if (matchPreds && matchPreds.length) {
+              liveContext += '\nTODAY\'S MATCH PREDICTIONS — Our Take on every game:\n';
+              matchPreds.slice(0, 60).forEach(function(m) {
+                liveContext += '- ' + (m.home_team || '') + ' v ' + (m.away_team || '') + (m.league ? ' (' + m.league + ')' : '') +
+                  ' — Our Take: ' + (m.pick || '') + (m.market ? ' [' + m.market + ']' : '') + ' (confidence ' + (m.confidence || '?') + '/10)' +
+                  (m.reason ? ' — ' + String(m.reason).substring(0, 140) : '') + '\n';
+              });
+            }
+          }
+        } catch (e) {}
+
+        // World Cup predictions (predicted scorelines + verdicts)
+        try {
+          if (process.env.ENABLE_WORLD_CUP === 'true' && db.query) {
+            var wcp = await db.query("SELECT home_team, away_team, predicted_scoreline, verdict_selection, verdict, confidence FROM world_cup_previews WHERE kickoff >= NOW() - INTERVAL '6 hours' ORDER BY kickoff ASC LIMIT 30");
+            if (wcp.rows && wcp.rows.length) {
+              liveContext += '\nWORLD CUP PREDICTIONS:\n';
+              wcp.rows.forEach(function(p) {
+                liveContext += '- ' + p.home_team + ' v ' + p.away_team + ' — Predicted score: ' + (p.predicted_scoreline || '?') +
+                  ', Our Pick: ' + (p.verdict_selection || p.verdict || 'TBC') + ' (confidence ' + (p.confidence || '?') + '/10)\n';
+              });
+            }
+          }
+        } catch (e) {}
       } catch (ctxErr) {
         // Non-fatal — chatbot works without live context
       }
@@ -254,18 +299,21 @@ module.exports = function(deps) {
         '- Premium: £19.99/month or £199.99/year | VIP: £39.99/month or £399.99/year\n' +
         '- 14-day free trial available for new users\n' +
         '- Features: Value Bet Scanner, Smart Acca Generator (2-8 fold, multi-sport), Steamer Alerts, AI Race Replays, Going Forecast\n\n' +
+        'ANSWERING MATCH & RACE QUESTIONS (this is your most important job):\n' +
+        '- When asked "who wins the [time] at [course]" or about a specific race, find it in TODAY\'S RACE PREDICTIONS and give Our Pick, the confidence, and a brief reason.\n' +
+        '- When asked "who wins" or "how many goals" for a football match, find it in TODAY\'S MATCH PREDICTIONS or WORLD CUP PREDICTIONS and give Our Take / predicted scoreline, confidence and the reasoning.\n' +
+        '- Always answer from OUR data below — these are the engine\'s own predictions. Never invent a selection or scoreline. If a specific race/match is not in the data, say we have not published a prediction for it yet and point them to the relevant page.\n' +
+        '- Give a clear, DETAILED answer for specific questions: state the pick/prediction, the confidence, and the key reasoning behind it — like an expert tipster explaining their call at the track.\n\n' +
         'RULES:\n' +
-        '- Be helpful, concise, and use British English\n' +
-        '- Never give financial advice or guarantee outcomes\n' +
-        '- When asked about today\'s tips, reference the LIVE TIPS data below\n' +
-        '- When asked about results, reference the RECENT RESULTS data below\n' +
-        '- Keep responses under 200 words\n' +
-        '- If you don\'t know something specific, direct them to the relevant page (e.g. "Check the Results page for full history")' +
+        '- British English. Confident but never arrogant. Never guarantee outcomes or give financial advice — these are statistical predictions for entertainment.\n' +
+        '- For general questions about today\'s tips/results, reference the data below.\n' +
+        '- Detailed answers welcome (up to ~300 words) but stay focused and useful — punters want a straight, well-reasoned answer.\n' +
+        '- 18+. Always responsible: if someone seems to be chasing losses, gently encourage responsible play.' +
         liveContext;
 
       var response = await aiReports.client.messages.create({
         model: process.env.AI_MODEL || 'claude-haiku-4-5-20251001',
-        max_tokens: 400,
+        max_tokens: 700,
         system: systemPrompt,
         messages: [{ role: 'user', content: message }],
       });
