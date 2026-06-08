@@ -320,6 +320,21 @@ function extraTeamsAllowed(competition) {
   return rollovers.length > 0;
 }
 
+// ---------------------------------------------------------------------------
+// Banner / branding — data-driven so it can be re-skinned without a deploy.
+// Phase defaults are overridden by anything in competition.config.banner, so
+// the dashboard banner follows whatever competition is live (World Cup now,
+// Premier League rollover later) and carries the live prize pot.
+// ---------------------------------------------------------------------------
+function bannerConfig(competition) {
+  if (!competition) return null;
+  var defaults = competition.phase === 'pl_rollover'
+    ? { eyebrow: 'Premier League', title: 'LAST MAN STANDING', tagline: 'One pick a week. Survive the season. Win the pot.', emoji: '⚽', accent: '#d4a843', cta: 'Play Now' }
+    : { eyebrow: 'World Cup 2026', title: 'LAST MAN STANDING', tagline: 'One pick. One life. Free to enter — survive to win the pot.', emoji: '🏆', accent: '#d4a843', cta: 'Play Now' };
+  var custom = (competition.config && competition.config.banner) || {};
+  return Object.assign(defaults, custom);
+}
+
 module.exports = {
   WC_TOTAL_ROUNDS,
   MAX_EXTRA_TEAMS: 2,
@@ -332,4 +347,5 @@ module.exports = {
   settleRound,
   potTotal,
   extraTeamsAllowed,
+  bannerConfig,
 };

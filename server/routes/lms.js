@@ -95,6 +95,30 @@ module.exports = function (deps) {
     }
   });
 
+  // GET /api/lms/featured — the headline competition for the dashboard banner.
+  // Data-driven branding so it re-skins itself (WC -> PL) without a deploy, and
+  // returns null when nothing is live so the banner detaches automatically.
+  router.get('/featured', authenticate, async function (req, res) {
+    if (!lmsStore.available()) return res.json({ competition: null });
+    try {
+      const all = await lmsStore.getCompetitions();
+      const featured = all.find(function (c) { return c.status === 'active'; })
+        || all.find(function (c) { return c.status === 'open'; })
+        || null;
+      if (!featured) return res.json({ competition: null });
+      res.json({
+        competition: {
+          id: featured.id, name: featured.name, phase: featured.phase, status: featured.status,
+          prizePot: featured.prizePot, roundLabel: lms.roundLabel(featured.phase, featured.currentRound),
+          banner: lms.bannerConfig(featured),
+        },
+      });
+    } catch (e) {
+      console.error('[LMS] featured error:', e.message);
+      res.json({ competition: null });
+    }
+  });
+
   // GET /api/lms/competitions/:id — full detail for the current user
   router.get('/competitions/:id', authenticate, async function (req, res) {
     if (!guard(req, res)) return;
@@ -334,6 +358,12 @@ module.exports = function (deps) {
       ['name', 'status', 'access', 'currentRound', 'basePrize'].forEach(function (k) {
         if (b[k] !== undefined) fields[k] = b[k];
       });
+      // Banner branding lives in config.banner so it can be re-skinned without a deploy
+      if (b.banner && typeof b.banner === 'object') {
+        const cfg = Object.assign({}, c.config || {});
+        cfg.banner = Object.assign({}, cfg.banner || {}, b.banner);
+        fields.config = cfg;
+      }
       const updated = await lmsStore.updateCompetition(c.id, fields);
       res.json({ ok: true, competition: updated });
     } catch (e) {

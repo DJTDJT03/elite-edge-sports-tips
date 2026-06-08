@@ -2852,29 +2852,8 @@ const App = {
         </div>
         ` : ''}
 
-        <!-- LAST MAN STANDING BANNER -->
-        ${document.getElementById('nav-lms') && document.getElementById('nav-lms').style.display !== 'none' ? `
-        <div onclick="window.location.hash='#/last-man-standing'" style="background:linear-gradient(135deg,#0a0e1a 0%,#14110a 55%,#1a1305 100%);border:2px solid rgba(212,168,67,0.45);border-radius:14px;padding:18px 22px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;">
-          <div style="position:absolute;top:-50%;right:-10%;width:60%;height:200%;background:radial-gradient(circle at 70% 50%,rgba(212,168,67,0.12),transparent 60%);"></div>
-          <div style="position:relative;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
-            <div style="display:flex;align-items:center;gap:16px;">
-              <span style="font-size:40px;line-height:1;">&#127942;</span>
-              <div>
-                <div style="font-size:13px;font-weight:800;letter-spacing:2px;color:rgba(255,255,255,0.65);text-transform:uppercase;">World Cup 2026</div>
-                <div style="font-size:24px;font-weight:900;letter-spacing:0.5px;background:linear-gradient(135deg,#f0d078,#d4a843);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1;">LAST MAN STANDING</div>
-                <div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:3px;">One pick. One life. Free to enter &mdash; survive to win the pot.</div>
-              </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:14px;">
-              <div style="text-align:center;">
-                <div style="font-size:28px;font-weight:900;color:#d4a843;line-height:1;">&pound;250</div>
-                <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:rgba(255,255,255,0.6);text-transform:uppercase;">For the winner</div>
-              </div>
-              <span style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-weight:800;font-size:13px;padding:10px 20px;border-radius:8px;white-space:nowrap;">Play Now &rarr;</span>
-            </div>
-          </div>
-        </div>
-        ` : ''}
+        <!-- LAST MAN STANDING BANNER (data-driven; filled by _loadLmsBanner) -->
+        <div id="lms-banner-slot"></div>
 
         <!-- 2. NAP OF THE DAY — Hero product, first thing you see -->
         ${napTip ? (this.isPremium() ? `
@@ -3193,6 +3172,9 @@ const App = {
 
     // Render dynamic big winner banner
     this.renderBigWinnerBanner();
+
+    // Render Last Man Standing banner (data-driven; only if a competition is live)
+    this._loadLmsBanner();
 
     // Premium weekend acca — DISABLED (replaced by Smart Acca Generator page)
     // this.renderPremiumAcca();
@@ -13363,6 +13345,44 @@ const App = {
         '<div class="heatmap-legend-item"><div class="heatmap-legend-dot" style="background:#1e293b;"></div> No Edge (&lt;5)</div>' +
       '</div>' +
     '</div>';
+  },
+
+  // Data-driven Last Man Standing dashboard banner. Pulls the live competition
+  // and its branding from /lms/featured, so it re-skins itself (World Cup ->
+  // Premier League) and detaches automatically when nothing is running.
+  async _loadLmsBanner() {
+    var slot = document.getElementById('lms-banner-slot');
+    if (!slot) return;
+    // Only bother if the LMS feature is switched on (nav link is visible)
+    var nav = document.getElementById('nav-lms');
+    if (!nav || nav.style.display === 'none') { slot.innerHTML = ''; return; }
+    try {
+      var data = await this.api('/lms/featured');
+      var c = data && data.competition;
+      if (!c) { slot.innerHTML = ''; return; }
+      var b = c.banner || {};
+      var accent = b.accent || '#d4a843';
+      var pot = '£' + Math.round(c.prizePot || 0);
+      var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]; }); };
+      slot.innerHTML =
+        '<div onclick="window.location.hash=\'#/last-man-standing\'" style="background:linear-gradient(135deg,#0a0e1a 0%,#14110a 55%,#1a1305 100%);border:2px solid ' + accent + '73;border-radius:14px;padding:18px 22px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;">' +
+          '<div style="position:absolute;top:-50%;right:-10%;width:60%;height:200%;background:radial-gradient(circle at 70% 50%,' + accent + '1f,transparent 60%);"></div>' +
+          '<div style="position:relative;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">' +
+            '<div style="display:flex;align-items:center;gap:16px;">' +
+              '<span style="font-size:40px;line-height:1;">' + (b.emoji || '🏆') + '</span>' +
+              '<div>' +
+                '<div style="font-size:13px;font-weight:800;letter-spacing:2px;color:rgba(255,255,255,0.65);text-transform:uppercase;">' + esc(b.eyebrow || c.name) + '</div>' +
+                '<div style="font-size:24px;font-weight:900;letter-spacing:0.5px;background:linear-gradient(135deg,#f0d078,' + accent + ');-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1;">' + esc(b.title || 'LAST MAN STANDING') + '</div>' +
+                '<div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:3px;">' + esc(b.tagline || '') + '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:14px;">' +
+              (c.prizePot ? '<div style="text-align:center;"><div style="font-size:28px;font-weight:900;color:' + accent + ';line-height:1;">' + pot + '</div><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:rgba(255,255,255,0.6);text-transform:uppercase;">For the winner</div></div>' : '') +
+              '<span style="background:linear-gradient(135deg,' + accent + ',#b8902f);color:#0a0e1a;font-weight:800;font-size:13px;padding:10px 20px;border-radius:8px;white-space:nowrap;">' + esc(b.cta || 'Play Now') + ' &rarr;</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+    } catch (e) { slot.innerHTML = ''; }
   },
 
   _scrollToRaceTip(tipId) {

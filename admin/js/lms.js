@@ -128,11 +128,44 @@ window.LMSPage = {
         '<button class="btn-sm" style="background:#666;" onclick="LMSPage.advanceRound(' + c.id + ',' + c.currentRound + ')">Advance round (manual)</button>' +
       '</div>' +
       '<p style="color:#888;font-size:12px;margin:0 0 10px;">Settle resolves finished World Cup fixtures automatically. Penalty shootouts and PL fixtures show W/L/V buttons for manual confirmation, then settle again.</p>' +
+      this._bannerEditor(c) +
       '<table class="admin-table" style="width:100%;">' +
         '<thead><tr><th>Player</th><th>Status</th><th>Picks</th></tr></thead>' +
         '<tbody>' + (entryRows || '<tr><td colspan="3" style="color:#888;">No entries yet.</td></tr>') + '</tbody>' +
       '</table>' +
     '</div>';
+  },
+
+  _bannerEditor: function (c) {
+    var b = (c.config && c.config.banner) || {};
+    var f = function (id, label, val, ph) {
+      return '<label style="display:flex;flex-direction:column;font-size:11px;color:#aaa;">' + label +
+        '<input id="' + id + '" value="' + LMSPage.esc(val || '') + '" placeholder="' + (ph || '') + '" style="padding:7px;min-width:160px;"></label>';
+    };
+    return '<details style="margin:6px 0 14px;background:#0f1115;border:1px solid #2a2e3d;border-radius:8px;padding:10px 14px;">' +
+      '<summary style="cursor:pointer;color:#d4a843;font-weight:700;font-size:13px;">Dashboard banner branding</summary>' +
+      '<p style="color:#888;font-size:11px;margin:8px 0;">Leave blank to use the phase defaults. Edit these to re-skin the dashboard banner (e.g. World Cup → Premier League) without a deploy. The prize shown follows the live pot.</p>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">' +
+        f('lms-b-eyebrow', 'Eyebrow', b.eyebrow, 'World Cup 2026') +
+        f('lms-b-title', 'Title', b.title, 'LAST MAN STANDING') +
+        f('lms-b-tagline', 'Tagline', b.tagline, 'One pick. One life…') +
+        f('lms-b-emoji', 'Emoji', b.emoji, '🏆') +
+        f('lms-b-accent', 'Accent (hex)', b.accent, '#d4a843') +
+        f('lms-b-cta', 'Button', b.cta, 'Play Now') +
+        '<button class="btn-sm" onclick="LMSPage.saveBanner(' + c.id + ')">Save banner</button>' +
+      '</div></details>';
+  },
+
+  async saveBanner(id) {
+    var v = function (x) { var el = document.getElementById(x); return el ? el.value.trim() : ''; };
+    var banner = { eyebrow: v('lms-b-eyebrow'), title: v('lms-b-title'), tagline: v('lms-b-tagline'), emoji: v('lms-b-emoji'), accent: v('lms-b-accent'), cta: v('lms-b-cta') };
+    // drop empties so phase defaults apply
+    Object.keys(banner).forEach(function (k) { if (!banner[k]) delete banner[k]; });
+    try {
+      await AdminAPI.put('/lms/admin/competitions/' + id, { banner: banner });
+      AdminApp.toast('Banner updated', 'success');
+      this._loadEntries(id);
+    } catch (e) { AdminApp.toast('Failed: ' + e.message, 'error'); }
   },
 
   async settle(id, force) {
