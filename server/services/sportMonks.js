@@ -173,6 +173,18 @@ SportMonks.prototype.getStandings = function(seasonId) {
 };
 
 // =========================================================================
+// TEAM RECENT FIXTURES — a team's matches in a date range (for form + stats)
+// =========================================================================
+SportMonks.prototype.getTeamRecentFixtures = function(teamId, fromDate, toDate) {
+  return this._request('/fixtures/between/' + fromDate + '/' + toDate + '/' + teamId, {
+    include: 'participants;scores;state;league',
+    per_page: 50,
+  }).then(function(data) {
+    return (data.data || []).map(normaliseFixture);
+  });
+};
+
+// =========================================================================
 // LEAGUE SEARCH — find a league by name (e.g. "FIFA World Cup")
 // =========================================================================
 SportMonks.prototype.searchLeagues = function(name) {

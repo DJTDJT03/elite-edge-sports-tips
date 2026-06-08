@@ -208,6 +208,42 @@ module.exports = function(deps) {
           if (smF && smF.homeTeam) {
             var smH2H = [];
             try { smH2H = await sportMonks.getH2H(smF.homeTeamId, smF.awayTeamId) || []; } catch(e) {}
+
+            // Recent form + key stats for each team from SportMonks (last ~6 months)
+            function _smDateStr(daysAgo) { var d = new Date(); d.setDate(d.getDate() - daysAgo); return d.toISOString().split('T')[0]; }
+            function _computeTeamForm(fixtures, teamId) {
+              var finished = (fixtures || []).filter(function(f) {
+                return ['FT', 'AET', 'PEN'].indexOf(f.status) !== -1 && f.homeGoals != null && f.awayGoals != null;
+              }).sort(function(a, b) { return new Date(b.kickoff) - new Date(a.kickoff); });
+              var form = [], scored = 0, conceded = 0, cs = 0, btts = 0, over25 = 0, n = 0;
+              finished.forEach(function(f) {
+                var isHome = f.homeTeamId === teamId;
+                var gf = isHome ? f.homeGoals : f.awayGoals;
+                var ga = isHome ? f.awayGoals : f.homeGoals;
+                if (n < 10) { scored += gf; conceded += ga; if (ga === 0) cs++; if (gf > 0 && ga > 0) btts++; if (gf + ga > 2.5) over25++; n++; }
+                if (form.length < 5) {
+                  form.push({ result: gf > ga ? 'W' : gf < ga ? 'L' : 'D', opponent: isHome ? f.awayTeam : f.homeTeam, goalsFor: gf, goalsAgainst: ga });
+                }
+              });
+              var stats = n > 0 ? {
+                avgScored: (scored / n).toFixed(1), avgConceded: (conceded / n).toFixed(1),
+                cleanSheetPct: Math.round((cs / n) * 100), bttsPct: Math.round((btts / n) * 100), over25Pct: Math.round((over25 / n) * 100),
+              } : { avgScored: '-', avgConceded: '-', cleanSheetPct: '-', bttsPct: '-', over25Pct: '-' };
+              return { form: form, stats: stats, sampleSize: n };
+            }
+            var smHomeForm = { form: [], stats: { avgScored: '-', avgConceded: '-', cleanSheetPct: '-', bttsPct: '-', over25Pct: '-' }, sampleSize: 0 };
+            var smAwayForm = smHomeForm;
+            if (sportMonks.getTeamRecentFixtures) {
+              try {
+                var _from = _smDateStr(200), _to = _smDateStr(0);
+                var _recent = await Promise.all([
+                  sportMonks.getTeamRecentFixtures(smF.homeTeamId, _from, _to).catch(function() { return []; }),
+                  sportMonks.getTeamRecentFixtures(smF.awayTeamId, _from, _to).catch(function() { return []; }),
+                ]);
+                smHomeForm = _computeTeamForm(_recent[0], smF.homeTeamId);
+                smAwayForm = _computeTeamForm(_recent[1], smF.awayTeamId);
+              } catch (e) { console.log('[Match Intelligence] SportMonks form fetch failed:', e.message); }
+            }
             var smH2HHomeWins = 0, smH2HAwayWins = 0, smH2HDraws = 0, smH2HTotalGoals = 0;
             smH2H.forEach(function(m) {
               if (m.homeGoals > m.awayGoals) { if (m.homeTeamId === smF.homeTeamId) smH2HHomeWins++; else smH2HAwayWins++; }
@@ -228,12 +264,12 @@ module.exports = function(deps) {
                 kickoff: smF.kickoff, status: smF.status,
                 homeGoals: smF.homeGoals, awayGoals: smF.awayGoals,
               },
-              form: { home: [], away: [] },
+              form: { home: smHomeForm.form, away: smAwayForm.form },
               h2h: {
                 matches: smH2H.slice(0, 5).map(function(m) { return { home: m.homeTeam, away: m.awayTeam, homeGoals: m.homeGoals, awayGoals: m.awayGoals, date: m.kickoff }; }),
                 homeWins: smH2HHomeWins, awayWins: smH2HAwayWins, draws: smH2HDraws, avgGoals: smH2HAvg,
               },
-              stats: { home: {}, away: {} },
+              stats: { home: smHomeForm.stats, away: smAwayForm.stats },
               injuries: { home: [], away: [] },
               predictions: null,
               seasonStats: { home: null, away: null },
@@ -247,7 +283,12 @@ module.exports = function(deps) {
               },
               analysis: {
                 overview: smF.homeTeam + ' host ' + smF.awayTeam + ' at ' + (smF.venue || 'their home ground') + ' in the ' + smF.league + '.',
-                form: 'Detailed form data requires API-Football coverage. H2H record shows ' + smH2HHomeWins + ' wins for ' + smF.homeTeam + ', ' + smH2HAwayWins + ' for ' + smF.awayTeam + ', and ' + smH2HDraws + ' draws.',
+                form: (smHomeForm.sampleSize || smAwayForm.sampleSize)
+                  ? (smF.homeTeam + ' have ' + smHomeForm.form.filter(function(r){return r.result==='W';}).length + ' wins from their last ' + smHomeForm.form.length + ', ' +
+                     smF.awayTeam + ' ' + smAwayForm.form.filter(function(r){return r.result==='W';}).length + ' from their last ' + smAwayForm.form.length + '. ' +
+                     'Averages: ' + smF.homeTeam + ' ' + smHomeForm.stats.avgScored + ' scored / ' + smHomeForm.stats.avgConceded + ' conceded, ' +
+                     smF.awayTeam + ' ' + smAwayForm.stats.avgScored + ' / ' + smAwayForm.stats.avgConceded + ' per game.')
+                  : 'Form data is still being gathered for these sides. H2H record shows ' + smH2HHomeWins + ' wins for ' + smF.homeTeam + ', ' + smH2HAwayWins + ' for ' + smF.awayTeam + ', and ' + smH2HDraws + ' draws.',
                 h2h: smH2H.length > 0 ? 'In ' + smH2H.length + ' previous meetings, these sides have averaged ' + smH2HAvg + ' goals per game.' : 'No head-to-head history available.',
                 injuries: '',
               },
