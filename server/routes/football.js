@@ -245,18 +245,53 @@ module.exports = function(deps) {
               } catch (e) { console.log('[Match Intelligence] SportMonks form fetch failed:', e.message); }
             }
 
-            // Pre-match win probabilities (All-In predictions) — defensive parse
-            var smProb = null;
+            // Pre-match predictions (All-In) — mapped by SportMonks type_id
+            // 237 = Fulltime Result (1X2), 240 = Correct Score, 231 = BTTS
+            var smProb = null, smScore = null, smBtts = null;
             if (sportMonks.getPredictions) {
               try {
                 var _preds = await sportMonks.getPredictions(fixtureId);
                 (_preds || []).forEach(function(p) {
                   var pv = p.predictions || {};
-                  if (pv.home != null && pv.away != null && pv.draw != null && !smProb) {
+                  if (p.type_id === 237 && pv.home != null) {
+                    smProb = { home: Math.round(pv.home), draw: Math.round(pv.draw), away: Math.round(pv.away) };
+                  } else if (p.type_id === 231 && pv.yes != null) {
+                    smBtts = Math.round(pv.yes);
+                  } else if (p.type_id === 240 && pv.scores) {
+                    var best = null, bestP = 0;
+                    Object.keys(pv.scores).forEach(function(k) {
+                      if (k.indexOf('Other') === -1 && pv.scores[k] > bestP) { bestP = pv.scores[k]; best = k; }
+                    });
+                    if (best) smScore = best;
+                  }
+                });
+                // Fallback if type ids differ on the plan: detect 1X2 by keys
+                if (!smProb) (_preds || []).forEach(function(p) {
+                  var pv = p.predictions || {};
+                  if (!smProb && pv.home != null && pv.draw != null && pv.away != null) {
                     smProb = { home: Math.round(pv.home), draw: Math.round(pv.draw), away: Math.round(pv.away) };
                   }
                 });
               } catch (e) { console.log('[Match Intelligence] SportMonks predictions failed:', e.message); }
+            }
+
+            // Probable lineups (All-In) — 11 per side with names, numbers, positions
+            var smLineups = null;
+            if (sportMonks.getFixtureRaw) {
+              try {
+                var smRaw = await sportMonks.getFixtureRaw(fixtureId);
+                if (smRaw && smRaw.lineups && smRaw.lineups.length) {
+                  var _lhome = [], _laway = [];
+                  smRaw.lineups.forEach(function(l) {
+                    var entry = { name: l.player_name || '', number: l.jersey_number || null, pos: l.formation_position || null };
+                    if (l.team_id === smF.homeTeamId) _lhome.push(entry);
+                    else if (l.team_id === smF.awayTeamId) _laway.push(entry);
+                  });
+                  var _byNum = function(a, b) { return (a.number || 99) - (b.number || 99); };
+                  _lhome.sort(_byNum); _laway.sort(_byNum);
+                  if (_lhome.length || _laway.length) smLineups = { home: _lhome, away: _laway };
+                }
+              } catch (e) { console.log('[Match Intelligence] SportMonks lineups failed:', e.message); }
             }
 
             // xG from fixture statistics — defensive key match (exact shape confirmed via diagnostic)
@@ -323,10 +358,15 @@ module.exports = function(deps) {
                 riskText: 'Moderate risk — limited data depth for this league.',
               },
               winProbability: smProb || null,
+              predictedScore: smScore || null,
+              bttsPercent: smBtts != null ? smBtts : null,
+              lineups: smLineups || null,
               xg: (smHomeXg != null && smAwayXg != null) ? { home: smHomeXg, away: smAwayXg } : null,
               analysis: {
                 overview: smF.homeTeam + ' host ' + smF.awayTeam + ' at ' + (smF.venue || 'their home ground') + ' in the ' + smF.league + '.'
                   + (smProb ? ' The model makes it ' + smF.homeTeam + ' ' + smProb.home + '% / Draw ' + smProb.draw + '% / ' + smF.awayTeam + ' ' + smProb.away + '%.' : '')
+                  + (smScore ? ' Most likely scoreline: ' + smScore + '.' : '')
+                  + (smBtts != null ? ' Both teams to score: ' + smBtts + '%.' : '')
                   + (smHomeXg != null && smAwayXg != null ? ' Expected goals: ' + smHomeXg + ' v ' + smAwayXg + '.' : ''),
                 form: (smHomeForm.sampleSize || smAwayForm.sampleSize)
                   ? (smF.homeTeam + ' have ' + smHomeForm.form.filter(function(r){return r.result==='W';}).length + ' wins from their last ' + smHomeForm.form.length + ', ' +

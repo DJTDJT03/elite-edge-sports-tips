@@ -6168,6 +6168,26 @@ const App = {
       '</div>' +
     '</div>';
 
+    // --- Model Prediction (SportMonks All-In) ---
+    if (data.winProbability || data.predictedScore || data.bttsPercent != null) {
+      var wp = data.winProbability;
+      var probBar = function(label, pct, color) {
+        return '<div style="margin-bottom:8px;">' +
+          '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);margin-bottom:3px;"><span>' + label + '</span><span>' + (pct != null ? pct + '%' : '-') + '</span></div>' +
+          '<div style="height:7px;border-radius:4px;background:var(--bg-elevated);overflow:hidden;"><div style="height:100%;width:' + (pct || 0) + '%;background:' + color + ';border-radius:4px;"></div></div>' +
+        '</div>';
+      };
+      html += '<div class="match-intel-section' + lockedClass + '">' +
+        '<h3 class="match-intel-section-title">Model Prediction</h3>' +
+        (wp ? probBar(m.homeTeam + ' win', wp.home, '#22c55e') + probBar('Draw', wp.draw, '#d4a843') + probBar(m.awayTeam + ' win', wp.away, '#3b82f6') : '') +
+        '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;">' +
+          (data.predictedScore ? '<div><span style="color:var(--text-secondary);font-size:12px;">Most likely score</span><div style="font-size:18px;font-weight:800;color:var(--text-primary);">' + this.escapeHtml(String(data.predictedScore)) + '</div></div>' : '') +
+          (data.bttsPercent != null ? '<div><span style="color:var(--text-secondary);font-size:12px;">Both teams to score</span><div style="font-size:18px;font-weight:800;color:var(--text-primary);">' + data.bttsPercent + '%</div></div>' : '') +
+          (data.xg ? '<div><span style="color:var(--text-secondary);font-size:12px;">Expected goals</span><div style="font-size:18px;font-weight:800;color:var(--text-primary);">' + data.xg.home + ' v ' + data.xg.away + '</div></div>' : '') +
+        '</div>' +
+      '</div>';
+    }
+
     // --- Analysis paragraphs ---
     html += '<div class="match-intel-section' + lockedClass + '">' +
       '<h3 class="match-intel-section-title">Match Overview</h3>' +
@@ -6199,6 +6219,25 @@ const App = {
         '<div class="match-intel-stat-row"><span>Over 2.5 %</span><span>' + s.home.over25Pct + '%</span><span>' + s.away.over25Pct + '%</span></div>' +
       '</div>' +
     '</div>';
+
+    // --- Probable Lineups (SportMonks All-In) ---
+    if (data.lineups && ((data.lineups.home && data.lineups.home.length) || (data.lineups.away && data.lineups.away.length))) {
+      var lineupCol = function(players) {
+        return (players || []).map(function(p) {
+          return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;">' +
+            '<span style="display:inline-block;min-width:22px;text-align:center;color:var(--gold);font-weight:700;font-size:12px;">' + (p.number != null ? p.number : '') + '</span>' +
+            '<span style="color:var(--text-primary);">' + App.escapeHtml(p.name || '') + '</span>' +
+          '</div>';
+        }).join('');
+      };
+      html += '<div class="match-intel-section' + lockedClass + '">' +
+        '<h3 class="match-intel-section-title">Probable Lineups</h3>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">' +
+          '<div><div style="font-weight:700;color:var(--text-primary);margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:4px;">' + m.homeTeam + '</div>' + lineupCol(data.lineups.home) + '</div>' +
+          '<div><div style="font-weight:700;color:var(--text-primary);margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:4px;">' + m.awayTeam + '</div>' + lineupCol(data.lineups.away) + '</div>' +
+        '</div>' +
+      '</div>';
+    }
 
     // --- Risk Assessment ---
     html += '<div class="match-intel-section' + lockedClass + '">' +
