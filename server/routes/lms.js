@@ -46,6 +46,7 @@ module.exports = function (deps) {
       .filter(function (p) { return p.result !== 'void' && p.round !== competition.currentRound; })
       .map(function (p) { return p.team; });
     const purchased = await lmsStore.countPaidPurchases(competition.id, userId);
+    const rolloverActive = lms.extraTeamsAllowed(competition);
     return {
       joined: true,
       status: entry.status,
@@ -58,7 +59,9 @@ module.exports = function (deps) {
       currentPick: currentPick ? { team: currentPick.team, result: currentPick.result, isReuse: currentPick.isReuse } : null,
       usedTeams: usedTeams,
       purchasedExtraTeams: purchased,
-      canBuyExtra: purchased < MAX_EXTRA_TEAMS,
+      // Extra teams only sold in a rollover situation (and up to the per-person cap)
+      extraTeamsAllowed: rolloverActive,
+      canBuyExtra: rolloverActive && purchased < MAX_EXTRA_TEAMS,
     };
   }
 
@@ -218,6 +221,11 @@ module.exports = function (deps) {
 
       const entry = await lmsStore.getEntry(c.id, req.user.id);
       if (!entry) return res.status(400).json({ error: 'Join the competition first' });
+
+      // Extra teams are only sold in a rollover situation.
+      if (!lms.extraTeamsAllowed(c)) {
+        return res.status(400).json({ error: 'Extra teams are only available once the competition has rolled over.' });
+      }
 
       const purchased = await lmsStore.countPaidPurchases(c.id, req.user.id);
       if (purchased >= MAX_EXTRA_TEAMS) {

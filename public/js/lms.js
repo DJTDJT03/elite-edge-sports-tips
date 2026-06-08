@@ -190,13 +190,22 @@ window.LMS = {
       ? '<p style="color:var(--green,#22c55e);font-size:13px;margin:10px 0 0;">Current pick for ' + this.esc(c.roundLabel) + ': <strong>' + this.esc(current.team) + '</strong>' + (current.isReuse ? ' (extra team)' : '') + '</p>'
       : '<p style="color:var(--gold);font-size:13px;margin:10px 0 0;">You haven\'t picked for ' + this.esc(c.roundLabel) + ' yet — don\'t get caught out.</p>';
 
-    var extra = me.canBuyExtra
-      ? '<div style="margin-top:16px;border-top:1px dashed var(--border);padding-top:14px;">' +
-          '<p style="color:var(--text-secondary);font-size:13px;margin:0 0 8px;">Want to reuse a team you\'ve already had? Buy an extra team for &pound;10 (max 2). It also adds to the prize pot.</p>' +
+    var extra;
+    if (!me.extraTeamsAllowed) {
+      // Extra teams only unlock in a rollover situation. Stay quiet until then.
+      extra = (allowancesLeft > 0)
+        ? '<p style="color:var(--text-secondary);font-size:12px;margin-top:14px;">Extra team allowances left: ' + allowancesLeft + '</p>'
+        : '';
+    } else if (me.canBuyExtra) {
+      extra = '<div style="margin-top:16px;border-top:1px dashed var(--border);padding-top:14px;">' +
+          '<p style="color:var(--gold);font-size:13px;margin:0 0 4px;font-weight:700;">&#8635; Rollover — extra teams unlocked</p>' +
+          '<p style="color:var(--text-secondary);font-size:13px;margin:0 0 8px;">Teams are getting tight. Buy an extra team for &pound;10 (max 2) to pick one you\'ve already used. It also adds to the prize pot.</p>' +
           '<button class="btn btn-outline btn-sm" onclick="LMS.buyExtraTeam(' + c.id + ')">Buy Extra Team — &pound;10</button>' +
           '<span style="color:var(--text-secondary);font-size:12px;margin-left:10px;">Allowances left: ' + allowancesLeft + '</span>' +
-        '</div>'
-      : '<p style="color:var(--text-secondary);font-size:12px;margin-top:14px;">You\'ve bought the maximum of 2 extra teams.</p>';
+        '</div>';
+    } else {
+      extra = '<p style="color:var(--text-secondary);font-size:12px;margin-top:14px;">You\'ve bought the maximum of 2 extra teams. Allowances left: ' + allowancesLeft + '</p>';
+    }
 
     var usedChips = used.length
       ? '<div style="margin-top:14px;"><span style="color:var(--text-secondary);font-size:12px;">Teams used: </span>' +
@@ -245,16 +254,18 @@ window.LMS = {
   _rulesAccordion: function (c) {
     var wc = c.phase === 'world_cup';
     var rules = wc
-      ? ['One pick per matchday/round. You can\'t pick the same team twice (unless you buy an extra team).',
+      ? ['Free to enter for subscribers. One pick per matchday/round.',
+         'You can\'t pick the same team twice.',
          'Group stage: 90 minutes only — a draw means you\'re out.',
          'Knockouts: extra time and penalties count — your team just has to go through.',
          'No pick made = you\'re out. Don\'t forget.',
          'If everyone left is knocked out the same round, you all go back in and it rolls over.',
-         'Last one standing wins the pot. Free to enter for subscribers.']
-      : ['One pick per gameweek. No reusing a team unless you buy an extra.',
-         '90 minutes only — a draw or loss puts you out.',
+         'On a rollover you can buy up to 2 extra teams (£10 each) to reuse a team — that money goes into the pot.',
+         'Last one standing wins the pot.']
+      : ['Free entry for everyone. World Cup survivors carry on. Pot carries over.',
+         'One pick per gameweek. 90 minutes only — a draw or loss puts you out.',
          'No pick = out. Rollover applies if everyone goes the same week.',
-         'Free entry for everyone. Pot carries over from the World Cup.'];
+         'Buy up to 2 extra teams (£10 each) to reuse a team — adds to the pot.'];
     return '<details style="margin-top:18px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:12px 16px;">' +
       '<summary style="cursor:pointer;color:var(--gold);font-weight:700;font-size:14px;">How it works</summary>' +
       '<ul style="margin:12px 0 4px;padding-left:20px;color:var(--text-secondary);font-size:13px;line-height:1.7;">' +

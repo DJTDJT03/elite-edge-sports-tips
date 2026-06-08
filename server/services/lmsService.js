@@ -307,8 +307,22 @@ function potTotal(competition) {
   return (parseFloat(competition.prizePot) || 0);
 }
 
+// ---------------------------------------------------------------------------
+// Extra-team purchases (£10, max 2) are only offered in a rollover situation —
+// the PL rollover phase, or once a competition has rolled over (everyone
+// knocked out the same round and reinstated), where the team pool gets tight.
+// Entry itself is always free for subscribers.
+// ---------------------------------------------------------------------------
+function extraTeamsAllowed(competition) {
+  if (!competition) return false;
+  if (competition.phase === 'pl_rollover') return true;
+  var rollovers = (competition.config && competition.config.rollovers) || [];
+  return rollovers.length > 0;
+}
+
 module.exports = {
   WC_TOTAL_ROUNDS,
+  MAX_EXTRA_TEAMS: 2,
   isGroupRound,
   roundLabel,
   getEntryState,
@@ -317,4 +331,5 @@ module.exports = {
   resolveTeamResult,
   settleRound,
   potTotal,
+  extraTeamsAllowed,
 };
