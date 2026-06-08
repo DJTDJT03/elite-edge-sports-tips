@@ -135,9 +135,57 @@ window.LMS = {
       body = this._pickPanel(d);
     }
 
+    var fixturesHtml = this._fixturesPanel(d.fixtures || [], me);
     var standingsHtml = this._standings(standings);
 
-    return head + body + standingsHtml + this._rulesAccordion(c);
+    return head + body + fixturesHtml + standingsHtml + this._rulesAccordion(c);
+  },
+
+  _fixturesPanel: function (fixtures, me) {
+    if (!fixtures || !fixtures.length) return '';
+    var pickTeam = (me && me.currentPick && me.currentPick.team) || null;
+    var used = (me && me.usedTeams) || [];
+
+    // Group by calendar date
+    var groups = {};
+    var order = [];
+    fixtures.forEach(function (f) {
+      var d = new Date(f.kickoff);
+      var key = d.toISOString().slice(0, 10);
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push(f);
+    });
+
+    var teamCell = function (name) {
+      var isPick = pickTeam && name === pickTeam;
+      var isUsed = used.indexOf(name) !== -1;
+      var style = isPick ? 'color:var(--gold);font-weight:800;'
+        : isUsed ? 'color:var(--text-secondary);text-decoration:line-through;'
+        : 'color:var(--text-primary);';
+      return '<span style="' + style + '">' + LMS.esc(name) + (isPick ? ' &#9733;' : '') + '</span>';
+    };
+
+    var sections = order.map(function (key) {
+      var dateLabel = new Date(key + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+      var rows = groups[key].map(function (f) {
+        var t = new Date(f.kickoff).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        var stageLabel = f.group ? ('Group ' + f.group) : (f.stage ? String(f.stage).replace(/-/g, ' ') : '');
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(255,255,255,0.05);">' +
+          '<span style="color:var(--text-secondary);font-size:12px;width:48px;flex-shrink:0;">' + t + '</span>' +
+          '<span style="flex:1;text-align:right;font-size:13px;">' + teamCell(f.homeTeam) + '</span>' +
+          '<span style="color:var(--text-secondary);font-size:11px;">v</span>' +
+          '<span style="flex:1;font-size:13px;">' + teamCell(f.awayTeam) + '</span>' +
+          '<span style="color:var(--text-secondary);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;width:84px;text-align:right;flex-shrink:0;">' + LMS.esc(stageLabel) + '</span>' +
+        '</div>';
+      }).join('');
+      return '<div style="margin-bottom:12px;"><div style="color:var(--gold);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:8px 4px 4px;">' + dateLabel + '</div>' + rows + '</div>';
+    }).join('');
+
+    return '<div style="margin-top:18px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:12px;padding:16px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">' +
+        '<h3 style="margin:0;color:var(--text-primary);font-size:16px;">Upcoming Fixtures</h3>' +
+        '<span style="color:var(--text-secondary);font-size:12px;">Plan ahead — your pick &#9733; · struck-through = already used</span>' +
+      '</div>' + sections + '</div>';
   },
 
   _statCard: function (label, value, color) {

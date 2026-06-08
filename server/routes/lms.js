@@ -129,7 +129,18 @@ module.exports = function (deps) {
       const me = await buildEntryView(c, req.user.id);
       // Team list for WC pick selection
       let teams = [];
-      if (c.phase === 'world_cup') teams = await lmsStore.getWcTeams();
+      let fixtures = [];
+      if (c.phase === 'world_cup') {
+        teams = await lmsStore.getWcTeams();
+        // Upcoming fixtures so players can plan ahead (visible well in advance)
+        const upcoming = await lmsStore.getUpcomingWcFixtures(7);
+        fixtures = upcoming.map(function (f) {
+          return {
+            homeTeam: f.home_team, awayTeam: f.away_team,
+            kickoff: f.kickoff, stage: f.stage, group: f.group_letter, status: f.status,
+          };
+        });
+      }
       res.json({
         competition: {
           id: c.id, name: c.name, phase: c.phase, status: c.status, access: c.access,
@@ -143,6 +154,7 @@ module.exports = function (deps) {
           && (!me.currentPick || me.currentPick.result === 'pending'),
         me: me,
         teams: teams,
+        fixtures: fixtures,
         extraTeam: { pricePence: EXTRA_TEAM_PRICE_PENCE, priceLabel: '£10', max: MAX_EXTRA_TEAMS },
       });
     } catch (e) {

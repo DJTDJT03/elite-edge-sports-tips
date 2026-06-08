@@ -312,6 +312,24 @@ async function getWcTeams() {
   return rows.map(function (r) { return r.team; });
 }
 
+// Upcoming WC fixtures (not yet finished) within the next `days` days, oldest
+// first — so players can see what's coming well in advance and plan their pick.
+async function getUpcomingWcFixtures(days) {
+  if (!available()) return [];
+  var window = days || 7;
+  const { rows } = await db.query(
+    `SELECT id, stage, group_letter, home_team, away_team, kickoff, status
+     FROM world_cup_fixtures
+     WHERE status <> 'finished'
+       AND kickoff IS NOT NULL
+       AND kickoff >= NOW() - INTERVAL '6 hours'
+       AND kickoff <= NOW() + ($1 || ' days')::interval
+     ORDER BY kickoff ASC`,
+    [String(window)]
+  );
+  return rows;
+}
+
 // A team's next/current fixture for a given LMS round (for displaying who they play)
 async function getWcFixtureByKickoffIndex(team, isGroup, index) {
   var all = await getWcFixturesForTeam(team);
@@ -332,7 +350,7 @@ module.exports = {
   // purchases
   createPurchase, getPurchaseBySession, updatePurchase, countPaidPurchases,
   // settlement source
-  getWcFixturesForTeam, getWcTeams, getWcFixtureByKickoffIndex,
+  getWcFixturesForTeam, getWcTeams, getWcFixtureByKickoffIndex, getUpcomingWcFixtures,
   // mappers (exposed for tests)
   _map: { mapCompetition, mapEntry, mapPick, mapPurchase },
 };
