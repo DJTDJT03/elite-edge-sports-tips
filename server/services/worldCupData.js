@@ -572,6 +572,21 @@ module.exports = function(deps) {
           }
         }
 
+        // PHASE 3: promote the consensus to the headline pick. The engine
+        // self-verifies (3-analyst debate + GPT arbiter + AutoTune), so the
+        // consensus selection/confidence lead; Perplexity's research becomes
+        // the supporting narrative.
+        if (signals.consensus && signals.consensus.selection) {
+          var _c = signals.consensus;
+          var _perplexityNarrative = verdict; // keep Perplexity's specific intel
+          verdictMarket = _c.market;
+          verdictSelection = _c.selection;
+          confidence = _c.confidence;
+          var _lead = (_c.debate && _c.debate[0]) ? _c.debate[0].reasoning : '';
+          verdict = _c.agreementLabel + ' analyst consensus: ' + _c.selection + ' (' + _c.market + '). ' + _lead
+            + (_perplexityNarrative ? ' Live intelligence: ' + _perplexityNarrative : '');
+        }
+
         await db.query(
           `INSERT INTO world_cup_previews (fixture_id, stage, home_team, away_team, kickoff, venue, signals, citations, predicted_scoreline, verdict, verdict_market, verdict_selection, verdict_odds, confidence)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
