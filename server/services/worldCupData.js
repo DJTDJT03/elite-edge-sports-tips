@@ -471,7 +471,7 @@ module.exports = function(deps) {
        WHERE f.status = 'scheduled'
          AND f.kickoff IS NOT NULL
          AND f.kickoff > NOW()
-         AND f.kickoff <= NOW() + INTERVAL '48 hours'
+         AND f.kickoff <= NOW() + INTERVAL '5 days'
          AND p.id IS NULL
        ORDER BY f.kickoff ASC
        LIMIT 6`

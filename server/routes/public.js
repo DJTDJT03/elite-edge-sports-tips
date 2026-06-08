@@ -272,15 +272,26 @@ module.exports = function(deps) {
           }
         } catch (e) {}
 
-        // World Cup predictions (predicted scorelines + verdicts)
+        // World Cup — upcoming fixtures (we have the full schedule synced) with
+        // our predicted scoreline/pick joined in where a preview has generated
         try {
           if (process.env.ENABLE_WORLD_CUP === 'true' && db.query) {
-            var wcp = await db.query("SELECT home_team, away_team, predicted_scoreline, verdict_selection, verdict, confidence FROM world_cup_previews WHERE kickoff >= NOW() - INTERVAL '6 hours' ORDER BY kickoff ASC LIMIT 30");
-            if (wcp.rows && wcp.rows.length) {
-              liveContext += '\nWORLD CUP PREDICTIONS:\n';
-              wcp.rows.forEach(function(p) {
-                liveContext += '- ' + p.home_team + ' v ' + p.away_team + ' — Predicted score: ' + (p.predicted_scoreline || '?') +
-                  ', Our Pick: ' + (p.verdict_selection || p.verdict || 'TBC') + ' (confidence ' + (p.confidence || '?') + '/10)\n';
+            var wcf = await db.query(
+              "SELECT f.home_team, f.away_team, f.kickoff, f.stage, f.group_letter, p.predicted_scoreline, p.verdict_selection, p.verdict, p.confidence " +
+              "FROM world_cup_fixtures f LEFT JOIN world_cup_previews p ON f.id = p.fixture_id " +
+              "WHERE f.status = 'scheduled' AND f.kickoff >= NOW() - INTERVAL '6 hours' ORDER BY f.kickoff ASC LIMIT 24"
+            );
+            if (wcf.rows && wcf.rows.length) {
+              liveContext += '\nWORLD CUP 2026 — UPCOMING FIXTURES (full schedule is synced; the first kickoff is the opener):\n';
+              wcf.rows.forEach(function(p) {
+                var ko = p.kickoff ? new Date(p.kickoff).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'TBC';
+                liveContext += '- ' + p.home_team + ' v ' + p.away_team + (p.group_letter ? ' (Group ' + p.group_letter + ')' : '') + ' — ' + ko;
+                if (p.predicted_scoreline || p.verdict_selection) {
+                  liveContext += ' | Our prediction: ' + (p.predicted_scoreline || '') + (p.verdict_selection ? ', ' + p.verdict_selection : '') + (p.confidence ? ' (conf ' + p.confidence + '/10)' : '');
+                } else {
+                  liveContext += ' | detailed prediction generates closer to kickoff';
+                }
+                liveContext += '\n';
               });
             }
           }
@@ -299,16 +310,18 @@ module.exports = function(deps) {
         '- Premium: £19.99/month or £199.99/year | VIP: £39.99/month or £399.99/year\n' +
         '- 14-day free trial available for new users\n' +
         '- Features: Value Bet Scanner, Smart Acca Generator (2-8 fold, multi-sport), Steamer Alerts, AI Race Replays, Going Forecast\n\n' +
-        'ANSWERING MATCH & RACE QUESTIONS (this is your most important job):\n' +
-        '- When asked "who wins the [time] at [course]" or about a specific race, find it in TODAY\'S RACE PREDICTIONS and give Our Pick, the confidence, and a brief reason.\n' +
-        '- When asked "who wins" or "how many goals" for a football match, find it in TODAY\'S MATCH PREDICTIONS or WORLD CUP PREDICTIONS and give Our Take / predicted scoreline, confidence and the reasoning.\n' +
-        '- Always answer from OUR data below — these are the engine\'s own predictions. Never invent a selection or scoreline. If a specific race/match is not in the data, say we have not published a prediction for it yet and point them to the relevant page.\n' +
-        '- Give a clear, DETAILED answer for specific questions: state the pick/prediction, the confidence, and the key reasoning behind it — like an expert tipster explaining their call at the track.\n\n' +
-        'RULES:\n' +
-        '- British English. Confident but never arrogant. Never guarantee outcomes or give financial advice — these are statistical predictions for entertainment.\n' +
-        '- For general questions about today\'s tips/results, reference the data below.\n' +
-        '- Detailed answers welcome (up to ~300 words) but stay focused and useful — punters want a straight, well-reasoned answer.\n' +
-        '- 18+. Always responsible: if someone seems to be chasing losses, gently encourage responsible play.' +
+        'HOW YOU TALK (this matters as much as what you say):\n' +
+        '- You are a sharp, friendly UK tipster — plain English, British spelling, confident but never arrogant or over the top.\n' +
+        '- Answer the actual question FIRST, in a sentence or two, then a brief why. Get to the point.\n' +
+        '- Sound like a real person who knows their sport, not a chatbot. Banned: "I appreciate the question", "Here\'s what I can help with", "I need to be straight with you", "dual AI system", corporate waffle, and long bulleted sales pitches. No rule-of-three lists. No emoji spam.\n' +
+        '- Do NOT pitch the free trial, pricing, or features unless they specifically ask about access or signing up.\n\n' +
+        'ANSWERING QUESTIONS — always from OUR data below, never invent a pick or score:\n' +
+        '- "Who wins the [time] at [course]?" → find it in TODAY\'S RACE PREDICTIONS, give Our Pick + confidence + a quick reason.\n' +
+        '- "Who wins / how many goals in [match]?" → find it in MATCH PREDICTIONS or WORLD CUP fixtures, give Our Take / predicted scoreline + confidence + why.\n' +
+        '- World Cup: we HAVE the full fixture schedule synced (see below) — so you always know who plays who and when, including the opener. If our detailed prediction for that game has not generated yet, tell them the fixture and that the full breakdown lands closer to kickoff — do not claim we lack the fixtures.\n' +
+        '- If something genuinely is not in the data, say so plainly in one line and point them to the right page.\n' +
+        '- Keep it tight — a few sentences. Detailed when the question needs it, never padded.\n' +
+        '- Never guarantee outcomes — these are statistical predictions for entertainment. 18+. If someone sounds like they are chasing losses, a quick word on gambling responsibly.' +
         liveContext;
 
       var response = await aiReports.client.messages.create({
