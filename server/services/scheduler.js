@@ -4479,6 +4479,34 @@ module.exports = function startScheduler(deps) {
   setTimeout(runEmailSchedulers, 45000);
 
   // =========================================================================
+  // LAST MAN STANDING — auto-settlement (feature-flagged, pluggable)
+  // Settles the current round of each active competition once every alive
+  // player's fixture is finished. Holds safely while matches are outstanding;
+  // penalty shootouts and PL fixtures are left for admin confirmation.
+  // =========================================================================
+  if (process.env.ENABLE_LMS === 'true') {
+    var runLmsSettlement = safeRun('LMS', async function () {
+      var lmsStore = require('../db/lmsStore');
+      var lms = require('./lmsService');
+      if (!lmsStore.available()) return;
+      var active = await lmsStore.getCompetitions({ status: 'active' });
+      for (var i = 0; i < active.length; i++) {
+        try {
+          var report = await lms.settleRound(active[i]); // non-force: holds until ready
+          if (report && report.settled > 0) {
+            console.log('[LMS] Auto-settled "' + active[i].name + '" ' + (report.roundLabel || '') + ' — ' + report.message);
+          }
+        } catch (e) {
+          console.error('[LMS] Settle error for competition ' + active[i].id + ':', e.message);
+        }
+      }
+    });
+    setInterval(runLmsSettlement, 10 * 60 * 1000);  // every 10 minutes
+    setTimeout(runLmsSettlement, 90000);
+    console.log('[Scheduler] LMS auto-settlement ENABLED');
+  }
+
+  // =========================================================================
   // TELEGRAM DAILY ENGAGEMENT (morning teaser, evening roundup, weekend preview, weekly stats)
   // =========================================================================
   // Persist Telegram send dates to survive deploys

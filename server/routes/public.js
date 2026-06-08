@@ -29,6 +29,7 @@ module.exports = function(deps) {
         ingestion: dataIngestion.getStatus ? dataIngestion.getStatus() : {},
         features: {
           worldCup: process.env.ENABLE_WORLD_CUP === 'true',
+          lms: process.env.ENABLE_LMS === 'true',
         }
       });
     } catch (err) { res.status(500).json({ error: err.message }); }

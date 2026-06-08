@@ -205,6 +205,11 @@ if (process.env.ENABLE_MARKETING === 'true') {
   app.use('/api/marketing', require('./routes/marketing')(deps));
   console.log('[Startup] Marketing Engine ENABLED (event: ' + (process.env.MARKETING_EVENT || 'worldcup2026') + ')');
 }
+// Last Man Standing — feature-flagged, pluggable branch
+if (process.env.ENABLE_LMS === 'true') {
+  app.use('/api/lms', require('./routes/lms')(deps));
+  console.log('[Startup] Last Man Standing ENABLED');
+}
 app.use('/', require('./routes/public')(deps));
 
 // ---------------------------------------------------------------------------
@@ -332,6 +337,16 @@ app.use('/', require('./routes/public')(deps));
           'CREATE INDEX IF NOT EXISTS idx_wcn_country ON world_cup_nations(country)',
           "CREATE TABLE IF NOT EXISTS world_cup_previews (id SERIAL PRIMARY KEY, fixture_id INTEGER NOT NULL REFERENCES world_cup_fixtures(id) UNIQUE, stage TEXT, home_team TEXT, away_team TEXT, kickoff TIMESTAMPTZ, venue TEXT, signals JSONB DEFAULT '{}', citations JSONB DEFAULT '[]', predicted_scoreline TEXT, verdict TEXT, verdict_market TEXT, verdict_selection TEXT, verdict_odds TEXT, confidence INTEGER, generated_at TIMESTAMPTZ DEFAULT NOW())",
           'CREATE INDEX IF NOT EXISTS idx_wcprev_fixture ON world_cup_previews(fixture_id)',
+        ] : []),
+        // Last Man Standing tables (feature-flagged via ENABLE_LMS)
+        ...(process.env.ENABLE_LMS === 'true' ? [
+          "CREATE TABLE IF NOT EXISTS lms_competitions (id SERIAL PRIMARY KEY, name TEXT NOT NULL, phase TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', access TEXT NOT NULL DEFAULT 'subscriber', current_round INTEGER DEFAULT 1, prize_pot NUMERIC(10,2) DEFAULT 0, base_prize NUMERIC(10,2) DEFAULT 0, config JSONB DEFAULT '{}', created_at TIMESTAMPTZ DEFAULT NOW())",
+          "CREATE TABLE IF NOT EXISTS lms_entries (id SERIAL PRIMARY KEY, competition_id INTEGER NOT NULL REFERENCES lms_competitions(id) ON DELETE CASCADE, user_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'alive', extra_teams INTEGER DEFAULT 0, reuses_used INTEGER DEFAULT 0, eliminated_round INTEGER, joined_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(competition_id, user_id))",
+          'CREATE INDEX IF NOT EXISTS idx_lms_entries_comp ON lms_entries(competition_id)',
+          "CREATE TABLE IF NOT EXISTS lms_picks (id SERIAL PRIMARY KEY, competition_id INTEGER NOT NULL REFERENCES lms_competitions(id) ON DELETE CASCADE, entry_id INTEGER NOT NULL REFERENCES lms_entries(id) ON DELETE CASCADE, user_id TEXT NOT NULL, round INTEGER NOT NULL, team TEXT NOT NULL, is_reuse BOOLEAN DEFAULT FALSE, result TEXT NOT NULL DEFAULT 'pending', fixture_id INTEGER, settled_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(entry_id, round))",
+          'CREATE INDEX IF NOT EXISTS idx_lms_picks_comp_round ON lms_picks(competition_id, round)',
+          "CREATE TABLE IF NOT EXISTS lms_purchases (id SERIAL PRIMARY KEY, competition_id INTEGER NOT NULL REFERENCES lms_competitions(id) ON DELETE CASCADE, user_id TEXT NOT NULL, amount NUMERIC(10,2) NOT NULL, stripe_session_id TEXT UNIQUE, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW())",
+          'CREATE INDEX IF NOT EXISTS idx_lms_purchases_user ON lms_purchases(competition_id, user_id)',
         ] : []),
         // Marketing Engine tables (feature-flagged)
         ...(process.env.ENABLE_MARKETING === 'true' ? [
