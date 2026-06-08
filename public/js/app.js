@@ -7305,7 +7305,7 @@ const App = {
             <div style="font-size:20px;font-weight:900;color:#d4a843;">1 Credit = 1 Selection</div>
             <div style="font-size:13px;color:var(--text-secondary);margin-top:6px;">Every tip, every AI preview, every verdict costs just 1 credit. Acca Generator costs 3.</div>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:8px;text-align:center;">
             <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;">
               <div style="font-size:20px;margin-bottom:4px;">&#127919;</div>
               <div style="font-size:11px;font-weight:700;color:#fff;">Tips</div>
@@ -7489,7 +7489,7 @@ const App = {
             <h3 style="color:#22c55e;font-size:20px;margin-bottom:4px;">Earn Free Credits — Refer a Friend</h3>
             <p style="color:var(--text-secondary);font-size:14px;">Share your unique link. Earn credits every time someone signs up.</p>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin-bottom:20px;">
             <div style="text-align:center;background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;">
               <div style="font-size:28px;font-weight:900;color:#22c55e;">+3</div>
               <div style="font-size:11px;color:var(--text-muted);">credits when your friend signs up</div>
