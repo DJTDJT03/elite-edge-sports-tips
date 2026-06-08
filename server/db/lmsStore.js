@@ -306,6 +306,15 @@ async function getWcFixturesForTeam(team) {
   return rows;
 }
 
+// All finished WC results (for settling against the canonical schedule by team)
+async function getFinishedWcResults() {
+  if (!available()) return [];
+  const { rows } = await db.query(
+    "SELECT home_team, away_team, home_goals, away_goals, result, status, stage FROM world_cup_fixtures WHERE status = 'finished'"
+  );
+  return rows;
+}
+
 // Real teams with an upcoming (not-finished) fixture — for the pick dropdown.
 // Excludes knockout-bracket PLACEHOLDERS ("1st Group A", "2nd Group B",
 // "3rd Group A/B/C/D/F", "Winner ...", etc.) that SportMonks uses for fixtures
@@ -447,7 +456,7 @@ module.exports = {
   // purchases
   createPurchase, getPurchaseBySession, updatePurchase, countPaidPurchases,
   // settlement source
-  getWcFixturesForTeam, getWcTeams, getWcFixtureByKickoffIndex, getUpcomingWcFixtures, getWcRoundFixtures,
+  getWcFixturesForTeam, getWcTeams, getWcFixtureByKickoffIndex, getUpcomingWcFixtures, getWcRoundFixtures, getFinishedWcResults,
   // mappers (exposed for tests)
   _map: { mapCompetition, mapEntry, mapPick, mapPurchase },
 };

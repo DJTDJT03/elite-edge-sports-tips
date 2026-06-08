@@ -132,23 +132,17 @@ module.exports = function (deps) {
       let fixtures = [];
       let roundFixtures = [];
       if (c.phase === 'world_cup') {
-        teams = await lmsStore.getWcTeams();
-        // Upcoming fixtures so players can plan ahead (visible well in advance)
-        const upcoming = await lmsStore.getUpcomingWcFixtures(7);
-        fixtures = upcoming.map(function (f) {
-          return {
-            homeTeam: f.home_team, awayTeam: f.away_team,
-            kickoff: f.kickoff, stage: f.stage, group: f.group_letter, status: f.status,
-          };
+        // Fixtures + teams come from the CANONICAL schedule (not the provisional
+        // live feed), so rounds are exactly right. Results still settle from the feed.
+        const schedule = require('../services/wc2026Schedule');
+        teams = schedule.allGroupTeams();
+        const rf = schedule.roundFixtures(c.currentRound).filter(function (f) {
+          return !schedule.isPlaceholder(f.home) && !schedule.isPlaceholder(f.away);
         });
-        // The actual matchups for THIS round — players pick a team from these
-        const rf = await lmsStore.getWcRoundFixtures(c.currentRound);
         roundFixtures = rf.map(function (f) {
-          return {
-            fixtureId: f.id, homeTeam: f.home_team, awayTeam: f.away_team,
-            kickoff: f.kickoff, group: f.group_letter, status: f.status,
-          };
+          return { fixtureId: null, homeTeam: f.home, awayTeam: f.away, kickoff: f.date || null, group: null, status: 'scheduled' };
         });
+        fixtures = roundFixtures; // the "fixtures" panel shows this round's matchups
       }
       res.json({
         competition: {

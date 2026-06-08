@@ -19,6 +19,7 @@
  */
 
 const lmsStore = require('../db/lmsStore');
+const wcSchedule = require('./wc2026Schedule');
 
 // 2026 World Cup (48 teams) has 8 LMS rounds: 3 group matchdays + Round of 32
 // + Round of 16 + Quarter-Final + Semi-Final + Final.
@@ -130,33 +131,43 @@ async function makePick(competition, userId, team) {
  *   - 'pending' means not finished yet, OR a knockout that went to penalties
  *     (goals level) which needs admin confirmation of who advanced.
  */
-async function resolveTeamResult(competition, round, team) {
+async function resolveTeamResult(competition, round, team, finishedResults) {
   if (competition.phase === 'pl_rollover') {
-    // PL fixtures aren't in the WC table — admin settles these for now.
+    // PL fixtures aren't in the WC schedule — admin settles these for now.
     return { status: 'pending', fixtureId: null, detail: 'PL phase — awaiting admin settlement' };
   }
 
-  var group = isGroupRound(competition.phase, round);
-  var index = group ? (round - 1) : (round - 4); // 0-based within group/knockout sets
-  var fixture = await lmsStore.getWcFixtureByKickoffIndex(team, group, index);
-
-  if (!fixture) return { status: 'pending', fixtureId: null, detail: 'No fixture found yet' };
-  if (fixture.status !== 'finished') return { status: 'pending', fixtureId: fixture.id, detail: 'Fixture not finished' };
-
-  var teamIsHome = fixture.home_team === team;
-  var side = teamIsHome ? 'home' : 'away';
-
-  if (group) {
-    // Group stage / PL: 90-minute win required (the stored result is the 90-min result).
-    if (fixture.result === side) return { status: 'won', fixtureId: fixture.id, detail: '90-min win' };
-    return { status: 'lost', fixtureId: fixture.id, detail: fixture.result === 'draw' ? 'Draw — out' : 'Lost' };
+  // Find the team's fixture for this round from the CANONICAL schedule.
+  var fx = wcSchedule.fixtureForTeam(round, team);
+  if (!fx) return { status: 'pending', fixtureId: null, detail: 'No fixture for this team in ' + roundLabel(competition.phase, round) };
+  if (wcSchedule.isPlaceholder(fx.home) || wcSchedule.isPlaceholder(fx.away)) {
+    return { status: 'pending', fixtureId: null, detail: 'Knockout opponent not decided yet' };
   }
 
-  // Knockout: team must advance. ET counts via the stored result; penalties
-  // leave goals level (result 'draw') and need admin confirmation.
-  if (fixture.result === side) return { status: 'won', fixtureId: fixture.id, detail: 'Advanced (incl. ET)' };
-  if (fixture.result === 'draw') return { status: 'pending', fixtureId: fixture.id, detail: 'Went to penalties — confirm who advanced' };
-  return { status: 'lost', fixtureId: fixture.id, detail: 'Knocked out' };
+  // Resolve the actual result from the live feed, matched by team names.
+  var results = finishedResults || (await lmsStore.getFinishedWcResults());
+  var res = (results || []).find(function (r) {
+    return (wcSchedule.teamsMatch(r.home_team, fx.home) && wcSchedule.teamsMatch(r.away_team, fx.away)) ||
+           (wcSchedule.teamsMatch(r.home_team, fx.away) && wcSchedule.teamsMatch(r.away_team, fx.home));
+  });
+  if (!res) return { status: 'pending', fixtureId: null, detail: 'Result not in yet' };
+  if (res.home_goals === null || res.away_goals === null) return { status: 'pending', fixtureId: null, detail: 'Score not in yet' };
+
+  var teamIsHome = wcSchedule.teamsMatch(res.home_team, team);
+  var gf = teamIsHome ? res.home_goals : res.away_goals;
+  var ga = teamIsHome ? res.away_goals : res.home_goals;
+  var group = isGroupRound(competition.phase, round);
+
+  if (group) {
+    // Group stage: 90-minute win required (a draw is out).
+    if (gf > ga) return { status: 'won', detail: '90-min win' };
+    return { status: 'lost', detail: gf === ga ? 'Draw — out' : 'Lost' };
+  }
+  // Knockout: team must advance. ET counts (in the goals); penalties leave the
+  // score level and need admin confirmation of who went through.
+  if (gf > ga) return { status: 'won', detail: 'Advanced' };
+  if (gf === ga) return { status: 'pending', detail: 'Went to penalties — confirm who advanced' };
+  return { status: 'lost', detail: 'Knocked out' };
 }
 
 // ---------------------------------------------------------------------------
@@ -181,6 +192,8 @@ async function settleRound(competition, opts) {
   if (aliveEntries.length === 0) {
     return { competitionId: competition.id, round: round, settled: 0, message: 'No active entries' };
   }
+  // Fetch finished results once for the whole round's settlement.
+  var finishedResults = await lmsStore.getFinishedWcResults();
 
   // First pass: resolve every alive entry's outcome for this round
   var outcomes = [];
@@ -196,7 +209,7 @@ async function settleRound(competition, opts) {
       outcomes.push({ entry: entry, pick: pick, status: pick.result, detail: 'Already settled' });
       continue;
     }
-    var res = await resolveTeamResult(competition, round, pick.team);
+    var res = await resolveTeamResult(competition, round, pick.team, finishedResults);
     if (res.status === 'pending') {
       // Not ready (fixture unfinished or penalties). Hold unless forced by admin.
       if (!opts.force) heldOnPenalties.push({ entry: entry, pick: pick, detail: res.detail });
