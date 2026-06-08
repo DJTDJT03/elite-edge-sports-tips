@@ -170,13 +170,24 @@ module.exports = function(deps) {
         else result = 'draw';
       }
 
-      await db.query(
-        `INSERT INTO world_cup_fixtures (tournament_id, stage, group_letter, home_team, away_team, kickoff, venue, home_goals, away_goals, result, status, external_fixture_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-         ON CONFLICT (external_fixture_id) DO UPDATE SET home_goals=$8, away_goals=$9, result=$10, status=$11, stage=$2, group_letter=$3, kickoff=$6`,
-        [tournamentId, sg.stage, sg.groupLetter, nf.homeTeam, nf.awayTeam, nf.kickoff,
-         nf.venue || null, nf.homeGoals, nf.awayGoals, result, st, rf.id]
-      );
+      // Explicit upsert — the production table may lack a UNIQUE constraint on
+      // external_fixture_id, so we don't rely on ON CONFLICT.
+      var existing = await db.query('SELECT id FROM world_cup_fixtures WHERE external_fixture_id = $1', [rf.id]);
+      if (existing.rows.length) {
+        await db.query(
+          `UPDATE world_cup_fixtures SET tournament_id=$1, stage=$2, group_letter=$3, home_team=$4, away_team=$5,
+           kickoff=$6, venue=$7, home_goals=$8, away_goals=$9, result=$10, status=$11 WHERE external_fixture_id=$12`,
+          [tournamentId, sg.stage, sg.groupLetter, nf.homeTeam, nf.awayTeam, nf.kickoff,
+           nf.venue || null, nf.homeGoals, nf.awayGoals, result, st, rf.id]
+        );
+      } else {
+        await db.query(
+          `INSERT INTO world_cup_fixtures (tournament_id, stage, group_letter, home_team, away_team, kickoff, venue, home_goals, away_goals, result, status, external_fixture_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          [tournamentId, sg.stage, sg.groupLetter, nf.homeTeam, nf.awayTeam, nf.kickoff,
+           nf.venue || null, nf.homeGoals, nf.awayGoals, result, st, rf.id]
+        );
+      }
       synced.fixtures++;
     }
 

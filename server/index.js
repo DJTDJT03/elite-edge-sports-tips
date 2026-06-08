@@ -330,6 +330,7 @@ app.use('/', require('./routes/public')(deps));
           'CREATE INDEX IF NOT EXISTS idx_wcf_kickoff ON world_cup_fixtures(kickoff)',
           'CREATE INDEX IF NOT EXISTS idx_wcf_stage ON world_cup_fixtures(stage)',
           'CREATE INDEX IF NOT EXISTS idx_wcf_status ON world_cup_fixtures(status)',
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_wcf_ext ON world_cup_fixtures(external_fixture_id)',
           "CREATE TABLE IF NOT EXISTS world_cup_predictions (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, fixture_id INTEGER NOT NULL REFERENCES world_cup_fixtures(id), predicted_home INTEGER NOT NULL, predicted_away INTEGER NOT NULL, first_goalscorer TEXT, predicted_cards INTEGER, predicted_corners INTEGER, points INTEGER DEFAULT 0, scored BOOLEAN DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(user_id, fixture_id))",
           'CREATE INDEX IF NOT EXISTS idx_wcp_user ON world_cup_predictions(user_id)',
           'CREATE INDEX IF NOT EXISTS idx_wcp_fixture ON world_cup_predictions(fixture_id)',
