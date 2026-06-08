@@ -508,6 +508,10 @@ const App = {
     var d = new Date(); d.setDate(d.getDate() - 1);
     return d.toISOString().split('T')[0];
   },
+  _getDateOffset(n) {
+    var d = new Date(); d.setDate(d.getDate() + n);
+    return d.toISOString().split('T')[0];
+  },
   _isToday(dateStr) { return dateStr === this._getToday(); },
   _isTomorrow(dateStr) { return dateStr === this._getTomorrow(); },
   _isThisWeekend() {
@@ -5660,8 +5664,9 @@ const App = {
     var pastFixtureData = null;
     var tomorrowFixtureData = null;
     var isFriday = this._isFriday();
-    if (!this._footballDateTab && isFriday) this._footballDateTab = 'weekend';
     var dateTab = this._footballDateTab || 'today';
+    // Selected future date (YYYY-MM-DD) when a specific upcoming-day tab is active
+    var futureDate = this._footballFutureDate || this._getTomorrow();
     var yesterdayDate = this._getYesterday();
     var dayBeforeDate = (function() { var d = new Date(); d.setDate(d.getDate() - 2); return d.toISOString().split('T')[0]; })();
     var tomorrowDate = this._getTomorrow();
@@ -5671,15 +5676,13 @@ const App = {
         this.fetchLiveFootball(),
         this.api('/results?sport=football'),
       ];
-      // Fetch fixtures for the selected past date
+      // Fetch fixtures for the selected date
       if (dateTab === 'yesterday') {
         fetches.push(this.fetchLiveFootball(false, yesterdayDate));
       } else if (dateTab === 'day-before') {
         fetches.push(this.fetchLiveFootball(false, dayBeforeDate));
-      } else if (dateTab === 'tomorrow') {
-        fetches.push(this.fetchLiveFootball(false, tomorrowDate));
-      } else if (isFriday || new Date().getDay() === 6 || new Date().getDay() === 0) {
-        fetches.push(this.fetchWeekendFootball());
+      } else if (dateTab === 'future') {
+        fetches.push(this.fetchLiveFootball(false, futureDate));
       }
       var results = await Promise.all(fetches);
       this.tips = results[0];
@@ -5687,10 +5690,8 @@ const App = {
       this._footballResults = results[2] || [];
       if (dateTab === 'yesterday' || dateTab === 'day-before') {
         pastFixtureData = results[3] || null;
-      } else if (dateTab === 'tomorrow') {
+      } else if (dateTab === 'future') {
         tomorrowFixtureData = results[3] || null;
-      } else {
-        weekendFixtures = results[3] || null;
       }
     } catch { try { this.tips = await this.api('/tips?sport=football'); } catch {} }
 
@@ -5727,10 +5728,8 @@ const App = {
     // Re-filter tips based on selected date tab
     var displayTips = tips;
     var isPastTab = false;
-    if (dateTab === 'tomorrow') {
-      displayTips = tomorrowTips;
-    } else if (dateTab === 'weekend') {
-      displayTips = weekendTips;
+    if (dateTab === 'future') {
+      displayTips = this.tips.filter(function(t) { return t.sport === 'football' && t.status === 'active' && App._normDate(t.date) === futureDate && !t.isWeeklyAcca; });
     } else if (dateTab === 'yesterday' || dateTab === 'day-before') {
       isPastTab = true;
       var targetDate = dateTab === 'yesterday' ? yesterday : dayBeforeYesterday;
@@ -5781,13 +5780,21 @@ const App = {
           <p>Data-driven selections across Europe's top leagues with xG analysis and injury intelligence</p>
         </div>
 
-        <!-- Date Tabs -->
+        <!-- Date Tabs — rolling day-by-day selector (yesterday → next 10 days) -->
         <div class="date-tabs" style="overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;">
-          <button class="date-tab ${dateTab === 'day-before' ? 'active' : ''}" onclick="App._footballDateTab='day-before';App.renderFootball()">${new Date(dayBeforeYesterday).toLocaleDateString('en-GB', {weekday:'short', day:'numeric', month:'short'})}</button>
           <button class="date-tab ${dateTab === 'yesterday' ? 'active' : ''}" onclick="App._footballDateTab='yesterday';App.renderFootball()">Yesterday</button>
           <button class="date-tab ${dateTab === 'today' ? 'active' : ''}" onclick="App._footballDateTab='today';App.renderFootball()">Today</button>
-          ${tomorrowTips.length ? '<button class="date-tab ' + (dateTab === 'tomorrow' ? 'active' : '') + '" onclick="App._footballDateTab=\'tomorrow\';App.renderFootball()">Tomorrow (' + tomorrowTips.length + ')</button>' : ''}
-          <button class="date-tab ${dateTab === 'weekend' ? 'active' : ''}" onclick="App._footballDateTab='weekend';App.renderFootball()">This Weekend${weekendTips.length ? ' (' + weekendTips.length + ')' : ''}</button>
+          ${(function() {
+            var btns = '';
+            for (var dd = 1; dd <= 10; dd++) {
+              var ds = App._getDateOffset(dd);
+              var lbl = dd === 1 ? 'Tomorrow' : new Date(ds + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+              var dayTips = App.tips.filter(function(t) { return t.sport === 'football' && t.status === 'active' && App._normDate(t.date) === ds && !t.isWeeklyAcca; }).length;
+              var isActive = dateTab === 'future' && futureDate === ds;
+              btns += '<button class="date-tab ' + (isActive ? 'active' : '') + '" onclick="App._footballDateTab=\'future\';App._footballFutureDate=\'' + ds + '\';App.renderFootball()">' + lbl + (dayTips ? ' (' + dayTips + ')' : '') + '</button>';
+            }
+            return btns;
+          })()}
         </div>
 
         <!-- Fixtures Section — date-aware -->
@@ -5800,9 +5807,9 @@ const App = {
             // Past dates — show finished fixtures with scores
             tabFixtures = pastFixtureData && pastFixtureData.fixtures ? pastFixtureData.fixtures : [];
             sectionLabel = dateTab === 'yesterday' ? 'Yesterday\'s Results' : new Date(dayBeforeYesterday).toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'short'}) + ' Results';
-          } else if (dateTab === 'tomorrow') {
+          } else if (dateTab === 'future') {
             tabFixtures = tomorrowFixtureData && tomorrowFixtureData.fixtures ? tomorrowFixtureData.fixtures : [];
-            sectionLabel = 'Tomorrow\'s Fixtures';
+            sectionLabel = (futureDate === App._getTomorrow() ? 'Tomorrow' : new Date(futureDate + 'T12:00:00').toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long'})) + '’s Fixtures';
           } else {
             tabFixtures = fixtures;
             sectionLabel = 'Live Fixtures';
@@ -5956,7 +5963,7 @@ const App = {
 
         <!-- League Badges -->
         <div class="card mb-24">
-          <h3 class="mb-16">${dateTab === 'today' ? "Today's" : dateTab === 'tomorrow' ? "Tomorrow's" : "Weekend"} Fixtures by League</h3>
+          <h3 class="mb-16">${dateTab === 'today' ? "Today's" : dateTab === 'future' ? (futureDate === this._getTomorrow() ? "Tomorrow's" : new Date(futureDate + 'T12:00:00').toLocaleDateString('en-GB', {weekday:'long'}) + "'s") : dateTab === 'yesterday' ? "Yesterday's" : "Selected day's"} Fixtures by League</h3>
           <div class="grid grid-3">
             ${displayLeagues.length ? displayLeagues.map(l => {
               const lTips = displayTips.filter(t => t.league === l);
