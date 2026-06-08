@@ -289,12 +289,18 @@ async function countPaidPurchases(competitionId, userId) {
 // ---------------------------------------------------------------------------
 async function getWcFixturesForTeam(team) {
   if (!available()) return [];
+  // Dedupe to one row per matchup+stage (the feed can contain duplicate
+  // fixtures), then order by kickoff so the round-index mapping is correct.
   const { rows } = await db.query(
-    `SELECT id, stage, group_letter, home_team, away_team, home_goals, away_goals,
-            result, status, kickoff
-     FROM world_cup_fixtures
-     WHERE home_team = $1 OR away_team = $1
-     ORDER BY kickoff ASC`,
+    `SELECT id, stage, group_letter, home_team, away_team, home_goals, away_goals, result, status, kickoff
+     FROM (
+       SELECT DISTINCT ON (LEAST(home_team, away_team), GREATEST(home_team, away_team), stage)
+         id, stage, group_letter, home_team, away_team, home_goals, away_goals, result, status, kickoff
+       FROM world_cup_fixtures
+       WHERE home_team = $1 OR away_team = $1
+       ORDER BY LEAST(home_team, away_team), GREATEST(home_team, away_team), stage, kickoff ASC
+     ) d
+     ORDER BY d.kickoff ASC`,
     [team]
   );
   return rows;
@@ -330,15 +336,18 @@ async function getUpcomingWcFixtures(days) {
   if (!available()) return [];
   var window = days || 7;
   const { rows } = await db.query(
-    `SELECT id, stage, group_letter, home_team, away_team, kickoff, status
-     FROM world_cup_fixtures
-     WHERE status <> 'finished'
-       AND kickoff IS NOT NULL
-       AND kickoff >= NOW() - INTERVAL '6 hours'
-       AND kickoff <= NOW() + ($1 || ' days')::interval
-       AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
-       AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'
-     ORDER BY kickoff ASC`,
+    `SELECT id, stage, group_letter, home_team, away_team, kickoff, status FROM (
+       SELECT DISTINCT ON (LEAST(home_team, away_team), GREATEST(home_team, away_team), stage)
+         id, stage, group_letter, home_team, away_team, kickoff, status
+       FROM world_cup_fixtures
+       WHERE status <> 'finished'
+         AND kickoff IS NOT NULL
+         AND kickoff >= NOW() - INTERVAL '6 hours'
+         AND kickoff <= NOW() + ($1 || ' days')::interval
+         AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
+         AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'
+       ORDER BY LEAST(home_team, away_team), GREATEST(home_team, away_team), stage, kickoff ASC
+     ) d ORDER BY d.kickoff ASC`,
     [String(window)]
   );
   return rows;
@@ -352,20 +361,25 @@ async function getWcRoundFixtures(round) {
   if (!available()) return [];
   if (round <= 3) {
     // Matchday = the home team's Nth group game by kickoff. Both teams in a
-    // fixture share the same matchday, and this matches settlement exactly
-    // (a team's round-N game = their Nth group fixture). No reliance on the
-    // group label, which can be wrong/missing in the feed.
+    // fixture share the same matchday, matching settlement exactly. We first
+    // DEDUPE to one row per matchup (the feed can contain duplicate fixtures
+    // from a prior sync source), otherwise a dupe both inflates the count and
+    // shows a team twice in a round.
     const { rows } = await db.query(
-      `SELECT id, home_team, away_team, kickoff, group_letter, status FROM (
-         SELECT f.id, f.home_team, f.away_team, f.kickoff, f.group_letter, f.status,
-           (SELECT COUNT(*) FROM world_cup_fixtures f2
-             WHERE f2.stage = 'group'
-               AND (f2.home_team = f.home_team OR f2.away_team = f.home_team)
-               AND f2.kickoff <= f.kickoff) AS md
-         FROM world_cup_fixtures f
-         WHERE f.stage = 'group'
-           AND f.home_team NOT ILIKE '%group%' AND f.home_team !~ '^[0-9]'
-           AND f.away_team NOT ILIKE '%group%' AND f.away_team !~ '^[0-9]'
+      `WITH g AS (
+         SELECT DISTINCT ON (LEAST(home_team, away_team), GREATEST(home_team, away_team))
+           id, home_team, away_team, kickoff, group_letter, status
+         FROM world_cup_fixtures
+         WHERE stage = 'group'
+           AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
+           AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'
+         ORDER BY LEAST(home_team, away_team), GREATEST(home_team, away_team), kickoff ASC
+       )
+       SELECT id, home_team, away_team, kickoff, group_letter, status FROM (
+         SELECT g.*, (SELECT COUNT(*) FROM g g2
+             WHERE (g2.home_team = g.home_team OR g2.away_team = g.home_team)
+               AND g2.kickoff <= g.kickoff) AS md
+         FROM g
        ) x WHERE md = $1 ORDER BY kickoff ASC`,
       [round]
     );
@@ -375,11 +389,15 @@ async function getWcRoundFixtures(round) {
   var stage = stageMap[round];
   if (!stage) return [];
   const { rows } = await db.query(
-    `SELECT id, home_team, away_team, kickoff, group_letter, status FROM world_cup_fixtures
-     WHERE stage = $1
-       AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
-       AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'
-     ORDER BY kickoff ASC`,
+    `SELECT id, home_team, away_team, kickoff, group_letter, status FROM (
+       SELECT DISTINCT ON (LEAST(home_team, away_team), GREATEST(home_team, away_team))
+         id, home_team, away_team, kickoff, group_letter, status
+       FROM world_cup_fixtures
+       WHERE stage = $1
+         AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
+         AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'
+       ORDER BY LEAST(home_team, away_team), GREATEST(home_team, away_team), kickoff ASC
+     ) d ORDER BY d.kickoff ASC`,
     [stage]
   );
   return rows;
