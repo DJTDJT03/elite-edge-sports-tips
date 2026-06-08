@@ -361,7 +361,7 @@ module.exports = function(deps) {
     }
   });
 
-  // POST /api/world-cup/admin/sync — force fixture sync from API-Football
+  // POST /api/world-cup/admin/sync — force fixture sync (SportMonks, then API-Football)
   router.post('/admin/sync', authenticate, requireAdmin, async function(req, res) {
     try {
       var worldCupData = deps.worldCupData;
@@ -370,6 +370,18 @@ module.exports = function(deps) {
       res.json({ ok: true, synced: result });
     } catch (err) {
       res.status(500).json({ error: 'Sync failed: ' + err.message });
+    }
+  });
+
+  // GET /api/world-cup/admin/diagnose — verify the SportMonks World Cup feed
+  router.get('/admin/diagnose', authenticate, requireAdmin, async function(req, res) {
+    try {
+      var worldCupData = deps.worldCupData;
+      if (!worldCupData || !worldCupData.diagnose) return res.status(503).json({ error: 'World Cup data service not available' });
+      var result = await worldCupData.diagnose();
+      res.json({ ok: true, diagnostic: result });
+    } catch (err) {
+      res.status(500).json({ error: 'Diagnostic failed: ' + err.message });
     }
   });
 

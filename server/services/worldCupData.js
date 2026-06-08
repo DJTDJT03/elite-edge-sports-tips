@@ -8,9 +8,63 @@
 
 module.exports = function(deps) {
   var db = deps.db;
+  var sportMonks = deps.sportMonks;
+  var SportMonks = require('./sportMonks'); // for the static normaliseFixture
   var FOOTBALL_API_KEY = process.env.API_FOOTBALL_KEY || process.env.FOOTBALL_API_KEY;
   var WORLD_CUP_LEAGUE_ID = process.env.WORLD_CUP_LEAGUE_ID || '1'; // API-Football league ID for FIFA World Cup
   var WORLD_CUP_SEASON = process.env.WORLD_CUP_SEASON || '2026';
+
+  // SportMonks World Cup config — explicit IDs win; otherwise auto-discovered.
+  var SM_WC_LEAGUE_ID = process.env.SPORTMONKS_WC_LEAGUE_ID || null;
+  var SM_WC_SEASON_ID = process.env.SPORTMONKS_WC_SEASON_ID || null;
+  var SM_WC_START = process.env.SPORTMONKS_WC_START || (WORLD_CUP_SEASON + '-06-01');
+  var SM_WC_END = process.env.SPORTMONKS_WC_END || (WORLD_CUP_SEASON + '-07-31');
+  var _smWcCache = null; // { leagueId, seasonId, leagueName }
+
+  function smAvailable() { return sportMonks && sportMonks.isAvailable && sportMonks.isAvailable(); }
+
+  // Resolve the SportMonks World Cup league + season — from env, or by searching
+  // SportMonks for the FIFA World Cup league and taking its current season.
+  async function resolveSportMonksWc() {
+    if (_smWcCache) return _smWcCache;
+    if (SM_WC_LEAGUE_ID) {
+      _smWcCache = { leagueId: SM_WC_LEAGUE_ID, seasonId: SM_WC_SEASON_ID, leagueName: 'World Cup (env)' };
+      return _smWcCache;
+    }
+    if (!smAvailable() || !sportMonks.searchLeagues) return null;
+    var leagues = await sportMonks.searchLeagues('World Cup');
+    // Prefer the men's FIFA World Cup — exclude Women's, U-age, Qualifiers, Club WC
+    var pick = (leagues || []).find(function(l) {
+      var n = (l.name || '').toLowerCase();
+      return n.indexOf('world cup') !== -1 && n.indexOf('women') === -1 && n.indexOf('u-') === -1 &&
+             n.indexOf('u2') === -1 && n.indexOf('qualif') === -1 && n.indexOf('club') === -1;
+    }) || (leagues || [])[0];
+    if (!pick) return null;
+    var season = pick.currentSeason || (pick.currentseason) || null;
+    _smWcCache = { leagueId: pick.id, seasonId: season ? season.id : SM_WC_SEASON_ID, leagueName: pick.name };
+    return _smWcCache;
+  }
+
+  // Map a SportMonks raw fixture's round/stage/group into our stage + group letter
+  function smStageAndGroup(f) {
+    var stageName = (f.stage && f.stage.name) || '';
+    var roundName = (f.round && f.round.name) || '';
+    var groupName = (f.group && f.group.name) || '';
+    var hay = (stageName + ' ' + roundName + ' ' + groupName).toLowerCase();
+
+    var stage = 'group';
+    if (hay.indexOf('group') !== -1) stage = 'group';
+    else if (hay.indexOf('16') !== -1) stage = 'round-of-16';
+    else if (hay.indexOf('quarter') !== -1) stage = 'quarter-final';
+    else if (hay.indexOf('semi') !== -1) stage = 'semi-final';
+    else if (hay.indexOf('3rd') !== -1 || hay.indexOf('third') !== -1) stage = 'third-place';
+    else if (hay.indexOf('final') !== -1) stage = 'final';
+
+    var groupLetter = null;
+    var gm = (groupName + ' ' + roundName + ' ' + stageName).match(/group\s+([a-l])/i);
+    if (gm) groupLetter = gm[1].toUpperCase();
+    return { stage: stage, groupLetter: groupLetter };
+  }
 
   async function apiFetch(endpoint) {
     if (!FOOTBALL_API_KEY) {
@@ -50,26 +104,122 @@ module.exports = function(deps) {
     }
   }
 
-  async function syncFixtures() {
-    if (!db.isAvailable || !db.isAvailable()) return { error: 'Database not available' };
-
-    var synced = { fixtures: 0, groups: 0 };
-
-    // 1. Ensure tournament record exists
+  // Ensure the tournament row exists; return its id.
+  async function ensureTournament() {
     var { rows: tournaments } = await db.query(
       'SELECT * FROM world_cup_tournaments WHERE year = $1',
       [parseInt(WORLD_CUP_SEASON)]
     );
-    var tournamentId;
     if (tournaments.length === 0) {
       var { rows: newT } = await db.query(
         "INSERT INTO world_cup_tournaments (name, year, status) VALUES ($1, $2, 'upcoming') RETURNING id",
         ['FIFA World Cup ' + WORLD_CUP_SEASON, parseInt(WORLD_CUP_SEASON)]
       );
-      tournamentId = newT[0].id;
-    } else {
-      tournamentId = tournaments[0].id;
+      return newT[0].id;
     }
+    return tournaments[0].id;
+  }
+
+  // Public entry point — prefer SportMonks (the upgraded source), fall back to
+  // API-Football if SportMonks isn't available or returns nothing.
+  async function syncFixtures() {
+    if (!db.isAvailable || !db.isAvailable()) return { error: 'Database not available' };
+    if (smAvailable()) {
+      try {
+        var smResult = await syncFromSportMonks();
+        if (smResult && !smResult.error && smResult.fixtures > 0) {
+          return Object.assign({ source: 'sportmonks' }, smResult);
+        }
+        console.warn('[WorldCup] SportMonks returned ' + ((smResult && smResult.fixtures) || 0) + ' fixtures — falling back to API-Football');
+      } catch (e) {
+        console.error('[WorldCup] SportMonks sync failed, falling back to API-Football:', e.message);
+      }
+    }
+    var afResult = await syncFromApiFootball();
+    return Object.assign({ source: 'api-football' }, afResult);
+  }
+
+  // -------------------------------------------------------------------------
+  // SportMonks World Cup sync
+  // -------------------------------------------------------------------------
+  async function syncFromSportMonks() {
+    if (!smAvailable()) return { error: 'SportMonks not available' };
+    var wc = await resolveSportMonksWc();
+    if (!wc || !wc.leagueId) return { error: 'Could not resolve SportMonks World Cup league' };
+
+    var tournamentId = await ensureTournament();
+    var synced = { fixtures: 0, groups: 0, league: wc.leagueName, leagueId: wc.leagueId, seasonId: wc.seasonId };
+
+    var raw = await sportMonks.getFixturesBetween(SM_WC_START, SM_WC_END, wc.leagueId);
+    for (var i = 0; i < (raw || []).length; i++) {
+      var rf = raw[i];
+      var nf = SportMonks.normaliseFixture(rf) || {};
+      if (!nf.homeTeam || !nf.awayTeam) continue;
+
+      var sg = smStageAndGroup(rf);
+
+      // Map normalised status -> our status
+      var st = 'scheduled';
+      if (['FT', 'AET', 'PEN'].indexOf(nf.status) !== -1) st = 'finished';
+      else if (['LIVE', 'HT', '1H', '2H', 'ET'].indexOf(nf.status) !== -1) st = 'live';
+
+      var result = null;
+      if (st === 'finished' && nf.homeGoals !== null && nf.awayGoals !== null) {
+        if (nf.homeGoals > nf.awayGoals) result = 'home';
+        else if (nf.awayGoals > nf.homeGoals) result = 'away';
+        else result = 'draw';
+      }
+
+      await db.query(
+        `INSERT INTO world_cup_fixtures (tournament_id, stage, group_letter, home_team, away_team, kickoff, venue, home_goals, away_goals, result, status, external_fixture_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         ON CONFLICT (external_fixture_id) DO UPDATE SET home_goals=$8, away_goals=$9, result=$10, status=$11, stage=$2, group_letter=$3, kickoff=$6`,
+        [tournamentId, sg.stage, sg.groupLetter, nf.homeTeam, nf.awayTeam, nf.kickoff,
+         nf.venue || null, nf.homeGoals, nf.awayGoals, result, st, rf.id]
+      );
+      synced.fixtures++;
+    }
+
+    // Standings (best effort — structure varies, never fail the whole sync)
+    if (wc.seasonId && sportMonks.getStandings) {
+      try {
+        var standings = await sportMonks.getStandings(wc.seasonId);
+        var byGroup = {};
+        (standings || []).forEach(function(s) {
+          var gName = (s.group && s.group.name) || (s.details && s.details.group) || '';
+          var gm = String(gName).match(/group\s+([a-l])/i);
+          if (!gm) return;
+          var letter = gm[1].toUpperCase();
+          (byGroup[letter] = byGroup[letter] || []).push({
+            team: (s.participant && s.participant.name) || s.name || '',
+            played: s.games_played || 0, points: s.points || 0,
+            position: s.position || s.rank || 0,
+          });
+        });
+        for (var letter in byGroup) {
+          await db.query(
+            `INSERT INTO world_cup_groups (tournament_id, group_letter, standings)
+             VALUES ($1,$2,$3) ON CONFLICT (tournament_id, group_letter) DO UPDATE SET standings=$3`,
+            [tournamentId, letter, JSON.stringify(byGroup[letter])]
+          );
+          synced.groups++;
+        }
+      } catch (e) {
+        console.warn('[WorldCup] SportMonks standings skipped:', e.message);
+      }
+    }
+
+    console.log('[WorldCup] SportMonks sync complete — ' + synced.fixtures + ' fixtures, ' + synced.groups + ' groups (league ' + wc.leagueId + ')');
+    return synced;
+  }
+
+  // -------------------------------------------------------------------------
+  // API-Football World Cup sync (fallback / original source)
+  // -------------------------------------------------------------------------
+  async function syncFromApiFootball() {
+    var synced = { fixtures: 0, groups: 0 };
+
+    var tournamentId = await ensureTournament();
 
     // 2. Fetch fixtures from API-Football
     var fixturesData = await apiFetch('/fixtures?league=' + WORLD_CUP_LEAGUE_ID + '&season=' + WORLD_CUP_SEASON);
@@ -429,8 +579,43 @@ module.exports = function(deps) {
   // Auto-seed on startup
   seedTournament();
 
+  // Diagnostic — confirm SportMonks World Cup data is reachable and what IDs
+  // resolve, plus a sample of fixtures. Used by the admin diagnostic endpoint.
+  async function diagnose() {
+    var out = {
+      sportMonksAvailable: smAvailable(),
+      apiFootballConfigured: !!FOOTBALL_API_KEY,
+      window: { start: SM_WC_START, end: SM_WC_END },
+      envOverride: { leagueId: SM_WC_LEAGUE_ID, seasonId: SM_WC_SEASON_ID },
+    };
+    if (!smAvailable()) { out.note = 'SportMonks API key not set'; return out; }
+    try {
+      var leagues = await sportMonks.searchLeagues('World Cup');
+      out.leagueSearch = (leagues || []).map(function(l) {
+        return { id: l.id, name: l.name, currentSeasonId: l.currentSeason ? l.currentSeason.id : null };
+      });
+      var wc = await resolveSportMonksWc();
+      out.resolved = wc;
+      if (wc && wc.leagueId) {
+        var raw = await sportMonks.getFixturesBetween(SM_WC_START, SM_WC_END, wc.leagueId);
+        out.fixturesFound = (raw || []).length;
+        out.sample = (raw || []).slice(0, 5).map(function(rf) {
+          var nf = SportMonks.normaliseFixture(rf) || {};
+          var sg = smStageAndGroup(rf);
+          return { home: nf.homeTeam, away: nf.awayTeam, kickoff: nf.kickoff, stage: sg.stage, group: sg.groupLetter, status: nf.status };
+        });
+      }
+    } catch (e) {
+      out.error = e.message;
+    }
+    return out;
+  }
+
   return {
     syncFixtures: syncFixtures,
+    syncFromSportMonks: syncFromSportMonks,
+    syncFromApiFootball: syncFromApiFootball,
+    diagnose: diagnose,
     scorePredictions: scorePredictions,
     seedTournament: seedTournament,
     generatePreviews: generatePreviews,

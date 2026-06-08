@@ -173,6 +173,43 @@ SportMonks.prototype.getStandings = function(seasonId) {
 };
 
 // =========================================================================
+// LEAGUE SEARCH — find a league by name (e.g. "FIFA World Cup")
+// =========================================================================
+SportMonks.prototype.searchLeagues = function(name) {
+  return this._request('/leagues/search/' + encodeURIComponent(name), {
+    include: 'currentSeason',
+  }).then(function(data) {
+    return data.data || [];
+  });
+};
+
+// =========================================================================
+// FIXTURES BETWEEN DATES — full schedule for a date range, optional league
+// filter. Returns RAW fixtures (incl. round/stage/group) so callers can read
+// tournament structure. Follows pagination.
+// =========================================================================
+SportMonks.prototype.getFixturesBetween = function(startDate, endDate, leagueId) {
+  var self = this;
+  var all = [];
+  function fetchPage(page) {
+    var params = {
+      include: 'participants;scores;state;league;venue;round;stage;group',
+      per_page: 50,
+      page: page,
+    };
+    if (leagueId) params.filters = 'fixtureLeagues:' + leagueId;
+    return self._request('/fixtures/between/' + startDate + '/' + endDate, params).then(function(data) {
+      var rows = data.data || [];
+      all = all.concat(rows);
+      var pg = data.pagination || {};
+      if (pg.has_more && page < 25) return fetchPage(page + 1);
+      return all;
+    });
+  }
+  return fetchPage(1);
+};
+
+// =========================================================================
 // TOP LEAGUE IDS (SportMonks v3)
 // =========================================================================
 SportMonks.TOP_LEAGUES = [
@@ -368,5 +405,9 @@ SportMonks.prototype.getStatus = function() {
     lastError: this.lastError,
   };
 };
+
+// Expose the normaliser so feature modules (e.g. World Cup sync) can reuse the
+// robust team/score/status parsing without re-implementing it.
+SportMonks.normaliseFixture = normaliseFixture;
 
 module.exports = SportMonks;
