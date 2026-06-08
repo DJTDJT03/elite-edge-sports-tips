@@ -85,6 +85,29 @@ function validatePick(entry, usedTeams, team) {
   return { ok: true, isReuse: true };
 }
 
+// Has the picked team's match for this round already kicked off? Uses the live
+// feed's precise kickoff when available, otherwise the schedule's match date.
+async function teamMatchStarted(round, team) {
+  var fx = wcSchedule.fixtureForTeam(round, team);
+  if (!fx) return { started: false };
+  try {
+    var kickoffs = await lmsStore.getWcKickoffs();
+    var match = (kickoffs || []).find(function (k) {
+      return (wcSchedule.teamsMatch(k.home_team, fx.home) && wcSchedule.teamsMatch(k.away_team, fx.away)) ||
+             (wcSchedule.teamsMatch(k.home_team, fx.away) && wcSchedule.teamsMatch(k.away_team, fx.home));
+    });
+    if (match && match.kickoff) {
+      return { started: Date.now() >= new Date(match.kickoff).getTime() };
+    }
+  } catch (e) { /* fall through to date check */ }
+  // Fallback: block only once the match DATE has fully passed (day-granular)
+  if (fx.date) {
+    var today = new Date().toISOString().split('T')[0];
+    if (fx.date < today) return { started: true };
+  }
+  return { started: false };
+}
+
 /**
  * Place or change a pick for the competition's current round.
  * Picks lock once the round is settled; before that they can be changed.
@@ -97,6 +120,14 @@ async function makePick(competition, userId, team) {
   // usedTeams already excludes the current round's own pick (see getEntryState).
   var v = validatePick(state.entry, state.usedTeams, team);
   if (!v.ok) return v;
+
+  // Pick deadline — you cannot pick/change to a team whose match has kicked off.
+  if (competition.phase === 'world_cup') {
+    var deadlineCheck = await teamMatchStarted(round, team);
+    if (deadlineCheck.started) {
+      return { ok: false, reason: team + "'s match has already kicked off — pick a team that hasn't started yet." };
+    }
+  }
 
   if (state.currentPick) {
     // Changing an existing (unsettled) pick

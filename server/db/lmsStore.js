@@ -306,6 +306,15 @@ async function getWcFixturesForTeam(team) {
   return rows;
 }
 
+// All WC fixture kickoffs (home/away/kickoff) — for enforcing the pick deadline
+async function getWcKickoffs() {
+  if (!available()) return [];
+  const { rows } = await db.query(
+    "SELECT home_team, away_team, kickoff FROM world_cup_fixtures WHERE kickoff IS NOT NULL"
+  );
+  return rows;
+}
+
 // All finished WC results (for settling against the canonical schedule by team)
 async function getFinishedWcResults() {
   if (!available()) return [];
@@ -456,7 +465,7 @@ module.exports = {
   // purchases
   createPurchase, getPurchaseBySession, updatePurchase, countPaidPurchases,
   // settlement source
-  getWcFixturesForTeam, getWcTeams, getWcFixtureByKickoffIndex, getUpcomingWcFixtures, getWcRoundFixtures, getFinishedWcResults,
+  getWcFixturesForTeam, getWcTeams, getWcFixtureByKickoffIndex, getUpcomingWcFixtures, getWcRoundFixtures, getFinishedWcResults, getWcKickoffs,
   // mappers (exposed for tests)
   _map: { mapCompetition, mapEntry, mapPick, mapPurchase },
 };
