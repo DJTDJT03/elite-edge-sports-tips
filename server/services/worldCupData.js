@@ -433,6 +433,28 @@ module.exports = function(deps) {
     return s;
   }
 
+  // Map the SportMonks model into a `scored` object for the consensus engine.
+  // Factors are normalised 0-1; odds derived from win probabilities.
+  function buildWcScored(fixture, model) {
+    var wp = model && model.winProb;
+    var homeP = wp ? wp.home : 40, drawP = wp ? wp.draw : 27, awayP = wp ? wp.away : 33;
+    var homeAway = (homeP + awayP) > 0 ? homeP / (homeP + awayP) : 0.55;
+    var countW = function(f) { return f && f.formStr ? (f.formStr.split('W').length - 1) : 0; };
+    var hw = countW(model && model.homeForm), aw = countW(model && model.awayForm);
+    var form = Math.max(0, Math.min(1, 0.5 + (hw - aw) * 0.08));
+    var totalGoals = 2.5;
+    if (model && model.score) { var pr = String(model.score).split('-'); if (pr.length === 2) totalGoals = (parseInt(pr[0]) || 0) + (parseInt(pr[1]) || 0); }
+    var xG = Math.max(0, Math.min(1, totalGoals / 4));
+    return {
+      fixture: { homeTeam: fixture.home_team, awayTeam: fixture.away_team, league: 'FIFA World Cup 2026', kickoff: fixture.kickoff },
+      factors: { homeAway: homeAway, form: form, xG: xG, shots: 0.5, injuries: 0.5, motivation: 0.5, scheduleCongestion: 0.5,
+        btts: (model && model.btts != null) ? model.btts / 100 : 0.5 },
+      homeOdds: 100 / homeP, drawOdds: 100 / drawP, awayOdds: 100 / awayP,
+      overOdds: (model && model.btts > 55) ? 1.8 : 2.05,
+      bttsOdds: (model && model.btts) ? Math.max(1.4, 100 / model.btts) : 1.8,
+    };
+  }
+
   async function generatePreviews() {
     if (!db.isAvailable || !db.isAvailable()) return { generated: 0 };
     var perplexityClient = deps.perplexityClient;
@@ -507,6 +529,26 @@ module.exports = function(deps) {
           if (wcModel.winProb) {
             var _top = Math.max(wcModel.winProb.home, wcModel.winProb.draw, wcModel.winProb.away);
             confidence = _top >= 55 ? 8 : _top >= 45 ? 7 : 6; // model-grounded, 6/10 floor
+          }
+
+          // PHASE 2 (shadow): run the fixture through the real 5-analyst consensus
+          // engine. Stored alongside the verdict for verification before we
+          // promote it to the headline pick. Non-fatal if it errors.
+          if (wcModel.winProb) {
+            try {
+              var ConsensusEngine = require('./consensusEngine');
+              var _ce = new ConsensusEngine(deps);
+              var _cres = await _ce.analyse(buildWcScored(fixture, wcModel), null);
+              if (_cres) {
+                signals.consensus = {
+                  value: _cres.agreementLabel + ' — ' + _cres.selection + ' (' + _cres.market + '), ' + _cres.confidence + '/10',
+                  market: _cres.market, selection: _cres.selection, confidence: _cres.confidence,
+                  agreementLabel: _cres.agreementLabel, agreementLevel: _cres.agreementLevel,
+                  debate: _cres.debate, analystName: _cres.analystName,
+                };
+                console.log('[WorldCup] Consensus (shadow) for ' + fixture.home_team + ' v ' + fixture.away_team + ': ' + signals.consensus.value);
+              }
+            } catch (ce) { console.log('[WorldCup] consensus shadow failed:', ce.message); }
           }
         }
 

@@ -218,6 +218,25 @@ var WorldCup = (function() {
             '</div>';
           }
 
+          // Consensus debate (Phase 2 — the 5-analyst circuit)
+          var consensusHtml = '';
+          var cons = signals.consensus;
+          if (cons && cons.debate && cons.debate.length) {
+            var agreeColor = cons.agreementLevel === 3 ? '#22c55e' : cons.agreementLevel === 2 ? '#d4a843' : '#94a3b8';
+            consensusHtml = '<div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:12px;margin-bottom:6px;">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+                '<div style="font-size:11px;font-weight:700;color:#3b82f6;">&#129504; ANALYST CONSENSUS</div>' +
+                '<span style="font-size:10px;font-weight:700;color:' + agreeColor + ';background:rgba(255,255,255,0.05);padding:2px 8px;border-radius:4px;">' + (cons.agreementLabel || '') + ' &middot; ' + (cons.confidence || '-') + '/10</span>' +
+              '</div>' +
+              '<div style="font-size:13px;color:#fff;font-weight:600;margin-bottom:8px;">' + (cons.selection || '') + ' <span style="color:rgba(255,255,255,0.5);font-weight:400;">(' + (cons.market || '') + ')</span></div>' +
+              cons.debate.map(function(d) {
+                return '<div style="font-size:11px;color:rgba(255,255,255,0.65);line-height:1.5;margin-bottom:4px;">' +
+                  '<strong style="color:#d4a843;">' + (d.agent || '') + ':</strong> ' + (d.selection || '-') + ' &mdash; ' + (d.reasoning || '') +
+                '</div>';
+              }).join('') +
+            '</div>';
+          }
+
           var citationHtml = '';
           if (preview.citations && preview.citations.length > 0) {
             citationHtml = '<div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:8px;border-top:1px solid rgba(255,255,255,0.05);padding-top:6px;">Sources: ' +
@@ -226,7 +245,7 @@ var WorldCup = (function() {
           }
 
           expandedHtml = '<div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.06);padding-top:10px;">' +
-            verdictDetail + signalCards + citationHtml +
+            verdictDetail + consensusHtml + signalCards + citationHtml +
             '<div style="text-align:center;margin-top:6px;font-size:10px;color:rgba(255,255,255,0.25);">Generated ' + new Date(preview.generatedAt).toLocaleString('en-GB') + ' by The Tactician AI</div>' +
           '</div>';
         }
