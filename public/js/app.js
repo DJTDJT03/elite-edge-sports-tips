@@ -7887,6 +7887,13 @@ const App = {
 
     box.innerHTML =
       '<div class="card mb-16">' +
+        '<h4 class="mb-8">World Cup data feed</h4>' +
+        '<p class="text-sm text-muted mb-8">Pulls fixtures from SportMonks (falls back to API-Football). Run Diagnose to confirm the feed, then Sync to load fixtures.</p>' +
+        '<button class="btn btn-outline btn-sm" onclick="App.lmsDiagnoseWc()">Diagnose feed</button> ' +
+        '<button class="btn btn-gold btn-sm" onclick="App.lmsSyncWc()">Sync fixtures now</button>' +
+        '<pre id="lms-wc-feed-out" style="display:none;white-space:pre-wrap;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;margin-top:10px;font-size:11px;max-height:240px;overflow:auto;"></pre>' +
+      '</div>' +
+      '<div class="card mb-16">' +
         '<h4 class="mb-16">Create competition</h4>' +
         '<div class="form-row" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">' +
           '<label class="text-sm text-muted">Name<br><input id="lms-c-name" value="World Cup 2026 Last Man Standing" style="padding:8px;min-width:240px;"></label>' +
@@ -7899,6 +7906,30 @@ const App = {
       '</div>' +
       '<h4 class="mb-16">Competitions (' + comps.length + ')</h4>' +
       (list || '<p class="text-muted">None yet — create one above.</p>');
+  },
+
+  async lmsDiagnoseWc() {
+    var out = document.getElementById('lms-wc-feed-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Checking SportMonks World Cup feed…'; }
+    try {
+      var r = await this.api('/world-cup/admin/diagnose');
+      if (out) out.textContent = JSON.stringify(r.diagnostic || r, null, 2);
+    } catch (e) {
+      if (out) out.textContent = 'Diagnostic failed: ' + (e.message || e) + '\n\n(Make sure ENABLE_WORLD_CUP=true and SPORTMONKS_API_KEY are set in Railway.)';
+    }
+  },
+
+  async lmsSyncWc() {
+    var out = document.getElementById('lms-wc-feed-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Syncing World Cup fixtures…'; }
+    try {
+      var r = await this.api('/world-cup/admin/sync', { method: 'POST' });
+      if (out) out.textContent = 'Sync result:\n' + JSON.stringify(r.synced || r, null, 2);
+      this.showToast('World Cup sync: ' + (((r.synced || {}).fixtures) || 0) + ' fixtures from ' + (((r.synced || {}).source) || '?'), 'success');
+    } catch (e) {
+      if (out) out.textContent = 'Sync failed: ' + (e.message || e);
+      this.showToast('Sync failed: ' + (e.message || e), 'error');
+    }
   },
 
   async lmsCreate() {
