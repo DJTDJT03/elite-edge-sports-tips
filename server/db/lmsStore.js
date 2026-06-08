@@ -300,14 +300,26 @@ async function getWcFixturesForTeam(team) {
   return rows;
 }
 
-// All teams that appear in WC fixtures (for the pick dropdown / validation)
+// Real teams with an upcoming (not-finished) fixture — for the pick dropdown.
+// Excludes knockout-bracket PLACEHOLDERS ("1st Group A", "2nd Group B",
+// "3rd Group A/B/C/D/F", "Winner ...", etc.) that SportMonks uses for fixtures
+// whose teams aren't decided yet. Naturally round-by-round: eliminated teams
+// drop off, and qualified teams appear under their real names in the knockouts.
 async function getWcTeams() {
   if (!available()) return [];
   const { rows } = await db.query(
     `SELECT DISTINCT t AS team FROM (
-       SELECT home_team AS t FROM world_cup_fixtures
-       UNION SELECT away_team AS t FROM world_cup_fixtures
-     ) x WHERE t IS NOT NULL ORDER BY team ASC`
+       SELECT home_team AS t FROM world_cup_fixtures WHERE status <> 'finished' AND kickoff >= NOW() - INTERVAL '6 hours'
+       UNION SELECT away_team AS t FROM world_cup_fixtures WHERE status <> 'finished' AND kickoff >= NOW() - INTERVAL '6 hours'
+     ) x
+     WHERE t IS NOT NULL
+       AND t NOT ILIKE '%group%'
+       AND t NOT ILIKE '%winner%'
+       AND t NOT ILIKE '%runner%'
+       AND t NOT ILIKE '%loser%'
+       AND t NOT ILIKE '%/%'
+       AND t !~ '^[0-9]'
+     ORDER BY team ASC`
   );
   return rows.map(function (r) { return r.team; });
 }
@@ -324,6 +336,8 @@ async function getUpcomingWcFixtures(days) {
        AND kickoff IS NOT NULL
        AND kickoff >= NOW() - INTERVAL '6 hours'
        AND kickoff <= NOW() + ($1 || ' days')::interval
+       AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
+       AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'
      ORDER BY kickoff ASC`,
     [String(window)]
   );
