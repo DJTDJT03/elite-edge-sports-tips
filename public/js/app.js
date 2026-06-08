@@ -7892,6 +7892,7 @@ const App = {
             <button class="btn btn-gold btn-sm" onclick="App.adminAutoSettle()">Auto-Settle Results</button>
             <button class="btn btn-outline btn-sm" onclick="App.adminLoadLiveData()">Refresh All Live Data</button>
             <button class="btn btn-outline btn-sm" onclick="App.adminCheckStripe()">Check Stripe</button>
+            <button class="btn btn-outline btn-sm" onclick="App.adminGenerateBlog(this)">Generate Blog Now</button>
           </div>
           <div id="admin-stripe-health" style="display:none;margin-bottom:16px;padding:12px 14px;border-radius:8px;font-size:13px;"></div>
           <div id="admin-live-racing" class="mb-16"><div class="inline-spinner">Loading live racing data...</div></div>
@@ -8176,6 +8177,18 @@ const App = {
   // -----------------------------------------------------------------------
   // ADMIN LIVE DATA
   // -----------------------------------------------------------------------
+  async adminGenerateBlog(btn) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+    try {
+      var r = await this.api('/admin/trigger/blog', { method: 'POST' });
+      this.showToast((r && r.message) || 'Blog review generated.', 'success');
+    } catch (e) {
+      this.showToast('Blog generation failed: ' + (e.message || e), 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Generate Blog Now'; }
+    }
+  },
+
   async adminCheckStripe() {
     var box = document.getElementById('admin-stripe-health');
     if (box) { box.style.display = 'block'; box.style.background = 'var(--bg-elevated)'; box.style.color = 'var(--text-secondary)'; box.textContent = 'Checking Stripe…'; }

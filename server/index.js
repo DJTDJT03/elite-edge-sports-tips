@@ -996,6 +996,18 @@ app.post('/api/admin/trigger/autotune', deps.authenticate, deps.requireAdmin, as
   }
 });
 
+app.post('/api/admin/trigger/blog', deps.authenticate, deps.requireAdmin, async (req, res) => {
+  try {
+    console.log('[Admin] Manual blog review generation triggered');
+    if (!scheduler.updateWeeklyBlog) return res.status(503).json({ error: 'Blog generator unavailable' });
+    await scheduler.updateWeeklyBlog();
+    res.json({ ok: true, message: 'Blog review generated. Check the Blog page.' });
+  } catch (err) {
+    console.error('[Admin] Manual blog generation error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/admin/tuning-status', deps.authenticate, deps.requireAdmin, async (req, res) => {
   try {
     // All state now in database — no filesystem dependency
