@@ -7897,7 +7897,8 @@ const App = {
         '<h4 class="mb-8">World Cup data feed</h4>' +
         '<p class="text-sm text-muted mb-8">Pulls fixtures from SportMonks (falls back to API-Football). Run Diagnose to confirm the feed, then Sync to load fixtures.</p>' +
         '<button class="btn btn-outline btn-sm" onclick="App.lmsDiagnoseWc()">Diagnose feed</button> ' +
-        '<button class="btn btn-gold btn-sm" onclick="App.lmsSyncWc()">Sync fixtures now</button>' +
+        '<button class="btn btn-gold btn-sm" onclick="App.lmsSyncWc()">Sync fixtures now</button> ' +
+        '<button class="btn btn-outline btn-sm" onclick="App.lmsInspectFixture()">Inspect rich data (xG/lineups/predictions)</button>' +
         '<pre id="lms-wc-feed-out" style="display:none;white-space:pre-wrap;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;margin-top:10px;font-size:11px;max-height:240px;overflow:auto;"></pre>' +
       '</div>' +
       '<div class="card mb-16">' +
@@ -7923,6 +7924,17 @@ const App = {
       if (out) out.textContent = JSON.stringify(r.diagnostic || r, null, 2);
     } catch (e) {
       if (out) out.textContent = 'Diagnostic failed: ' + (e.message || e) + '\n\n(Make sure ENABLE_WORLD_CUP=true and SPORTMONKS_API_KEY are set in Railway.)';
+    }
+  },
+
+  async lmsInspectFixture() {
+    var out = document.getElementById('lms-wc-feed-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Inspecting rich fixture data (first upcoming WC fixture)…'; }
+    try {
+      var r = await this.api('/world-cup/admin/fixture-data');
+      if (out) out.textContent = JSON.stringify(r.summary || r, null, 2);
+    } catch (e) {
+      if (out) out.textContent = 'Inspect failed: ' + (e.message || e) + '\n\n(Sync fixtures first so there is one to inspect.)';
     }
   },
 
