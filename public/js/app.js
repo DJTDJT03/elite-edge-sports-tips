@@ -7565,6 +7565,7 @@ const App = {
           <button class="admin-tab" onclick="App.switchAdminTab('livedata', this)">Live Data</button>
           <button class="admin-tab" onclick="App.switchAdminTab('chat', this)">Chat Logs</button>
           <button class="admin-tab" onclick="App.switchAdminTab('notifications', this)">Notifications</button>
+          <button class="admin-tab" onclick="App.switchAdminTab('lms', this)">&#127942; Last Man Standing</button>
         </div>
 
         <!-- TIPS PANEL -->
@@ -7836,6 +7837,12 @@ const App = {
             <p class="text-sm text-muted">Stored alerts: ${this.notifications.length}/10</p>
           </div>
         </div>
+
+        <!-- LAST MAN STANDING PANEL -->
+        <div class="admin-panel" id="panel-lms">
+          <h3 class="mb-16">&#127942; Last Man Standing</h3>
+          <div id="lms-admin-content"><p class="text-muted">Loading…</p></div>
+        </div>
       </div>
     `;
   },
@@ -7847,6 +7854,86 @@ const App = {
     var panelEl = document.getElementById('panel-' + panel);
     if (panelEl) panelEl.classList.add('active');
     if (panel === 'livedata') this.adminLoadLiveData();
+    if (panel === 'lms') this.adminLoadLms();
+  },
+
+  // ---- Last Man Standing admin (in-app) ----------------------------------
+  async adminLoadLms() {
+    var box = document.getElementById('lms-admin-content');
+    if (!box) return;
+    var data;
+    try {
+      data = await this.api('/lms/competitions?includeCompleted=1');
+    } catch (e) {
+      box.innerHTML = '<div class="card"><p class="text-muted">Last Man Standing isn\'t switched on yet. Set <strong>ENABLE_LMS=true</strong> (and <strong>ENABLE_WORLD_CUP=true</strong>) in Railway, redeploy, then refresh this page.</p></div>';
+      return;
+    }
+    var comps = (data && data.competitions) || [];
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]; }); };
+
+    var list = comps.map(function (c) {
+      var actions = '';
+      if (c.status === 'open') actions += '<button class="btn btn-gold btn-sm" onclick="App.lmsSetStatus(' + c.id + ',\'active\')">Activate</button> ';
+      if (c.status !== 'completed') {
+        actions += '<button class="btn btn-outline btn-sm" onclick="App.lmsSettle(' + c.id + ',false)">Settle round</button> ';
+        actions += '<button class="btn btn-outline btn-sm" onclick="App.lmsSettle(' + c.id + ',true)">Force settle</button> ';
+      }
+      return '<div class="card mb-16">' +
+        '<div class="flex-between"><div><strong>' + esc(c.name) + '</strong> <span class="text-sm text-muted">(' + esc(c.phase) + ')</span></div>' +
+        '<div class="text-sm">Status: <strong>' + esc(c.status) + '</strong> · ' + esc(c.roundLabel || ('Round ' + c.currentRound)) + ' · Alive: ' + (c.aliveCount != null ? c.aliveCount : '-') + ' · Pot: &pound;' + (c.prizePot || 0).toFixed(0) + '</div></div>' +
+        '<div class="mt-8">' + (actions || '<span class="text-muted text-sm">Completed</span>') + '</div>' +
+        '</div>';
+    }).join('');
+
+    box.innerHTML =
+      '<div class="card mb-16">' +
+        '<h4 class="mb-16">Create competition</h4>' +
+        '<div class="form-row" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">' +
+          '<label class="text-sm text-muted">Name<br><input id="lms-c-name" value="World Cup 2026 Last Man Standing" style="padding:8px;min-width:240px;"></label>' +
+          '<label class="text-sm text-muted">Phase<br><select id="lms-c-phase" style="padding:8px;"><option value="world_cup">World Cup</option><option value="pl_rollover">PL Rollover</option></select></label>' +
+          '<label class="text-sm text-muted">Prize (&pound;)<br><input id="lms-c-prize" type="number" value="250" style="padding:8px;width:110px;"></label>' +
+          '<label class="text-sm text-muted">Access<br><select id="lms-c-access" style="padding:8px;"><option value="everyone">Any member (incl. Free)</option><option value="subscriber">Paid subscribers only</option></select></label>' +
+          '<button class="btn btn-gold btn-sm" onclick="App.lmsCreate()">Create &amp; Activate</button>' +
+        '</div>' +
+        '<p class="text-sm text-muted mt-8">Creating sets it Active straight away so the dashboard banner goes live.</p>' +
+      '</div>' +
+      '<h4 class="mb-16">Competitions (' + comps.length + ')</h4>' +
+      (list || '<p class="text-muted">None yet — create one above.</p>');
+  },
+
+  async lmsCreate() {
+    var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+    var name = g('lms-c-name');
+    if (!name) { this.showToast('Enter a name', 'error'); return; }
+    try {
+      await this.api('/lms/admin/competitions', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: name, phase: g('lms-c-phase'),
+          basePrize: parseFloat(g('lms-c-prize')) || 0,
+          access: g('lms-c-access'), status: 'active',
+        }),
+      });
+      this.showToast('Competition created and live', 'success');
+      this.adminLoadLms();
+    } catch (e) { this.showToast('Create failed: ' + (e.message || e), 'error'); }
+  },
+
+  async lmsSettle(id, force) {
+    try {
+      var r = await this.api('/lms/admin/competitions/' + id + '/settle', { method: 'POST', body: JSON.stringify({ force: !!force }) });
+      var rep = (r && r.report) || {};
+      this.showToast(rep.message || 'Settled', rep.held ? 'info' : 'success');
+      this.adminLoadLms();
+    } catch (e) { this.showToast('Settle failed: ' + (e.message || e), 'error'); }
+  },
+
+  async lmsSetStatus(id, status) {
+    try {
+      await this.api('/lms/admin/competitions/' + id, { method: 'PUT', body: JSON.stringify({ status: status }) });
+      this.showToast('Status: ' + status, 'success');
+      this.adminLoadLms();
+    } catch (e) { this.showToast('Failed: ' + (e.message || e), 'error'); }
   },
 
   showAddTipForm() {
