@@ -169,6 +169,19 @@ var WorldCup = (function() {
               '<button onclick="event.stopPropagation();WorldCup.togglePreview(' + f.id + ')" style="background:none;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;">' + (isExpanded ? 'Hide' : 'Full Analysis') + '</button>' +
             '</div>' +
             (preview.predictedScoreline ? '<div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:6px;">Predicted: ' + preview.predictedScoreline + '</div>' : '') +
+            (function() {
+              // Hard model line (SportMonks): win% / scoreline / BTTS
+              var sm = signals.sportmonks_model;
+              if (!sm || !sm.winProb) return '';
+              var abbr = function(name) { return (name || '').length > 3 ? name.substring(0, 3).toUpperCase() : (name || '').toUpperCase(); };
+              return '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);font-size:11px;">' +
+                '<span style="color:rgba(255,255,255,0.4);">Model:</span>' +
+                '<span style="color:#22c55e;font-weight:600;">' + abbr(preview.homeTeam) + ' ' + sm.winProb.home + '%</span>' +
+                '<span style="color:#d4a843;font-weight:600;">Draw ' + sm.winProb.draw + '%</span>' +
+                '<span style="color:#3b82f6;font-weight:600;">' + abbr(preview.awayTeam) + ' ' + sm.winProb.away + '%</span>' +
+                (sm.btts != null ? '<span style="color:rgba(255,255,255,0.6);">BTTS ' + sm.btts + '%</span>' : '') +
+              '</div>';
+            })() +
           '</div>';
         }
 
