@@ -923,6 +923,8 @@ const App = {
       // Mobile auth
       if (guestMobile) guestMobile.style.display = 'none';
       if (userMobile) userMobile.style.display = '';
+      var signupMobileBtn = document.getElementById('nav-signup-mobile');
+      if (signupMobileBtn) signupMobileBtn.style.display = 'none';
       if (badgeMobile) { badgeMobile.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">VIP</span>' : ''); badgeMobile.style.cursor = 'pointer'; badgeMobile.onclick = () => { window.location.hash = '#/account'; }; }
       // Top menu auth (mobile only — toggled via class, CSS hides on desktop)
       var topGuest = document.getElementById('nav-auth-top-guest');
@@ -1004,6 +1006,8 @@ const App = {
       // Mobile auth
       if (guestMobile) guestMobile.style.display = '';
       if (userMobile) userMobile.style.display = 'none';
+      var signupMobileBtnG = document.getElementById('nav-signup-mobile');
+      if (signupMobileBtnG) signupMobileBtnG.style.display = '';  // CSS shows it on mobile only
       // Top menu auth (mobile only — toggled via class, CSS hides on desktop)
       var topGuest2 = document.getElementById('nav-auth-top-guest');
       var topUser2 = document.getElementById('nav-auth-top-user');
@@ -2838,6 +2842,17 @@ const App = {
 
     app.innerHTML = `
       <div class="container">
+        ${!this.user ? `
+        <!-- GUEST SIGN-UP HERO — unmissable for new visitors -->
+        <div style="background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(212,168,67,0.08));border:2px solid rgba(212,168,67,0.45);border-radius:14px;padding:22px 24px;margin-bottom:20px;text-align:center;">
+          <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">New here? Create your free account</div>
+          <div style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">Free daily tips, results and analysis across 6 sports. No card needed. Upgrade anytime.</div>
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+            <button class="btn btn-gold btn-lg" onclick="App.showModal('register')" style="font-weight:800;">Sign Up Free</button>
+            <button class="btn btn-outline btn-lg" onclick="App.showModal('login')">Log In</button>
+          </div>
+        </div>
+        ` : ''}
         <!-- 1. HEADER — Welcome + Date + Credits + Countdown -->
         <div style="margin-bottom:16px;">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
