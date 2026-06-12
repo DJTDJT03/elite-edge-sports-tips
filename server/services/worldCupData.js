@@ -142,8 +142,15 @@ module.exports = function(deps) {
       var afResult = await syncFromApiFootball();
       result = Object.assign({ source: 'api-football' }, afResult);
     }
-    // Always recompute group tables from the results we hold (don't depend on
-    // the provider's standings feed, which is unreliable for the 2026 data).
+    // Remove stale DUPLICATE group fixtures (round_name NULL = old API-Football
+    // leftovers; current SportMonks fixtures all carry a round_name). Keeps any
+    // that have an AI preview attached so we never break that reference.
+    try {
+      var del = await db.query("DELETE FROM world_cup_fixtures WHERE stage = 'group' AND round_name IS NULL AND id NOT IN (SELECT fixture_id FROM world_cup_previews WHERE fixture_id IS NOT NULL)");
+      if (del.rowCount) { console.log('[WorldCup] Removed ' + del.rowCount + ' stale duplicate group fixtures'); result.removedDuplicates = del.rowCount; }
+    } catch (e) { console.warn('[WorldCup] dup cleanup failed:', e.message); }
+    // Recompute group tables from the results we hold (provider standings are
+    // unreliable for the provisional 2026 data).
     try { result.computedGroups = await computeGroupStandings(); } catch (e) { console.warn('[WorldCup] computeGroupStandings failed:', e.message); }
     return result;
   }
@@ -156,7 +163,11 @@ module.exports = function(deps) {
     var groupsRes = await db.query('SELECT id, group_letter, standings FROM world_cup_groups ORDER BY group_letter');
     var groups = groupsRes.rows || [];
     if (!groups.length) return 0;
-    var fxRes = await db.query("SELECT home_team, away_team, home_goals, away_goals FROM world_cup_fixtures WHERE stage = 'group' AND status = 'finished' AND home_goals IS NOT NULL AND away_goals IS NOT NULL");
+    var fxRes = await db.query(
+      "SELECT DISTINCT ON (LEAST(home_team, away_team), GREATEST(home_team, away_team)) home_team, away_team, home_goals, away_goals " +
+      "FROM world_cup_fixtures WHERE stage = 'group' AND status = 'finished' AND home_goals IS NOT NULL AND away_goals IS NOT NULL " +
+      "ORDER BY LEAST(home_team, away_team), GREATEST(home_team, away_team)"
+    );
     var fixtures = fxRes.rows || [];
     var updated = 0;
     for (var gi = 0; gi < groups.length; gi++) {
