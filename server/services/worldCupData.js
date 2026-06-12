@@ -121,6 +121,91 @@ module.exports = function(deps) {
     return tournaments[0].id;
   }
 
+  // Canonical 12 groups of 4 (real WC2026 draw). Single source for group letters.
+  var WC_GROUPS = {
+    A: ['Mexico', 'South Africa', 'South Korea', 'Czech Republic'],
+    B: ['Canada', 'Switzerland', 'Qatar', 'Bosnia & Herzegovina'],
+    C: ['Brazil', 'Morocco', 'Haiti', 'Scotland'],
+    D: ['USA', 'Paraguay', 'Australia', 'Turkey'],
+    E: ['Germany', 'Curacao', 'Ivory Coast', 'Ecuador'],
+    F: ['Netherlands', 'Japan', 'Sweden', 'Tunisia'],
+    G: ['Belgium', 'Egypt', 'Iran', 'New Zealand'],
+    H: ['Spain', 'Cape Verde', 'Saudi Arabia', 'Uruguay'],
+    I: ['France', 'Senegal', 'Norway', 'Iraq'],
+    J: ['Argentina', 'Algeria', 'Austria', 'Jordan'],
+    K: ['Portugal', 'DR Congo', 'Uzbekistan', 'Colombia'],
+    L: ['England', 'Croatia', 'Ghana', 'Panama'],
+  };
+
+  function letterForTeams(schedule, home, away) {
+    for (var L in WC_GROUPS) {
+      var teams = WC_GROUPS[L];
+      var hasHome = teams.some(function (t) { return schedule.teamsMatch(t, home); });
+      var hasAway = teams.some(function (t) { return schedule.teamsMatch(t, away); });
+      if (hasHome && hasAway) return L;
+    }
+    return null;
+  }
+
+  // Drive the group-stage fixtures from the canonical schedule (matchups + dates +
+  // group + matchday). Idempotent: matches existing rows by team pairing (either
+  // orientation) and updates them, preserving any goals/result/status from the
+  // feed; inserts the rest. The feed is only ever authoritative for results.
+  async function seedGroupFixturesFromSchedule() {
+    if (!db.isAvailable || !db.isAvailable()) return 0;
+    var schedule = require('./wc2026Schedule');
+    var tournamentId = await ensureTournament();
+    var matchdays = [schedule.matchday1, schedule.matchday2, schedule.matchday3];
+
+    // Ensure all 12 groups exist with their 4 teams (self-heals the Groups tab).
+    // Only inserts when missing — never overwrites computed standings.
+    for (var L in WC_GROUPS) {
+      var blank = WC_GROUPS[L].map(function (team, i) {
+        return { team: team, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0, rank: i + 1 };
+      });
+      await db.query(
+        "INSERT INTO world_cup_groups (tournament_id, group_letter, standings) VALUES ($1,$2,$3) " +
+        "ON CONFLICT (tournament_id, group_letter) DO NOTHING",
+        [tournamentId, L, JSON.stringify(blank)]
+      );
+    }
+
+    // Load existing group fixtures once and match in JS (alias-tolerant).
+    var existingRes = await db.query("SELECT id, home_team, away_team FROM world_cup_fixtures WHERE stage='group'");
+    var existing = existingRes.rows || [];
+    var seeded = 0;
+    for (var md = 0; md < matchdays.length; md++) {
+      var round = String(md + 1);
+      var list = matchdays[md] || [];
+      for (var i = 0; i < list.length; i++) {
+        var fx = list[i];
+        var letter = letterForTeams(schedule, fx.home, fx.away);
+        var kickoff = fx.date ? (fx.date + 'T18:00:00Z') : null;
+        var match = existing.find(function (r) {
+          return (schedule.teamsMatch(r.home_team, fx.home) && schedule.teamsMatch(r.away_team, fx.away)) ||
+                 (schedule.teamsMatch(r.home_team, fx.away) && schedule.teamsMatch(r.away_team, fx.home));
+        });
+        if (match) {
+          await db.query(
+            "UPDATE world_cup_fixtures SET stage='group', group_letter=COALESCE($1, group_letter), " +
+            "kickoff=COALESCE(kickoff, $2), round_name=$3 WHERE id=$4",
+            [letter, kickoff, round, match.id]
+          );
+        } else {
+          await db.query(
+            "INSERT INTO world_cup_fixtures (tournament_id, stage, group_letter, home_team, away_team, kickoff, status, round_name) " +
+            "VALUES ($1,'group',$2,$3,$4,$5,'scheduled',$6)",
+            [tournamentId, letter, fx.home, fx.away, kickoff, round]
+          );
+          existing.push({ id: -1, home_team: fx.home, away_team: fx.away });
+          seeded++;
+        }
+      }
+    }
+    if (seeded) console.log('[WorldCup] Seeded ' + seeded + ' group fixtures from canonical schedule');
+    return seeded;
+  }
+
   // Public entry point — prefer SportMonks (the upgraded source), fall back to
   // API-Football if SportMonks isn't available or returns nothing.
   async function syncFixtures() {
@@ -142,14 +227,21 @@ module.exports = function(deps) {
       var afResult = await syncFromApiFootball();
       result = Object.assign({ source: 'api-football' }, afResult);
     }
-    // Remove stale DUPLICATE group fixtures (round_name NULL = old API-Football
-    // leftovers; current SportMonks fixtures all carry a round_name). Keeps any
-    // that have an AI preview attached so we never break that reference.
+    // Make sure the full canonical group schedule is present (self-heals if a
+    // prior run or a thin feed left it incomplete). The feed only updates results.
+    try { result.seededFromSchedule = await seedGroupFixturesFromSchedule(); } catch (e) { console.warn('[WorldCup] schedule seed failed:', e.message); }
+    // Remove ONLY genuine duplicate group fixtures (same matchup seeded by more
+    // than one source). Keeps the richest copy — a finished result first, then a
+    // round_name, then a kickoff, then lowest id. NEVER removes a unique fixture.
     try {
-      // NEVER delete a fixture that has a result (status finished) — protects
-      // LMS settlement and the standings tally. Only stale, unplayed dupes go.
-      var del = await db.query("DELETE FROM world_cup_fixtures WHERE stage = 'group' AND round_name IS NULL AND status <> 'finished' AND id NOT IN (SELECT fixture_id FROM world_cup_previews WHERE fixture_id IS NOT NULL)");
-      if (del.rowCount) { console.log('[WorldCup] Removed ' + del.rowCount + ' stale duplicate group fixtures'); result.removedDuplicates = del.rowCount; }
+      var del = await db.query(
+        "DELETE FROM world_cup_fixtures WHERE id IN (" +
+          "SELECT id FROM (SELECT id, ROW_NUMBER() OVER (" +
+            "PARTITION BY tournament_id, LEAST(LOWER(home_team),LOWER(away_team)), GREATEST(LOWER(home_team),LOWER(away_team)) " +
+            "ORDER BY (status='finished') DESC, (round_name IS NOT NULL) DESC, (kickoff IS NOT NULL) DESC, id ASC) AS rn " +
+          "FROM world_cup_fixtures WHERE stage='group') t WHERE t.rn > 1)"
+      );
+      if (del.rowCount) { console.log('[WorldCup] Removed ' + del.rowCount + ' duplicate group fixtures'); result.removedDuplicates = del.rowCount; }
     } catch (e) { console.warn('[WorldCup] dup cleanup failed:', e.message); }
     // Recompute group tables from the results we hold (provider standings are
     // unreliable for the provisional 2026 data).
@@ -788,8 +880,12 @@ module.exports = function(deps) {
     }
   }
 
-  // Auto-seed on startup
+  // Auto-seed on startup, then ensure the full canonical group schedule is present
+  // (restores fixtures + groups immediately rather than waiting for the next sync).
   seedTournament();
+  seedGroupFixturesFromSchedule()
+    .then(function (n) { if (n) console.log('[WorldCup] Startup schedule seed added ' + n + ' fixtures'); })
+    .catch(function (e) { console.warn('[WorldCup] startup schedule seed failed:', e.message); });
 
   // Diagnostic — confirm SportMonks World Cup data is reachable and what IDs
   // resolve, plus a sample of fixtures. Used by the admin diagnostic endpoint.
@@ -831,6 +927,7 @@ module.exports = function(deps) {
     diagnose: diagnose,
     scorePredictions: scorePredictions,
     seedTournament: seedTournament,
+    seedGroupFixturesFromSchedule: seedGroupFixturesFromSchedule,
     generatePreviews: generatePreviews,
   };
 };
