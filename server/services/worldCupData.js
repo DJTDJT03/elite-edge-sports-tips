@@ -146,7 +146,9 @@ module.exports = function(deps) {
     // leftovers; current SportMonks fixtures all carry a round_name). Keeps any
     // that have an AI preview attached so we never break that reference.
     try {
-      var del = await db.query("DELETE FROM world_cup_fixtures WHERE stage = 'group' AND round_name IS NULL AND id NOT IN (SELECT fixture_id FROM world_cup_previews WHERE fixture_id IS NOT NULL)");
+      // NEVER delete a fixture that has a result (status finished) — protects
+      // LMS settlement and the standings tally. Only stale, unplayed dupes go.
+      var del = await db.query("DELETE FROM world_cup_fixtures WHERE stage = 'group' AND round_name IS NULL AND status <> 'finished' AND id NOT IN (SELECT fixture_id FROM world_cup_previews WHERE fixture_id IS NOT NULL)");
       if (del.rowCount) { console.log('[WorldCup] Removed ' + del.rowCount + ' stale duplicate group fixtures'); result.removedDuplicates = del.rowCount; }
     } catch (e) { console.warn('[WorldCup] dup cleanup failed:', e.message); }
     // Recompute group tables from the results we hold (provider standings are
