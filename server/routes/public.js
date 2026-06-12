@@ -3,6 +3,31 @@ module.exports = function(deps) {
   const path = require('path');
   const { db, racingSource, footballSource, oddsSource, racingOddsSource, movementTracker, dataIngestion, aiReports, newsService } = deps;
 
+  // Cache today's racecards for the Ask Elite Edge assistant (10 min)
+  var _raceCardCache = { ts: 0, cards: [] };
+  async function getTodaysRaceCards() {
+    if (Date.now() - _raceCardCache.ts < 600000 && _raceCardCache.cards.length) return _raceCardCache.cards;
+    if (!racingSource || !process.env.RACING_API_KEY) return [];
+    try {
+      var raw = await racingSource.fetch();
+      var norm = racingSource.normalise(raw) || [];
+      var today = new Date().toISOString().split('T')[0];
+      norm = norm.filter(function (r) {
+        if (r.region && r.region !== 'GB' && r.region !== 'IRE') return false;
+        if (r.date) { var d = r.date.toString().split('T')[0].substring(0, 10); if (d !== today && d !== '') return false; }
+        return true;
+      });
+      norm.forEach(function (race) {
+        if (race.runners && race.runners.length) {
+          var declared = race.runners.filter(function (rn) { return !rn.isNonRunner; });
+          if (declared.length) race.runners = declared;
+        }
+      });
+      _raceCardCache = { ts: Date.now(), cards: norm };
+      return norm;
+    } catch (e) { return _raceCardCache.cards || []; }
+  }
+
   // GET /api/status — API connection status overview
   router.get('/api/status', async (req, res) => {
     try {
@@ -296,6 +321,40 @@ module.exports = function(deps) {
             }
           }
         } catch (e) {}
+        // LIVE RACECARDS — lets the assistant analyse ANY race on demand (our
+        // edge over generic chatbots, which can't see today's runners/odds)
+        try {
+          var msgLower = message.toLowerCase();
+          var racingIntent = /\brace|racing|runner|winner|nap|each.?way|favourite|favorite|top ?3|top three|tip|\b\d{1,2}[.:]\d{2}\b/.test(msgLower);
+          var cards = (racingSource && process.env.RACING_API_KEY && racingIntent) ? await getTodaysRaceCards() : [];
+          if (!cards.length && racingSource && process.env.RACING_API_KEY) {
+            // course name in the message? fetch anyway
+            var quick = await getTodaysRaceCards();
+            if (quick.some(function (c) { return c.meeting && msgLower.indexOf(c.meeting.toLowerCase()) !== -1; })) cards = quick;
+          }
+          if (cards.length) {
+            liveContext += "\nTODAY'S LIVE RACECARDS (UK & Ireland) — use these to answer any race question:\n";
+            cards.forEach(function (r) {
+              liveContext += '- ' + (r.time || '') + ' ' + (r.meeting || '') + (r.raceName ? ' — ' + r.raceName : '') + ' (' + ((r.runners && r.runners.length) || 0) + ' runners)\n';
+            });
+            // Detailed runners for the race(s) the question is about
+            var courses = cards.map(function (c) { return c.meeting; }).filter(Boolean);
+            var mentionedCourse = courses.find(function (c) { return msgLower.indexOf(c.toLowerCase()) !== -1; });
+            var tMatch = msgLower.match(/(\d{1,2})[.:](\d{2})/);
+            var detail = cards.filter(function (r) {
+              var cOk = mentionedCourse ? (r.meeting === mentionedCourse) : false;
+              var tOk = tMatch ? ((r.time || '').replace(/[^0-9]/g, '').indexOf(('0' + tMatch[1]).slice(-2) + tMatch[2]) !== -1) : false;
+              if (mentionedCourse && tMatch) return cOk && tOk;
+              return cOk || tOk;
+            }).slice(0, 3);
+            detail.forEach(function (r) {
+              liveContext += '\nRUNNERS — ' + (r.time || '') + ' ' + (r.meeting || '') + (r.going ? ' (going: ' + r.going + ')' : '') + (r.distance ? ', ' + r.distance : '') + ':\n';
+              (r.runners || []).slice(0, 18).forEach(function (rn) {
+                liveContext += '  - ' + (rn.horseName || '') + ' @ ' + (rn.odds || '?') + ' | OR ' + (rn.officialRating || '-') + ' | form ' + (rn.form || '-') + ' | ' + (rn.jockey || '-') + ' / ' + (rn.trainer || '-') + '\n';
+              });
+            });
+          }
+        } catch (e) {}
       } catch (ctxErr) {
         // Non-fatal — chatbot works without live context
       }
@@ -316,7 +375,8 @@ module.exports = function(deps) {
         '- Sound like a real person who knows their sport, not a chatbot. Banned: "I appreciate the question", "Here\'s what I can help with", "I need to be straight with you", "dual AI system", corporate waffle, and long bulleted sales pitches. No rule-of-three lists. No emoji spam.\n' +
         '- Do NOT pitch the free trial, pricing, or features unless they specifically ask about access or signing up.\n\n' +
         'ANSWERING QUESTIONS — always from OUR data below, never invent a pick or score:\n' +
-        '- "Who wins the [time] at [course]?" → find it in TODAY\'S RACE PREDICTIONS, give Our Pick + confidence + a quick reason.\n' +
+        '- "Who wins the [time] at [course]?" → first check TODAY\'S RACE PREDICTIONS for Our Pick. If we have not pre-published one BUT the race is in TODAY\'S LIVE RACECARDS, ANALYSE IT YOURSELF: give a clear winner and a top-3, reasoning from the runners, odds, form and official ratings shown. This is our edge over ChatGPT — we can see the actual card. Always give a real, data-backed answer; only say you cannot if the race genuinely is not in the predictions or the racecards.\n' +
+        '- Lead with the pick. e.g. "1st: X @ odds — [why]. Also consider: Y, Z." Mention going/draw/form when relevant. Be decisive like a tipster, not wishy-washy.\n' +
         '- "Who wins / how many goals in [match]?" → find it in MATCH PREDICTIONS or WORLD CUP fixtures, give Our Take / predicted scoreline + confidence + why.\n' +
         '- World Cup: we HAVE the full fixture schedule synced (see below) — so you always know who plays who and when, including the opener. If our detailed prediction for that game has not generated yet, tell them the fixture and that the full breakdown lands closer to kickoff — do not claim we lack the fixtures.\n' +
         '- If something genuinely is not in the data, say so plainly in one line and point them to the right page.\n' +
