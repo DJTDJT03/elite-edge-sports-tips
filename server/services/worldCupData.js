@@ -125,19 +125,64 @@ module.exports = function(deps) {
   // API-Football if SportMonks isn't available or returns nothing.
   async function syncFixtures() {
     if (!db.isAvailable || !db.isAvailable()) return { error: 'Database not available' };
+    var result;
     if (smAvailable()) {
       try {
         var smResult = await syncFromSportMonks();
         if (smResult && !smResult.error && smResult.fixtures > 0) {
-          return Object.assign({ source: 'sportmonks' }, smResult);
+          result = Object.assign({ source: 'sportmonks' }, smResult);
+        } else {
+          console.warn('[WorldCup] SportMonks returned ' + ((smResult && smResult.fixtures) || 0) + ' fixtures — falling back to API-Football');
         }
-        console.warn('[WorldCup] SportMonks returned ' + ((smResult && smResult.fixtures) || 0) + ' fixtures — falling back to API-Football');
       } catch (e) {
         console.error('[WorldCup] SportMonks sync failed, falling back to API-Football:', e.message);
       }
     }
-    var afResult = await syncFromApiFootball();
-    return Object.assign({ source: 'api-football' }, afResult);
+    if (!result) {
+      var afResult = await syncFromApiFootball();
+      result = Object.assign({ source: 'api-football' }, afResult);
+    }
+    // Always recompute group tables from the results we hold (don't depend on
+    // the provider's standings feed, which is unreliable for the 2026 data).
+    try { result.computedGroups = await computeGroupStandings(); } catch (e) { console.warn('[WorldCup] computeGroupStandings failed:', e.message); }
+    return result;
+  }
+
+  // Recompute every group's table (P/W/D/L/GD/PTS) from our finished group
+  // fixtures, matched to each group's teams by name. Self-reliant + accurate.
+  async function computeGroupStandings() {
+    if (!db.isAvailable || !db.isAvailable()) return 0;
+    var schedule = require('./wc2026Schedule');
+    var groupsRes = await db.query('SELECT id, group_letter, standings FROM world_cup_groups ORDER BY group_letter');
+    var groups = groupsRes.rows || [];
+    if (!groups.length) return 0;
+    var fxRes = await db.query("SELECT home_team, away_team, home_goals, away_goals FROM world_cup_fixtures WHERE stage = 'group' AND status = 'finished' AND home_goals IS NOT NULL AND away_goals IS NOT NULL");
+    var fixtures = fxRes.rows || [];
+    var updated = 0;
+    for (var gi = 0; gi < groups.length; gi++) {
+      var g = groups[gi];
+      var existing = g.standings || [];
+      if (!existing.length) continue;
+      var byTeam = {};
+      existing.forEach(function (t) { byTeam[t.team] = { team: t.team, logo: t.logo || null, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, points: 0 }; });
+      var teamNames = Object.keys(byTeam);
+      fixtures.forEach(function (f) {
+        var h = teamNames.find(function (t) { return schedule.teamsMatch(t, f.home_team); });
+        var a = teamNames.find(function (t) { return schedule.teamsMatch(t, f.away_team); });
+        if (!h || !a) return;
+        var th = byTeam[h], ta = byTeam[a], hg = f.home_goals, ag = f.away_goals;
+        th.played++; ta.played++; th.goalsFor += hg; th.goalsAgainst += ag; ta.goalsFor += ag; ta.goalsAgainst += hg;
+        if (hg > ag) { th.won++; ta.lost++; th.points += 3; }
+        else if (hg < ag) { ta.won++; th.lost++; ta.points += 3; }
+        else { th.drawn++; ta.drawn++; th.points++; ta.points++; }
+      });
+      var standings = teamNames.map(function (t) { var x = byTeam[t]; x.goalDifference = x.goalsFor - x.goalsAgainst; return x; });
+      standings.sort(function (a, b) { return b.points - a.points || b.goalDifference - a.goalDifference || b.goalsFor - a.goalsFor; });
+      standings.forEach(function (s, i) { s.rank = i + 1; });
+      await db.query('UPDATE world_cup_groups SET standings = $1 WHERE id = $2', [JSON.stringify(standings), g.id]);
+      updated++;
+    }
+    return updated;
   }
 
   // -------------------------------------------------------------------------
@@ -767,6 +812,7 @@ module.exports = function(deps) {
 
   return {
     syncFixtures: syncFixtures,
+    computeGroupStandings: computeGroupStandings,
     syncFromSportMonks: syncFromSportMonks,
     syncFromApiFootball: syncFromApiFootball,
     diagnose: diagnose,

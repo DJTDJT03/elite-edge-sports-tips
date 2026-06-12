@@ -412,6 +412,11 @@ module.exports = function(deps) {
             "GROUP BY round_name ORDER BY first_kickoff ASC"
           );
           summary.groupRoundsInDb = gr.rows;
+          // How many group games have actually FINISHED (results available)?
+          var fin = await deps.db.query("SELECT COUNT(*)::int AS finished FROM world_cup_fixtures WHERE stage='group' AND status='finished' AND home_goals IS NOT NULL");
+          summary.finishedGroupFixtures = fin.rows[0] ? fin.rows[0].finished : 0;
+          var sched = await deps.db.query("SELECT status, COUNT(*)::int AS n FROM world_cup_fixtures GROUP BY status ORDER BY n DESC");
+          summary.fixtureStatusCounts = sched.rows;
         }
       } catch (e) { summary.groupRoundsError = e.message; }
       res.json({ ok: true, summary: summary });
