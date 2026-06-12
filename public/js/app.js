@@ -6099,6 +6099,52 @@ const App = {
     document.body.style.overflow = '';
   },
 
+  // National-team name -> ISO code for flagcdn. Covers all 48 WC2026 nations
+  // plus the feed's alternate names (Korea Republic, IR Iran, USA, etc.).
+  countryCode(name) {
+    if (!name) return null;
+    var key = String(name).toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')   // strip accents
+      .replace(/&/g, 'and').replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
+    var MAP = {
+      'mexico': 'mx', 'south africa': 'za', 'south korea': 'kr', 'korea republic': 'kr', 'korea': 'kr',
+      'czech republic': 'cz', 'czechia': 'cz', 'canada': 'ca', 'switzerland': 'ch', 'qatar': 'qa',
+      'bosnia and herzegovina': 'ba', 'bosnia': 'ba', 'brazil': 'br', 'morocco': 'ma', 'haiti': 'ht',
+      'scotland': 'gb-sct', 'usa': 'us', 'united states': 'us', 'paraguay': 'py', 'australia': 'au',
+      'turkey': 'tr', 'turkiye': 'tr', 'germany': 'de', 'curacao': 'cw', 'ivory coast': 'ci',
+      'cote divoire': 'ci', 'ecuador': 'ec', 'netherlands': 'nl', 'holland': 'nl', 'japan': 'jp',
+      'sweden': 'se', 'tunisia': 'tn', 'belgium': 'be', 'egypt': 'eg', 'iran': 'ir', 'ir iran': 'ir',
+      'new zealand': 'nz', 'spain': 'es', 'cape verde': 'cv', 'cabo verde': 'cv', 'saudi arabia': 'sa',
+      'uruguay': 'uy', 'france': 'fr', 'senegal': 'sn', 'norway': 'no', 'iraq': 'iq', 'argentina': 'ar',
+      'algeria': 'dz', 'austria': 'at', 'jordan': 'jo', 'portugal': 'pt', 'dr congo': 'cd',
+      'congo dr': 'cd', 'democratic republic of congo': 'cd', 'uzbekistan': 'uz', 'colombia': 'co',
+      'england': 'gb-eng', 'croatia': 'hr', 'ghana': 'gh', 'panama': 'pa', 'wales': 'gb-wls',
+      'northern ireland': 'gb-nir', 'republic of ireland': 'ie', 'ireland': 'ie',
+    };
+    return MAP[key] || null;
+  },
+
+  // Team badge for the match-intel header: crisp flag for national sides, club
+  // crest when we have one, lettered circle as the last resort. size in px.
+  teamBadge(team, logoUrl, size) {
+    size = size || 48;
+    var letter = '<div class="match-intel-letter" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:linear-gradient(135deg,#1a2a4a,#0a1a3a);display:flex;align-items:center;justify-content:center;font-size:' + Math.round(size * 0.38) + 'px;font-weight:900;color:#d4a843;">' + ((team || '?')[0] || '?') + '</div>';
+    var code = this.countryCode(team);
+    if (code) {
+      var src = 'https://flagcdn.com/w160/' + code + '.png';
+      return '<img src="' + src + '" alt="' + (team || '') + '" class="match-intel-team-logo" ' +
+        'style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 2px rgba(212,168,67,0.35);" ' +
+        'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+        letter.replace('display:flex', 'display:none');
+    }
+    if (logoUrl) {
+      return '<img src="' + logoUrl + '" alt="' + (team || '') + '" class="match-intel-team-logo" ' +
+        'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+        letter.replace('display:flex', 'display:none');
+    }
+    return letter;
+  },
+
   renderMatchIntelligence(data) {
     var container = document.querySelector('.match-intel-container');
     if (!container) return;
@@ -6156,7 +6202,7 @@ const App = {
       '</div>' +
       '<div class="match-intel-teams-row">' +
         '<div class="match-intel-team">' +
-          (m.homeTeamLogo ? '<img src="' + m.homeTeamLogo + '" alt="' + (m.homeTeam || '')[0] + '" class="match-intel-team-logo" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><div style="display:none;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#1a2a4a,#0a1a3a);align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#d4a843;">' + (m.homeTeam || '?')[0] + '</div>' : '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#1a2a4a,#0a1a3a);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#d4a843;">' + (m.homeTeam || '?')[0] + '</div>') +
+          this.teamBadge(m.homeTeam, m.homeTeamLogo, 48) +
           '<span class="match-intel-team-name">' + m.homeTeam + '</span>' +
         '</div>' +
         '<div class="match-intel-vs">' +
@@ -6164,7 +6210,7 @@ const App = {
           '<div class="match-intel-kickoff">' + kickoffStr + '</div>' +
         '</div>' +
         '<div class="match-intel-team">' +
-          (m.awayTeamLogo ? '<img src="' + m.awayTeamLogo + '" alt="' + (m.awayTeam || '')[0] + '" class="match-intel-team-logo" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><div style="display:none;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#1a2a4a,#0a1a3a);align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#d4a843;">' + (m.awayTeam || '?')[0] + '</div>' : '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#1a2a4a,#0a1a3a);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#d4a843;">' + (m.awayTeam || '?')[0] + '</div>') +
+          this.teamBadge(m.awayTeam, m.awayTeamLogo, 48) +
           '<span class="match-intel-team-name">' + m.awayTeam + '</span>' +
         '</div>' +
       '</div>' +
