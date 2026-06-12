@@ -29,6 +29,17 @@ module.exports = function (deps) {
     if (competition.access === 'everyone') return true;
     return isSubscriber(user); // 'subscriber'
   }
+  // Entries close once the tournament starts, the comp is past round 1, or admin closes them.
+  function entriesClosed(c) {
+    if (c.config && c.config.entriesClosed) return true;
+    if (c.currentRound > 1) return true;
+    if (c.phase === 'world_cup') {
+      var schedule = require('../services/wc2026Schedule');
+      var firstDate = schedule.matchday1[0] && schedule.matchday1[0].date;
+      if (firstDate && new Date().toISOString().split('T')[0] >= firstDate) return true;
+    }
+    return false;
+  }
   function guard(req, res) {
     if (!lmsStore.available()) {
       res.status(503).json({ error: 'Last Man Standing requires the database and is not available right now.' });
@@ -153,6 +164,7 @@ module.exports = function (deps) {
         },
         aliveCount: aliveCount,
         canAccess: canAccess(c, req.user),
+        entriesClosed: entriesClosed(c),
         canPick: me.joined && me.status === 'alive' && c.status !== 'completed'
           && (!me.currentPick || me.currentPick.result === 'pending'),
         me: me,
@@ -177,13 +189,14 @@ module.exports = function (deps) {
       if (!canAccess(c, req.user)) {
         return res.status(403).json({ error: 'This competition is for subscribers. Start a subscription to join.', upgrade: true });
       }
-      // Entries lock once the competition has moved past round 1 (no late joiners
-      // mid-game), unless it's a PL rollover phase that explicitly allows carry-over.
-      if (c.status === 'active' && c.currentRound > 1 && c.phase === 'world_cup') {
-        return res.status(400).json({ error: 'Entries are closed — the competition is already underway.' });
-      }
+      // Already in? fine — let them through (don't block existing entrants).
       const existing = await lmsStore.getEntry(c.id, req.user.id);
       if (existing) return res.json({ ok: true, alreadyJoined: true });
+
+      // Entries are CLOSED once the tournament has started (or admin closes them).
+      if (entriesClosed(c)) {
+        return res.status(400).json({ error: 'Entries are closed — the competition is under way.' });
+      }
       await lmsStore.createEntry({ competitionId: c.id, userId: req.user.id });
       console.log('[LMS] ' + req.user.email + ' joined competition ' + c.id + ' (' + c.name + ')');
       res.json({ ok: true });
@@ -220,26 +233,37 @@ module.exports = function (deps) {
       const users = await db.getUsers();
       const byId = {};
       users.forEach(function (u) { byId[u.id] = u; });
+      // Current-round picks are revealed once that round has started (no copy edge,
+      // but everyone can see who's backed who as the round plays out).
+      const schedule = require('../services/wc2026Schedule');
+      const roundDates = (c.phase === 'world_cup' ? schedule.roundFixtures(c.currentRound) : []).map(function (f) { return f.date; }).filter(Boolean).sort();
+      const revealCurrent = !roundDates.length || (new Date().toISOString().split('T')[0] >= roundDates[0]);
       const rows = [];
       for (let i = 0; i < entries.length; i++) {
         const e = entries[i];
         const picks = await lmsStore.getPicksForEntry(e.id);
         const u = byId[e.userId];
+        const current = picks.find(function (p) { return p.round === c.currentRound; }) || null;
         rows.push({
           name: u ? (u.name || 'Player') : 'Player',
           status: e.status,
           roundsSurvived: picks.filter(function (p) { return p.result === 'won'; }).length,
           eliminatedRound: e.eliminatedRound,
           isMe: e.userId === req.user.id,
-          // Reveal current pick only after settlement to avoid copying
-          lastTeam: picks.length ? picks[picks.length - 1].team : null,
+          hasPicked: !!current,
+          currentPick: current && (revealCurrent || e.userId === req.user.id) ? current.team : null,
+          currentPickHidden: !!current && !revealCurrent && e.userId !== req.user.id,
+          // Pick history (settled rounds + revealed current) — visible to all
+          picks: picks
+            .filter(function (p) { return p.round !== c.currentRound || revealCurrent || e.userId === req.user.id; })
+            .map(function (p) { return { round: p.round, roundLabel: lms.roundLabel(c.phase, p.round), team: p.team, result: p.result }; }),
         });
       }
       rows.sort(function (a, b) {
         if (a.status === b.status) return b.roundsSurvived - a.roundsSurvived;
         return a.status === 'alive' || a.status === 'winner' ? -1 : 1;
       });
-      res.json({ standings: rows, aliveCount: rows.filter(function (r) { return r.status === 'alive'; }).length });
+      res.json({ standings: rows, aliveCount: rows.filter(function (r) { return r.status === 'alive'; }).length, revealCurrent: revealCurrent, currentRoundLabel: lms.roundLabel(c.phase, c.currentRound) });
     } catch (e) {
       console.error('[LMS] standings error:', e.message);
       res.status(500).json({ error: 'Could not load standings' });
@@ -374,10 +398,11 @@ module.exports = function (deps) {
       ['name', 'status', 'access', 'currentRound', 'basePrize'].forEach(function (k) {
         if (b[k] !== undefined) fields[k] = b[k];
       });
-      // Banner branding lives in config.banner so it can be re-skinned without a deploy
-      if (b.banner && typeof b.banner === 'object') {
-        const cfg = Object.assign({}, c.config || {});
-        cfg.banner = Object.assign({}, cfg.banner || {}, b.banner);
+      // config-level flags (banner branding, manual entries open/close)
+      if ((b.banner && typeof b.banner === 'object') || b.entriesClosed !== undefined) {
+        const cfg = Object.assign({}, c.config || {}, fields.config || {});
+        if (b.banner && typeof b.banner === 'object') cfg.banner = Object.assign({}, cfg.banner || {}, b.banner);
+        if (b.entriesClosed !== undefined) cfg.entriesClosed = !!b.entriesClosed;
         fields.config = cfg;
       }
       const updated = await lmsStore.updateCompetition(c.id, fields);

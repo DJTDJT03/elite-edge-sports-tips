@@ -196,6 +196,11 @@ window.LMS = {
 
   _joinPanel: function (d) {
     var c = d.competition;
+    if (d.entriesClosed) {
+      return '<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;">' +
+        '<p style="color:var(--text-primary);font-size:15px;margin:0 0 4px;font-weight:700;">Entries are closed</p>' +
+        '<p style="color:var(--text-secondary);font-size:13px;margin:0;">The competition is under way — keep an eye on the standings below to see how it unfolds.</p></div>';
+    }
     if (!d.canAccess) {
       return '<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;">' +
         '<p style="color:var(--text-primary);font-size:15px;margin:0 0 12px;">This competition is free for subscribers.</p>' +
@@ -305,18 +310,26 @@ window.LMS = {
 
   _standings: function (standings) {
     if (!standings || !standings.standings || !standings.standings.length) return '';
-    var rows = standings.standings.slice(0, 50).map(function (r) {
+    var roundLabel = standings.currentRoundLabel || 'This round';
+    var rows = standings.standings.slice(0, 100).map(function (r) {
       var color = r.status === 'out' ? 'var(--text-secondary)' : r.status === 'winner' ? 'var(--gold)' : 'var(--green,#22c55e)';
       var badge = r.status === 'winner' ? '&#127942; Winner' : r.status === 'out' ? 'Out (R' + (r.eliminatedRound || '-') + ')' : 'Still in';
+      // This round's pick (revealed once the round has started)
+      var pickCell = r.currentPick ? '<strong style="color:var(--text-primary);">' + LMS.esc(r.currentPick) + '</strong>'
+        : r.currentPickHidden ? '<span style="color:var(--text-secondary);">&#128274; Locked</span>'
+        : r.status === 'out' ? '<span style="color:var(--text-secondary);">—</span>'
+        : '<span style="color:var(--gold);">Not picked</span>';
       return '<tr style="' + (r.isMe ? 'background:rgba(212,168,67,0.08);' : '') + '">' +
         '<td style="padding:8px 10px;color:var(--text-primary);font-size:13px;">' + LMS.esc(r.name) + (r.isMe ? ' <span style="color:var(--gold);font-size:11px;">(you)</span>' : '') + '</td>' +
+        '<td style="padding:8px 10px;font-size:13px;">' + pickCell + '</td>' +
         '<td style="padding:8px 10px;color:var(--text-secondary);font-size:13px;text-align:center;">' + r.roundsSurvived + '</td>' +
         '<td style="padding:8px 10px;color:' + color + ';font-size:13px;text-align:right;font-weight:600;">' + badge + '</td></tr>';
     }).join('');
     return '<div style="margin-top:22px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:12px;padding:8px 8px 4px;">' +
-      '<h3 style="margin:8px 10px;color:var(--text-primary);font-size:16px;">Standings</h3>' +
+      '<h3 style="margin:8px 10px;color:var(--text-primary);font-size:16px;">Standings <span style="font-size:12px;color:var(--text-secondary);font-weight:400;">— picks for ' + LMS.esc(roundLabel) + '</span></h3>' +
       '<table style="width:100%;border-collapse:collapse;">' +
       '<tr><th style="text-align:left;padding:6px 10px;color:var(--text-secondary);font-size:11px;text-transform:uppercase;">Player</th>' +
+      '<th style="text-align:left;padding:6px 10px;color:var(--text-secondary);font-size:11px;text-transform:uppercase;">Pick</th>' +
       '<th style="text-align:center;padding:6px 10px;color:var(--text-secondary);font-size:11px;text-transform:uppercase;">Rounds</th>' +
       '<th style="text-align:right;padding:6px 10px;color:var(--text-secondary);font-size:11px;text-transform:uppercase;">Status</th></tr>' +
       rows + '</table></div>';
