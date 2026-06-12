@@ -42,7 +42,16 @@ var WorldCup = (function() {
     'New Zealand': '\ud83c\uddf3\ud83c\uddff',
   };
 
+  // Crisp rectangular flag image (flagcdn) for any national side, reusing the
+  // shared App.countryCode map; emoji flag as fallback, then a football.
   function getFlag(team) {
+    var code = (window.App && App.countryCode) ? App.countryCode(team) : null;
+    if (code) {
+      return '<img src="https://flagcdn.com/h40/' + code + '.png" alt="" ' +
+        'style="height:14px;width:21px;border-radius:2px;object-fit:cover;vertical-align:-2px;' +
+        'box-shadow:0 0 0 1px rgba(0,0,0,0.25);display:inline-block;" ' +
+        'onerror="this.replaceWith(document.createTextNode(\'\u26bd\'))">';
+    }
     return FLAGS[team] || '\u26bd';
   }
 
