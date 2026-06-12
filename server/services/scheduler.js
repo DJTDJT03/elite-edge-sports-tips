@@ -4542,6 +4542,21 @@ module.exports = function startScheduler(deps) {
   }
 
   // =========================================================================
+  // WORLD CUP — auto-sync fixtures, results and group tables (keep them current)
+  // =========================================================================
+  if (process.env.ENABLE_WORLD_CUP === 'true' && deps.worldCupData && deps.worldCupData.syncFixtures) {
+    var runWcSync = safeRun('WorldCupSync', async function () {
+      var r = await deps.worldCupData.syncFixtures();
+      if (r && (r.fixtures || r.groups)) {
+        console.log('[WorldCup] Auto-sync — ' + (r.fixtures || 0) + ' fixtures, ' + (r.groups || 0) + ' groups (' + (r.source || '?') + ')');
+      }
+    });
+    setInterval(runWcSync, 15 * 60 * 1000);  // every 15 minutes
+    setTimeout(runWcSync, 100000);
+    console.log('[Scheduler] World Cup auto-sync ENABLED');
+  }
+
+  // =========================================================================
   // TELEGRAM DAILY ENGAGEMENT (morning teaser, evening roundup, weekend preview, weekly stats)
   // =========================================================================
   // Persist Telegram send dates to survive deploys
