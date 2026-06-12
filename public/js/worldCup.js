@@ -446,7 +446,7 @@ var WorldCup = (function() {
     '</div>';
 
     // Group predictions grid
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;margin-bottom:28px;">';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin-bottom:28px;">';
     for (var letter in groupPicks) {
       var gp = groupPicks[letter];
       html += '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px;">' +
@@ -473,7 +473,7 @@ var WorldCup = (function() {
       round.matches.forEach(function(m) {
         var pickIsHome = m.pick === m.home;
         html += '<div style="' + (isFinal ? 'background:linear-gradient(135deg,rgba(212,168,67,0.1),rgba(212,168,67,0.04));border:2px solid rgba(212,168,67,0.3);' : 'background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);') + 'border-radius:10px;padding:14px 18px;margin-bottom:8px;display:flex;align-items:center;gap:14px;">' +
-          '<div style="flex:1;display:flex;align-items:center;gap:8px;">' +
+          '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
             '<span style="font-size:15px;font-weight:' + (pickIsHome ? '900;color:#22c55e' : '600;color:rgba(255,255,255,0.5)') + ';">' + getFlag(m.home) + ' ' + m.home + '</span>' +
             '<span style="color:rgba(255,255,255,0.2);font-size:12px;">vs</span>' +
             '<span style="font-size:15px;font-weight:' + (!pickIsHome ? '900;color:#22c55e' : '600;color:rgba(255,255,255,0.5)') + ';">' + m.away + ' ' + getFlag(m.away) + '</span>' +
@@ -520,7 +520,7 @@ var WorldCup = (function() {
 
     loadData().then(function() {
       var tournamentName = _tournament ? _tournament.name : 'FIFA World Cup 2026';
-      var html = '<div style="padding:0 4px;">' +
+      var html = '<div style="padding:0 4px;max-width:100%;overflow-x:hidden;">' +
         '<div class="wc-hub-header">' +
           '<h1>\u26bd ' + tournamentName + '</h1>' +
           '<div class="wc-subtitle">Predict. Compete. Represent Your Nation.</div>' +
