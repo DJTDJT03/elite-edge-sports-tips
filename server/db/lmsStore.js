@@ -49,6 +49,7 @@ function mapEntry(r) {
     extraTeams: r.extra_teams || 0,       // purchased team-reuse allowances
     reusesUsed: r.reuses_used || 0,
     eliminatedRound: r.eliminated_round,
+    remindedRound: r.reminded_round || 0,
     joinedAt: r.joined_at,
   };
 }
@@ -168,7 +169,7 @@ async function createEntry(data) {
 }
 async function updateEntry(id, fields) {
   requireDb();
-  var map = { status: 'status', extraTeams: 'extra_teams', reusesUsed: 'reuses_used', eliminatedRound: 'eliminated_round' };
+  var map = { status: 'status', extraTeams: 'extra_teams', reusesUsed: 'reuses_used', eliminatedRound: 'eliminated_round', remindedRound: 'reminded_round' };
   var sets = [], vals = [], i = 1;
   for (var k in fields) {
     if (!map[k] || fields[k] === undefined) continue;

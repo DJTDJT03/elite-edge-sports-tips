@@ -4503,6 +4503,41 @@ module.exports = function startScheduler(deps) {
     });
     setInterval(runLmsSettlement, 10 * 60 * 1000);  // every 10 minutes
     setTimeout(runLmsSettlement, 90000);
+
+    // LMS pick reminders — email alive players who haven't picked this round (once per round)
+    var runLmsReminders = safeRun('LMS-Reminders', async function () {
+      var lmsStore = require('../db/lmsStore');
+      var lms = require('./lmsService');
+      if (!lmsStore.available()) return;
+      var active = await lmsStore.getCompetitions({ status: 'active' });
+      var users = await db.getUsers();
+      var byId = {}; users.forEach(function (u) { byId[u.id] = u; });
+      for (var i = 0; i < active.length; i++) {
+        var c = active[i];
+        var alive = await lmsStore.getEntriesForCompetition(c.id, 'alive');
+        var sent = 0;
+        for (var j = 0; j < alive.length; j++) {
+          var e = alive[j];
+          if ((e.remindedRound || 0) >= c.currentRound) continue; // already reminded this round
+          var pick = await lmsStore.getPick(e.id, c.currentRound);
+          if (pick) { await lmsStore.updateEntry(e.id, { remindedRound: c.currentRound }); continue; } // already picked — no reminder needed
+          var u = byId[e.userId];
+          if (!u || !u.email) continue;
+          if (u.emailPrefs && u.emailPrefs.marketing === false) { await lmsStore.updateEntry(e.id, { remindedRound: c.currentRound }); continue; }
+          try {
+            await emailService.sendLmsPickReminder({
+              name: u.name, email: u.email, competitionName: c.name,
+              roundLabel: lms.roundLabel(c.phase, c.currentRound), prizePot: c.prizePot,
+            });
+            await lmsStore.updateEntry(e.id, { remindedRound: c.currentRound });
+            sent++;
+          } catch (re) { console.error('[LMS] Reminder failed for ' + u.email + ':', re.message); }
+        }
+        if (sent > 0) console.log('[LMS] Pick reminders sent: ' + sent + ' for "' + c.name + '" ' + lms.roundLabel(c.phase, c.currentRound));
+      }
+    });
+    setInterval(runLmsReminders, 3 * 60 * 60 * 1000);  // every 3 hours
+    setTimeout(runLmsReminders, 120000);
     console.log('[Scheduler] LMS auto-settlement ENABLED');
   }
 

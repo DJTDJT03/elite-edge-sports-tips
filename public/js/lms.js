@@ -70,6 +70,7 @@ window.LMS = {
       this._comp = detail;
       var standings = await this.api('/competitions/' + primary.id + '/standings');
       app.innerHTML = this._shell(this._competitionView(detail, standings));
+      this._maybeCelebrate(detail);
     } catch (e) {
       app.innerHTML = this._shell('<div style="text-align:center;padding:40px;color:var(--red);">' + this.esc(e.message) + '</div>');
     }
@@ -138,7 +139,60 @@ window.LMS = {
     var fixturesHtml = this._fixturesPanel(d.fixtures || [], me);
     var standingsHtml = this._standings(standings);
 
-    return head + body + fixturesHtml + standingsHtml + this._rulesAccordion(c);
+    return this._winBanner(me, c) + head + body + fixturesHtml + standingsHtml + this._rulesAccordion(c);
+  },
+
+  // Celebration banner when the player's pick won (they're through)
+  _winBanner: function (me, c) {
+    if (!me || !me.picks || me.status === 'out') return '';
+    var won = me.picks.filter(function (p) { return p.result === 'won'; });
+    if (!won.length) return '';
+    var latest = won[won.length - 1];
+    var msg = c.status === 'completed' ? 'You won the competition! &#127942;'
+      : 'You survived ' + this.esc(latest.roundLabel) + ' — on to ' + this.esc(c.roundLabel) + '. Make your next pick.';
+    return '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.18),rgba(212,168,67,0.10));border:1px solid var(--green,#22c55e);border-radius:12px;padding:16px 20px;margin-bottom:16px;text-align:center;">' +
+      '<div style="font-size:24px;line-height:1;">&#127881;</div>' +
+      '<div style="font-size:17px;font-weight:800;color:#fff;margin-top:4px;">' + this.esc(latest.team) + ' won — you\'re through!</div>' +
+      '<div style="font-size:13px;color:var(--text-secondary);margin-top:2px;">' + msg + '</div>' +
+    '</div>';
+  },
+
+  // One-time confetti when a new win is first seen
+  _maybeCelebrate: function (d) {
+    try {
+      var me = d && d.me;
+      if (!me || !me.picks) return;
+      var won = me.picks.filter(function (p) { return p.result === 'won'; });
+      if (!won.length) return;
+      var latest = won[won.length - 1];
+      var key = 'ee_lms_won_' + d.competition.id + '_' + latest.round;
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+      this._confetti();
+    } catch (e) {}
+  },
+
+  _confetti: function () {
+    var overlay = document.createElement('div');
+    overlay.className = 'win-celebration-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden;';
+    var colors = ['#d4a843', '#22c55e', '#ffffff', '#f5d77a', '#4ade80', '#3b82f6'];
+    for (var i = 0; i < 60; i++) {
+      var p = document.createElement('div');
+      p.className = 'confetti-particle';
+      p.style.position = 'absolute';
+      p.style.top = '-10px';
+      p.style.left = (Math.random() * 100) + 'vw';
+      p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+      p.style.animationDelay = (Math.random() * 1.5) + 's';
+      p.style.animationDuration = (2 + Math.random() * 1.5) + 's';
+      p.style.width = (5 + Math.random() * 8) + 'px';
+      p.style.height = (5 + Math.random() * 8) + 'px';
+      p.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+      overlay.appendChild(p);
+    }
+    document.body.appendChild(overlay);
+    setTimeout(function () { overlay.remove(); }, 5000);
   },
 
   _fixturesPanel: function (fixtures, me) {

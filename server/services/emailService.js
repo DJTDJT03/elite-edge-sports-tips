@@ -1366,6 +1366,33 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
     return this._sendEmail({ to: adminEmail, subject, html, text, emailType: 'admin_new_subscriber' });
   }
 
+  // Last Man Standing — reminder to make your pick for the next round
+  async sendLmsPickReminder({ name, email, competitionName, roundLabel, prizePot }) {
+    const url = 'https://eliteedgesports.co.uk/#/last-man-standing';
+    const subject = '⏰ Make your Last Man Standing pick — ' + (roundLabel || 'next round');
+    const html = this._wrapHTML(`
+        <h2 style="color:#ffffff;margin:0 0 16px;font-size:20px;">Hi ${this._esc(name)},</h2>
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">You're still standing in <strong style="color:#d4a843;">${this._esc(competitionName || 'Last Man Standing')}</strong> — but you haven't made your pick for <strong style="color:#d4a843;">${this._esc(roundLabel || 'the next round')}</strong> yet.</p>
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">Pick before kick-off or you're out. Remember: your team has to <strong>win</strong> — a draw and you're gone. And you can't pick a team you've already used.</p>
+        ${prizePot ? '<p style="color:#cbd5e1;font-size:14px;">Still ' + '&pound;' + Math.round(prizePot) + ' in the pot.</p>' : ''}
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${url}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;">Make Your Pick</a>
+        </div>
+        <p style="color:#cbd5e1;font-size:14px;"><strong style="color:#d4a843;">Elite Edge — Last Man Standing</strong></p>
+    `, 'Don\'t get caught out — make your pick');
+    const text = `Hi ${name},
+
+You're still standing in ${competitionName || 'Last Man Standing'} — but you haven't picked for ${roundLabel || 'the next round'} yet.
+
+Pick before kick-off or you're out. Your team has to win (a draw and you're gone), and you can't reuse a team.
+
+Make your pick: ${url}
+
+Elite Edge — Last Man Standing
+18+ | Entertainment only | BeGambleAware.org`;
+    return this._sendEmail({ to: email, subject, html, text, emailType: 'lms_pick_reminder' });
+  }
+
   async sendPasswordReset(email, resetLink) {
     const subject = 'Elite Edge Sports Tips — Reset Your Password';
     const html = this._wrapHTML(`
