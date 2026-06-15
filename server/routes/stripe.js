@@ -208,78 +208,99 @@ module.exports = function(deps) {
 
       switch (event.type) {
         case 'checkout.session.completed': {
-          // This is handled by the success redirect, but also handle async payments
           const session = event.data.object;
-          if (session.payment_status === 'paid' && session.metadata && session.metadata.userId) {
-            const tier = (session.metadata.tier === 'vip') ? 'vip' : (session.metadata.tier === 'starter') ? 'starter' : 'premium';
-            const user = await db.getUserById(session.metadata.userId);
-            // Idempotency: skip if already processed this subscription
-            var webhookSubId = typeof session.subscription === 'string' ? session.subscription : (session.subscription && session.subscription.id);
-            if (user && user.stripeSubscriptionId === webhookSubId) {
-              console.log('[Stripe] Webhook: checkout already processed for', user.email);
+          if (session.payment_status === 'paid' || session.payment_status === 'no_payment_required') {
+            const md = session.metadata || {};
+            const webhookSubId = typeof session.subscription === 'string' ? session.subscription : (session.subscription && session.subscription.id);
+            const custId = typeof session.customer === 'string' ? session.customer : (session.customer && session.customer.id) || null;
+            const email = session.customer_email || (session.customer_details && session.customer_details.email) || null;
+
+            // Resolve the user: prefer the userId we tagged on the session, then
+            // fall back to the billing email so a missing/garbled tag can't block it.
+            let user = md.userId ? await db.getUserById(md.userId) : null;
+            if (!user && email && db.getUserByEmail) user = await db.getUserByEmail(email);
+            if (!user) {
+              console.error('[Stripe] Webhook checkout.session.completed: NO MATCHING USER (userId=' + md.userId + ', email=' + email + ', sub=' + webhookSubId + ')');
               break;
             }
-            if (user && user.subscription !== tier) {
-              const sub = session.subscription
-                ? await stripeService.getSubscription(
-                    typeof session.subscription === 'string' ? session.subscription : session.subscription.id
-                  )
-                : null;
-              let expiry = new Date();
-              if (sub && sub.current_period_end) {
-                expiry = new Date(sub.current_period_end * 1000);
-              } else {
-                expiry.setMonth(expiry.getMonth() + 1);
-              }
-              // Win-back attribution (mirrors the success-redirect handler)
-              var wbFields = {};
-              if (user.churnedAt) {
-                wbFields = {
-                  reactivatedAt: new Date().toISOString(),
-                  winbackReactivation: true,
-                  churnedAt: null,
-                  churnedTier: null,
-                  winbacksSent: [],
-                };
-                console.log('[Stripe] Win-back (webhook): churned user reactivated —', user.email);
-              }
-              await db.updateUser(user.id, Object.assign({
-                subscription: tier,
-                subscriptionExpiry: expiry.toISOString(),
-                trialActive: false,
-                stripeCustomerId: typeof session.customer === 'string' ? session.customer : null,
-                stripeSubscriptionId: typeof session.subscription === 'string' ? session.subscription : null,
-              }, wbFields));
-              console.log('[Stripe] Webhook: activated ' + tier + ' for', user.email);
+
+            // Resolve the tier: prefer metadata, fall back to the actual price paid.
+            const sub = webhookSubId ? await stripeService.getSubscription(webhookSubId) : null;
+            let tier = md.tier === 'vip' ? 'vip' : md.tier === 'starter' ? 'starter' : md.tier === 'premium' ? 'premium' : null;
+            if (!tier && sub) tier = await stripeService.tierFromSubscription(sub);
+            if (!tier) tier = 'premium';
+
+            // Idempotency: already on this tier with this sub linked → nothing to do.
+            if (user.stripeSubscriptionId === webhookSubId && user.subscription === tier) {
+              console.log('[Stripe] Webhook: checkout already provisioned for', user.email);
+              break;
             }
+
+            let expiry = new Date();
+            if (sub && sub.current_period_end) expiry = new Date(sub.current_period_end * 1000);
+            else expiry.setMonth(expiry.getMonth() + 1);
+            const credits = tier === 'vip' ? 999999 : tier === 'premium' ? 250 : 50;
+
+            // Win-back attribution (mirrors the success-redirect handler)
+            var wbFields = {};
+            if (user.churnedAt) {
+              wbFields = { reactivatedAt: new Date().toISOString(), winbackReactivation: true, churnedAt: null, churnedTier: null, winbacksSent: [] };
+              console.log('[Stripe] Win-back (webhook): churned user reactivated —', user.email);
+            }
+            await db.updateUser(user.id, Object.assign({
+              subscription: tier,
+              role: (tier === 'premium' || tier === 'vip') ? 'premium' : (user.role === 'admin' ? 'admin' : 'free'),
+              subscriptionExpiry: expiry.toISOString(),
+              trialActive: false,
+              credits: credits,
+              stripeCustomerId: custId || user.stripeCustomerId || null,
+              stripeSubscriptionId: webhookSubId || user.stripeSubscriptionId || null,
+            }, wbFields));
+            if (db.recordCreditTransaction) {
+              db.recordCreditTransaction({ userId: user.id, amount: credits, balanceAfter: credits, type: 'subscription_grant', description: tier + ' via Stripe checkout webhook (' + credits + ' credits)' }).catch(function(){});
+            }
+            console.log('[Stripe] Webhook: provisioned ' + tier + ' for', user.email);
           }
           break;
         }
 
         case 'invoice.payment_succeeded': {
-          // Renewal successful — extend subscription expiry
+          // Renewal OR first payment — extend expiry, and provision if still free.
           const invoice = event.data.object;
           if (invoice.subscription) {
             const sub = await stripeService.getSubscription(invoice.subscription);
-            if (sub && sub.metadata && sub.metadata.userId) {
-              // Not always available — try customer-based lookup
-            }
-            // Find user by stripeSubscriptionId
             const users = await db.getUsers();
-            const user = users.find(u => u.stripeSubscriptionId === invoice.subscription);
+            // Match by linked subscription id, then fall back to billing email so
+            // a first payment provisions even before the sub id has been linked.
+            let user = users.find(u => u.stripeSubscriptionId === invoice.subscription);
+            const invEmail = invoice.customer_email || (invoice.customer_details && invoice.customer_details.email) || null;
+            if (!user && invEmail && db.getUserByEmail) user = await db.getUserByEmail(invEmail);
             if (user && sub) {
               const expiry = new Date(sub.current_period_end * 1000);
-              // Preserve the user's current tier on renewal (premium or vip)
-              const currentTier = (user.subscription === 'vip') ? 'vip' : 'premium';
-              await db.updateUser(user.id, {
-                subscription: currentTier,
+              const isPaid = ['starter', 'premium', 'vip'].includes(user.subscription);
+              // Keep their current paid tier on renewal; if they're still free,
+              // provision from the actual price paid (safety net for missed checkout event).
+              let tier = isPaid ? user.subscription : (await stripeService.tierFromSubscription(sub)) || 'premium';
+              const update = {
+                subscription: tier,
+                role: (tier === 'premium' || tier === 'vip') ? 'premium' : (user.role === 'admin' ? 'admin' : 'free'),
                 subscriptionExpiry: expiry.toISOString(),
-                // Clear any dunning flags on successful payment
-                paymentFailedAt: null,
-                paymentGraceEnd: null,
-                dunningStage: 0,
-              });
-              console.log('[Stripe] Webhook: renewal success for', user.email, '(' + currentTier + ') — new expiry:', expiry.toISOString());
+                stripeSubscriptionId: invoice.subscription,
+                stripeCustomerId: (typeof invoice.customer === 'string' ? invoice.customer : null) || user.stripeCustomerId || null,
+                paymentFailedAt: null, paymentGraceEnd: null, dunningStage: 0,
+              };
+              if (!isPaid) {
+                // First provision via this path → grant the tier's credit allowance.
+                update.credits = tier === 'vip' ? 999999 : tier === 'premium' ? 250 : 50;
+                update.trialActive = false;
+                if (db.recordCreditTransaction) {
+                  db.recordCreditTransaction({ userId: user.id, amount: update.credits, balanceAfter: update.credits, type: 'subscription_grant', description: tier + ' via invoice.payment_succeeded (' + update.credits + ' credits)' }).catch(function(){});
+                }
+                console.log('[Stripe] Webhook: invoice.payment_succeeded PROVISIONED ' + tier + ' for', user.email);
+              } else {
+                console.log('[Stripe] Webhook: renewal success for', user.email, '(' + tier + ') — new expiry:', expiry.toISOString());
+              }
+              await db.updateUser(user.id, update);
             }
           }
           break;

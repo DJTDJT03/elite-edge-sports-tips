@@ -281,6 +281,21 @@ class StripeService {
    * payment succeeded but provisioning (webhook/redirect) didn't run.
    * @returns {object|null} { tier, subscriptionId, customerId, currentPeriodEnd, status, priceId } or null
    */
+  /**
+   * Maps a Stripe subscription object to our tier via its price ID.
+   * @returns {'starter'|'premium'|'vip'|null}
+   */
+  async tierFromSubscription(sub) {
+    if (!sub) return null;
+    const priceId = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price && sub.items.data[0].price.id;
+    if (!priceId) return null;
+    const prices = await this.ensureProducts();
+    if (priceId === prices.vipMonthlyId || priceId === prices.vipAnnualId) return 'vip';
+    if (priceId === prices.starterMonthlyId || priceId === prices.starterAnnualId) return 'starter';
+    if (priceId === prices.premiumMonthlyId || priceId === prices.premiumAnnualId) return 'premium';
+    return null;
+  }
+
   async findSubscriptionByEmail(email) {
     if (!stripe) throw new Error('Stripe not configured');
     const customers = await stripe.customers.list({ email: email, limit: 20 });
