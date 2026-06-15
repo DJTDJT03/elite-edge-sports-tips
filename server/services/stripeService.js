@@ -298,20 +298,33 @@ class StripeService {
 
   async findSubscriptionByEmail(email) {
     if (!stripe) throw new Error('Stripe not configured');
-    const customers = await stripe.customers.list({ email: email, limit: 20 });
-    const prices = await this.ensureProducts();
-    for (const c of customers.data) {
-      const subs = await stripe.subscriptions.list({ customer: c.id, status: 'all', limit: 20 });
-      const live = subs.data.find(function (s) { return ['active', 'trialing', 'past_due'].includes(s.status); });
-      if (!live) continue;
-      const priceId = live.items && live.items.data[0] && live.items.data[0].price && live.items.data[0].price.id;
-      let tier = 'premium';
-      if (priceId === prices.vipMonthlyId || priceId === prices.vipAnnualId) tier = 'vip';
-      else if (priceId === prices.starterMonthlyId || priceId === prices.starterAnnualId) tier = 'starter';
-      else if (priceId === prices.premiumMonthlyId || priceId === prices.premiumAnnualId) tier = 'premium';
-      return { tier: tier, subscriptionId: live.id, customerId: c.id, currentPeriodEnd: live.current_period_end, status: live.status, priceId: priceId };
+    const seen = {};
+    const candidates = [];
+    const addAll = (list) => { (list && list.data ? list.data : []).forEach((c) => { if (!seen[c.id]) { seen[c.id] = 1; candidates.push(c); } }); };
+
+    // 1) exact email match (case-sensitive in Stripe)
+    try { addAll(await stripe.customers.list({ email: email, limit: 50 })); } catch (e) {}
+    // 2) lowercased email match (covers case differences)
+    if (email && email.toLowerCase() !== email) {
+      try { addAll(await stripe.customers.list({ email: email.toLowerCase(), limit: 50 })); } catch (e) {}
     }
-    return null;
+    // 3) case-insensitive search fallback (Stripe Search API)
+    try {
+      const q = "email:'" + String(email).replace(/'/g, '') + "'";
+      addAll(await stripe.customers.search({ query: q, limit: 50 }));
+    } catch (e) {}
+
+    const diag = { customers: candidates.length, subs: [] };
+    for (const c of candidates) {
+      const subs = await stripe.subscriptions.list({ customer: c.id, status: 'all', limit: 20 });
+      subs.data.forEach((s) => diag.subs.push(s.status));
+      const live = subs.data.find(function (s) { return ['active', 'trialing', 'past_due', 'unpaid'].includes(s.status); });
+      if (!live) continue;
+      const tier = (await this.tierFromSubscription(live)) || 'premium';
+      const priceId = live.items && live.items.data[0] && live.items.data[0].price && live.items.data[0].price.id;
+      return { ok: true, tier: tier, subscriptionId: live.id, customerId: c.id, currentPeriodEnd: live.current_period_end, status: live.status, priceId: priceId, diag: diag };
+    }
+    return { ok: false, diag: diag };
   }
 }
 

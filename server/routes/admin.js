@@ -123,8 +123,10 @@ module.exports = function(deps) {
       if (!user) return res.status(404).json({ error: 'User not found' });
 
       const found = await stripeService.findSubscriptionByEmail(user.email);
-      if (!found) {
-        return res.json({ reconciled: false, message: 'No active Stripe subscription found for ' + user.email + '. Confirm the email on the Stripe payment matches their account email.' });
+      if (!found || !found.ok) {
+        const d = (found && found.diag) || { customers: 0, subs: [] };
+        const detail = ' (Stripe: ' + d.customers + ' customer(s) for this email; subscription statuses: [' + (d.subs.join(', ') || 'none') + '])';
+        return res.json({ reconciled: false, message: 'No active subscription found for ' + user.email + detail + '. If the payment used a different email, change their account email to match, or use the Plan button to set the tier manually.' });
       }
 
       const credits = found.tier === 'vip' ? 999999 : found.tier === 'premium' ? 250 : 50;
