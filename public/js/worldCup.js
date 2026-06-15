@@ -47,7 +47,7 @@ var WorldCup = (function() {
   function getFlag(team) {
     var code = (window.App && App.countryCode) ? App.countryCode(team) : null;
     if (code) {
-      return '<img src="https://flagcdn.com/h40/' + code + '.png" alt="" ' +
+      return '<img src="/flags/' + code + '.png" alt="" ' +
         'style="height:14px;width:21px;border-radius:2px;object-fit:cover;vertical-align:-2px;' +
         'box-shadow:0 0 0 1px rgba(0,0,0,0.25);display:inline-block;" ' +
         'onerror="this.replaceWith(document.createTextNode(\'\u26bd\'))">';

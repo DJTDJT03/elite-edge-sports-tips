@@ -6131,7 +6131,7 @@ const App = {
     var letter = '<div class="match-intel-letter" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:linear-gradient(135deg,#1a2a4a,#0a1a3a);display:flex;align-items:center;justify-content:center;font-size:' + Math.round(size * 0.38) + 'px;font-weight:900;color:#d4a843;">' + ((team || '?')[0] || '?') + '</div>';
     var code = this.countryCode(team);
     if (code) {
-      var src = 'https://flagcdn.com/w160/' + code + '.png';
+      var src = '/flags/' + code + '.png';
       return '<img src="' + src + '" alt="' + (team || '') + '" class="match-intel-team-logo" ' +
         'style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 2px rgba(212,168,67,0.35);" ' +
         'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
