@@ -8093,7 +8093,10 @@ const App = {
     try {
       var r = await this.api('/world-cup/admin/broadcast-preview');
       if (!r.count) { if (out) out.textContent = 'No World Cup games with a view in the next 30h.'; return; }
-      var lines = (r.picks || []).map(function (p) { return '• ' + p.home + ' v ' + p.away + ' → ' + p.view + (p.note ? ' · ' + p.note : '') + (p.conf ? ' (' + p.conf + '/10)' : ''); });
+      var lines = (r.picks || []).map(function (p) {
+        var price = p.oddsDecimal ? ' @ ' + p.oddsDecimal.toFixed(2) : '';
+        return '• ' + p.home + ' v ' + p.away + ' → ' + p.view + price + (p.note ? ' · ' + p.note : '') + (p.conf ? ' [confidence ' + p.conf + '/10]' : '');
+      });
       if (out) out.textContent = 'WC view for ' + r.count + ' game(s) — this is what will be sent:\n\n' + lines.join('\n');
     } catch (e) { if (out) out.textContent = 'Preview failed: ' + (e.message || e); }
   },

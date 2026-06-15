@@ -52,7 +52,7 @@ module.exports = function (deps) {
     var picks = [];
     for (var i = 0; i < fixtures.length; i++) {
       var f = fixtures[i];
-      var view = null, note = '', conf = null;
+      var view = null, note = '', conf = null, oddsDecimal = null;
       // 1) Stored consensus preview verdict (the "high powered engine")
       try {
         var pv = await db.query(
@@ -72,6 +72,7 @@ module.exports = function (deps) {
           if (mo && mo.home && mo.away) {
             var favHome = mo.home <= mo.away;
             var favOdds = favHome ? mo.home : mo.away;
+            oddsDecimal = favOdds;
             view = (favHome ? f.home_team : f.away_team) + ' to win';
             conf = favOdds <= 1.20 ? 9 : favOdds <= 1.50 ? 8 : favOdds <= 2.20 ? 7 : 6;
             if (mo.over35 && mo.over35 <= 2.05) note = 'Over 3.5 goals lean';
@@ -80,19 +81,38 @@ module.exports = function (deps) {
         } catch (e) {}
       }
       if (!view) continue;
-      picks.push({ home: f.home_team, away: f.away_team, kickoff: f.kickoff, view: view, note: note, conf: conf });
+      picks.push({ home: f.home_team, away: f.away_team, kickoff: f.kickoff, view: view, note: note, conf: conf, oddsDecimal: oddsDecimal });
     }
     return picks;
   }
 
   function _esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+  // Decimal odds -> tidy fractional (e.g. 1.09 -> "1/11", 1.91 -> "10/11").
+  function fracOdds(d) {
+    if (!d || d <= 1) return '';
+    var dec = d - 1, best = null;
+    for (var den = 1; den <= 20; den++) {
+      var num = Math.round(dec * den);
+      if (num < 1) continue;
+      var err = Math.abs(dec - num / den);
+      if (best === null || err < best.err) best = { num: num, den: den, err: err };
+    }
+    if (!best) return d.toFixed(2);
+    var a = best.num, b = best.den;
+    var g = (function gcd(x, y) { return y ? gcd(y, x % y) : x; })(a, b);
+    return (a / g) + '/' + (b / g);
+  }
+  // A short, human label for our confidence so it's never mistaken for odds.
+  function confWord(c) { return c >= 8 ? 'high confidence' : c >= 6 ? 'solid' : 'lean'; }
+
   function buildTelegram(picks, dateLabel) {
     var t = '⚽ <b>Elite Edge — World Cup View</b>\n' + dateLabel + '\n\n';
     picks.forEach(function (p) {
       var time = new Date(p.kickoff).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
+      var price = p.oddsDecimal ? ' (' + fracOdds(p.oddsDecimal) + ')' : '';
       t += flag(p.home) + ' <b>' + _esc(p.home) + '</b> v <b>' + _esc(p.away) + '</b> ' + flag(p.away) + '  <i>' + time + '</i>\n';
-      t += '→ Our view: <b>' + _esc(p.view) + '</b>' + (p.note ? ' · ' + _esc(p.note) : '') + (p.conf ? ' (' + p.conf + '/10)' : '') + '\n\n';
+      t += '→ Our view: <b>' + _esc(p.view) + '</b>' + price + (p.note ? ' · ' + _esc(p.note) : '') + (p.conf ? ' — ' + confWord(p.conf) : '') + '\n\n';
     });
     t += 'Full match intelligence → eliteedgesports.co.uk\n<i>18+ | Opinion &amp; analysis, not betting advice | BeGambleAware.org</i>';
     return t;
@@ -101,9 +121,10 @@ module.exports = function (deps) {
   function buildEmailHtml(picks, dateLabel) {
     var rows = picks.map(function (p) {
       var time = new Date(p.kickoff).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
+      var price = p.oddsDecimal ? ' (' + fracOdds(p.oddsDecimal) + ')' : '';
       return '<tr><td style="padding:10px 0;border-bottom:1px solid #1e2433;">' +
         '<div style="font-size:15px;font-weight:700;color:#fff;">' + _esc(p.home) + ' v ' + _esc(p.away) + ' <span style="color:#64748b;font-weight:400;font-size:12px;">' + time + '</span></div>' +
-        '<div style="font-size:14px;color:#d4a843;margin-top:3px;">Our view: <strong>' + _esc(p.view) + '</strong>' + (p.note ? ' · ' + _esc(p.note) : '') + (p.conf ? ' (' + p.conf + '/10)' : '') + '</div>' +
+        '<div style="font-size:14px;color:#d4a843;margin-top:3px;">Our view: <strong>' + _esc(p.view) + '</strong>' + price + (p.note ? ' · ' + _esc(p.note) : '') + (p.conf ? ' — ' + confWord(p.conf) : '') + '</div>' +
         '</td></tr>';
     }).join('');
     return '<div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e1a;padding:28px;border-radius:12px;">' +
