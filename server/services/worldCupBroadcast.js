@@ -59,7 +59,8 @@ module.exports = function (deps) {
           "SELECT verdict_selection, predicted_scoreline, confidence FROM world_cup_previews WHERE fixture_id = $1 AND verdict_selection IS NOT NULL LIMIT 1",
           [f.id]
         );
-        if (pv.rows.length && pv.rows[0].verdict_selection && !/^\s*draw\s*$/i.test(pv.rows[0].verdict_selection)) {
+        if (pv.rows.length && pv.rows[0].verdict_selection) {
+          // Consensus engine leads — trust its call (incl. a genuine draw).
           view = pv.rows[0].verdict_selection;
           conf = pv.rows[0].confidence || null;
           if (pv.rows[0].predicted_scoreline) note = 'Predicted ' + pv.rows[0].predicted_scoreline;

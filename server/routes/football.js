@@ -411,7 +411,7 @@ module.exports = function(deps) {
 
             // Pick the verdict source, then guard: a World Cup "Our Take" must
             // never headline a bare Draw — back the favourite to win instead.
-            var _finalVerdict = marketVerdict || wcConsensusVerdict || smVerdict || {
+            var _finalVerdict = wcConsensusVerdict || marketVerdict || smVerdict || {
               market: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Total Goals' : 'Match Result',
               pick: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Over 2.5 Goals' : (smH2HHomeWins > smH2HAwayWins ? smF.homeTeam + ' Win' : smF.awayTeam + ' Win'),
               reason: 'Based on head-to-head record: ' + smH2HHomeWins + ' home wins, ' + smH2HAwayWins + ' away wins, ' + smH2HDraws + ' draws across ' + smH2H.length + ' meetings. Average ' + smH2HAvg + ' goals per game.',
@@ -420,8 +420,9 @@ module.exports = function(deps) {
               riskText: 'Moderate risk — limited data depth for this league.',
             };
             // Only flip a draw to a win when the model shows a CLEAR favourite
-            // (>=18-point edge). Genuinely even games keep a legitimate draw.
-            if (_finalVerdict && /^\s*draw\s*$/i.test(String(_finalVerdict.pick || '')) && smProb) {
+            // (>=18-point edge) AND it's not a trusted consensus call. Genuinely
+            // even games (and consensus draws) keep their draw.
+            if (_finalVerdict && _finalVerdict.source !== 'consensus' && /^\s*draw\s*$/i.test(String(_finalVerdict.pick || '')) && smProb) {
               var _drawGap = Math.abs(smProb.home - smProb.away);
               if (_drawGap >= 18) {
                 var _gFav = (smProb.home >= smProb.away) ? smF.homeTeam : smF.awayTeam;
@@ -623,6 +624,37 @@ module.exports = function(deps) {
         }
       } catch(tipLookupErr) { /* non-fatal — fall through to auto-generate */ }
 
+      // WORLD CUP: Elite Edge's 5-analyst consensus LEADS the headline (it's the
+      // real engine and has been the sharpest read). Market/heuristics only fill
+      // gaps when no consensus exists for the fixture.
+      var fromConsensus = false;
+      if (!fromPublishedTip) {
+        try {
+          var _csched = require('../services/wc2026Schedule');
+          if (db.query) {
+            var _crows = await db.query("SELECT id, home_team, away_team FROM world_cup_fixtures");
+            var _chn = homeTeam.name, _can = awayTeam.name;
+            var _cf = (_crows.rows || []).find(function (r) {
+              return (_csched.teamsMatch(r.home_team, _chn) && _csched.teamsMatch(r.away_team, _can)) ||
+                     (_csched.teamsMatch(r.home_team, _can) && _csched.teamsMatch(r.away_team, _chn));
+            });
+            if (_cf) {
+              var _cpv = await db.query("SELECT verdict_selection, verdict_market, verdict, confidence FROM world_cup_previews WHERE fixture_id = $1 AND verdict_selection IS NOT NULL LIMIT 1", [_cf.id]);
+              if (_cpv.rows && _cpv.rows.length) {
+                var _cc = _cpv.rows[0];
+                verdictMarket = _cc.verdict_market || 'Match Result';
+                verdictPick = _cc.verdict_selection;
+                verdictReason = (_cc.verdict || 'Elite Edge 5-analyst consensus.');
+                confidence = _cc.confidence || 7;
+                riskLevel = confidence >= 8 ? 'Low' : confidence >= 6 ? 'Medium' : 'High';
+                fromConsensus = true;
+                console.log('[Match Intelligence] WC consensus verdict used: ' + verdictPick + ' (' + verdictMarket + ')');
+              }
+            }
+          }
+        } catch (e) { /* non-fatal — fall through to market/heuristics */ }
+      }
+
       // Ensure stats have safe defaults
       homeStats.cleanSheetPct = homeStats.cleanSheetPct || 0;
       homeStats.bttsPct = homeStats.bttsPct || 0;
@@ -704,10 +736,10 @@ module.exports = function(deps) {
       }
 
       // --- World Cup market-odds adjustment (SURGICAL — keeps market variety) ---
-      // Only intervene for a genuine market favourite, or to replace a draw when
-      // the market clearly favours one side. Competitive games keep their full
-      // heuristic call (Over/Under, BTTS, draw) so the output stays varied.
-      if (!fromPublishedTip) {
+      // Only runs when there's NO consensus/published tip to lead. Intervenes for
+      // a genuine market favourite, or to replace a draw when the market clearly
+      // favours one side. Competitive games keep their full heuristic call.
+      if (!fromPublishedTip && !fromConsensus) {
         try {
           var _wcSched = require('../services/wc2026Schedule');
           if (sportMonks && sportMonks.getMarketOdds && db.query) {
