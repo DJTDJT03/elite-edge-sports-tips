@@ -149,6 +149,42 @@ SportMonks.prototype.getOdds = function(fixtureId) {
   });
 };
 
+// Clean, bookmaker-averaged market odds for a fixture: 1X2 + Over/Under 2.5/3.5
+// + BTTS. Returns decimal odds (null where unavailable). Market = sharpest signal.
+SportMonks.prototype.getMarketOdds = function(fixtureId) {
+  return this.getOdds(fixtureId).then(function(oddsArr) {
+    var acc = { home: [], draw: [], away: [], over25: [], under25: [], over35: [], bttsYes: [] };
+    (oddsArr || []).forEach(function(o) {
+      var label = (o.label || o.name || '').toLowerCase();
+      var val = parseFloat(o.value);
+      if (!val || val <= 1) return;
+      var mid = o.market_id;
+      var total = (o.total != null ? String(o.total) : '');
+      if (mid === 1) {
+        if (label === 'home' || label === '1') acc.home.push(val);
+        else if (label === 'draw' || label === 'x') acc.draw.push(val);
+        else if (label === 'away' || label === '2') acc.away.push(val);
+      } else if (mid === 12 || mid === 18) {
+        if (label.indexOf('over') !== -1) {
+          if (total === '2.5' || label.indexOf('2.5') !== -1) acc.over25.push(val);
+          if (total === '3.5' || label.indexOf('3.5') !== -1) acc.over35.push(val);
+        } else if (label.indexOf('under') !== -1) {
+          if (total === '2.5' || label.indexOf('2.5') !== -1) acc.under25.push(val);
+        }
+      } else if (mid === 3) {
+        if (label === 'yes' || label.indexOf('yes') !== -1) acc.bttsYes.push(val);
+      }
+    });
+    var avg = function(a) { return a.length ? a.reduce(function(s, x) { return s + x; }, 0) / a.length : null; };
+    return {
+      home: avg(acc.home), draw: avg(acc.draw), away: avg(acc.away),
+      over25: avg(acc.over25), under25: avg(acc.under25), over35: avg(acc.over35),
+      bttsYes: avg(acc.bttsYes),
+      books: acc.home.length || acc.away.length,
+    };
+  }).catch(function() { return null; });
+};
+
 // =========================================================================
 // LEAGUES — list available leagues
 // =========================================================================

@@ -330,6 +330,43 @@ module.exports = function(deps) {
               }
             } catch (e) { console.log('[Match Intelligence] WC consensus lookup failed:', e.message); }
 
+            // MARKET-DRIVEN verdict — the sharpest signal. Real bookmaker odds
+            // make a 1/11 favourite read as a strong win + goals lean, regardless
+            // of the unreliable provisional model. Takes priority over everything.
+            var marketVerdict = null;
+            try {
+              if (sportMonks && sportMonks.getMarketOdds) {
+                var mo = await sportMonks.getMarketOdds(fixtureId);
+                if (mo && mo.home && mo.away) {
+                  var ih = 1 / mo.home, idr = mo.draw ? 1 / mo.draw : 0, ia = 1 / mo.away;
+                  var isum = ih + idr + ia;
+                  var pHome = Math.round((ih / isum) * 100), pAway = Math.round((ia / isum) * 100);
+                  var mFavHome = mo.home <= mo.away;
+                  var mFavTeam = mFavHome ? smF.homeTeam : smF.awayTeam;
+                  var mFavOdds = mFavHome ? mo.home : mo.away;
+                  var mFavProb = mFavHome ? pHome : pAway;
+                  var fOdd = function (d) { return d != null ? d.toFixed(2) : '-'; };
+                  // Goals lean from over/under prices.
+                  var gLean = '';
+                  if (mo.over35 && mo.over35 <= 2.05) gLean = 'Over 3.5 Goals (' + fOdd(mo.over35) + ')';
+                  else if (mo.over25 && mo.over25 <= 1.80) gLean = 'Over 2.5 Goals (' + fOdd(mo.over25) + ')';
+                  var reason = 'Bookmaker odds: ' + smF.homeTeam + ' ' + fOdd(mo.home) + ', Draw ' + fOdd(mo.draw) + ', ' + smF.awayTeam + ' ' + fOdd(mo.away) + '. '
+                    + mFavTeam + ' are clear favourites (' + mFavProb + '% implied).'
+                    + (gLean ? ' Goals lean: ' + gLean + '.' : '');
+                  marketVerdict = {
+                    market: 'Match Result',
+                    pick: mFavTeam + ' Win',
+                    reason: reason,
+                    confidence: mFavOdds <= 1.20 ? 9 : mFavOdds <= 1.50 ? 8 : mFavOdds <= 2.20 ? 7 : 6,
+                    riskLevel: mFavOdds <= 1.50 ? 'low' : mFavOdds <= 2.50 ? 'low-medium' : 'medium',
+                    riskText: mFavOdds <= 1.50 ? 'Strong market favourite.' : 'Market edge to ' + mFavTeam + '.',
+                    secondaryMarket: gLean || null,
+                    source: 'market',
+                  };
+                }
+              }
+            } catch (e) { console.log('[Match Intelligence] market odds failed:', e.message); }
+
             // Build verdict — prefer the SportMonks model when available.
             var smVerdict;
             if (smProb) {
@@ -369,7 +406,7 @@ module.exports = function(deps) {
 
             // Pick the verdict source, then guard: a World Cup "Our Take" must
             // never headline a bare Draw — back the favourite to win instead.
-            var _finalVerdict = wcConsensusVerdict || smVerdict || {
+            var _finalVerdict = marketVerdict || wcConsensusVerdict || smVerdict || {
               market: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Total Goals' : 'Match Result',
               pick: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Over 2.5 Goals' : (smH2HHomeWins > smH2HAwayWins ? smF.homeTeam + ' Win' : smF.awayTeam + ' Win'),
               reason: 'Based on head-to-head record: ' + smH2HHomeWins + ' home wins, ' + smH2HAwayWins + ' away wins, ' + smH2HDraws + ' draws across ' + smH2H.length + ' meetings. Average ' + smH2HAvg + ' goals per game.',
