@@ -6,6 +6,7 @@ module.exports = function(deps) {
   // ADMIN: List all users
   // ---------------------------------------------------------------------------
   router.get('/admin/users', authenticate, requireAdmin, async (req, res) => {
+    res.set('Cache-Control', 'no-store');
     const users = await db.getUsers();
     res.json(users.map(u => ({
       id: u.id, email: u.email, name: u.name, role: u.role,

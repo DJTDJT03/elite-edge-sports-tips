@@ -566,7 +566,7 @@ const App = {
       this._spinnerTimeout = setTimeout(() => this.showLoadingSpinner(), 150);
     }
     try {
-      const res = await fetch(`/api${endpoint}`, { ...options, headers: { ...headers, ...options.headers } });
+      const res = await fetch(`/api${endpoint}`, { cache: 'no-store', ...options, headers: { ...headers, ...options.headers } });
       const data = await res.json();
       if (!res.ok) {
         // Handle session expired (login from another device)
@@ -8424,9 +8424,10 @@ const App = {
       var result = await this.api('/admin/users/' + userId + '/subscription', {
         method: 'PUT', body: JSON.stringify({ subscription: newSub, subscriptionExpiry: expiry })
       });
-      App.showToast(result.message || 'Subscription updated.', 'success');
-      this.renderAdmin();
-    } catch (e) { App.showToast('Error: ' + e.message, 'error'); }
+      // Show the TRUTH from the server (what actually persisted), not an assumption.
+      alert('Server result:\n\n' + (result.message || JSON.stringify(result)) + (result.persisted ? '\n\nPersisted value in DB: ' + result.persisted : ''));
+      await this.renderAdmin();
+    } catch (e) { alert('Update failed: ' + e.message); App.showToast('Error: ' + e.message, 'error'); }
   },
 
   async adminAutoSettle() {
