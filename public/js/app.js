@@ -913,13 +913,26 @@ const App = {
     if (this.user) {
       guest.style.display = 'none';
       userEl.style.display = 'flex';
-      var creditDisplay = '';
-      if (this.user.credits !== undefined && !this.isVIP()) {
-        creditDisplay = ' <span style="background:rgba(212,168,67,0.15);color:#d4a843;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;" onclick="event.stopPropagation();window.location.hash=\'#/buy-credits\'">' + (this.user.credits || 0) + ' credits</span>';
-      }
-      badge.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">VIP</span>' : '') + creditDisplay;
+      badge.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">VIP</span>' : '');
       badge.style.cursor = 'pointer';
       badge.onclick = () => { window.location.hash = '#/account'; };
+      // Dedicated, always-visible credits pill (desktop + mobile). VIP = unlimited.
+      var creditsPill = document.getElementById('nav-credits');
+      if (creditsPill) {
+        if (this.isVIP()) {
+          creditsPill.innerHTML = '∞ credits';
+          creditsPill.classList.add('nav-credits-vip');
+          creditsPill.style.display = 'inline-flex';
+        } else if (this.user.credits !== undefined && this.user.credits !== null) {
+          var c = this.user.credits || 0;
+          creditsPill.innerHTML = '<span class="nav-credits-num">' + c + '</span> credit' + (c === 1 ? '' : 's');
+          creditsPill.classList.toggle('nav-credits-low', c <= 3);
+          creditsPill.classList.remove('nav-credits-vip');
+          creditsPill.style.display = 'inline-flex';
+        } else {
+          creditsPill.style.display = 'none';
+        }
+      }
       // Mobile auth
       if (guestMobile) guestMobile.style.display = 'none';
       if (userMobile) userMobile.style.display = '';
@@ -1003,6 +1016,8 @@ const App = {
     } else {
       guest.style.display = 'flex';
       userEl.style.display = 'none';
+      var creditsPillOut = document.getElementById('nav-credits');
+      if (creditsPillOut) creditsPillOut.style.display = 'none';
       // Mobile auth
       if (guestMobile) guestMobile.style.display = '';
       if (userMobile) userMobile.style.display = 'none';
