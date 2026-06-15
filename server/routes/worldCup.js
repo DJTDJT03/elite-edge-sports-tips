@@ -205,7 +205,10 @@ module.exports = function(deps) {
   router.post('/admin/broadcast', authenticate, requireAdmin, async function (req, res) {
     try {
       if (!deps.worldCupBroadcast) return res.status(503).json({ error: 'World Cup broadcast not available' });
-      var r = await deps.worldCupBroadcast.broadcast({ skipEmail: req.body && req.body.skipEmail === true });
+      var r = await deps.worldCupBroadcast.broadcast({
+        skipEmail: req.body && req.body.skipEmail === true,
+        telegramOnly: req.body && req.body.telegramOnly === true,
+      });
       res.json(r);
     } catch (err) { res.status(500).json({ error: 'Broadcast failed: ' + err.message }); }
   });

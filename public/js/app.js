@@ -8047,7 +8047,8 @@ const App = {
         '<button class="btn btn-outline btn-sm" onclick="App.lmsInspectFixture()">Inspect rich data (xG/lineups/predictions)</button> ' +
         '<button class="btn btn-gold btn-sm" onclick="App.lmsGenerateWcPreviews()">Run consensus picks (Our Take)</button> ' +
         '<button class="btn btn-outline btn-sm" onclick="App.wcBroadcastPreview()">Preview WC view content</button> ' +
-        '<button class="btn btn-gold btn-sm" onclick="App.wcBroadcastSend()">Send WC view (Telegram + subscribers)</button>' +
+        '<button class="btn btn-gold btn-sm" onclick="App.wcBroadcastSend()">Send WC view (Telegram + subscribers)</button> ' +
+        '<button class="btn btn-outline btn-sm" onclick="App.wcBroadcastTelegram()">Resend to Telegram only</button>' +
         '<pre id="lms-wc-feed-out" style="display:none;white-space:pre-wrap;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;margin-top:10px;font-size:11px;max-height:240px;overflow:auto;"></pre>' +
       '</div>' +
       '<div class="card mb-16">' +
@@ -8099,6 +8100,18 @@ const App = {
       });
       if (out) out.textContent = 'WC view for ' + r.count + ' game(s) — this is what will be sent:\n\n' + lines.join('\n');
     } catch (e) { if (out) out.textContent = 'Preview failed: ' + (e.message || e); }
+  },
+
+  async wcBroadcastTelegram() {
+    if (!confirm('Resend today\'s World Cup view to the Telegram channel only? (No emails, no push — just Telegram.)')) return;
+    var out = document.getElementById('lms-wc-feed-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Resending to Telegram…'; }
+    try {
+      var r = await this.api('/world-cup/admin/broadcast', { method: 'POST', body: JSON.stringify({ telegramOnly: true }) });
+      if (!r.sent) { if (out) out.textContent = r.reason || 'Nothing to send.'; this.showToast(r.reason || 'Nothing to send', 'error'); return; }
+      if (out) out.textContent = 'Telegram resend: ' + r.picks + ' game(s) — Telegram: ' + (r.telegram ? 'sent ✓' : 'NOT sent (check TELEGRAM_BOT_TOKEN)');
+      this.showToast(r.telegram ? 'Resent to Telegram (' + r.picks + ' games)' : 'Telegram not configured', r.telegram ? 'success' : 'error');
+    } catch (e) { if (out) out.textContent = 'Resend failed: ' + (e.message || e); this.showToast('Resend failed: ' + e.message, 'error'); }
   },
 
   async wcBroadcastSend() {

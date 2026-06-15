@@ -150,6 +150,11 @@ module.exports = function (deps) {
     if (telegramBot && telegramBot.isAvailable()) {
       try { await telegramBot.sendMessage(buildTelegram(picks, dateLabel), 'HTML'); result.telegram = true; } catch (e) { console.warn('[WC Broadcast] telegram failed:', e.message); }
     }
+    // Telegram-only resend: stop here, don't re-spam email/push/notifications.
+    if (opts.telegramOnly) {
+      console.log('[WC Broadcast] Telegram-only resend — ' + picks.length + ' games, telegram:' + result.telegram);
+      return result;
+    }
     // Push + in-app notification
     if (pushService && pushService.isAvailable) {
       pushService.broadcast(db, { title: '⚽ World Cup — Our View', body: 'Our view on today\'s ' + picks.length + ' game' + (picks.length === 1 ? '' : 's') + ' is live.', url: '/#/world-cup', tag: 'wc-view' }).then(function () { result.push = true; }).catch(function () {});
