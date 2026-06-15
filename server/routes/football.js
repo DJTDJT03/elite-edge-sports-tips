@@ -116,6 +116,7 @@ module.exports = function(deps) {
   // MATCH INTELLIGENCE — Deep analysis for any fixture
   // ---------------------------------------------------------------------------
   router.get('/football/match-intelligence/:fixtureId', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
     try {
       if (!footballSource || !process.env.API_FOOTBALL_KEY) {
         return res.status(503).json({ error: 'API-Football not configured. Set API_FOOTBALL_KEY.' });
