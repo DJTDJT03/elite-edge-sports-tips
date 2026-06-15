@@ -7822,7 +7822,7 @@ const App = {
                     <td>${u.name} ${isFlagged ? '<span title="Suspicious: 3+ IPs in 24h" style="color:#f59e0b;cursor:help;">&#9888;</span>' : ''}</td>
                     <td class="text-xs">${u.email}</td>
                     <td>${u.role}</td>
-                    <td>${u.subscription === 'vip' ? '<span style="color:#d4a843;font-weight:700;">VIP</span>' : u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : 'Free'}</td>
+                    <td>${u.subscription === 'vip' ? '<span style="color:#d4a843;font-weight:700;">VIP</span>' : u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : u.subscription === 'starter' ? '<span style="color:#22c55e;font-weight:600;">Starter</span>' : 'Free'}</td>
                     <td>${statusBadge}</td>
                     <td class="text-xs">${lastTime}</td>
                     <td class="text-xs">${lastIP}</td>
@@ -10045,7 +10045,7 @@ const App = {
     const u = accountData.user || {};
     const loginHistory = u.loginHistory || [];
     const lastLogin = u.lastLogin || {};
-    const subLabel = u.subscription === 'vip' ? '<span style="color:#d4a843;font-weight:700;">VIP</span>' : u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : 'Free';
+    const subLabel = u.subscription === 'vip' ? '<span style="color:#d4a843;font-weight:700;">VIP</span>' : u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : u.subscription === 'starter' ? '<span style="color:#22c55e;font-weight:600;">Starter</span>' : 'Free';
     const expiryLabel = u.subscriptionExpiry ? formatDateUK(u.subscriptionExpiry) : 'N/A';
 
     function parseUA(ua) {
