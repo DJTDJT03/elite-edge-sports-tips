@@ -266,42 +266,60 @@ module.exports = function(deps) {
 
         case 'invoice.payment_succeeded': {
           // Renewal OR first payment — extend expiry, and provision if still free.
+          // NOTE: newer Stripe API versions removed invoice.subscription from the
+          // top level, so we resolve the customer + subscription robustly by email
+          // (and dig the sub id out of the new locations as a fallback).
           const invoice = event.data.object;
-          if (invoice.subscription) {
-            const sub = await stripeService.getSubscription(invoice.subscription);
-            const users = await db.getUsers();
-            // Match by linked subscription id, then fall back to billing email so
-            // a first payment provisions even before the sub id has been linked.
-            let user = users.find(u => u.stripeSubscriptionId === invoice.subscription);
-            const invEmail = invoice.customer_email || (invoice.customer_details && invoice.customer_details.email) || null;
-            if (!user && invEmail && db.getUserByEmail) user = await db.getUserByEmail(invEmail);
-            if (user && sub) {
-              const expiry = new Date(sub.current_period_end * 1000);
-              const isPaid = ['starter', 'premium', 'vip'].includes(user.subscription);
-              // Keep their current paid tier on renewal; if they're still free,
-              // provision from the actual price paid (safety net for missed checkout event).
-              let tier = isPaid ? user.subscription : (await stripeService.tierFromSubscription(sub)) || 'premium';
-              const update = {
-                subscription: tier,
-                role: (tier === 'premium' || tier === 'vip') ? 'premium' : (user.role === 'admin' ? 'admin' : 'free'),
-                subscriptionExpiry: expiry.toISOString(),
-                stripeSubscriptionId: invoice.subscription,
-                stripeCustomerId: (typeof invoice.customer === 'string' ? invoice.customer : null) || user.stripeCustomerId || null,
-                paymentFailedAt: null, paymentGraceEnd: null, dunningStage: 0,
-              };
-              if (!isPaid) {
-                // First provision via this path → grant the tier's credit allowance.
-                update.credits = tier === 'vip' ? 999999 : tier === 'premium' ? 250 : 50;
-                update.trialActive = false;
-                if (db.recordCreditTransaction) {
-                  db.recordCreditTransaction({ userId: user.id, amount: update.credits, balanceAfter: update.credits, type: 'subscription_grant', description: tier + ' via invoice.payment_succeeded (' + update.credits + ' credits)' }).catch(function(){});
-                }
-                console.log('[Stripe] Webhook: invoice.payment_succeeded PROVISIONED ' + tier + ' for', user.email);
-              } else {
-                console.log('[Stripe] Webhook: renewal success for', user.email, '(' + tier + ') — new expiry:', expiry.toISOString());
-              }
-              await db.updateUser(user.id, update);
+          const invEmail = invoice.customer_email || (invoice.customer_details && invoice.customer_details.email) || null;
+          const invCust = typeof invoice.customer === 'string' ? invoice.customer : (invoice.customer && invoice.customer.id) || null;
+          // Find our user — by email first (most reliable), then by any linked sub.
+          let user = (invEmail && db.getUserByEmail) ? await db.getUserByEmail(invEmail) : null;
+
+          // Resolve the live subscription/tier. The robust email lookup handles the
+          // new invoice shape; fall back to digging the sub id out of the invoice.
+          let info = invEmail ? await stripeService.findSubscriptionByEmail(invEmail) : null;
+          if ((!info || !info.ok)) {
+            var subId = invoice.subscription
+              || (invoice.parent && invoice.parent.subscription_details && invoice.parent.subscription_details.subscription)
+              || ((invoice.lines && invoice.lines.data ? invoice.lines.data : [])
+                    .map(function (l) { return l.subscription || (l.parent && l.parent.subscription_item_details && l.parent.subscription_item_details.subscription); })
+                    .find(Boolean));
+            if (subId) {
+              try {
+                var subObj = await stripeService.getSubscription(subId);
+                if (subObj) info = { ok: true, tier: (await stripeService.tierFromSubscription(subObj)) || 'premium', subscriptionId: subObj.id, customerId: invCust, currentPeriodEnd: subObj.current_period_end };
+              } catch (e) {}
             }
+          }
+          if (!user && info && info.ok) {
+            const users = await db.getUsers();
+            user = users.find(u => u.stripeSubscriptionId === info.subscriptionId);
+          }
+          if (user && info && info.ok) {
+            const expiry = info.currentPeriodEnd ? new Date(info.currentPeriodEnd * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+            const isPaid = ['starter', 'premium', 'vip'].includes(user.subscription);
+            const tier = isPaid ? user.subscription : info.tier;
+            const update = {
+              subscription: tier,
+              role: (tier === 'premium' || tier === 'vip') ? 'premium' : (user.role === 'admin' ? 'admin' : 'free'),
+              subscriptionExpiry: expiry.toISOString(),
+              stripeSubscriptionId: info.subscriptionId,
+              stripeCustomerId: info.customerId || invCust || user.stripeCustomerId || null,
+              paymentFailedAt: null, paymentGraceEnd: null, dunningStage: 0,
+            };
+            if (!isPaid) {
+              update.credits = tier === 'vip' ? 999999 : tier === 'premium' ? 250 : 50;
+              update.trialActive = false;
+              if (db.recordCreditTransaction) {
+                db.recordCreditTransaction({ userId: user.id, amount: update.credits, balanceAfter: update.credits, type: 'subscription_grant', description: tier + ' via invoice.payment_succeeded (' + update.credits + ' credits)' }).catch(function(){});
+              }
+              console.log('[Stripe] Webhook: invoice.payment_succeeded PROVISIONED ' + tier + ' for', user.email);
+            } else {
+              console.log('[Stripe] Webhook: renewal success for', user.email, '(' + tier + ')');
+            }
+            await db.updateUser(user.id, update);
+          } else {
+            console.warn('[Stripe] invoice.payment_succeeded: could not provision (email=' + invEmail + ', userFound=' + !!user + ', subFound=' + !!(info && info.ok) + ')');
           }
           break;
         }
