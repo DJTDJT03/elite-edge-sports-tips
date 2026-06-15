@@ -89,6 +89,26 @@ module.exports = function(deps) {
 
       const updated = await db.updateUser(user.id, fields);
 
+      // Defend against DUPLICATE account rows for the same email: apply the same
+      // change to every row with this email so the list can't show a stale twin.
+      var emailRows = [];
+      if (db.query && subscription) {
+        try {
+          await db.query(
+            'UPDATE users SET subscription = $1, role = $2, updated_at = NOW() WHERE LOWER(email) = LOWER($3)',
+            [fields.subscription, fields.role, user.email]
+          );
+          if (fields.subscriptionExpiry !== undefined) {
+            await db.query('UPDATE users SET subscription_expiry = $1 WHERE LOWER(email) = LOWER($2)', [fields.subscriptionExpiry, user.email]);
+          }
+          if (fields.credits !== undefined) {
+            await db.query('UPDATE users SET credits = $1, trial_active = FALSE WHERE LOWER(email) = LOWER($2)', [fields.credits, user.email]);
+          }
+          var rr = await db.query('SELECT id, subscription, created_at FROM users WHERE LOWER(email) = LOWER($1) ORDER BY created_at', [user.email]);
+          emailRows = rr.rows || [];
+        } catch (e) { console.warn('[Admin] email-wide update/diag failed:', e.message); }
+      }
+
       if (grantedCredits !== null && db.recordCreditTransaction) {
         db.recordCreditTransaction({ userId: user.id, amount: grantedCredits, balanceAfter: grantedCredits, type: 'subscription_grant', description: 'Admin set ' + subscription + ' — ' + grantedCredits + ' monthly credits' }).catch(function(){});
       }
@@ -101,8 +121,9 @@ module.exports = function(deps) {
 
       // Read back the persisted value so we report the TRUTH, not what we hoped.
       const persisted = (updated && updated.subscription) || (await db.getUserById(user.id) || {}).subscription;
-      console.log('[Admin] Set ' + user.email + ' -> requested ' + subscription + ', persisted ' + persisted);
-      res.json({ message: `${user.email} is now: ${persisted}`, persisted: persisted, requested: subscription });
+      const rowsNote = emailRows.length ? ' | ' + emailRows.length + ' row(s) for this email: [' + emailRows.map(r => r.subscription).join(', ') + ']' : '';
+      console.log('[Admin] Set ' + user.email + ' -> requested ' + subscription + ', persisted ' + persisted + rowsNote);
+      res.json({ message: `${user.email} is now: ${persisted}${rowsNote}`, persisted: persisted, requested: subscription, emailRows: emailRows.length });
     } catch (err) {
       console.error('[Admin] Subscription update failed:', err.message);
       res.status(500).json({ error: 'Update failed: ' + err.message });
