@@ -61,50 +61,51 @@ module.exports = function(deps) {
   // ADMIN: Change user subscription
   // ---------------------------------------------------------------------------
   router.put('/admin/users/:id/subscription', authenticate, requireAdmin, async (req, res) => {
-    const users = await db.getUsers();
-    const user = users.find(u => u.id === req.params.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    const { subscription, subscriptionExpiry } = req.body;
-    const PAID = ['starter', 'premium', 'vip'];
-    const wasFree = !PAID.includes(user.subscription);
-    var grantedCredits = null;
-    if (subscription) {
-      user.subscription = subscription;
-      // premium/vip carry the 'premium' role (full access); starter & free do not.
-      user.role = (subscription === 'premium' || subscription === 'vip') ? 'premium' : (user.role === 'admin' ? 'admin' : 'free');
-      if (PAID.includes(subscription)) {
-        user.trialActive = false;
-        // Default a month's expiry if none supplied so access doesn't lapse instantly.
-        if (subscriptionExpiry === undefined && !user.subscriptionExpiry) {
-          user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    try {
+      const users = await db.getUsers();
+      // Type-safe id match (DB id may be number while the URL param is a string).
+      const user = users.find(u => String(u.id) === String(req.params.id));
+      if (!user) return res.status(404).json({ error: 'User not found for id ' + req.params.id });
+      const { subscription, subscriptionExpiry } = req.body;
+      const PAID = ['starter', 'premium', 'vip'];
+      const wasFree = !PAID.includes(user.subscription);
+
+      // Build a MINIMAL update — only the fields we're changing. Passing the whole
+      // user object risked a bad field silently failing the UPDATE.
+      const fields = {};
+      var grantedCredits = null;
+      if (subscription) {
+        fields.subscription = subscription;
+        fields.role = (subscription === 'premium' || subscription === 'vip') ? 'premium' : (user.role === 'admin' ? 'admin' : 'free');
+        if (PAID.includes(subscription)) {
+          fields.trialActive = false;
+          fields.subscriptionExpiry = subscriptionExpiry || user.subscriptionExpiry || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+          grantedCredits = subscription === 'vip' ? 999999 : subscription === 'premium' ? 250 : 50;
+          fields.credits = grantedCredits;
         }
-        // Grant the tier's monthly credit allowance (matches the Stripe flow).
-        grantedCredits = subscription === 'vip' ? 999999 : subscription === 'premium' ? 250 : 50;
-        user.credits = grantedCredits;
       }
+      if (subscriptionExpiry !== undefined) fields.subscriptionExpiry = subscriptionExpiry;
+
+      const updated = await db.updateUser(user.id, fields);
+
+      if (grantedCredits !== null && db.recordCreditTransaction) {
+        db.recordCreditTransaction({ userId: user.id, amount: grantedCredits, balanceAfter: grantedCredits, type: 'subscription_grant', description: 'Admin set ' + subscription + ' — ' + grantedCredits + ' monthly credits' }).catch(function(){});
+      }
+      if (wasFree && subscription === 'premium') {
+        const chargeDate = subscriptionExpiry || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        emailService.sendPremiumWelcome({ name: user.name, email: user.email, chargeDate }).catch(function(err) {
+          console.error('[Email] Premium welcome email failed:', err.message);
+        });
+      }
+
+      // Read back the persisted value so we report the TRUTH, not what we hoped.
+      const persisted = (updated && updated.subscription) || (await db.getUserById(user.id) || {}).subscription;
+      console.log('[Admin] Set ' + user.email + ' -> requested ' + subscription + ', persisted ' + persisted);
+      res.json({ message: `${user.email} is now: ${persisted}`, persisted: persisted, requested: subscription });
+    } catch (err) {
+      console.error('[Admin] Subscription update failed:', err.message);
+      res.status(500).json({ error: 'Update failed: ' + err.message });
     }
-    if (subscriptionExpiry !== undefined) user.subscriptionExpiry = subscriptionExpiry;
-
-    // Initialise default email preferences if missing
-    if (!user.emailPrefs) {
-      user.emailPrefs = { dailyBulletin: true, weeklySummary: true, marketing: true, bigWins: true };
-    }
-
-    await db.updateUser(user.id, user);
-
-    if (grantedCredits !== null && db.recordCreditTransaction) {
-      db.recordCreditTransaction({ userId: user.id, amount: grantedCredits, balanceAfter: grantedCredits, type: 'subscription_grant', description: 'Admin set ' + subscription + ' — ' + grantedCredits + ' monthly credits' }).catch(function(){});
-    }
-
-    // Send premium welcome email if upgrading from free to premium
-    if (wasFree && subscription === 'premium') {
-      const chargeDate = subscriptionExpiry || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      emailService.sendPremiumWelcome({ name: user.name, email: user.email, chargeDate }).catch(function(err) {
-        console.error('[Email] Premium welcome email failed:', err.message);
-      });
-    }
-
-    res.json({ message: `Subscription updated for ${user.email}: ${user.subscription}` });
   });
 
   // ---------------------------------------------------------------------------
@@ -119,7 +120,7 @@ module.exports = function(deps) {
         return res.status(503).json({ error: 'Stripe not configured' });
       }
       const users = await db.getUsers();
-      const user = users.find(u => u.id === req.params.id);
+      const user = users.find(u => String(u.id) === String(req.params.id));
       if (!user) return res.status(404).json({ error: 'User not found' });
 
       const found = await stripeService.findSubscriptionByEmail(user.email);
