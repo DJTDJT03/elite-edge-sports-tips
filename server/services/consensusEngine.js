@@ -26,6 +26,7 @@ function ConsensusEngine(deps) {
   this.deps = deps;
   scoringModel = deps.scoringModel;
   this.gptVerifier = deps.gptVerifier;
+  this.aiArbiters = deps.aiArbiters; // multi-model arbiter panel (GPT + Gemini + Grok)
 }
 
 /**
@@ -241,20 +242,29 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
   debate.push({ agent: scout.agent, pick: scout.selection, market: scout.market, confidence: scout.confidence, reasoning: scout.reasoning });
 
   // =====================================================================
-  // GPT VERIFICATION — independent arbiter reviews the debate
+  // AI ARBITER PANEL — independent reasoning models review the debate
   // =====================================================================
+  // Prefer the multi-model panel (GPT + Gemini + Grok) for diversity; fall back
+  // to the single GPT verifier if the panel has no keys configured.
   var gptVerdict = null;
-  if (this.gptVerifier && this.gptVerifier.isAvailable && this.gptVerifier.isAvailable()) {
+  var arbiterPanel = null;
+  var verifyPrompt = {
+    fixture: home + ' vs ' + away,
+    league: fixture.league || '',
+    agents: debate,
+    consensus: consensus ? { market: consensus.market, selection: consensus.selection, agreeing: consensus.agents.join(', ') } : null,
+  };
+  if (this.aiArbiters && this.aiArbiters.isAvailable && this.aiArbiters.isAvailable()) {
     try {
-      var verifyPrompt = {
-        fixture: home + ' vs ' + away,
-        league: fixture.league || '',
-        agents: debate,
-        consensus: consensus ? { market: consensus.market, selection: consensus.selection, agreeing: consensus.agents.join(', ') } : null,
-      };
+      arbiterPanel = await this.aiArbiters.panel(verifyPrompt);
+      if (arbiterPanel) gptVerdict = { agrees: arbiterPanel.agrees, disagrees: arbiterPanel.disagrees, confidence: arbiterPanel.confidence, panel: arbiterPanel.votes, label: arbiterPanel.label };
+    } catch (e) { /* non-fatal */ }
+  }
+  if (!gptVerdict && this.gptVerifier && this.gptVerifier.isAvailable && this.gptVerifier.isAvailable()) {
+    try {
       gptVerdict = await this.gptVerifier.verifyConsensus(verifyPrompt);
     } catch(e) {
-      // Non-fatal — proceed without GPT input
+      // Non-fatal — proceed without arbiter input
     }
   }
 
@@ -269,9 +279,16 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
   else if (agreementLevel === 2) consensusBonus = 1; // Two agree — moderate
   else consensusBonus = -1; // No agreement — weak
 
-  // GPT verification bonus
-  if (gptVerdict && gptVerdict.agrees) consensusBonus += 1;
-  if (gptVerdict && gptVerdict.disagrees) consensusBonus -= 1;
+  // Arbiter bonus — scaled by how many independent models agree.
+  if (arbiterPanel && arbiterPanel.panelSize) {
+    var agreeFrac = arbiterPanel.agreeCount / arbiterPanel.panelSize;
+    if (agreeFrac >= 0.99) consensusBonus += 2;      // whole panel agrees
+    else if (agreeFrac > 0.5) consensusBonus += 1;   // majority agree
+    else if (arbiterPanel.agreeCount === 0) consensusBonus -= 1; // none agree
+  } else {
+    if (gptVerdict && gptVerdict.agrees) consensusBonus += 1;
+    if (gptVerdict && gptVerdict.disagrees) consensusBonus -= 1;
+  }
 
   var finalConfidence = Math.max(6, Math.min(10, baseConfidence + consensusBonus));
 
@@ -304,6 +321,7 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
     // The full debate
     debate: debate,
     gptVerdict: gptVerdict,
+    arbiterPanel: arbiterPanel, // multi-model panel votes (GPT/Gemini/Grok)
 
     // Analyst assignment (primary agent from consensus)
     analyst: consensus && consensus.agents[0] ? consensus.agents[0].toLowerCase().replace('the ', '') : 'tactician',
