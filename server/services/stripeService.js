@@ -274,6 +274,30 @@ class StripeService {
       expand: ['subscription'],
     });
   }
+
+  /**
+   * Reconciliation: given an email, find their live Stripe subscription and
+   * work out which tier they're actually paying for. Used to fix accounts where
+   * payment succeeded but provisioning (webhook/redirect) didn't run.
+   * @returns {object|null} { tier, subscriptionId, customerId, currentPeriodEnd, status, priceId } or null
+   */
+  async findSubscriptionByEmail(email) {
+    if (!stripe) throw new Error('Stripe not configured');
+    const customers = await stripe.customers.list({ email: email, limit: 20 });
+    const prices = await this.ensureProducts();
+    for (const c of customers.data) {
+      const subs = await stripe.subscriptions.list({ customer: c.id, status: 'all', limit: 20 });
+      const live = subs.data.find(function (s) { return ['active', 'trialing', 'past_due'].includes(s.status); });
+      if (!live) continue;
+      const priceId = live.items && live.items.data[0] && live.items.data[0].price && live.items.data[0].price.id;
+      let tier = 'premium';
+      if (priceId === prices.vipMonthlyId || priceId === prices.vipAnnualId) tier = 'vip';
+      else if (priceId === prices.starterMonthlyId || priceId === prices.starterAnnualId) tier = 'starter';
+      else if (priceId === prices.premiumMonthlyId || priceId === prices.premiumAnnualId) tier = 'premium';
+      return { tier: tier, subscriptionId: live.id, customerId: c.id, currentPeriodEnd: live.current_period_end, status: live.status, priceId: priceId };
+    }
+    return null;
+  }
 }
 
 module.exports = new StripeService();

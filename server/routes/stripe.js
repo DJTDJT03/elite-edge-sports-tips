@@ -106,7 +106,9 @@ module.exports = function(deps) {
       }
 
       // Determine tier from session metadata (defaults to 'premium' for backward compat)
-      const tier = (session.metadata && session.metadata.tier === 'vip') ? 'vip' : 'premium';
+      const tier = (session.metadata && session.metadata.tier === 'vip') ? 'vip'
+                 : (session.metadata && session.metadata.tier === 'starter') ? 'starter'
+                 : 'premium';
 
       // Update user subscription
       const stripeCustomerId = typeof session.customer === 'string'

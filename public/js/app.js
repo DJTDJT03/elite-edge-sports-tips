@@ -7820,6 +7820,7 @@ const App = {
                         : `<button class="btn btn-ghost btn-sm" onclick="App.adminLockUser('${u.id}')">Lock</button>`}
                       <button class="btn btn-ghost btn-sm" onclick="App.adminToggleLoginHistory('${u.id}')" title="Login history">History</button>
                       <button class="btn btn-ghost btn-sm" onclick="App.adminChangeSubscription('${u.id}','${u.subscription}')" title="Change plan">Plan</button>
+                      <button class="btn btn-ghost btn-sm" onclick="App.adminReconcileStripe('${u.id}','${(u.email || '').replace(/'/g, "\\'")}')" title="They paid but show free? Pull their real plan from Stripe">Fix from Stripe</button>
                     </td>
                   </tr>
                   <tr id="admin-login-history-${u.id}" style="display:none;">
@@ -8384,13 +8385,25 @@ const App = {
     if (row) row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
   },
 
+  async adminReconcileStripe(userId, email) {
+    if (!confirm('Look up ' + (email || 'this user') + ' in Stripe and set their plan to whatever they are actually paying for?')) return;
+    try {
+      var result = await this.api('/admin/users/' + userId + '/reconcile-stripe', { method: 'POST' });
+      App.showToast(result.message || (result.reconciled ? 'Reconciled.' : 'No active Stripe subscription found.'), result.reconciled ? 'success' : 'error');
+      this.renderAdmin();
+    } catch (e) { App.showToast('Error: ' + e.message, 'error'); }
+  },
+
   async adminChangeSubscription(userId, currentSub) {
-    var options = { 'free': 'premium', 'premium': 'vip', 'vip': 'free' };
-    var newSub = options[currentSub] || 'premium';
-    if (!confirm('Change subscription to ' + newSub + '?')) return;
+    var newSub = prompt('Set plan — type one of: free, starter, premium, vip\n(current: ' + currentSub + ')', currentSub);
+    if (!newSub) return;
+    newSub = newSub.trim().toLowerCase();
+    if (['free', 'starter', 'premium', 'vip'].indexOf(newSub) === -1) {
+      return App.showToast('Invalid plan. Use free, starter, premium or vip.', 'error');
+    }
     var expiry = null;
-    if (newSub === 'premium' || newSub === 'vip') {
-      expiry = prompt('Subscription expiry date (YYYY-MM-DD):', new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    if (newSub === 'starter' || newSub === 'premium' || newSub === 'vip') {
+      expiry = prompt('Subscription expiry date (YYYY-MM-DD):', new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
       if (!expiry) return;
     }
     try {

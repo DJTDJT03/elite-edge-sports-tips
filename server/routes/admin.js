@@ -65,10 +65,23 @@ module.exports = function(deps) {
     const user = users.find(u => u.id === req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     const { subscription, subscriptionExpiry } = req.body;
-    const wasFree = user.subscription !== 'premium';
+    const PAID = ['starter', 'premium', 'vip'];
+    const wasFree = !PAID.includes(user.subscription);
+    var grantedCredits = null;
     if (subscription) {
       user.subscription = subscription;
-      user.role = subscription === 'premium' ? 'premium' : (user.role === 'admin' ? 'admin' : 'free');
+      // premium/vip carry the 'premium' role (full access); starter & free do not.
+      user.role = (subscription === 'premium' || subscription === 'vip') ? 'premium' : (user.role === 'admin' ? 'admin' : 'free');
+      if (PAID.includes(subscription)) {
+        user.trialActive = false;
+        // Default a month's expiry if none supplied so access doesn't lapse instantly.
+        if (subscriptionExpiry === undefined && !user.subscriptionExpiry) {
+          user.subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        }
+        // Grant the tier's monthly credit allowance (matches the Stripe flow).
+        grantedCredits = subscription === 'vip' ? 999999 : subscription === 'premium' ? 250 : 50;
+        user.credits = grantedCredits;
+      }
     }
     if (subscriptionExpiry !== undefined) user.subscriptionExpiry = subscriptionExpiry;
 
@@ -79,6 +92,10 @@ module.exports = function(deps) {
 
     await db.updateUser(user.id, user);
 
+    if (grantedCredits !== null && db.recordCreditTransaction) {
+      db.recordCreditTransaction({ userId: user.id, amount: grantedCredits, balanceAfter: grantedCredits, type: 'subscription_grant', description: 'Admin set ' + subscription + ' — ' + grantedCredits + ' monthly credits' }).catch(function(){});
+    }
+
     // Send premium welcome email if upgrading from free to premium
     if (wasFree && subscription === 'premium') {
       const chargeDate = subscriptionExpiry || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -88,6 +105,48 @@ module.exports = function(deps) {
     }
 
     res.json({ message: `Subscription updated for ${user.email}: ${user.subscription}` });
+  });
+
+  // ---------------------------------------------------------------------------
+  // ADMIN: Reconcile a user against Stripe — fixes "paid but still on free".
+  // Reads the live subscription from Stripe (source of truth) and provisions
+  // the correct tier, expiry, credits and Stripe IDs.
+  // ---------------------------------------------------------------------------
+  router.post('/admin/users/:id/reconcile-stripe', authenticate, requireAdmin, async (req, res) => {
+    try {
+      const stripeService = deps.stripeService;
+      if (!stripeService || !stripeService.isAvailable) {
+        return res.status(503).json({ error: 'Stripe not configured' });
+      }
+      const users = await db.getUsers();
+      const user = users.find(u => u.id === req.params.id);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      const found = await stripeService.findSubscriptionByEmail(user.email);
+      if (!found) {
+        return res.json({ reconciled: false, message: 'No active Stripe subscription found for ' + user.email + '. Confirm the email on the Stripe payment matches their account email.' });
+      }
+
+      const credits = found.tier === 'vip' ? 999999 : found.tier === 'premium' ? 250 : 50;
+      const expiry = found.currentPeriodEnd ? new Date(found.currentPeriodEnd * 1000).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      await db.updateUser(user.id, {
+        subscription: found.tier,
+        role: (found.tier === 'premium' || found.tier === 'vip') ? 'premium' : (user.role === 'admin' ? 'admin' : 'free'),
+        subscriptionExpiry: expiry,
+        trialActive: false,
+        credits: credits,
+        stripeCustomerId: found.customerId,
+        stripeSubscriptionId: found.subscriptionId,
+      });
+      if (db.recordCreditTransaction) {
+        db.recordCreditTransaction({ userId: user.id, amount: credits, balanceAfter: credits, type: 'subscription_grant', description: 'Stripe reconcile — ' + found.tier + ' (' + credits + ' credits)' }).catch(function(){});
+      }
+      console.log('[Admin] Reconciled ' + user.email + ' to ' + found.tier + ' from Stripe (' + found.status + ')');
+      res.json({ reconciled: true, tier: found.tier, status: found.status, message: user.email + ' set to ' + found.tier + ' (Stripe status: ' + found.status + ').' });
+    } catch (err) {
+      console.error('[Admin] Stripe reconcile failed:', err.message);
+      res.status(500).json({ error: 'Reconcile failed: ' + err.message });
+    }
   });
 
   // ---------------------------------------------------------------------------
