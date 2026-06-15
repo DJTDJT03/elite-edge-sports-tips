@@ -330,24 +330,32 @@ module.exports = function(deps) {
               }
             } catch (e) { console.log('[Match Intelligence] WC consensus lookup failed:', e.message); }
 
-            // Build verdict — prefer the SportMonks model when available
+            // Build verdict — prefer the SportMonks model when available.
             var smVerdict;
             if (smProb) {
-              var _top = Math.max(smProb.home, smProb.draw, smProb.away);
-              // Always name the favourite (higher win-prob side); only add "or
-              // Draw" when the draw is genuinely the single most-likely outcome.
-              // Never headline a bare draw — a #1 seed should never read as a draw.
+              // ALWAYS back the favourite (higher win-prob side) to WIN. The
+              // provisional WC model is unreliable and was producing draws for
+              // clear favourites — a draw is never the headline for a mismatch.
               var _favHome = smProb.home >= smProb.away;
               var _favTeam = _favHome ? smF.homeTeam : smF.awayTeam;
-              var _drawHighest = smProb.draw > smProb.home && smProb.draw > smProb.away;
+              var _favProb = _favHome ? smProb.home : smProb.away;
+              var _dogProb = _favHome ? smProb.away : smProb.home;
+              var _gap = _favProb - _dogProb; // dominance
+              // Goals lean from the model's predicted scoreline / BTTS.
+              var _total = null;
+              if (smScore) { var _ps = String(smScore).split('-'); if (_ps.length === 2) _total = (parseInt(_ps[0]) || 0) + (parseInt(_ps[1]) || 0); }
+              var _goalsNote = '';
+              if (_total != null && _total >= 4) _goalsNote = ' Projected scoreline ' + smScore + ' — strong Over 3.5 Goals lean.';
+              else if (_total != null && _total >= 3) _goalsNote = ' Projected scoreline ' + smScore + ' — Over 2.5 Goals lean.';
+              else if (smBtts != null && smBtts >= 60) _goalsNote = ' High BTTS read (' + smBtts + '%) — goals expected.';
               smVerdict = {
                 market: 'Match Result',
-                pick: _drawHighest ? _favTeam + ' or Draw' : _favTeam + ' Win',
+                pick: _favTeam + ' Win',
                 reason: 'SportMonks model: ' + smF.homeTeam + ' ' + smProb.home + '%, Draw ' + smProb.draw + '%, ' + smF.awayTeam + ' ' + smProb.away + '%.'
-                        + (smHomeXg != null && smAwayXg != null ? ' Expected goals ' + smHomeXg + ' v ' + smAwayXg + '.' : ''),
-                confidence: Math.max(5, Math.min(9, Math.round(_top / 10))),
-                riskLevel: _top >= 55 ? 'low-medium' : 'medium',
-                riskText: _top >= 55 ? 'Model shows a clear favourite.' : 'Tight match on the model — moderate risk.',
+                        + (smHomeXg != null && smAwayXg != null ? ' Expected goals ' + smHomeXg + ' v ' + smAwayXg + '.' : '') + _goalsNote,
+                confidence: _gap >= 35 ? 9 : _gap >= 20 ? 8 : _favProb >= 45 ? 7 : 6,
+                riskLevel: _gap >= 25 ? 'low' : _gap >= 12 ? 'low-medium' : 'medium',
+                riskText: _gap >= 25 ? 'Clear favourite — back them to win.' : _gap >= 12 ? 'Model favours ' + _favTeam + '.' : 'Competitive on the model.',
               };
             }
             var smH2HHomeWins = 0, smH2HAwayWins = 0, smH2HDraws = 0, smH2HTotalGoals = 0;
@@ -358,6 +366,29 @@ module.exports = function(deps) {
               smH2HTotalGoals += (m.homeGoals || 0) + (m.awayGoals || 0);
             });
             var smH2HAvg = smH2H.length > 0 ? (smH2HTotalGoals / smH2H.length).toFixed(1) : '2.5';
+
+            // Pick the verdict source, then guard: a World Cup "Our Take" must
+            // never headline a bare Draw — back the favourite to win instead.
+            var _finalVerdict = wcConsensusVerdict || smVerdict || {
+              market: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Total Goals' : 'Match Result',
+              pick: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Over 2.5 Goals' : (smH2HHomeWins > smH2HAwayWins ? smF.homeTeam + ' Win' : smF.awayTeam + ' Win'),
+              reason: 'Based on head-to-head record: ' + smH2HHomeWins + ' home wins, ' + smH2HAwayWins + ' away wins, ' + smH2HDraws + ' draws across ' + smH2H.length + ' meetings. Average ' + smH2HAvg + ' goals per game.',
+              confidence: 6,
+              riskLevel: 'medium',
+              riskText: 'Moderate risk — limited data depth for this league.',
+            };
+            if (_finalVerdict && /^\s*draw\s*$/i.test(String(_finalVerdict.pick || '')) && smProb) {
+              var _gFav = (smProb.home >= smProb.away) ? smF.homeTeam : smF.awayTeam;
+              _finalVerdict = {
+                market: 'Match Result',
+                pick: _gFav + ' Win',
+                reason: 'Backing the favourite to win — a draw is not the play in a mismatch. ' + (_finalVerdict.reason || ''),
+                confidence: _finalVerdict.confidence || 7,
+                riskLevel: _finalVerdict.riskLevel || 'low-medium',
+                riskText: _finalVerdict.riskText || 'Clear favourite.',
+                source: _finalVerdict.source,
+              };
+            }
 
             return res.json({
               fixtureId: parseInt(fixtureId),
@@ -379,14 +410,7 @@ module.exports = function(deps) {
               injuries: { home: [], away: [] },
               predictions: null,
               seasonStats: { home: null, away: null },
-              verdict: wcConsensusVerdict || smVerdict || {
-                market: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Total Goals' : 'Match Result',
-                pick: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Over 2.5 Goals' : (smH2HHomeWins > smH2HAwayWins ? smF.homeTeam + ' Win' : smF.awayTeam + ' or Draw'),
-                reason: 'Based on head-to-head record: ' + smH2HHomeWins + ' home wins, ' + smH2HAwayWins + ' away wins, ' + smH2HDraws + ' draws across ' + smH2H.length + ' meetings. Average ' + smH2HAvg + ' goals per game.',
-                confidence: 6,
-                riskLevel: 'medium',
-                riskText: 'Moderate risk — limited data depth for this league.',
-              },
+              verdict: _finalVerdict,
               winProbability: smProb || null,
               predictedScore: smScore || null,
               bttsPercent: smBtts != null ? smBtts : null,
