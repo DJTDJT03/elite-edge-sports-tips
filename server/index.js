@@ -164,6 +164,9 @@ const deps = {
   perplexityClient,
 };
 
+// Elite Edge Quant Model — in-house Elo + Dixon-Coles engine (independent signal).
+deps.quantModel = require('./services/quantModel')(deps);
+
 // ---------------------------------------------------------------------------
 // Mount routes
 // ---------------------------------------------------------------------------

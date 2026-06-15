@@ -6271,6 +6271,35 @@ const App = {
       '</div>' +
     '</div>';
 
+    // --- Elite Edge Quant Model (in-house Elo + Dixon-Coles) ---
+    if (data.quantModel && data.quantModel.winProb) {
+      var q = data.quantModel;
+      var qbar = function (label, pct, color) {
+        return '<div style="display:flex;align-items:center;gap:8px;margin:4px 0;">' +
+          '<span style="font-size:12px;color:var(--text-secondary);width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + App.escapeHtml(label) + '</span>' +
+          '<div style="flex:1;height:8px;border-radius:4px;background:var(--bg-elevated);overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:' + color + ';"></div></div>' +
+          '<span style="font-size:12px;font-weight:700;color:var(--text-primary);width:34px;text-align:right;">' + pct + '%</span>' +
+        '</div>';
+      };
+      html += '<div class="match-intel-section">' +
+        '<h3 class="match-intel-section-title">Elite Edge Model <span style="font-size:11px;color:var(--text-muted);font-weight:500;">· Elo + Dixon-Coles (our engine)</span></h3>' +
+        '<div style="display:flex;gap:18px;flex-wrap:wrap;">' +
+          '<div style="flex:1;min-width:220px;">' +
+            qbar(m.homeTeam, q.winProb.home, '#22c55e') +
+            qbar('Draw', q.winProb.draw, '#94a3b8') +
+            qbar(m.awayTeam, q.winProb.away, '#3b82f6') +
+          '</div>' +
+          '<div style="text-align:center;min-width:120px;">' +
+            '<div style="font-size:11px;color:var(--text-muted);">Expected goals</div>' +
+            '<div style="font-size:20px;font-weight:900;color:#fff;">' + q.expectedGoals.home + ' – ' + q.expectedGoals.away + '</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Most likely</div>' +
+            '<div style="font-size:16px;font-weight:800;color:#d4a843;">' + (q.mostLikelyScore || '-') + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--text-secondary);margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">Model lean: <strong style="color:#d4a843;">' + App.escapeHtml(q.pick.selection) + '</strong> &nbsp;·&nbsp; Over 2.5: <strong>' + q.over25 + '%</strong> &nbsp;·&nbsp; BTTS: <strong>' + q.btts + '%</strong> &nbsp;·&nbsp; Power rating ' + q.ratings.home + ' v ' + q.ratings.away + '</div>' +
+      '</div>';
+    }
+
     // --- Model Prediction (SportMonks All-In) ---
     if (data.winProbability || data.predictedScore || data.bttsPercent != null) {
       var wp = data.winProbability;

@@ -969,9 +969,20 @@ module.exports = function(deps) {
         }
       }
 
+      // Elite Edge Quant Model — independent Elo + Dixon-Coles prediction (a
+      // genuine in-house signal shown alongside the engine's verdict).
+      var _quant = null;
+      try {
+        if (deps.quantModel) {
+          var _neutral = /world cup|world championship/i.test(league.name || '');
+          _quant = deps.quantModel.predict(homeTeam.name || '', awayTeam.name || '', { neutral: _neutral });
+        }
+      } catch (e) { /* non-fatal */ }
+
       res.json({
         fixtureId: parseInt(fixtureId),
         source: usedSportMonks ? 'sportmonks' : 'api-football',
+        quantModel: _quant,
         match: {
           homeTeam: homeTeam.name || homeTeam || '',
           homeTeamId: homeTeam.id || 0,

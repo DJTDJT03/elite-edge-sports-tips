@@ -206,6 +206,25 @@ module.exports = function(deps) {
     return seeded;
   }
 
+  // Update the Quant Model's Elo ratings from finished WC results, once each
+  // (tracked via elo_applied) so ratings learn from the tournament. Neutral venue.
+  async function updateQuantRatings() {
+    if (!deps.quantModel || !db.query) return 0;
+    try {
+      await db.query("ALTER TABLE world_cup_fixtures ADD COLUMN IF NOT EXISTS elo_applied BOOLEAN DEFAULT FALSE");
+      var res = await db.query("SELECT id, home_team, away_team, home_goals, away_goals FROM world_cup_fixtures WHERE status='finished' AND home_goals IS NOT NULL AND away_goals IS NOT NULL AND elo_applied IS NOT TRUE ORDER BY kickoff ASC");
+      var n = 0;
+      for (var i = 0; i < (res.rows || []).length; i++) {
+        var f = res.rows[i];
+        await deps.quantModel.updateFromResult(f.home_team, f.away_team, f.home_goals, f.away_goals, { neutral: true });
+        await db.query("UPDATE world_cup_fixtures SET elo_applied = TRUE WHERE id = $1", [f.id]);
+        n++;
+      }
+      if (n) console.log('[QuantModel] Elo updated from ' + n + ' finished WC result(s)');
+      return n;
+    } catch (e) { console.warn('[QuantModel] rating update failed:', e.message); return 0; }
+  }
+
   // Public entry point — prefer SportMonks (the upgraded source), fall back to
   // API-Football if SportMonks isn't available or returns nothing.
   async function syncFixtures() {
@@ -246,6 +265,7 @@ module.exports = function(deps) {
     // Recompute group tables from the results we hold (provider standings are
     // unreliable for the provisional 2026 data).
     try { result.computedGroups = await computeGroupStandings(); } catch (e) { console.warn('[WorldCup] computeGroupStandings failed:', e.message); }
+    try { result.eloUpdated = await updateQuantRatings(); } catch (e) { console.warn('[WorldCup] updateQuantRatings failed:', e.message); }
     return result;
   }
 
@@ -588,22 +608,29 @@ module.exports = function(deps) {
   // Map the SportMonks model into a `scored` object for the consensus engine.
   // Factors are normalised 0-1; odds derived from win probabilities.
   function buildWcScored(fixture, model) {
-    var wp = model && model.winProb;
+    // Prefer the Elite Edge Quant Model (Elo + Dixon-Coles) — a real, independent
+    // probability set — over the unreliable provisional SportMonks model. This is
+    // what stops the consensus drawing clear favourites (it now sees Spain ~85%).
+    var quant = null;
+    try { if (deps.quantModel) quant = deps.quantModel.predict(fixture.home_team, fixture.away_team, { neutral: true }); } catch (e) {}
+
+    var wp = (quant && quant.winProb) ? quant.winProb : (model && model.winProb);
     var homeP = wp ? wp.home : 40, drawP = wp ? wp.draw : 27, awayP = wp ? wp.away : 33;
     var homeAway = (homeP + awayP) > 0 ? homeP / (homeP + awayP) : 0.55;
     var countW = function(f) { return f && f.formStr ? (f.formStr.split('W').length - 1) : 0; };
     var hw = countW(model && model.homeForm), aw = countW(model && model.awayForm);
     var form = Math.max(0, Math.min(1, 0.5 + (hw - aw) * 0.08));
-    var totalGoals = 2.5;
-    if (model && model.score) { var pr = String(model.score).split('-'); if (pr.length === 2) totalGoals = (parseInt(pr[0]) || 0) + (parseInt(pr[1]) || 0); }
+    var totalGoals = quant ? quant.expectedGoals.total : 2.5;
+    if (!quant && model && model.score) { var pr = String(model.score).split('-'); if (pr.length === 2) totalGoals = (parseInt(pr[0]) || 0) + (parseInt(pr[1]) || 0); }
     var xG = Math.max(0, Math.min(1, totalGoals / 4));
+    var bttsPct = quant ? quant.btts : (model && model.btts != null ? model.btts : 50);
     return {
       fixture: { homeTeam: fixture.home_team, awayTeam: fixture.away_team, league: 'FIFA World Cup 2026', kickoff: fixture.kickoff },
-      factors: { homeAway: homeAway, form: form, xG: xG, shots: 0.5, injuries: 0.5, motivation: 0.5, scheduleCongestion: 0.5,
-        btts: (model && model.btts != null) ? model.btts / 100 : 0.5 },
-      homeOdds: 100 / homeP, drawOdds: 100 / drawP, awayOdds: 100 / awayP,
-      overOdds: (model && model.btts > 55) ? 1.8 : 2.05,
-      bttsOdds: (model && model.btts) ? Math.max(1.4, 100 / model.btts) : 1.8,
+      factors: { homeAway: homeAway, form: form, xG: xG, shots: 0.5, injuries: 0.5, motivation: 0.5, scheduleCongestion: 0.5, btts: bttsPct / 100 },
+      homeOdds: 100 / Math.max(1, homeP), drawOdds: 100 / Math.max(1, drawP), awayOdds: 100 / Math.max(1, awayP),
+      overOdds: (quant ? quant.over25 : (model && model.btts)) > 55 ? 1.8 : 2.05,
+      bttsOdds: bttsPct ? Math.max(1.4, 100 / bttsPct) : 1.8,
+      quantModel: quant || null,
     };
   }
 
@@ -928,6 +955,7 @@ module.exports = function(deps) {
     scorePredictions: scorePredictions,
     seedTournament: seedTournament,
     seedGroupFixturesFromSchedule: seedGroupFixturesFromSchedule,
+    updateQuantRatings: updateQuantRatings,
     generatePreviews: generatePreviews,
   };
 };
