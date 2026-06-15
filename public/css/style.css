@@ -122,6 +122,9 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
 .nav-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .nav-toggle { display: none; background: none; border: none; color: var(--text-primary); font-size: 22px; cursor: pointer; padding: 4px 8px; }
 .nav-signup-mobile { display: none; }
+/* Desktop: never show the compact mobile CTA — the nav-right Log In + Sign Up
+   buttons cover it. Prevents the duplicate "Sign Up" + "Sign Up Free". */
+@media (min-width: 769px) { .nav-signup-mobile { display: none !important; } }
 
 /* Mobile-only items hidden on desktop (shown only when nav is in mobile dropdown mode) */
 #nav-auth-guest-mobile, #nav-auth-user-mobile, .mobile-menu-tools { display: none !important; }
