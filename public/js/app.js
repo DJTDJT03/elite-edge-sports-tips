@@ -8029,7 +8029,8 @@ const App = {
         '<p class="text-sm text-muted mb-8">Pulls fixtures from SportMonks (falls back to API-Football). Run Diagnose to confirm the feed, then Sync to load fixtures.</p>' +
         '<button class="btn btn-outline btn-sm" onclick="App.lmsDiagnoseWc()">Diagnose feed</button> ' +
         '<button class="btn btn-gold btn-sm" onclick="App.lmsSyncWc()">Sync fixtures now</button> ' +
-        '<button class="btn btn-outline btn-sm" onclick="App.lmsInspectFixture()">Inspect rich data (xG/lineups/predictions)</button>' +
+        '<button class="btn btn-outline btn-sm" onclick="App.lmsInspectFixture()">Inspect rich data (xG/lineups/predictions)</button> ' +
+        '<button class="btn btn-gold btn-sm" onclick="App.lmsGenerateWcPreviews()">Run consensus picks (Our Take)</button>' +
         '<pre id="lms-wc-feed-out" style="display:none;white-space:pre-wrap;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;margin-top:10px;font-size:11px;max-height:240px;overflow:auto;"></pre>' +
       '</div>' +
       '<div class="card mb-16">' +
@@ -8066,6 +8067,18 @@ const App = {
       if (out) out.textContent = JSON.stringify(r.summary || r, null, 2);
     } catch (e) {
       if (out) out.textContent = 'Inspect failed: ' + (e.message || e) + '\n\n(Sync fixtures first so there is one to inspect.)';
+    }
+  },
+
+  async lmsGenerateWcPreviews() {
+    var out = document.getElementById('lms-wc-feed-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Running the 5-analyst consensus engine over upcoming fixtures… (this can take a minute)'; }
+    try {
+      var r = await this.api('/world-cup/admin/generate-previews', { method: 'POST' });
+      if (out) out.textContent = 'Consensus picks generated for ' + (r.generated || 0) + ' fixture(s).\nOpen any of those games — the "Our Take" now shows the multi-analyst consensus selection.';
+      this.showToast('Consensus picks generated: ' + (r.generated || 0) + ' fixtures', 'success');
+    } catch (e) {
+      if (out) out.textContent = 'Preview generation failed: ' + (e.message || e) + '\n\n(Needs a Perplexity key + upcoming scheduled fixtures within 5 days.)';
     }
   },
 

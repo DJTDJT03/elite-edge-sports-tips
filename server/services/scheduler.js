@@ -4550,10 +4550,19 @@ module.exports = function startScheduler(deps) {
       if (r && (r.fixtures || r.groups)) {
         console.log('[WorldCup] Auto-sync — ' + (r.fixtures || 0) + ' fixtures, ' + (r.groups || 0) + ' groups (' + (r.source || '?') + ')');
       }
+      // Run the 5-analyst consensus engine over upcoming fixtures (self-limited
+      // to the next 5 days, max 6 per pass, only those without a preview). This
+      // is what produces the real headline pick shown on each game's "Our Take".
+      if (deps.worldCupData.generatePreviews) {
+        try {
+          var p = await deps.worldCupData.generatePreviews();
+          if (p && p.generated) console.log('[WorldCup] Consensus previews generated: ' + p.generated);
+        } catch (e) { console.warn('[WorldCup] preview generation failed:', e.message); }
+      }
     });
     setInterval(runWcSync, 15 * 60 * 1000);  // every 15 minutes
     setTimeout(runWcSync, 100000);
-    console.log('[Scheduler] World Cup auto-sync ENABLED');
+    console.log('[Scheduler] World Cup auto-sync + consensus previews ENABLED');
   }
 
   // =========================================================================

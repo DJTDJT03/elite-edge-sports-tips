@@ -303,16 +303,46 @@ module.exports = function(deps) {
               }
             });
 
+            // Prefer our 5-analyst consensus verdict (stored on the WC preview)
+            // over the raw SportMonks model — the provisional WC model is
+            // unreliable (it was headlining draws for clear favourites). The
+            // consensus engine reasons on live team strength via Perplexity.
+            var wcConsensusVerdict = null;
+            try {
+              var _pv = await db.query(
+                "SELECT p.verdict, p.verdict_market, p.verdict_selection, p.confidence " +
+                "FROM world_cup_previews p JOIN world_cup_fixtures f ON p.fixture_id = f.id " +
+                "WHERE f.external_fixture_id::text = $1 AND p.verdict_selection IS NOT NULL LIMIT 1",
+                [String(fixtureId)]
+              );
+              if (_pv.rows && _pv.rows.length) {
+                var _r = _pv.rows[0];
+                var _conf = _r.confidence || 7;
+                wcConsensusVerdict = {
+                  market: _r.verdict_market || 'Match Result',
+                  pick: _r.verdict_selection,
+                  reason: _r.verdict || 'Elite Edge multi-analyst consensus.',
+                  confidence: _conf,
+                  riskLevel: _conf >= 8 ? 'low' : _conf >= 6 ? 'low-medium' : 'medium',
+                  riskText: 'Selection from the Elite Edge 5-analyst consensus engine.',
+                  source: 'consensus',
+                };
+              }
+            } catch (e) { console.log('[Match Intelligence] WC consensus lookup failed:', e.message); }
+
             // Build verdict — prefer the SportMonks model when available
             var smVerdict;
             if (smProb) {
-              var _best = (smProb.home >= smProb.draw && smProb.home >= smProb.away) ? 'home'
-                        : (smProb.away >= smProb.draw && smProb.away >= smProb.home) ? 'away' : 'draw';
               var _top = Math.max(smProb.home, smProb.draw, smProb.away);
+              // Always name the favourite (higher win-prob side); only add "or
+              // Draw" when the draw is genuinely the single most-likely outcome.
+              // Never headline a bare draw — a #1 seed should never read as a draw.
+              var _favHome = smProb.home >= smProb.away;
+              var _favTeam = _favHome ? smF.homeTeam : smF.awayTeam;
+              var _drawHighest = smProb.draw > smProb.home && smProb.draw > smProb.away;
               smVerdict = {
                 market: 'Match Result',
-                pick: _best === 'home' ? smF.homeTeam + ' Win' : _best === 'away' ? smF.awayTeam + ' Win'
-                      : (smProb.home >= smProb.away ? smF.homeTeam + ' or Draw' : smF.awayTeam + ' or Draw'),
+                pick: _drawHighest ? _favTeam + ' or Draw' : _favTeam + ' Win',
                 reason: 'SportMonks model: ' + smF.homeTeam + ' ' + smProb.home + '%, Draw ' + smProb.draw + '%, ' + smF.awayTeam + ' ' + smProb.away + '%.'
                         + (smHomeXg != null && smAwayXg != null ? ' Expected goals ' + smHomeXg + ' v ' + smAwayXg + '.' : ''),
                 confidence: Math.max(5, Math.min(9, Math.round(_top / 10))),
@@ -349,7 +379,7 @@ module.exports = function(deps) {
               injuries: { home: [], away: [] },
               predictions: null,
               seasonStats: { home: null, away: null },
-              verdict: smVerdict || {
+              verdict: wcConsensusVerdict || smVerdict || {
                 market: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Total Goals' : 'Match Result',
                 pick: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Over 2.5 Goals' : (smH2HHomeWins > smH2HAwayWins ? smF.homeTeam + ' Win' : smF.awayTeam + ' or Draw'),
                 reason: 'Based on head-to-head record: ' + smH2HHomeWins + ' home wins, ' + smH2HAwayWins + ' away wins, ' + smH2HDraws + ' draws across ' + smH2H.length + ' meetings. Average ' + smH2HAvg + ' goals per game.',
