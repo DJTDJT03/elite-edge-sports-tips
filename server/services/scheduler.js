@@ -4578,6 +4578,21 @@ module.exports = function startScheduler(deps) {
     setInterval(runWcSync, 15 * 60 * 1000);  // every 15 minutes
     setTimeout(runWcSync, 100000);
     console.log('[Scheduler] World Cup auto-sync + consensus previews ENABLED');
+
+    // Daily World Cup "Our View" content broadcast (Telegram + subscribers + push).
+    // Fires once per day around 11:00 UK while there are games to cover.
+    var lastWcBroadcastDate = null;
+    var runWcBroadcast = safeRun('WorldCupBroadcast', async function () {
+      if (!deps.worldCupBroadcast) return;
+      var nowUk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+      var dateStr = nowUk.toISOString().split('T')[0];
+      if (nowUk.getHours() < 11 || lastWcBroadcastDate === dateStr) return;
+      var r = await deps.worldCupBroadcast.broadcast();
+      lastWcBroadcastDate = dateStr; // mark done for the day (even if no fixtures, don't retry all day)
+      if (r && r.sent) console.log('[WorldCup] Daily view broadcast — ' + r.picks + ' games, ' + r.emails + ' emails, telegram:' + r.telegram);
+    });
+    setInterval(runWcBroadcast, 20 * 60 * 1000);  // check every 20 min; sends once/day after 11:00
+    setTimeout(runWcBroadcast, 130000);
   }
 
   // =========================================================================

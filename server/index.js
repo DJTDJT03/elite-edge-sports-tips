@@ -197,6 +197,7 @@ app.use('/api', require('./routes/userBets')(deps));
 if (process.env.ENABLE_WORLD_CUP === 'true') {
   var worldCupData = require('./services/worldCupData')(deps);
   deps.worldCupData = worldCupData;
+  deps.worldCupBroadcast = require('./services/worldCupBroadcast')(deps);
   app.use('/api/world-cup', require('./routes/worldCup')(deps));
   console.log('[Startup] World Cup Mode ENABLED');
 }

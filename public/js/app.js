@@ -8045,7 +8045,9 @@ const App = {
         '<button class="btn btn-outline btn-sm" onclick="App.lmsDiagnoseWc()">Diagnose feed</button> ' +
         '<button class="btn btn-gold btn-sm" onclick="App.lmsSyncWc()">Sync fixtures now</button> ' +
         '<button class="btn btn-outline btn-sm" onclick="App.lmsInspectFixture()">Inspect rich data (xG/lineups/predictions)</button> ' +
-        '<button class="btn btn-gold btn-sm" onclick="App.lmsGenerateWcPreviews()">Run consensus picks (Our Take)</button>' +
+        '<button class="btn btn-gold btn-sm" onclick="App.lmsGenerateWcPreviews()">Run consensus picks (Our Take)</button> ' +
+        '<button class="btn btn-outline btn-sm" onclick="App.wcBroadcastPreview()">Preview WC view content</button> ' +
+        '<button class="btn btn-gold btn-sm" onclick="App.wcBroadcastSend()">Send WC view (Telegram + subscribers)</button>' +
         '<pre id="lms-wc-feed-out" style="display:none;white-space:pre-wrap;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;margin-top:10px;font-size:11px;max-height:240px;overflow:auto;"></pre>' +
       '</div>' +
       '<div class="card mb-16">' +
@@ -8083,6 +8085,29 @@ const App = {
     } catch (e) {
       if (out) out.textContent = 'Inspect failed: ' + (e.message || e) + '\n\n(Sync fixtures first so there is one to inspect.)';
     }
+  },
+
+  async wcBroadcastPreview() {
+    var out = document.getElementById('lms-wc-feed-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Building today\'s World Cup view…'; }
+    try {
+      var r = await this.api('/world-cup/admin/broadcast-preview');
+      if (!r.count) { if (out) out.textContent = 'No World Cup games with a view in the next 30h.'; return; }
+      var lines = (r.picks || []).map(function (p) { return '• ' + p.home + ' v ' + p.away + ' → ' + p.view + (p.note ? ' · ' + p.note : '') + (p.conf ? ' (' + p.conf + '/10)' : ''); });
+      if (out) out.textContent = 'WC view for ' + r.count + ' game(s) — this is what will be sent:\n\n' + lines.join('\n');
+    } catch (e) { if (out) out.textContent = 'Preview failed: ' + (e.message || e); }
+  },
+
+  async wcBroadcastSend() {
+    if (!confirm('Send the World Cup view to the Telegram channel, push, and email all subscribers now?')) return;
+    var out = document.getElementById('lms-wc-feed-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Sending World Cup view…'; }
+    try {
+      var r = await this.api('/world-cup/admin/broadcast', { method: 'POST' });
+      if (!r.sent) { if (out) out.textContent = r.reason || 'Nothing to send.'; this.showToast(r.reason || 'Nothing to send', 'error'); return; }
+      if (out) out.textContent = 'Sent! ' + r.picks + ' game(s) — Telegram: ' + (r.telegram ? 'yes' : 'no') + ', emails: ' + r.emails + ', push: ' + (r.push ? 'yes' : 'no');
+      this.showToast('World Cup view sent — ' + r.picks + ' games, ' + r.emails + ' emails', 'success');
+    } catch (e) { if (out) out.textContent = 'Send failed: ' + (e.message || e); this.showToast('Send failed: ' + e.message, 'error'); }
   },
 
   async lmsGenerateWcPreviews() {

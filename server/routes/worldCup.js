@@ -192,6 +192,24 @@ module.exports = function(deps) {
     }
   });
 
+  // GET /api/world-cup/admin/broadcast-preview — see the day's "Our View" content
+  // (no send). POST /admin/broadcast — actually send it to all channels.
+  router.get('/admin/broadcast-preview', authenticate, requireAdmin, async function (req, res) {
+    try {
+      if (!deps.worldCupBroadcast) return res.status(503).json({ error: 'World Cup broadcast not available' });
+      var picks = await deps.worldCupBroadcast.buildPicks();
+      res.json({ ok: true, count: picks.length, picks: picks });
+    } catch (err) { res.status(500).json({ error: 'Preview failed: ' + err.message }); }
+  });
+
+  router.post('/admin/broadcast', authenticate, requireAdmin, async function (req, res) {
+    try {
+      if (!deps.worldCupBroadcast) return res.status(503).json({ error: 'World Cup broadcast not available' });
+      var r = await deps.worldCupBroadcast.broadcast({ skipEmail: req.body && req.body.skipEmail === true });
+      res.json(r);
+    } catch (err) { res.status(500).json({ error: 'Broadcast failed: ' + err.message }); }
+  });
+
   // GET /api/world-cup/bracket — knockout bracket
   router.get('/bracket', async function(req, res) {
     try {
