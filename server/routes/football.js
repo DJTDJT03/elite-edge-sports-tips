@@ -331,9 +331,9 @@ module.exports = function(deps) {
               }
             } catch (e) { console.log('[Match Intelligence] WC consensus lookup failed:', e.message); }
 
-            // MARKET-DRIVEN verdict — the sharpest signal. Real bookmaker odds
-            // make a 1/11 favourite read as a strong win + goals lean, regardless
-            // of the unreliable provisional model. Takes priority over everything.
+            // Market-odds adjustment — SURGICAL. Only takes over for a clear
+            // favourite, or a strong goals signal. Otherwise it stays null and
+            // the model/consensus decides, so the output keeps its variety.
             var marketVerdict = null;
             try {
               if (sportMonks && sportMonks.getMarketOdds) {
@@ -347,54 +347,58 @@ module.exports = function(deps) {
                   var mFavOdds = mFavHome ? mo.home : mo.away;
                   var mFavProb = mFavHome ? pHome : pAway;
                   var fOdd = function (d) { return d != null ? d.toFixed(2) : '-'; };
-                  // Goals lean from over/under prices.
-                  var gLean = '';
-                  if (mo.over35 && mo.over35 <= 2.05) gLean = 'Over 3.5 Goals (' + fOdd(mo.over35) + ')';
-                  else if (mo.over25 && mo.over25 <= 1.80) gLean = 'Over 2.5 Goals (' + fOdd(mo.over25) + ')';
-                  var reason = 'Bookmaker odds: ' + smF.homeTeam + ' ' + fOdd(mo.home) + ', Draw ' + fOdd(mo.draw) + ', ' + smF.awayTeam + ' ' + fOdd(mo.away) + '. '
-                    + mFavTeam + ' are clear favourites (' + mFavProb + '% implied).'
-                    + (gLean ? ' Goals lean: ' + gLean + '.' : '');
-                  marketVerdict = {
-                    market: 'Match Result',
-                    pick: mFavTeam + ' Win',
-                    reason: reason,
-                    confidence: mFavOdds <= 1.20 ? 9 : mFavOdds <= 1.50 ? 8 : mFavOdds <= 2.20 ? 7 : 6,
-                    riskLevel: mFavOdds <= 1.50 ? 'low' : mFavOdds <= 2.50 ? 'low-medium' : 'medium',
-                    riskText: mFavOdds <= 1.50 ? 'Strong market favourite.' : 'Market edge to ' + mFavTeam + '.',
-                    secondaryMarket: gLean || null,
-                    source: 'market',
-                  };
+                  var gLean = '', gOdd = null;
+                  if (mo.over35 && mo.over35 <= 2.05) { gLean = 'Over 3.5 Goals'; gOdd = mo.over35; }
+                  else if (mo.over25 && mo.over25 <= 1.80) { gLean = 'Over 2.5 Goals'; gOdd = mo.over25; }
+                  if (mFavOdds <= 1.50) {
+                    // Clear favourite → back to win (+ goals note).
+                    marketVerdict = {
+                      market: 'Match Result', pick: mFavTeam + ' Win',
+                      reason: 'Bookmaker odds: ' + smF.homeTeam + ' ' + fOdd(mo.home) + ', Draw ' + fOdd(mo.draw) + ', ' + smF.awayTeam + ' ' + fOdd(mo.away) + '. ' + mFavTeam + ' clear favourites (' + mFavProb + '% implied).' + (gLean ? ' Goals lean: ' + gLean + ' (' + fOdd(gOdd) + ').' : ''),
+                      confidence: mFavOdds <= 1.20 ? 9 : 8,
+                      riskLevel: 'low', riskText: 'Strong market favourite.', source: 'market',
+                    };
+                  } else if (gLean) {
+                    // No clear favourite but the goals market is short → that's the play.
+                    marketVerdict = {
+                      market: 'Total Goals', pick: gLean,
+                      reason: 'Tight on the win market (' + smF.homeTeam + ' ' + fOdd(mo.home) + ' / ' + smF.awayTeam + ' ' + fOdd(mo.away) + '), but the goals market is short — ' + gLean + ' priced at ' + fOdd(gOdd) + '.',
+                      confidence: gOdd <= 1.65 ? 8 : 7, riskLevel: 'low-medium', riskText: 'Goals-led call.', source: 'market',
+                    };
+                  }
+                  // else: leave null — let the model/consensus call it (variety).
                 }
               }
             } catch (e) { console.log('[Match Intelligence] market odds failed:', e.message); }
 
-            // Build verdict — prefer the SportMonks model when available.
+            // Build verdict from the model — pick the BEST market (varied), not
+            // always a win: clear favourite → win; goal-heavy → Over; both score
+            // → BTTS; tight + low-scoring → Under; genuinely even → Draw.
             var smVerdict;
             if (smProb) {
-              // ALWAYS back the favourite (higher win-prob side) to WIN. The
-              // provisional WC model is unreliable and was producing draws for
-              // clear favourites — a draw is never the headline for a mismatch.
               var _favHome = smProb.home >= smProb.away;
               var _favTeam = _favHome ? smF.homeTeam : smF.awayTeam;
               var _favProb = _favHome ? smProb.home : smProb.away;
               var _dogProb = _favHome ? smProb.away : smProb.home;
               var _gap = _favProb - _dogProb; // dominance
-              // Goals lean from the model's predicted scoreline / BTTS.
+              var _modelLine = 'SportMonks model: ' + smF.homeTeam + ' ' + smProb.home + '%, Draw ' + smProb.draw + '%, ' + smF.awayTeam + ' ' + smProb.away + '%.'
+                + (smHomeXg != null && smAwayXg != null ? ' Expected goals ' + smHomeXg + ' v ' + smAwayXg + '.' : '');
               var _total = null;
               if (smScore) { var _ps = String(smScore).split('-'); if (_ps.length === 2) _total = (parseInt(_ps[0]) || 0) + (parseInt(_ps[1]) || 0); }
-              var _goalsNote = '';
-              if (_total != null && _total >= 4) _goalsNote = ' Projected scoreline ' + smScore + ' — strong Over 3.5 Goals lean.';
-              else if (_total != null && _total >= 3) _goalsNote = ' Projected scoreline ' + smScore + ' — Over 2.5 Goals lean.';
-              else if (smBtts != null && smBtts >= 60) _goalsNote = ' High BTTS read (' + smBtts + '%) — goals expected.';
-              smVerdict = {
-                market: 'Match Result',
-                pick: _favTeam + ' Win',
-                reason: 'SportMonks model: ' + smF.homeTeam + ' ' + smProb.home + '%, Draw ' + smProb.draw + '%, ' + smF.awayTeam + ' ' + smProb.away + '%.'
-                        + (smHomeXg != null && smAwayXg != null ? ' Expected goals ' + smHomeXg + ' v ' + smAwayXg + '.' : '') + _goalsNote,
-                confidence: _gap >= 35 ? 9 : _gap >= 20 ? 8 : _favProb >= 45 ? 7 : 6,
-                riskLevel: _gap >= 25 ? 'low' : _gap >= 12 ? 'low-medium' : 'medium',
-                riskText: _gap >= 25 ? 'Clear favourite — back them to win.' : _gap >= 12 ? 'Model favours ' + _favTeam + '.' : 'Competitive on the model.',
-              };
+              if (_gap >= 25) {
+                smVerdict = { market: 'Match Result', pick: _favTeam + ' Win', reason: _modelLine + ' Clear edge to ' + _favTeam + '.', confidence: _gap >= 40 ? 9 : 8, riskLevel: 'low', riskText: 'Model favourite.' };
+              } else if (smBtts != null && smBtts >= 62) {
+                smVerdict = { market: 'Both Teams to Score', pick: 'BTTS - Yes', reason: _modelLine + ' Model BTTS ' + smBtts + '% — both expected to score.', confidence: Math.min(8, Math.round(smBtts / 12)), riskLevel: 'low-medium', riskText: 'Goals at both ends.' };
+              } else if (_total != null && _total >= 3) {
+                smVerdict = { market: 'Total Goals', pick: 'Over 2.5 Goals', reason: _modelLine + ' Projected ' + smScore + ' — leans Over 2.5.', confidence: 7, riskLevel: 'low-medium', riskText: 'Goals expected.' };
+              } else if (_gap >= 12) {
+                smVerdict = { market: 'Match Result', pick: _favTeam + ' Win', reason: _modelLine + ' Model edge to ' + _favTeam + '.', confidence: 7, riskLevel: 'low-medium', riskText: 'Model favours ' + _favTeam + '.' };
+              } else if (_total != null && _total <= 2 && (smBtts == null || smBtts < 50)) {
+                smVerdict = { market: 'Total Goals', pick: 'Under 2.5 Goals', reason: _modelLine + ' Low projected total (' + smScore + ') — leans Under 2.5.', confidence: 6, riskLevel: 'medium', riskText: 'Tight, low-scoring profile.' };
+              } else {
+                // Genuinely even — a draw is a legitimate call here.
+                smVerdict = { market: 'Match Result', pick: 'Draw', reason: _modelLine + ' Tightly matched — the draw is live.', confidence: 6, riskLevel: 'medium', riskText: 'Evenly poised.' };
+              }
             }
             var smH2HHomeWins = 0, smH2HAwayWins = 0, smH2HDraws = 0, smH2HTotalGoals = 0;
             smH2H.forEach(function(m) {
@@ -415,17 +419,22 @@ module.exports = function(deps) {
               riskLevel: 'medium',
               riskText: 'Moderate risk — limited data depth for this league.',
             };
+            // Only flip a draw to a win when the model shows a CLEAR favourite
+            // (>=18-point edge). Genuinely even games keep a legitimate draw.
             if (_finalVerdict && /^\s*draw\s*$/i.test(String(_finalVerdict.pick || '')) && smProb) {
-              var _gFav = (smProb.home >= smProb.away) ? smF.homeTeam : smF.awayTeam;
-              _finalVerdict = {
-                market: 'Match Result',
-                pick: _gFav + ' Win',
-                reason: 'Backing the favourite to win — a draw is not the play in a mismatch. ' + (_finalVerdict.reason || ''),
-                confidence: _finalVerdict.confidence || 7,
-                riskLevel: _finalVerdict.riskLevel || 'low-medium',
-                riskText: _finalVerdict.riskText || 'Clear favourite.',
-                source: _finalVerdict.source,
-              };
+              var _drawGap = Math.abs(smProb.home - smProb.away);
+              if (_drawGap >= 18) {
+                var _gFav = (smProb.home >= smProb.away) ? smF.homeTeam : smF.awayTeam;
+                _finalVerdict = {
+                  market: 'Match Result',
+                  pick: _gFav + ' Win',
+                  reason: 'Backing the favourite to win — the model favours them clearly over the draw. ' + (_finalVerdict.reason || ''),
+                  confidence: _finalVerdict.confidence || 7,
+                  riskLevel: _finalVerdict.riskLevel || 'low-medium',
+                  riskText: _finalVerdict.riskText || 'Clear favourite.',
+                  source: _finalVerdict.source,
+                };
+              }
             }
 
             return res.json({
@@ -694,10 +703,10 @@ module.exports = function(deps) {
         }
       }
 
-      // --- World Cup market-odds override (sharpest signal) + no-draw guard ---
-      // For WC games, real bookmaker odds beat form heuristics: a 1/11 favourite
-      // must read as a win, never a draw. Resolve the WC fixture's SportMonks
-      // odds via our table (team names are alias-tolerant).
+      // --- World Cup market-odds adjustment (SURGICAL — keeps market variety) ---
+      // Only intervene for a genuine market favourite, or to replace a draw when
+      // the market clearly favours one side. Competitive games keep their full
+      // heuristic call (Over/Under, BTTS, draw) so the output stays varied.
       if (!fromPublishedTip) {
         try {
           var _wcSched = require('../services/wc2026Schedule');
@@ -720,22 +729,32 @@ module.exports = function(deps) {
                 var _gl = '';
                 if (_mo.over35 && _mo.over35 <= 2.05) _gl = 'Over 3.5 Goals (' + _mo.over35.toFixed(2) + ')';
                 else if (_mo.over25 && _mo.over25 <= 1.80) _gl = 'Over 2.5 Goals (' + _mo.over25.toFixed(2) + ')';
-                verdictMarket = 'Match Result';
-                verdictPick = _favTeam + ' to Win';
-                verdictReason = 'Bookmaker odds make ' + _favTeam + ' clear favourites (' + _favProb + '% implied — ' + _favOdds.toFixed(2) + '). ' + (_gl ? 'Goals lean: ' + _gl + '. ' : '') + 'The market is the sharpest signal here.';
-                confidence = _favOdds <= 1.20 ? 9 : _favOdds <= 1.50 ? 8 : _favOdds <= 2.20 ? 7 : 6;
-                riskLevel = _favOdds <= 1.50 ? 'Low' : _favOdds <= 2.50 ? 'Low-Medium' : 'Medium';
+                var _heuristicDraw = /^\s*draw\s*$/i.test(verdictPick);
+                // Heavy favourite (<=1.50) → back to win. Moderate favourite
+                // (<=2.30) only overrides if the heuristic landed on a draw.
+                if (_favOdds <= 1.50 || (_favOdds <= 2.30 && _heuristicDraw)) {
+                  verdictMarket = 'Match Result';
+                  verdictPick = _favTeam + ' to Win';
+                  verdictReason = 'Bookmaker odds make ' + _favTeam + ' the favourite (' + _favProb + '% implied — ' + _favOdds.toFixed(2) + '). ' + (_gl ? 'Goals lean: ' + _gl + '. ' : '') + 'A market-led call.';
+                  confidence = _favOdds <= 1.20 ? 9 : _favOdds <= 1.50 ? 8 : _favOdds <= 2.20 ? 7 : 6;
+                  riskLevel = _favOdds <= 1.50 ? 'Low' : _favOdds <= 2.50 ? 'Low-Medium' : 'Medium';
+                }
+                // else: leave the heuristic verdict untouched (Over/Under/BTTS/Draw).
               }
             }
           }
         } catch (e) { /* non-fatal — keep heuristic verdict */ }
 
-        // Hard guard: never headline a bare Draw — back the stronger side to win.
+        // Light backstop (no odds available): only flip a draw when one side is
+        // clearly stronger on form/H2H. Genuinely even games keep their Draw.
         if (/^\s*draw\s*$/i.test(verdictPick)) {
-          var _betterAway = awayFormWins > homeFormWins;
-          verdictMarket = 'Match Result';
-          verdictPick = (_betterAway ? awayTeam.name : homeTeam.name) + ' to Win';
-          verdictReason = 'Backing the favourite to win — a draw is not the play here. ' + verdictReason;
+          var _formGap = Math.abs(homeFormWins - awayFormWins);
+          if (_formGap >= 2 || h2hDominance >= 2) {
+            var _betterAway = awayFormWins > homeFormWins || h2hAwayWins > h2hHomeWins;
+            verdictMarket = 'Match Result';
+            verdictPick = (_betterAway ? awayTeam.name : homeTeam.name) + ' to Win';
+            verdictReason = 'One side is clearly stronger on the numbers — backing them over the draw. ' + verdictReason;
+          }
         }
       }
 

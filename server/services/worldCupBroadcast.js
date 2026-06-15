@@ -72,11 +72,22 @@ module.exports = function (deps) {
           if (mo && mo.home && mo.away) {
             var favHome = mo.home <= mo.away;
             var favOdds = favHome ? mo.home : mo.away;
-            oddsDecimal = favOdds;
-            view = (favHome ? f.home_team : f.away_team) + ' to win';
-            conf = favOdds <= 1.20 ? 9 : favOdds <= 1.50 ? 8 : favOdds <= 2.20 ? 7 : 6;
-            if (mo.over35 && mo.over35 <= 2.05) note = 'Over 3.5 goals lean';
-            else if (mo.over25 && mo.over25 <= 1.80) note = 'Over 2.5 goals lean';
+            var favTeam = favHome ? f.home_team : f.away_team;
+            // Pick the best market angle — keeps the daily view varied.
+            if (favOdds <= 1.50) {
+              view = favTeam + ' to win'; oddsDecimal = favOdds;
+              conf = favOdds <= 1.20 ? 9 : 8;
+              if (mo.over35 && mo.over35 <= 2.05) note = 'Over 3.5 goals lean';
+              else if (mo.over25 && mo.over25 <= 1.80) note = 'Over 2.5 goals lean';
+            } else if (mo.over25 && mo.over25 <= 1.70) {
+              view = 'Over 2.5 goals'; oddsDecimal = mo.over25; conf = 7;
+            } else if (mo.bttsYes && mo.bttsYes <= 1.65) {
+              view = 'Both teams to score'; oddsDecimal = mo.bttsYes; conf = 7;
+            } else if (mo.over35 && mo.over35 <= 1.95) {
+              view = 'Over 3.5 goals'; oddsDecimal = mo.over35; conf = 7;
+            } else {
+              view = favTeam + ' to win'; oddsDecimal = favOdds; conf = favOdds <= 2.0 ? 7 : 6;
+            }
           }
         } catch (e) {}
       }
