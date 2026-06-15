@@ -920,9 +920,8 @@ const App = {
       var creditsPill = document.getElementById('nav-credits');
       if (creditsPill) {
         if (this.isVIP()) {
-          creditsPill.innerHTML = '∞ credits';
-          creditsPill.classList.add('nav-credits-vip');
-          creditsPill.style.display = 'inline-flex';
+          // VIP is unlimited — no credit count to show, keep the bar clean.
+          creditsPill.style.display = 'none';
         } else if (this.user.credits !== undefined && this.user.credits !== null) {
           var c = this.user.credits || 0;
           creditsPill.innerHTML = '<span class="nav-credits-num">' + c + '</span> credit' + (c === 1 ? '' : 's');

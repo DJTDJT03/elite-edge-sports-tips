@@ -146,6 +146,26 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
 .nav-credits.nav-credits-low::before { content: "\26A0"; }
 .nav-credits.nav-credits-vip { color: var(--gold); }
 
+/* Tidy the top-right nav cluster — uniform control heights + clean grouping */
+.nav-right { gap: 8px; }
+.nav-right .notif-bell,
+.nav-right .odds-format-toggle,
+.nav-right .theme-toggle,
+.nav-right .nav-credits,
+.nav-right .user-badge,
+.nav-right #nav-auth-user .btn,
+.nav-right #nav-auth-guest .btn {
+  height: 34px; box-sizing: border-box; align-self: center;
+  display: inline-flex; align-items: center;
+}
+.nav-right .notif-bell,
+.nav-right .odds-format-toggle,
+.nav-right .theme-toggle { border-radius: var(--radius-sm); justify-content: center; }
+.nav-right .theme-toggle { padding: 0 9px; }
+.nav-right .notif-bell { padding: 0 9px; }
+.nav-right #nav-auth-user { display: none; align-items: center; gap: 8px; }
+.nav-right #nav-auth-user .btn { padding-top: 0; padding-bottom: 0; }
+
 /* Sub bar */
 .sub-bar {
   background: linear-gradient(90deg, var(--gold-dark), var(--gold), var(--gold-dark));
