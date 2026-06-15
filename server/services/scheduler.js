@@ -4559,6 +4559,21 @@ module.exports = function startScheduler(deps) {
           if (p && p.generated) console.log('[WorldCup] Consensus previews generated: ' + p.generated);
         } catch (e) { console.warn('[WorldCup] preview generation failed:', e.message); }
       }
+      // Settle Last Man Standing straight after the results land — each pick is
+      // resolved the moment its match finishes, not at the end of the round.
+      if (process.env.ENABLE_LMS === 'true') {
+        try {
+          var lmsStore = require('../db/lmsStore');
+          var lms = require('./lmsService');
+          if (lmsStore.available()) {
+            var actives = await lmsStore.getCompetitions({ status: 'active' });
+            for (var ai = 0; ai < actives.length; ai++) {
+              var rep = await lms.settleRound(actives[ai]);
+              if (rep && rep.settled > 0) console.log('[LMS] Settled on result — "' + actives[ai].name + '": ' + rep.message);
+            }
+          }
+        } catch (e) { console.warn('[LMS] post-sync settle failed:', e.message); }
+      }
     });
     setInterval(runWcSync, 15 * 60 * 1000);  // every 15 minutes
     setTimeout(runWcSync, 100000);

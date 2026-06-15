@@ -219,73 +219,91 @@ async function resolveTeamResult(competition, round, team, finishedResults) {
 async function settleRound(competition, opts) {
   opts = opts || {};
   var round = competition.currentRound;
+  var nowTs = new Date().toISOString();
+  // Fetch finished results once for this settlement pass.
+  var finishedResults = await lmsStore.getFinishedWcResults();
+
   var aliveEntries = await lmsStore.getEntriesForCompetition(competition.id, 'alive');
   if (aliveEntries.length === 0) {
     return { competitionId: competition.id, round: round, settled: 0, message: 'No active entries' };
   }
-  // Fetch finished results once for the whole round's settlement.
-  var finishedResults = await lmsStore.getFinishedWcResults();
 
-  // First pass: resolve every alive entry's outcome for this round
-  var outcomes = [];
-  var heldOnPenalties = [];
+  // ---- Phase A: progressive per-match settlement --------------------------
+  // Resolve every alive entry whose pick's match has FINISHED, the moment it
+  // finishes — losers are eliminated straight away rather than waiting for the
+  // rest of the round. Picks whose match is still in progress stay pending.
+  var resolvedNow = 0, eliminatedNow = 0;
   for (var i = 0; i < aliveEntries.length; i++) {
     var entry = aliveEntries[i];
     var pick = await lmsStore.getPick(entry.id, round);
-    if (!pick) {
-      outcomes.push({ entry: entry, pick: null, status: 'lost', detail: 'No pick made' });
-      continue;
-    }
-    if (pick.result !== 'pending') {
-      outcomes.push({ entry: entry, pick: pick, status: pick.result, detail: 'Already settled' });
-      continue;
-    }
+    if (!pick || pick.result !== 'pending') continue; // no pick yet / already settled
     var res = await resolveTeamResult(competition, round, pick.team, finishedResults);
-    if (res.status === 'pending') {
-      // Not ready (fixture unfinished or penalties). Hold unless forced by admin.
-      if (!opts.force) heldOnPenalties.push({ entry: entry, pick: pick, detail: res.detail });
-      outcomes.push({ entry: entry, pick: pick, status: 'pending', detail: res.detail, fixtureId: res.fixtureId });
-      continue;
+    if (res.status === 'pending' && !opts.force) continue; // match not finished (or penalties)
+    var finalStatus = res.status === 'pending' ? 'lost' : res.status; // force => lost
+    await lmsStore.updatePick(pick.id, { result: finalStatus, fixtureId: res.fixtureId || null, settledAt: nowTs });
+    resolvedNow++;
+    if (finalStatus !== 'won') {
+      await lmsStore.updateEntry(entry.id, { status: 'out', eliminatedRound: round });
+      eliminatedNow++;
     }
-    outcomes.push({ entry: entry, pick: pick, status: res.status, detail: res.detail, fixtureId: res.fixtureId });
   }
 
-  // If any pick is still genuinely pending (fixture not finished), hold the
-  // round so we don't eliminate someone whose match hasn't been played.
-  var stillPending = outcomes.filter(function (o) { return o.status === 'pending'; });
-  if (stillPending.length > 0 && !opts.force) {
+  // ---- Is the whole round complete? ---------------------------------------
+  // Complete when every fixture in the round has a finished result. Knockout
+  // placeholders (opponent undecided) mean the round isn't ready.
+  var roundComplete = opts.force === true;
+  if (!roundComplete) {
+    var roundFx = wcSchedule.roundFixtures(round) || [];
+    roundComplete = roundFx.length > 0 && roundFx.every(function (fx) {
+      if (wcSchedule.isPlaceholder(fx.home) || wcSchedule.isPlaceholder(fx.away)) return false;
+      var r = (finishedResults || []).find(function (x) {
+        return (wcSchedule.teamsMatch(x.home_team, fx.home) && wcSchedule.teamsMatch(x.away_team, fx.away)) ||
+               (wcSchedule.teamsMatch(x.home_team, fx.away) && wcSchedule.teamsMatch(x.away_team, fx.home));
+      });
+      return r && r.home_goals !== null && r.away_goals !== null;
+    });
+  }
+
+  if (!roundComplete) {
+    // Round still in progress — finished picks are settled, the rest stay live.
     return {
-      competitionId: competition.id, round: round, settled: 0, held: true,
-      pending: stillPending.length,
-      penalties: heldOnPenalties.length,
-      message: 'Round held — ' + stillPending.length + ' pick(s) not resolved yet (incl. ' + heldOnPenalties.length + ' on penalties). Settle again when finished, or use admin override.',
+      competitionId: competition.id, round: round,
+      roundLabel: roundLabel(competition.phase, round),
+      settled: resolvedNow, eliminated: eliminatedNow, held: true,
+      message: resolvedNow > 0
+        ? 'Settled ' + resolvedNow + ' finished pick(s) — ' + eliminatedNow + ' out. Round still in progress.'
+        : 'Round in progress — no new results yet.',
     };
   }
 
-  // Finalise outcomes
-  var winners = [], losers = [], nowTs = new Date().toISOString();
-  for (var j = 0; j < outcomes.length; j++) {
-    var o = outcomes[j];
-    var finalStatus = o.status === 'pending' ? 'lost' : o.status; // forced: treat unresolved as lost
-    if (o.pick) {
-      await lmsStore.updatePick(o.pick.id, { result: finalStatus, fixtureId: o.fixtureId || null, settledAt: nowTs });
+  // ---- Phase B: round complete — finalise no-picks, rollover, winner, advance
+  // Any still-alive entry with no pick (or an unresolved pick on a forced
+  // settle) missed the round → eliminated.
+  var remainingAlive = await lmsStore.getEntriesForCompetition(competition.id, 'alive');
+  for (var n = 0; n < remainingAlive.length; n++) {
+    var rp = await lmsStore.getPick(remainingAlive[n].id, round);
+    if (!rp) {
+      await lmsStore.updateEntry(remainingAlive[n].id, { status: 'out', eliminatedRound: round });
+      eliminatedNow++;
+    } else if (rp.result === 'pending') {
+      await lmsStore.updatePick(rp.id, { result: 'lost', settledAt: nowTs });
+      await lmsStore.updateEntry(remainingAlive[n].id, { status: 'out', eliminatedRound: round });
+      eliminatedNow++;
     }
-    if (finalStatus === 'won') winners.push(o.entry);
-    else losers.push(o.entry);
   }
 
-  // Rollover: everyone alive went out this round → reinstate them all.
+  // Rollover: nobody survived this round → reinstate everyone who went out in it
+  // (eliminations may have happened across several progressive passes, so judge
+  // by who is eliminated-this-round, not by this pass's counts).
+  var survivorsAlive = await lmsStore.getEntriesForCompetition(competition.id, 'alive');
+  var outThisRound = (await lmsStore.getEntriesForCompetition(competition.id, 'out'))
+    .filter(function (e) { return e.eliminatedRound === round; });
   var rollover = false;
-  if (winners.length === 0 && losers.length > 0) {
+  if (survivorsAlive.length === 0 && outThisRound.length > 0) {
     rollover = true;
-    for (var k = 0; k < losers.length; k++) {
+    for (var k = 0; k < outThisRound.length; k++) {
       // keep them alive; their losing pick stays on record (team stays "used")
-      await lmsStore.updateEntry(losers[k].id, { status: 'alive', eliminatedRound: null });
-    }
-  } else {
-    // Normal: eliminate losers, survivors stay alive
-    for (var m = 0; m < losers.length; m++) {
-      await lmsStore.updateEntry(losers[m].id, { status: 'out', eliminatedRound: round });
+      await lmsStore.updateEntry(outThisRound[k].id, { status: 'alive', eliminatedRound: null });
     }
   }
 
@@ -321,19 +339,20 @@ async function settleRound(competition, opts) {
     compUpdate.status = 'active';
     if (rollover) {
       var cfg = competition.config || {};
-      cfg.rollovers = (cfg.rollovers || []).concat([{ round: round, reinstated: losers.length, at: nowTs }]);
+      cfg.rollovers = (cfg.rollovers || []).concat([{ round: round, reinstated: aliveAfter, at: nowTs }]);
       compUpdate.config = cfg;
     }
   }
   await lmsStore.updateCompetition(competition.id, compUpdate);
 
+  var survivedCount = rollover ? aliveAfter : aliveAfter;
   return {
     competitionId: competition.id,
     round: round,
     roundLabel: roundLabel(competition.phase, round),
-    settled: outcomes.length,
-    survived: winners.length,
-    eliminated: rollover ? 0 : losers.length,
+    settled: resolvedNow,
+    survived: survivedCount,
+    eliminated: rollover ? 0 : eliminatedNow,
     rollover: rollover,
     completed: completed,
     championEntryIds: championEntryIds,
@@ -342,7 +361,7 @@ async function settleRound(competition, opts) {
       ? 'Rollover — everyone was eliminated, all reinstated for ' + roundLabel(competition.phase, nextRound)
       : completed
         ? (championEntryIds.length > 1 ? championEntryIds.length + ' winners share the pot' : 'We have a winner!')
-        : winners.length + ' through, ' + losers.length + ' out — on to ' + roundLabel(competition.phase, nextRound),
+        : survivedCount + ' through, ' + eliminatedNow + ' out — on to ' + roundLabel(competition.phase, nextRound),
   };
 }
 
