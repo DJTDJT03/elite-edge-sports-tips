@@ -411,7 +411,7 @@ module.exports = function(deps) {
 
             // Pick the verdict source, then guard: a World Cup "Our Take" must
             // never headline a bare Draw — back the favourite to win instead.
-            var _finalVerdict = wcConsensusVerdict || marketVerdict || smVerdict || {
+            var _finalVerdict = wcConsensusVerdict || smVerdict || {
               market: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Total Goals' : 'Match Result',
               pick: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Over 2.5 Goals' : (smH2HHomeWins > smH2HAwayWins ? smF.homeTeam + ' Win' : smF.awayTeam + ' Win'),
               reason: 'Based on head-to-head record: ' + smH2HHomeWins + ' home wins, ' + smH2HAwayWins + ' away wins, ' + smH2HDraws + ' draws across ' + smH2H.length + ' meetings. Average ' + smH2HAvg + ' goals per game.',
@@ -419,24 +419,7 @@ module.exports = function(deps) {
               riskLevel: 'medium',
               riskText: 'Moderate risk — limited data depth for this league.',
             };
-            // Only flip a draw to a win when the model shows a CLEAR favourite
-            // (>=18-point edge) AND it's not a trusted consensus call. Genuinely
-            // even games (and consensus draws) keep their draw.
-            if (_finalVerdict && _finalVerdict.source !== 'consensus' && /^\s*draw\s*$/i.test(String(_finalVerdict.pick || '')) && smProb) {
-              var _drawGap = Math.abs(smProb.home - smProb.away);
-              if (_drawGap >= 18) {
-                var _gFav = (smProb.home >= smProb.away) ? smF.homeTeam : smF.awayTeam;
-                _finalVerdict = {
-                  market: 'Match Result',
-                  pick: _gFav + ' Win',
-                  reason: 'Backing the favourite to win — the model favours them clearly over the draw. ' + (_finalVerdict.reason || ''),
-                  confidence: _finalVerdict.confidence || 7,
-                  riskLevel: _finalVerdict.riskLevel || 'low-medium',
-                  riskText: _finalVerdict.riskText || 'Clear favourite.',
-                  source: _finalVerdict.source,
-                };
-              }
-            }
+            // No draw-guard / market override — the engine's verdict stands as-is.
 
             return res.json({
               fixtureId: parseInt(fixtureId),
@@ -735,60 +718,9 @@ module.exports = function(deps) {
         }
       }
 
-      // --- World Cup market-odds adjustment (SURGICAL — keeps market variety) ---
-      // Only runs when there's NO consensus/published tip to lead. Intervenes for
-      // a genuine market favourite, or to replace a draw when the market clearly
-      // favours one side. Competitive games keep their full heuristic call.
-      if (!fromPublishedTip && !fromConsensus) {
-        try {
-          var _wcSched = require('../services/wc2026Schedule');
-          if (sportMonks && sportMonks.getMarketOdds && db.query) {
-            var _wcRows = await db.query("SELECT external_fixture_id, home_team, away_team FROM world_cup_fixtures WHERE external_fixture_id IS NOT NULL");
-            var _hn = homeTeam.name, _an = awayTeam.name;
-            var _match = (_wcRows.rows || []).find(function (r) {
-              return (_wcSched.teamsMatch(r.home_team, _hn) && _wcSched.teamsMatch(r.away_team, _an)) ||
-                     (_wcSched.teamsMatch(r.home_team, _an) && _wcSched.teamsMatch(r.away_team, _hn));
-            });
-            if (_match) {
-              var _mo = await sportMonks.getMarketOdds(_match.external_fixture_id);
-              if (_mo && _mo.home && _mo.away) {
-                var _favIsFixtureHome = _mo.home <= _mo.away;
-                var _favFixtureName = _favIsFixtureHome ? _match.home_team : _match.away_team;
-                var _favTeam = _wcSched.teamsMatch(_favFixtureName, _hn) ? homeTeam.name : awayTeam.name;
-                var _favOdds = _favIsFixtureHome ? _mo.home : _mo.away;
-                var _ih = 1 / _mo.home, _idr = _mo.draw ? 1 / _mo.draw : 0, _ia = 1 / _mo.away, _ssum = _ih + _idr + _ia;
-                var _favProb = Math.round(((_favIsFixtureHome ? _ih : _ia) / _ssum) * 100);
-                var _gl = '';
-                if (_mo.over35 && _mo.over35 <= 2.05) _gl = 'Over 3.5 Goals (' + _mo.over35.toFixed(2) + ')';
-                else if (_mo.over25 && _mo.over25 <= 1.80) _gl = 'Over 2.5 Goals (' + _mo.over25.toFixed(2) + ')';
-                var _heuristicDraw = /^\s*draw\s*$/i.test(verdictPick);
-                // Heavy favourite (<=1.50) → back to win. Moderate favourite
-                // (<=2.30) only overrides if the heuristic landed on a draw.
-                if (_favOdds <= 1.50 || (_favOdds <= 2.30 && _heuristicDraw)) {
-                  verdictMarket = 'Match Result';
-                  verdictPick = _favTeam + ' to Win';
-                  verdictReason = 'Bookmaker odds make ' + _favTeam + ' the favourite (' + _favProb + '% implied — ' + _favOdds.toFixed(2) + '). ' + (_gl ? 'Goals lean: ' + _gl + '. ' : '') + 'A market-led call.';
-                  confidence = _favOdds <= 1.20 ? 9 : _favOdds <= 1.50 ? 8 : _favOdds <= 2.20 ? 7 : 6;
-                  riskLevel = _favOdds <= 1.50 ? 'Low' : _favOdds <= 2.50 ? 'Low-Medium' : 'Medium';
-                }
-                // else: leave the heuristic verdict untouched (Over/Under/BTTS/Draw).
-              }
-            }
-          }
-        } catch (e) { /* non-fatal — keep heuristic verdict */ }
-
-        // Light backstop (no odds available): only flip a draw when one side is
-        // clearly stronger on form/H2H. Genuinely even games keep their Draw.
-        if (/^\s*draw\s*$/i.test(verdictPick)) {
-          var _formGap = Math.abs(homeFormWins - awayFormWins);
-          if (_formGap >= 2 || h2hDominance >= 2) {
-            var _betterAway = awayFormWins > homeFormWins || h2hAwayWins > h2hHomeWins;
-            verdictMarket = 'Match Result';
-            verdictPick = (_betterAway ? awayTeam.name : homeTeam.name) + ' to Win';
-            verdictReason = 'One side is clearly stronger on the numbers — backing them over the draw. ' + verdictReason;
-          }
-        }
-      }
+      // NOTE: no market-odds override. The Elite Edge engine leads — the consensus
+      // verdict (when present) or the analyst heuristic above. The market is not
+      // allowed to overrule the engine's call (including a genuine draw).
 
       // Confidence floor — never show below 6 or above 9 in auto-generated verdicts
       if (confidence < 6) confidence = 6;
