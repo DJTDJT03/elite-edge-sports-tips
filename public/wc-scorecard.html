@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elite Edge — World Cup Scorecard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0e1a;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    padding: 24px 12px;
+  }
+  .card {
+    width: 100%;
+    max-width: 540px;
+    background: linear-gradient(160deg, #0f1426 0%, #0a0e1a 60%);
+    border: 1px solid rgba(212,168,67,0.25);
+    border-radius: 22px;
+    padding: 28px 24px 22px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .brand .logo {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg,#d4a843,#b8862a);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; color: #0a0e1a; font-size: 15px;
+  }
+  .brand .name { font-weight: 900; font-size: 16px; letter-spacing: 0.3px; }
+  .brand .name span { color: #d4a843; }
+  .kicker { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 14px; }
+  h1 { font-size: 27px; font-weight: 900; margin-bottom: 16px; line-height: 1.1; }
+  h1 .gold { color: #d4a843; }
+
+  .summary {
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(135deg, rgba(34,197,94,0.14), rgba(34,197,94,0.02));
+    border: 1px solid rgba(34,197,94,0.3);
+    border-radius: 16px; padding: 18px 20px; margin-bottom: 18px;
+  }
+  .summary .rec { font-size: 13px; color: rgba(255,255,255,0.55); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .summary .big { font-size: 30px; font-weight: 900; line-height: 1.15; }
+  .summary .big .mut { color: rgba(255,255,255,0.4); font-size: 19px; }
+  .summary .rate { text-align: center; }
+  .summary .rate .pct { font-size: 46px; font-weight: 900; color: #22c55e; line-height: 1; }
+  .summary .rate .lab { font-size: 11px; color: rgba(255,255,255,0.5); font-weight: 700; }
+
+  .row {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-left: 3px solid #22c55e;
+    border-radius: 11px; padding: 11px 13px; margin-bottom: 7px;
+  }
+  .row.miss { border-left-color: #ef4444; }
+  .row .match { flex: 1; min-width: 0; }
+  .row .teams { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .teams .sc { color: #d4a843; font-weight: 900; margin: 0 4px; }
+  .row .pick { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+  .row .pick b { color: #fff; font-weight: 700; }
+  .row .tick {
+    width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; font-weight: 900; flex-shrink: 0;
+    background: rgba(34,197,94,0.18); color: #22c55e;
+  }
+  .row.miss .tick { background: rgba(239,68,68,0.18); color: #ef4444; }
+
+  .foot { font-size: 10.5px; color: rgba(255,255,255,0.3); text-align: center; margin-top: 14px; line-height: 1.5; }
+  .foot .gold { color: rgba(212,168,67,0.7); font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <div class="logo">EE</div>
+      <div class="name">ELITE EDGE <span>SPORTS TIPS</span></div>
+    </div>
+    <div class="kicker">Consensus Engine · Track Record</div>
+    <h1>World Cup 2026 <span class="gold">Scorecard</span></h1>
+
+    <div class="summary">
+      <div>
+        <div class="rec">Our Record So Far</div>
+        <div class="big">11 <span class="mut">won</span> &nbsp;·&nbsp; 0 <span class="mut">lost</span></div>
+      </div>
+      <div class="rate">
+        <div class="pct">100%</div>
+        <div class="lab">11 settled picks</div>
+      </div>
+    </div>
+
+    <div id="rows"></div>
+
+    <div class="foot">
+      <span class="gold">ELITE EDGE</span> consensus engine · Elo + Dixon-Coles. Settled group-stage picks.<br>
+      18+ | Analysis, not betting advice | BeGambleAware.org
+    </div>
+  </div>
+
+<script>
+  var picks = [
+    { h:'🇪🇸 Spain', a:'Cape Verde 🇨🇻', score:'0–0', pick:'Draw', market:'Match Result', hit:true },
+    { h:'🇧🇪 Belgium', a:'Egypt 🇪🇬', score:'1–1', pick:'Draw', market:'Match Result', hit:true },
+    { h:'🇸🇦 Saudi Arabia', a:'Uruguay 🇺🇾', score:'1–1', pick:'Draw', market:'Match Result', hit:true },
+    { h:'🇫🇷 France', a:'Senegal 🇸🇳', score:'0–0', pick:'Under 2.5 Goals', market:'Total Goals', hit:true },
+    { h:'🇮🇷 Iran', a:'New Zealand 🇳🇿', score:'2–2', pick:'Over 2.5 Goals', market:'Total Goals', hit:true },
+    { h:'🇦🇺 Australia', a:'Türkiye 🇹🇷', score:'2–0', pick:'Under 2.5 Goals', market:'Total Goals', hit:true },
+    { h:'🇸🇪 Sweden', a:'Tunisia 🇹🇳', score:'5–1', pick:'BTTS – Yes', market:'Both Teams to Score', hit:true },
+    { h:'🇨🇦 Canada', a:'Bosnia & Herz. 🇧🇦', score:'1–1', pick:'Draw', market:'Match Result', hit:true },
+    { h:'🇺🇸 USA', a:'Paraguay 🇵🇾', score:'4–1', pick:'United States Win', market:'Match Result', hit:true },
+    { h:'🇭🇹 Haiti', a:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿', score:'0–1', pick:'Under 2.5 Goals', market:'Total Goals', hit:true },
+    { h:'🇰🇷 Korea Republic', a:'Czech Rep. 🇨🇿', score:'2–1', pick:'Korea Republic Win', market:'Match Result', hit:true }
+  ];
+  document.getElementById('rows').innerHTML = picks.map(function(p){
+    return '<div class="row' + (p.hit ? '' : ' miss') + '">' +
+      '<div class="match">' +
+        '<div class="teams">' + p.h + ' <span class="sc">' + p.score + '</span> ' + p.a + '</div>' +
+        '<div class="pick">Our call: <b>' + p.pick + '</b> · ' + p.market + '</div>' +
+      '</div>' +
+      '<div class="tick">' + (p.hit ? '✓' : '✗') + '</div>' +
+    '</div>';
+  }).join('');
+</script>
+</body>
+</html>
