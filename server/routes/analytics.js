@@ -111,6 +111,45 @@ module.exports = function(deps) {
   });
 
   // -------------------------------------------------------------------------
+  // GET /api/analytics/clv-public — public-safe CLV proof (headline numbers only).
+  // CLV is the gold-standard proof of edge: consistently beating the closing line
+  // = genuine skill, not luck. Only published once there's a meaningful sample.
+  // -------------------------------------------------------------------------
+  router.get('/analytics/clv-public', async (req, res) => {
+    try {
+      const tips = await db.getTips({ status: 'settled' });
+      const withClv = tips.filter(function (t) { return t.clvPercent !== null && t.clvPercent !== undefined; });
+      const n = withClv.length;
+      const MIN_SAMPLE = 15; // don't publish numbers off a tiny sample
+      if (n < MIN_SAMPLE) {
+        return res.json({ ready: false, sample: n, minSample: MIN_SAMPLE });
+      }
+      const avgClv = withClv.reduce(function (s, t) { return s + t.clvPercent; }, 0) / n;
+      const positive = withClv.filter(function (t) { return t.clvPercent > 0; }).length;
+      // Per-sport beat rate (only sports with a decent sample)
+      const bySport = {};
+      withClv.forEach(function (t) {
+        if (!bySport[t.sport]) bySport[t.sport] = { n: 0, pos: 0, total: 0 };
+        bySport[t.sport].n++; bySport[t.sport].total += t.clvPercent;
+        if (t.clvPercent > 0) bySport[t.sport].pos++;
+      });
+      const sports = Object.keys(bySport).filter(function (s) { return bySport[s].n >= 8; }).map(function (s) {
+        return { sport: s, sample: bySport[s].n, beatRate: Math.round((bySport[s].pos / bySport[s].n) * 100), avgClv: Math.round((bySport[s].total / bySport[s].n) * 100) / 100 };
+      });
+      res.json({
+        ready: true,
+        sample: n,
+        avgClv: Math.round(avgClv * 100) / 100,
+        beatRate: Math.round((positive / n) * 100),
+        bySport: sports,
+      });
+    } catch (err) {
+      console.error('[Analytics] CLV public error:', err.message);
+      res.status(500).json({ error: 'CLV unavailable' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // GET /api/analytics/edge-vs-results — compare predicted edge to actual
   // -------------------------------------------------------------------------
   router.get('/analytics/edge-vs-results', authenticate, requireAdmin, async (req, res) => {

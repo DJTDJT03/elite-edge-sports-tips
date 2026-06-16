@@ -9715,6 +9715,32 @@ const App = {
       return;
     }
 
+    // Closing Line Value proof — the gold-standard proof of edge (best-effort).
+    var clv = null;
+    try { clv = await this.api('/analytics/clv-public'); } catch (e) { clv = null; }
+    var clvCard = '';
+    if (clv && clv.ready) {
+      var clvPos = clv.avgClv >= 0;
+      var sportsLine = (clv.bySport || []).map(function (s) {
+        return s.sport.charAt(0).toUpperCase() + s.sport.slice(1) + ' ' + s.beatRate + '%';
+      }).join(' · ');
+      clvCard = '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.10),rgba(212,168,67,0.06));border:1px solid rgba(34,197,94,0.3);border-radius:12px;padding:22px;margin-bottom:28px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:18px;">📈</span><h2 style="font-size:18px;font-weight:800;margin:0;">Proven Edge — Closing Line Value</h2></div>' +
+        '<p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Beating the closing line is how professionals prove genuine edge — not luck. Measured on every settled tip.</p>' +
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">' +
+          '<div style="text-align:center;"><div style="font-size:30px;font-weight:900;color:#22c55e;">' + clv.beatRate + '%</div><div style="font-size:11px;color:#94a3b8;">beat the closing line</div></div>' +
+          '<div style="text-align:center;"><div style="font-size:30px;font-weight:900;color:' + (clvPos ? '#22c55e' : '#ef4444') + ';">' + (clvPos ? '+' : '') + clv.avgClv + '%</div><div style="font-size:11px;color:#94a3b8;">average CLV</div></div>' +
+          '<div style="text-align:center;"><div style="font-size:30px;font-weight:900;color:#d4a843;">' + clv.sample + '</div><div style="font-size:11px;color:#94a3b8;">tips measured</div></div>' +
+        '</div>' +
+        (sportsLine ? '<div style="font-size:12px;color:#64748b;margin-top:14px;text-align:center;">Beat-rate by sport: ' + sportsLine + '</div>' : '') +
+      '</div>';
+    } else if (clv && clv.ready === false) {
+      clvCard = '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:28px;text-align:center;">' +
+        '<h2 style="font-size:16px;font-weight:800;margin:0 0 4px;">📈 Closing Line Value tracking is live</h2>' +
+        '<p style="font-size:13px;color:#94a3b8;margin:0;">We measure CLV on every tip. Headline figures publish once we have a meaningful sample (' + (clv.sample || 0) + '/' + (clv.minSample || 15) + ' settled so far).</p>' +
+      '</div>';
+    }
+
     var o = data.overview || {};
     var self = this;
     var pnlClass = o.totalPnl > 0 ? 'color:#22c55e;' : 'color:#ef4444;';
@@ -9813,6 +9839,9 @@ const App = {
           '<div style="font-size:11px;color:#64748b;">' + o.wins + 'W ' + o.losses + 'L | Best run: ' + o.longestStreak + '</div>' +
         '</div>' +
       '</div>' +
+
+      // Proven Edge — CLV
+      clvCard +
 
       // By sport
       '<div style="margin-bottom:28px;">' +
