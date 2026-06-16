@@ -8015,6 +8015,13 @@ const App = {
             <div id="admin-announce-out" style="display:none;margin-top:10px;font-size:13px;"></div>
           </div>
           <div class="card mb-16">
+            <h4 class="mb-8">Instagram (official Graph API)</h4>
+            <p class="text-muted mb-8">Once your Meta token is set in Railway, check the connection and post a test. The daily World Cup view auto-posts here too.</p>
+            <button class="btn btn-outline btn-sm" onclick="App.adminInstagramVerify()">Check Instagram connection</button>
+            <button class="btn btn-outline btn-sm" onclick="App.adminInstagramTest()">Post test to Instagram</button>
+            <div id="admin-instagram-out" style="display:none;margin-top:10px;font-size:13px;"></div>
+          </div>
+          <div class="card mb-16">
             <p class="text-muted mb-16">Send test notifications to users who have opted in. Browser Notification API is used for instant alerts.</p>
             <button class="btn btn-gold" onclick="App.sendTestAlert()">Send Test Alert</button>
             <button class="btn btn-outline" onclick="App.addNotification('New premium racing tip just published! Check the Racing page.')">Send Tip Alert</button>
@@ -8158,7 +8165,7 @@ const App = {
     try {
       var r = await this.api('/world-cup/admin/broadcast', { method: 'POST' });
       if (!r.sent) { if (out) out.textContent = r.reason || 'Nothing to send.'; this.showToast(r.reason || 'Nothing to send', 'error'); return; }
-      if (out) out.textContent = 'Sent! ' + r.picks + ' game(s) — Telegram: ' + (r.telegram ? 'yes' : 'no') + ', emails: ' + r.emails + ', push: ' + (r.push ? 'yes' : 'no');
+      if (out) out.textContent = 'Sent! ' + r.picks + ' game(s) — Telegram: ' + (r.telegram ? 'yes' : 'no') + ', Instagram: ' + (r.instagram ? 'yes' : 'no') + ', emails: ' + r.emails + ', push: ' + (r.push ? 'yes' : 'no');
       this.showToast('World Cup view sent — ' + r.picks + ' games, ' + r.emails + ' emails', 'success');
     } catch (e) { if (out) out.textContent = 'Send failed: ' + (e.message || e); this.showToast('Send failed: ' + e.message, 'error'); }
   },
@@ -9562,6 +9569,29 @@ const App = {
   sendTestAlert() {
     this.addNotification('Test Alert: New premium tip just published!');
     App.showToast('Test notification sent!', 'success');
+  },
+
+  async adminInstagramVerify() {
+    var out = document.getElementById('admin-instagram-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Checking Instagram connection…'; }
+    try {
+      var r = await this.api('/admin/instagram/verify');
+      if (out) out.innerHTML = r.ok
+        ? '<span style="color:#22c55e;">Connected ✓</span> — @' + r.username + (r.followers != null ? ' · ' + r.followers + ' followers' : '')
+        : '<span style="color:#ef4444;">Not connected:</span> ' + (r.error || 'check INSTAGRAM_ACCESS_TOKEN + INSTAGRAM_ACCOUNT_ID in Railway');
+    } catch (e) { if (out) out.innerHTML = '<span style="color:#ef4444;">Error: ' + (e.message || e) + '</span>'; }
+  },
+
+  async adminInstagramTest() {
+    var caption = prompt('Test Instagram post caption:', 'Elite Edge is live for the World Cup ⚽ Data-driven views every day. eliteedgesports.co.uk · 18+ | BeGambleAware.org #WorldCup2026 #EliteEdge');
+    if (!caption) return;
+    var out = document.getElementById('admin-instagram-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Posting to Instagram…'; }
+    try {
+      var r = await this.api('/admin/instagram/post', { method: 'POST', body: JSON.stringify({ caption: caption }) });
+      if (out) out.innerHTML = r.ok ? '<span style="color:#22c55e;">Posted ✓</span> (media ' + r.mediaId + ')' : '<span style="color:#ef4444;">Failed:</span> ' + (r.error || 'unknown');
+      this.showToast(r.ok ? 'Posted to Instagram' : 'Instagram post failed', r.ok ? 'success' : 'error');
+    } catch (e) { if (out) out.innerHTML = '<span style="color:#ef4444;">Error: ' + (e.message || e) + '</span>'; }
   },
 
   async adminAnnouncePwa() {

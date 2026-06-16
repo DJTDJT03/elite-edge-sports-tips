@@ -170,6 +170,9 @@ deps.quantModel = require('./services/quantModel')(deps);
 // Multi-model AI arbiter panel (GPT + Gemini + Grok) for the consensus engine.
 deps.aiArbiters = require('./services/aiArbiters')(deps);
 
+// Instagram publisher — official Meta Graph API (compliant auto-posting).
+deps.instagramPublisher = require('./services/instagramPublisher');
+
 // ---------------------------------------------------------------------------
 // Mount routes
 // ---------------------------------------------------------------------------

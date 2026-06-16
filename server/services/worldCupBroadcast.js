@@ -109,6 +109,17 @@ module.exports = function (deps) {
     return t;
   }
 
+  // Plain-text caption for Instagram (no HTML; emoji + hashtags allowed).
+  function buildInstagramCaption(picks, dateLabel) {
+    var c = '⚽ ELITE EDGE — WORLD CUP VIEW\n' + dateLabel + '\n\n';
+    picks.forEach(function (p) {
+      c += p.home + ' v ' + p.away + '\n→ Our view: ' + p.view + (p.note ? ' · ' + p.note : '') + (p.conf ? ' (' + confWord(p.conf) + ')' : '') + '\n\n';
+    });
+    c += 'Full match intelligence at eliteedgesports.co.uk\n18+ | Opinion & analysis, not betting advice | BeGambleAware.org\n\n';
+    c += '#WorldCup2026 #Football #EliteEdge #FootballTips #BettingTips';
+    return c;
+  }
+
   function buildEmailHtml(picks, dateLabel) {
     var rows = picks.map(function (p) {
       var time = new Date(p.kickoff).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
@@ -140,11 +151,19 @@ module.exports = function (deps) {
 
     var now = new Date();
     var dateLabel = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/London' });
-    var result = { sent: true, picks: picks.length, telegram: false, emails: 0, push: false };
+    var result = { sent: true, picks: picks.length, telegram: false, emails: 0, push: false, instagram: false };
 
     // Telegram channel
     if (telegramBot && telegramBot.isAvailable()) {
       try { await telegramBot.sendMessage(buildTelegram(picks, dateLabel), 'HTML'); result.telegram = true; } catch (e) { console.warn('[WC Broadcast] telegram failed:', e.message); }
+    }
+    // Instagram (official Graph API) — same verdicts, consistent with the app.
+    if (!opts.telegramOnly && !opts.skipInstagram && deps.instagramPublisher && deps.instagramPublisher.isAvailable()) {
+      try {
+        var ig = await deps.instagramPublisher.publish(buildInstagramCaption(picks, dateLabel));
+        result.instagram = !!(ig && ig.ok);
+        if (ig && !ig.ok) console.warn('[WC Broadcast] instagram failed:', ig.error);
+      } catch (e) { console.warn('[WC Broadcast] instagram error:', e.message); }
     }
     // Telegram-only resend: stop here, don't re-spam email/push/notifications.
     if (opts.telegramOnly) {

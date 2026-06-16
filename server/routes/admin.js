@@ -220,6 +220,26 @@ module.exports = function(deps) {
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // ADMIN: Instagram (official Graph API) — verify connection + manual post.
+  // ---------------------------------------------------------------------------
+  router.get('/admin/instagram/verify', authenticate, requireAdmin, async (req, res) => {
+    try {
+      if (!deps.instagramPublisher) return res.status(503).json({ ok: false, error: 'Instagram not available' });
+      res.json(await deps.instagramPublisher.verify());
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+
+  router.post('/admin/instagram/post', authenticate, requireAdmin, async (req, res) => {
+    try {
+      if (!deps.instagramPublisher) return res.status(503).json({ ok: false, error: 'Instagram not available' });
+      const caption = (req.body && req.body.caption) || '';
+      const imageUrl = (req.body && req.body.imageUrl) || null;
+      if (!caption.trim()) return res.status(400).json({ ok: false, error: 'Caption is required' });
+      res.json(await deps.instagramPublisher.publish(caption, imageUrl));
+    } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+  });
+
   router.post('/admin/users/:id/reconcile-stripe', authenticate, requireAdmin, async (req, res) => {
     try {
       const stripeService = deps.stripeService;
