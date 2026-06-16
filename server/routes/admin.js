@@ -484,9 +484,7 @@ module.exports = function(deps) {
   // ---------------------------------------------------------------------------
   // ADMIN: Auto-result marking (racing + football)
   // ---------------------------------------------------------------------------
-  router.post('/admin/auto-results', authenticate, async (req, res) => {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-
+  router.post('/admin/auto-results', authenticate, requireAdmin, async (req, res) => {
     try {
       const tips = await db.getTips();
       const results = await db.getResults();

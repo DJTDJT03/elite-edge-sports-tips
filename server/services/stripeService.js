@@ -320,9 +320,12 @@ class StripeService {
       subs.data.forEach((s) => diag.subs.push(s.status));
       const live = subs.data.find(function (s) { return ['active', 'trialing', 'past_due', 'unpaid'].includes(s.status); });
       if (!live) continue;
-      const tier = (await this.tierFromSubscription(live)) || 'premium';
+      // If the price can't be matched, default to the LOWEST paid tier (starter)
+      // rather than over-granting premium.
+      const tier = (await this.tierFromSubscription(live)) || 'starter';
       const priceId = live.items && live.items.data[0] && live.items.data[0].price && live.items.data[0].price.id;
-      return { ok: true, tier: tier, subscriptionId: live.id, customerId: c.id, currentPeriodEnd: live.current_period_end, status: live.status, priceId: priceId, diag: diag };
+      const cpe = live.current_period_end || (live.items && live.items.data[0] && live.items.data[0].current_period_end) || null;
+      return { ok: true, tier: tier, subscriptionId: live.id, customerId: c.id, currentPeriodEnd: cpe, status: live.status, priceId: priceId, diag: diag };
     }
     return { ok: false, diag: diag };
   }

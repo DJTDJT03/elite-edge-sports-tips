@@ -331,45 +331,8 @@ module.exports = function(deps) {
               }
             } catch (e) { console.log('[Match Intelligence] WC consensus lookup failed:', e.message); }
 
-            // Market-odds adjustment — SURGICAL. Only takes over for a clear
-            // favourite, or a strong goals signal. Otherwise it stays null and
-            // the model/consensus decides, so the output keeps its variety.
-            var marketVerdict = null;
-            try {
-              if (sportMonks && sportMonks.getMarketOdds) {
-                var mo = await sportMonks.getMarketOdds(fixtureId);
-                if (mo && mo.home && mo.away) {
-                  var ih = 1 / mo.home, idr = mo.draw ? 1 / mo.draw : 0, ia = 1 / mo.away;
-                  var isum = ih + idr + ia;
-                  var pHome = Math.round((ih / isum) * 100), pAway = Math.round((ia / isum) * 100);
-                  var mFavHome = mo.home <= mo.away;
-                  var mFavTeam = mFavHome ? smF.homeTeam : smF.awayTeam;
-                  var mFavOdds = mFavHome ? mo.home : mo.away;
-                  var mFavProb = mFavHome ? pHome : pAway;
-                  var fOdd = function (d) { return d != null ? d.toFixed(2) : '-'; };
-                  var gLean = '', gOdd = null;
-                  if (mo.over35 && mo.over35 <= 2.05) { gLean = 'Over 3.5 Goals'; gOdd = mo.over35; }
-                  else if (mo.over25 && mo.over25 <= 1.80) { gLean = 'Over 2.5 Goals'; gOdd = mo.over25; }
-                  if (mFavOdds <= 1.50) {
-                    // Clear favourite → back to win (+ goals note).
-                    marketVerdict = {
-                      market: 'Match Result', pick: mFavTeam + ' Win',
-                      reason: 'Bookmaker odds: ' + smF.homeTeam + ' ' + fOdd(mo.home) + ', Draw ' + fOdd(mo.draw) + ', ' + smF.awayTeam + ' ' + fOdd(mo.away) + '. ' + mFavTeam + ' clear favourites (' + mFavProb + '% implied).' + (gLean ? ' Goals lean: ' + gLean + ' (' + fOdd(gOdd) + ').' : ''),
-                      confidence: mFavOdds <= 1.20 ? 9 : 8,
-                      riskLevel: 'low', riskText: 'Strong market favourite.', source: 'market',
-                    };
-                  } else if (gLean) {
-                    // No clear favourite but the goals market is short → that's the play.
-                    marketVerdict = {
-                      market: 'Total Goals', pick: gLean,
-                      reason: 'Tight on the win market (' + smF.homeTeam + ' ' + fOdd(mo.home) + ' / ' + smF.awayTeam + ' ' + fOdd(mo.away) + '), but the goals market is short — ' + gLean + ' priced at ' + fOdd(gOdd) + '.',
-                      confidence: gOdd <= 1.65 ? 8 : 7, riskLevel: 'low-medium', riskText: 'Goals-led call.', source: 'market',
-                    };
-                  }
-                  // else: leave null — let the model/consensus call it (variety).
-                }
-              }
-            } catch (e) { console.log('[Match Intelligence] market odds failed:', e.message); }
+            // (Market-odds verdict removed — the engine leads; consensus or the
+            // model heuristic decides. No wasted odds call here.)
 
             // Build verdict from the model — pick the BEST market (varied), not
             // always a win: clear favourite → win; goal-heavy → Over; both score

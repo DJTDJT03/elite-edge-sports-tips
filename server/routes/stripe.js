@@ -10,6 +10,16 @@ module.exports = function(deps) {
   const { db, authenticate, requireAdmin, stripeService, emailService } = deps;
   const express = require('express');
 
+  // Newer Stripe API versions moved current_period_end onto the subscription
+  // item, not the top-level subscription. Read both so expiries never silently
+  // fall back / get skipped.
+  function subPeriodEnd(sub) {
+    if (!sub) return null;
+    if (sub.current_period_end) return sub.current_period_end;
+    if (sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].current_period_end) return sub.items.data[0].current_period_end;
+    return null;
+  }
+
   // ---------------------------------------------------------------------------
   // POST /api/stripe/create-checkout — create a Stripe Checkout session
   // ---------------------------------------------------------------------------
@@ -91,8 +101,8 @@ module.exports = function(deps) {
       // Determine subscription period from the Stripe subscription
       const subscription = session.subscription;
       let expiryDate = new Date();
-      if (subscription && subscription.current_period_end) {
-        expiryDate = new Date(subscription.current_period_end * 1000);
+      if (subscription && subPeriodEnd(subscription)) {
+        expiryDate = new Date(subPeriodEnd(subscription) * 1000);
       } else {
         // Fallback: check plan from price interval
         const lineItems = await require('stripe')(process.env.STRIPE_SECRET_KEY)
@@ -228,7 +238,7 @@ module.exports = function(deps) {
             const sub = webhookSubId ? await stripeService.getSubscription(webhookSubId) : null;
             let tier = md.tier === 'vip' ? 'vip' : md.tier === 'starter' ? 'starter' : md.tier === 'premium' ? 'premium' : null;
             if (!tier && sub) tier = await stripeService.tierFromSubscription(sub);
-            if (!tier) tier = 'premium';
+            if (!tier) { tier = 'starter'; console.warn('[Stripe] checkout tier unresolved (no metadata, no price match) — defaulting to starter to avoid over-granting'); }
 
             // Idempotency: already on this tier with this sub linked → nothing to do.
             if (user.stripeSubscriptionId === webhookSubId && user.subscription === tier) {
@@ -237,7 +247,7 @@ module.exports = function(deps) {
             }
 
             let expiry = new Date();
-            if (sub && sub.current_period_end) expiry = new Date(sub.current_period_end * 1000);
+            if (sub && subPeriodEnd(sub)) expiry = new Date(subPeriodEnd(sub) * 1000);
             else expiry.setMonth(expiry.getMonth() + 1);
             const credits = tier === 'vip' ? 999999 : tier === 'premium' ? 250 : 50;
 
@@ -287,7 +297,7 @@ module.exports = function(deps) {
             if (subId) {
               try {
                 var subObj = await stripeService.getSubscription(subId);
-                if (subObj) info = { ok: true, tier: (await stripeService.tierFromSubscription(subObj)) || 'premium', subscriptionId: subObj.id, customerId: invCust, currentPeriodEnd: subObj.current_period_end };
+                if (subObj) info = { ok: true, tier: (await stripeService.tierFromSubscription(subObj)) || 'starter', subscriptionId: subObj.id, customerId: invCust, currentPeriodEnd: subPeriodEnd(subObj) };
               } catch (e) {}
             }
           }
@@ -347,20 +357,26 @@ module.exports = function(deps) {
         }
 
         case 'customer.subscription.updated': {
-          // Plan changed
+          // Plan changed / renewed / card updated etc.
           const sub = event.data.object;
           const users = await db.getUsers();
           const user = users.find(u => u.stripeSubscriptionId === sub.id);
-          if (user && sub.current_period_end) {
-            const expiry = new Date(sub.current_period_end * 1000);
-            // Preserve the user's current tier on update (premium or vip)
-            const currentTier = (user.subscription === 'vip') ? 'vip' : 'premium';
-            const status = sub.cancel_at_period_end ? user.subscription : currentTier;
+          if (user) {
+            const pe = subPeriodEnd(sub);
+            const expiry = pe ? new Date(pe * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+            // Derive the REAL tier from the subscription's price — never guess
+            // from the old value (that silently downgraded Starter -> premium).
+            let derived = null;
+            try { derived = await stripeService.tierFromSubscription(sub); } catch (e) {}
+            const isPaid = ['starter', 'premium', 'vip'].includes(user.subscription);
+            // If cancelling at period end, keep their current tier until it lapses.
+            const tier = sub.cancel_at_period_end ? user.subscription : (derived || (isPaid ? user.subscription : 'premium'));
             await db.updateUser(user.id, {
-              subscription: status,
+              subscription: tier,
+              role: (tier === 'premium' || tier === 'vip') ? 'premium' : (user.role === 'admin' ? 'admin' : 'free'),
               subscriptionExpiry: expiry.toISOString(),
             });
-            console.log('[Stripe] Webhook: subscription updated for', user.email);
+            console.log('[Stripe] Webhook: subscription updated for ' + user.email + ' -> ' + tier);
           }
           break;
         }
