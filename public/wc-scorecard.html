@@ -86,11 +86,11 @@
     <div class="summary">
       <div>
         <div class="rec">Our Record So Far</div>
-        <div class="big">11 <span class="mut">won</span> &nbsp;·&nbsp; 0 <span class="mut">lost</span></div>
+        <div class="big">12 <span class="mut">won</span> &nbsp;·&nbsp; 2 <span class="mut">lost</span></div>
       </div>
       <div class="rate">
-        <div class="pct">100%</div>
-        <div class="lab">11 settled picks</div>
+        <div class="pct">86%</div>
+        <div class="lab">14 settled picks</div>
       </div>
     </div>
 
@@ -114,7 +114,10 @@
     { h:'🇨🇦 Canada', a:'Bosnia & Herz. 🇧🇦', score:'1–1', pick:'Draw', market:'Match Result', hit:true },
     { h:'🇺🇸 USA', a:'Paraguay 🇵🇾', score:'4–1', pick:'United States Win', market:'Match Result', hit:true },
     { h:'🇭🇹 Haiti', a:'Scotland 🏴󠁧󠁢󠁳󠁣󠁴󠁿', score:'0–1', pick:'Under 2.5 Goals', market:'Total Goals', hit:true },
-    { h:'🇰🇷 Korea Republic', a:'Czech Rep. 🇨🇿', score:'2–1', pick:'Korea Republic Win', market:'Match Result', hit:true }
+    { h:'🇰🇷 Korea Republic', a:'Czech Rep. 🇨🇿', score:'2–1', pick:'Korea Republic Win', market:'Match Result', hit:true },
+    { h:'🇩🇪 Germany', a:'Curaçao 🇨🇼', score:'7–1', pick:'Over 2.5 Goals', market:'Total Goals', hit:true },
+    { h:'🇧🇷 Brazil', a:'Morocco 🇲🇦', score:'1–1', pick:'Over 2.5 Goals', market:'Total Goals', hit:false },
+    { h:'🇳🇱 Netherlands', a:'Japan 🇯🇵', score:'2–2', pick:'Under 2.5 Goals', market:'Total Goals', hit:false }
   ];
   document.getElementById('rows').innerHTML = picks.map(function(p){
     return '<div class="row' + (p.hit ? '' : ' miss') + '">' +
