@@ -5677,6 +5677,27 @@ module.exports = function startScheduler(deps) {
       console.error('[AutoTune] Failed to save analyst state: ' + e.message);
     }
 
+    // --- CALIBRATION EVIDENCE (ADVISORY ONLY) ---------------------------------
+    // Read-only measurement surfaced in the report for Darren's review. It does
+    // NOT adjust any weight, odds range or selection — per level-2 agreement.
+    var calibration = null;
+    try {
+      var calibEngine = require('./calibrationEngine');
+      var calibTips = await db.getTips({ status: 'settled' });
+      var cutoff30 = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+      var calibFiltered = calibTips.filter(function (t) {
+        var d = t.date;
+        if (d && typeof d !== 'string') { try { d = new Date(d).toISOString().split('T')[0]; } catch (e) { return false; } }
+        return !(d && d < cutoff30);
+      });
+      calibration = calibEngine.analyse(calibFiltered, { minSample: 20 });
+      if (calibration.ready) {
+        console.log('[AutoTune] Calibration (30d): grade=' + calibration.grade + ', Brier=' + calibration.brier + ', ordering=' + (calibration.confidenceOrdering.healthy ? 'healthy' : 'INVERSIONS: ' + calibration.confidenceOrdering.inversions.join('; ')) + ' (advisory — no auto-action)');
+      } else {
+        console.log('[AutoTune] Calibration: insufficient sample (' + calibration.sample + '/' + calibration.minSample + ')');
+      }
+    } catch (e) { console.warn('[AutoTune] calibration evidence failed: ' + e.message); }
+
     // --- APPEND TUNING LOG TO DATABASE ---
     try {
       var logEntry = {
@@ -5684,6 +5705,7 @@ module.exports = function startScheduler(deps) {
         timestamp: new Date().toISOString(),
         isMonday: isMonday,
         analysts: tuningReport,
+        calibration: calibration, // advisory evidence only
       };
       await db.query(
         "INSERT INTO audit_log (user_id, user_email, action, entity, details, timestamp) VALUES ($1, $2, $3, $4, $5, NOW())",
@@ -5727,6 +5749,22 @@ module.exports = function startScheduler(deps) {
         }
         reportHtml += '</div>';
       });
+
+      // Calibration evidence (advisory — informs your decisions, changes nothing)
+      if (calibration && calibration.ready) {
+        var gradeCol = calibration.grade === 'Excellent' ? '#22c55e' : calibration.grade === 'Good' ? '#84cc16' : calibration.grade === 'Fair' ? '#f59e0b' : '#ef4444';
+        reportHtml += '<div style="background:#141828;border:1px solid ' + gradeCol + ';padding:20px;margin:20px 0;border-radius:8px;">';
+        reportHtml += '<h2 style="color:' + gradeCol + ';margin-bottom:6px;">Model Calibration (30 days) — ' + calibration.grade + '</h2>';
+        reportHtml += '<p style="color:#94a3b8;font-size:13px;margin:0 0 12px;">Advisory only — surfaced for your review, no automatic changes made.</p>';
+        reportHtml += '<p style="color:#e8e6e3;">Brier ' + calibration.brier + ' &nbsp;·&nbsp; Skill score ' + (calibration.brierSkillScore >= 0 ? '+' : '') + calibration.brierSkillScore + ' &nbsp;·&nbsp; Sample ' + calibration.sample + ' tips</p>';
+        if (!calibration.confidenceOrdering.healthy) {
+          reportHtml += '<p style="color:#ef4444;font-weight:700;">⚠ Confidence inversion (for review): ' + calibration.confidenceOrdering.inversions.join('; ') + '</p>';
+        } else {
+          reportHtml += '<p style="color:#22c55e;">✓ Confidence ordering healthy — higher-confidence picks win more.</p>';
+        }
+        reportHtml += '<p style="color:#64748b;font-size:12px;margin-top:8px;">Full reliability/backtest breakdown: Admin → Live Data → Model Calibration.</p>';
+        reportHtml += '</div>';
+      }
 
       // Loss pattern intelligence
       try {
