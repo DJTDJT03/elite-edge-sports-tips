@@ -135,6 +135,81 @@ module.exports = function(deps) {
   // Reads the live subscription from Stripe (source of truth) and provisions
   // the correct tier, expiry, credits and Stripe IDs.
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // ADMIN: Broadcast the "Add to Home Screen" (install as app) announcement.
+  // Short push + in-app nudge for everyone, plus a step-by-step email (iOS+Android).
+  // ---------------------------------------------------------------------------
+  router.post('/admin/announce-pwa', authenticate, requireAdmin, async (req, res) => {
+    try {
+      const now = new Date().toISOString();
+      const result = { notification: false, push: false, emails: 0 };
+
+      // In-app notification (the bell) — everyone
+      try {
+        await db.createNotification({
+          id: 'pwa_' + Date.now(), type: 'announcement', timestamp: now, audience: 'all',
+          message: '📲 Add Elite Edge to your home screen for one-tap access — no app store needed. Open your browser menu and choose "Add to Home Screen". Full step-by-step just emailed to you.',
+        });
+        result.notification = true;
+      } catch (e) {}
+
+      // Push notification — opted-in users
+      if (deps.pushService && deps.pushService.isAvailable) {
+        deps.pushService.broadcast(db, {
+          title: '📲 Install Elite Edge as an app',
+          body: 'Add us to your home screen for instant one-tap access — check your inbox for the 10-second how-to.',
+          url: '/#/dashboard', tag: 'pwa-install',
+        }).then(function () { result.push = true; }).catch(function () {});
+      }
+
+      // Email with full instructions — subscribers who haven't opted out
+      if (emailService && (emailService._sendEmail || emailService.sendGeneric)) {
+        const subject = '📲 Add Elite Edge to your home screen (takes 10 seconds)';
+        const html = '<div style="font-family:Inter,Arial,sans-serif;max-width:600px;margin:0 auto;color:#222;">' +
+          '<h2 style="color:#0a0e1a;">Get Elite Edge on your home screen 📲</h2>' +
+          '<p>Add Elite Edge to your phone like an app — one tap to open, no app store, no download. Here\'s how, takes 10 seconds:</p>' +
+          '<div style="background:#f4f4f4;border-radius:10px;padding:16px;margin:16px 0;">' +
+            '<h3 style="margin:0 0 8px;color:#0a5;">iPhone &amp; iPad (Safari)</h3>' +
+            '<ol style="margin:0;padding-left:20px;line-height:1.7;">' +
+              '<li>Open <strong>eliteedgesports.co.uk</strong> in <strong>Safari</strong>.</li>' +
+              '<li>Tap the <strong>Share</strong> button (the square with an arrow pointing up).</li>' +
+              '<li>Scroll down and tap <strong>"Add to Home Screen"</strong>.</li>' +
+              '<li>Tap <strong>Add</strong> — the Elite Edge icon appears on your home screen.</li>' +
+            '</ol>' +
+          '</div>' +
+          '<div style="background:#f4f4f4;border-radius:10px;padding:16px;margin:16px 0;">' +
+            '<h3 style="margin:0 0 8px;color:#0a5;">Android (Chrome)</h3>' +
+            '<ol style="margin:0;padding-left:20px;line-height:1.7;">' +
+              '<li>Open <strong>eliteedgesports.co.uk</strong> in <strong>Chrome</strong>.</li>' +
+              '<li>Tap the <strong>⋮</strong> menu (top-right).</li>' +
+              '<li>Tap <strong>"Add to Home screen"</strong> (or <strong>"Install app"</strong>).</li>' +
+              '<li>Tap <strong>Add</strong> / <strong>Install</strong> — done.</li>' +
+            '</ol>' +
+          '</div>' +
+          '<p style="text-align:center;margin:22px 0;"><a href="https://eliteedgesports.co.uk/" style="display:inline-block;padding:12px 28px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;">Open Elite Edge →</a></p>' +
+          '<p style="font-size:12px;color:#777;">You\'ll get faster access to tips, World Cup, Last Man Standing and live results. 18+ | BeGambleAware.org. <a href="https://eliteedgesports.co.uk/#/account" style="color:#777;">Email preferences</a>.</p>' +
+        '</div>';
+        const users = await db.getUsers();
+        for (let i = 0; i < users.length; i++) {
+          const u = users[i];
+          if (!u.email) continue;
+          const p = u.emailPrefs || {};
+          if (p.marketing === false && p.dailyBulletin === false) continue;
+          const send = emailService._sendEmail
+            ? emailService._sendEmail({ to: u.email, subject: subject, html: html, emailType: 'pwa_install' })
+            : emailService.sendGeneric({ to: u.email, subject: subject, html: html });
+          send.then(function () {}).catch(function () {});
+          result.emails++;
+        }
+      }
+      console.log('[Admin] PWA install announcement — notification:' + result.notification + ', emails:' + result.emails);
+      res.json(result);
+    } catch (err) {
+      console.error('[Admin] announce-pwa failed:', err.message);
+      res.status(500).json({ error: 'Announcement failed: ' + err.message });
+    }
+  });
+
   router.post('/admin/users/:id/reconcile-stripe', authenticate, requireAdmin, async (req, res) => {
     try {
       const stripeService = deps.stripeService;

@@ -8009,6 +8009,12 @@ const App = {
         <div class="admin-panel" id="panel-notifications">
           <h3 class="mb-16">Push Notifications</h3>
           <div class="card mb-16">
+            <h4 class="mb-8">Announcements to all subscribers</h4>
+            <p class="text-muted mb-8">Sends a push + in-app nudge to everyone and emails step-by-step install instructions (iPhone &amp; Android).</p>
+            <button class="btn btn-gold" onclick="App.adminAnnouncePwa()">Send "Add to Home Screen" announcement</button>
+            <div id="admin-announce-out" style="display:none;margin-top:10px;font-size:13px;"></div>
+          </div>
+          <div class="card mb-16">
             <p class="text-muted mb-16">Send test notifications to users who have opted in. Browser Notification API is used for instant alerts.</p>
             <button class="btn btn-gold" onclick="App.sendTestAlert()">Send Test Alert</button>
             <button class="btn btn-outline" onclick="App.addNotification('New premium racing tip just published! Check the Racing page.')">Send Tip Alert</button>
@@ -9556,6 +9562,20 @@ const App = {
   sendTestAlert() {
     this.addNotification('Test Alert: New premium tip just published!');
     App.showToast('Test notification sent!', 'success');
+  },
+
+  async adminAnnouncePwa() {
+    if (!confirm('Send the "Add to Home Screen" announcement to ALL subscribers now? (Push + in-app notification + step-by-step email.)')) return;
+    var out = document.getElementById('admin-announce-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Sending announcement…'; }
+    try {
+      var r = await this.api('/admin/announce-pwa', { method: 'POST' });
+      if (out) out.innerHTML = '<span style="color:#22c55e;">Sent ✓</span> — in-app: ' + (r.notification ? 'yes' : 'no') + ', push: ' + (r.push ? 'yes' : 'no') + ', emails: ' + (r.emails || 0);
+      this.showToast('Install announcement sent (' + (r.emails || 0) + ' emails)', 'success');
+    } catch (e) {
+      if (out) out.innerHTML = '<span style="color:#ef4444;">Failed: ' + (e.message || e) + '</span>';
+      this.showToast('Announcement failed: ' + e.message, 'error');
+    }
   },
 
   timeAgo(dateStr) {
