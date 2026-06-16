@@ -510,12 +510,23 @@ var WorldCup = (function() {
     return html;
   }
 
+  function renderValueFinder() {
+    setTimeout(function () { WorldCup._loadValue(); }, 30);
+    return '<div style="margin-bottom:16px;">' +
+      '<div style="display:inline-block;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);padding:6px 14px;border-radius:6px;font-size:12px;color:#22c55e;font-weight:700;margin-bottom:12px;">ELITE EDGE QUANT MODEL vs THE MARKET</div>' +
+      '<h3 style="font-size:20px;font-weight:900;color:#d4a843;margin-bottom:4px;">Value Finder</h3>' +
+      '<p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:16px;">Where our in-house model rates a selection more likely than the bookmakers’ price implies. Bigger edge = bigger gap between our model and the market.</p>' +
+      '<div id="wc-value-list"><div style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">Scanning the market…</div></div>' +
+    '</div>';
+  }
+
   function renderTabContent() {
     switch (_tab) {
       case 'fixtures': return renderFixtures();
       case 'groups': return renderGroups();
       case 'bracket': return renderBracket();
       case 'our-picks': return renderOurPicks();
+      case 'value': return renderValueFinder();
       case 'leaderboard': return renderLeaderboard();
       case 'predictions': return renderMyPredictions();
       case 'nations': return renderNationWars();
@@ -536,9 +547,10 @@ var WorldCup = (function() {
           renderCountdown() +
         '</div>' +
         '<div class="wc-tabs">' +
-          ['fixtures', 'groups', 'bracket', 'our-picks', 'predictions', 'leaderboard', 'nations'].map(function(t) {
+          ['fixtures', 'groups', 'bracket', 'our-picks', 'value', 'predictions', 'leaderboard', 'nations'].map(function(t) {
             var label = t.charAt(0).toUpperCase() + t.slice(1);
             if (t === 'nations') label = 'Nation Wars';
+            if (t === 'value') label = 'Value Finder';
             return '<div class="wc-tab' + (_tab === t ? ' active' : '') + '" onclick="WorldCup.switchTab(\'' + t + '\')">' + label + '</div>';
           }).join('') +
         '</div>' +
@@ -578,7 +590,9 @@ var WorldCup = (function() {
     _tab = tab;
     // Update tab UI
     document.querySelectorAll('.wc-tab').forEach(function(el) {
-      el.classList.toggle('active', el.textContent.toLowerCase().replace(' wars', 's').replace('nation', 'nations') === tab || el.textContent.toLowerCase() === tab);
+      var label = el.textContent.toLowerCase();
+      var key = label === 'nation wars' ? 'nations' : label === 'value finder' ? 'value' : label;
+      el.classList.toggle('active', key === tab);
     });
     var content = document.getElementById('wc-content');
     if (content) content.innerHTML = renderTabContent();
@@ -652,6 +666,35 @@ var WorldCup = (function() {
     }
   }
 
+  function _loadValue() {
+    var el = document.getElementById('wc-value-list');
+    if (!el) return;
+    api('/value-scan').then(function (data) {
+      el = document.getElementById('wc-value-list');
+      if (!el) return;
+      if (!data || !data.ready || !data.flags || !data.flags.length) {
+        el.innerHTML = '<div style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">No value flags right now — our model and the market are in line on the upcoming games. Check back as new fixtures approach.</div>';
+        return;
+      }
+      el.innerHTML = data.flags.map(function (v) {
+        var t = new Date(v.kickoff).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+        var edgeCol = v.edge >= 12 ? '#22c55e' : v.edge >= 8 ? '#84cc16' : '#d4a843';
+        return '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-left:3px solid ' + edgeCol + ';border-radius:10px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+          '<div style="flex:1;min-width:170px;"><div style="font-size:14px;font-weight:700;color:#fff;">' + App.escapeHtml(v.fixture) + '</div>' +
+          '<div style="font-size:12px;color:rgba(255,255,255,0.4);">' + t + ' · ' + App.escapeHtml(v.market) + '</div></div>' +
+          '<div style="text-align:center;min-width:150px;"><div style="font-size:15px;font-weight:800;color:#d4a843;">' + App.escapeHtml(v.selection) + '</div>' +
+          '<div style="font-size:11px;color:rgba(255,255,255,0.5);">Model ' + v.modelProb + '% vs Market ' + v.marketProb + '%</div></div>' +
+          '<div style="text-align:right;min-width:84px;"><div style="font-size:18px;font-weight:900;color:' + edgeCol + ';">+' + v.edge + '%</div>' +
+          '<div style="font-size:11px;color:rgba(255,255,255,0.4);">edge · @ ' + v.odds + '</div></div>' +
+        '</div>';
+      }).join('') +
+        '<p style="font-size:11px;color:rgba(255,255,255,0.25);margin-top:12px;text-align:center;">Elite Edge quant model vs de-vigged market odds. 18+ | Analysis, not betting advice | BeGambleAware.org</p>';
+    }).catch(function () {
+      var e = document.getElementById('wc-value-list');
+      if (e) e.innerHTML = '<div style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">Value scan unavailable right now.</div>';
+    });
+  }
+
   return {
     render: render,
     switchTab: switchTab,
@@ -659,6 +702,7 @@ var WorldCup = (function() {
     setNation: setNation,
     togglePreview: togglePreview,
     cleanup: cleanup,
+    _loadValue: _loadValue,
     _countdownInterval: null,
   };
 })();

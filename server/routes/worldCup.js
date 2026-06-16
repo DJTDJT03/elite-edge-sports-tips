@@ -213,6 +213,16 @@ module.exports = function(deps) {
     } catch (err) { res.status(500).json({ error: 'Broadcast failed: ' + err.message }); }
   });
 
+  // GET /api/world-cup/value-scan — where our quant model beats the market
+  router.get('/value-scan', async function (req, res) {
+    try {
+      if (!deps.valueScanner) return res.json({ ready: false, flags: [] });
+      res.set('Cache-Control', 'no-store');
+      var minEdge = req.query.minEdge ? parseFloat(req.query.minEdge) : 5;
+      res.json(await deps.valueScanner.scan({ minEdge: minEdge }));
+    } catch (err) { res.status(500).json({ error: 'Value scan failed: ' + err.message }); }
+  });
+
   // GET /api/world-cup/bracket — knockout bracket
   router.get('/bracket', async function(req, res) {
     try {
