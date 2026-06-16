@@ -4545,15 +4545,16 @@ module.exports = function startScheduler(deps) {
   // WORLD CUP — auto-sync fixtures, results and group tables (keep them current)
   // =========================================================================
   if (process.env.ENABLE_WORLD_CUP === 'true' && deps.worldCupData && deps.worldCupData.syncFixtures) {
+    var lastPreviewGenAt = 0; // throttle the heavy consensus-preview generation
     var runWcSync = safeRun('WorldCupSync', async function () {
       var r = await deps.worldCupData.syncFixtures();
       if (r && (r.fixtures || r.groups)) {
         console.log('[WorldCup] Auto-sync — ' + (r.fixtures || 0) + ' fixtures, ' + (r.groups || 0) + ' groups (' + (r.source || '?') + ')');
       }
-      // Run the 5-analyst consensus engine over upcoming fixtures (self-limited
-      // to the next 5 days, max 6 per pass, only those without a preview). This
-      // is what produces the real headline pick shown on each game's "Our Take".
-      if (deps.worldCupData.generatePreviews) {
+      // Consensus-preview generation is HEAVY (Perplexity + multi-model LLM calls).
+      // Run it at most hourly, not on every 15-min sync — keeps background load sane.
+      if (deps.worldCupData.generatePreviews && (Date.now() - lastPreviewGenAt) >= 60 * 60 * 1000) {
+        lastPreviewGenAt = Date.now();
         try {
           var p = await deps.worldCupData.generatePreviews();
           if (p && p.generated) console.log('[WorldCup] Consensus previews generated: ' + p.generated);

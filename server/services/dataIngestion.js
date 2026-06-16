@@ -391,11 +391,12 @@ class FootballOddsSource extends DataSource {
         res.on('end', function() {
           try {
             var parsed = JSON.parse(data);
-            // Log remaining API credits from response headers
+            // Only log credits when genuinely low (actionable) — the per-sport
+            // "credits remaining" line was flooding the logs every fetch.
             var remaining = res.headers['x-requests-remaining'];
             var used = res.headers['x-requests-used'];
-            if (remaining) {
-              console.log('[elite-odds] API credits: ' + used + ' used, ' + remaining + ' remaining');
+            if (remaining != null && parseInt(remaining, 10) < 1000) {
+              console.warn('[elite-odds] LOW API credits: ' + used + ' used, ' + remaining + ' remaining');
             }
             resolve(parsed);
           }
