@@ -60,38 +60,17 @@ module.exports = function (deps) {
           [f.id]
         );
         if (pv.rows.length && pv.rows[0].verdict_selection) {
-          // Consensus engine leads — trust its call (incl. a genuine draw).
+          // SINGLE SOURCE OF TRUTH: the consensus engine's stored verdict — the
+          // exact same selection the app shows for this game. Trust its call
+          // (incl. a genuine draw). No market fallback — Telegram must never
+          // show a different pick from the app.
           view = pv.rows[0].verdict_selection;
           conf = pv.rows[0].confidence || null;
           if (pv.rows[0].predicted_scoreline) note = 'Predicted ' + pv.rows[0].predicted_scoreline;
         }
       } catch (e) {}
-      // 2) Live bookmaker odds — favourite to win + goals lean
-      if (!view && sportMonks && sportMonks.getMarketOdds && f.external_fixture_id) {
-        try {
-          var mo = await sportMonks.getMarketOdds(f.external_fixture_id);
-          if (mo && mo.home && mo.away) {
-            var favHome = mo.home <= mo.away;
-            var favOdds = favHome ? mo.home : mo.away;
-            var favTeam = favHome ? f.home_team : f.away_team;
-            // Pick the best market angle — keeps the daily view varied.
-            if (favOdds <= 1.50) {
-              view = favTeam + ' to win'; oddsDecimal = favOdds;
-              conf = favOdds <= 1.20 ? 9 : 8;
-              if (mo.over35 && mo.over35 <= 2.05) note = 'Over 3.5 goals lean';
-              else if (mo.over25 && mo.over25 <= 1.80) note = 'Over 2.5 goals lean';
-            } else if (mo.over25 && mo.over25 <= 1.70) {
-              view = 'Over 2.5 goals'; oddsDecimal = mo.over25; conf = 7;
-            } else if (mo.bttsYes && mo.bttsYes <= 1.65) {
-              view = 'Both teams to score'; oddsDecimal = mo.bttsYes; conf = 7;
-            } else if (mo.over35 && mo.over35 <= 1.95) {
-              view = 'Over 3.5 goals'; oddsDecimal = mo.over35; conf = 7;
-            } else {
-              view = favTeam + ' to win'; oddsDecimal = favOdds; conf = favOdds <= 2.0 ? 7 : 6;
-            }
-          }
-        } catch (e) {}
-      }
+      // No consensus verdict for this game yet → skip it (never invent a pick
+      // from the market — that's what caused Telegram to diverge from the app).
       if (!view) continue;
       picks.push({ home: f.home_team, away: f.away_team, kickoff: f.kickoff, view: view, note: note, conf: conf, oddsDecimal: oddsDecimal });
     }
@@ -151,8 +130,13 @@ module.exports = function (deps) {
   // Send the day's views across all channels. opts.channels can limit.
   async function broadcast(opts) {
     opts = opts || {};
+    // Ensure the consensus engine has run on the day's games first, so the
+    // broadcast uses the SAME verdicts the app shows (single source of truth).
+    if (deps.worldCupData && deps.worldCupData.generatePreviews) {
+      try { await deps.worldCupData.generatePreviews(); } catch (e) { console.warn('[WC Broadcast] preview gen failed:', e.message); }
+    }
     var picks = await buildPicks();
-    if (!picks.length) return { sent: false, reason: 'No World Cup fixtures with a view in the next 30h.' };
+    if (!picks.length) return { sent: false, reason: 'No World Cup games with a consensus verdict yet. Run "Run consensus picks" first, then resend.' };
 
     var now = new Date();
     var dateLabel = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/London' });
