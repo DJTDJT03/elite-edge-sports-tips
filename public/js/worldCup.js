@@ -520,12 +520,23 @@ var WorldCup = (function() {
     '</div>';
   }
 
+  function renderScorecard() {
+    setTimeout(function () { WorldCup._loadScorecard(); }, 30);
+    return '<div style="margin-bottom:16px;">' +
+      '<div style="display:inline-block;background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);padding:6px 14px;border-radius:6px;font-size:12px;color:#d4a843;font-weight:700;margin-bottom:12px;">CONSENSUS ENGINE · TRACK RECORD</div>' +
+      '<h3 style="font-size:20px;font-weight:900;color:#d4a843;margin-bottom:4px;">World Cup Scorecard</h3>' +
+      '<p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:16px;">Every pick our engine called, against the actual result. No hindsight, no edits.</p>' +
+      '<div id="wc-scorecard"><div style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">Tallying the results…</div></div>' +
+    '</div>';
+  }
+
   function renderTabContent() {
     switch (_tab) {
       case 'fixtures': return renderFixtures();
       case 'groups': return renderGroups();
       case 'bracket': return renderBracket();
       case 'our-picks': return renderOurPicks();
+      case 'scorecard': return renderScorecard();
       case 'value': return renderValueFinder();
       case 'leaderboard': return renderLeaderboard();
       case 'predictions': return renderMyPredictions();
@@ -547,10 +558,11 @@ var WorldCup = (function() {
           renderCountdown() +
         '</div>' +
         '<div class="wc-tabs">' +
-          ['fixtures', 'groups', 'bracket', 'our-picks', 'value', 'predictions', 'leaderboard', 'nations'].map(function(t) {
+          ['fixtures', 'groups', 'bracket', 'our-picks', 'scorecard', 'value', 'predictions', 'leaderboard', 'nations'].map(function(t) {
             var label = t.charAt(0).toUpperCase() + t.slice(1);
             if (t === 'nations') label = 'Nation Wars';
             if (t === 'value') label = 'Value Finder';
+            if (t === 'our-picks') label = 'Our Picks';
             return '<div class="wc-tab' + (_tab === t ? ' active' : '') + '" onclick="WorldCup.switchTab(\'' + t + '\')">' + label + '</div>';
           }).join('') +
         '</div>' +
@@ -591,7 +603,7 @@ var WorldCup = (function() {
     // Update tab UI
     document.querySelectorAll('.wc-tab').forEach(function(el) {
       var label = el.textContent.toLowerCase();
-      var key = label === 'nation wars' ? 'nations' : label === 'value finder' ? 'value' : label;
+      var key = label === 'nation wars' ? 'nations' : label === 'value finder' ? 'value' : label === 'our picks' ? 'our-picks' : label;
       el.classList.toggle('active', key === tab);
     });
     var content = document.getElementById('wc-content');
@@ -695,6 +707,44 @@ var WorldCup = (function() {
     });
   }
 
+  function _loadScorecard() {
+    var el = document.getElementById('wc-scorecard');
+    if (!el) return;
+    api('/scorecard').then(function (data) {
+      el = document.getElementById('wc-scorecard');
+      if (!el) return;
+      if (!data || !data.ready || !data.picks || !data.picks.length) {
+        el.innerHTML = '<div style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">No settled picks yet — the scorecard fills in as games finish.</div>';
+        return;
+      }
+      var rate = data.hitRate;
+      var rateCol = rate >= 60 ? '#22c55e' : rate >= 50 ? '#84cc16' : '#d4a843';
+      var summary = '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(212,168,67,0.02));border:1px solid rgba(212,168,67,0.25);border-radius:14px;padding:18px 20px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;">' +
+        '<div><div style="font-size:13px;color:rgba(255,255,255,0.5);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Our Record So Far</div>' +
+        '<div style="font-size:30px;font-weight:900;color:#fff;line-height:1.1;">' + data.correct + ' <span style="color:rgba(255,255,255,0.4);font-size:20px;">won</span> · ' + data.wrong + ' <span style="color:rgba(255,255,255,0.4);font-size:20px;">lost</span></div></div>' +
+        '<div style="text-align:center;"><div style="font-size:40px;font-weight:900;color:' + rateCol + ';line-height:1;">' + rate + '%</div>' +
+        '<div style="font-size:12px;color:rgba(255,255,255,0.45);font-weight:600;">strike rate · ' + data.scored + ' picks</div></div>' +
+      '</div>';
+      var rows = data.picks.map(function (p) {
+        var hit = p.hit === true, miss = p.hit === false;
+        var col = hit ? '#22c55e' : miss ? '#ef4444' : 'rgba(255,255,255,0.3)';
+        var icon = hit ? '✓' : miss ? '✗' : '–';
+        return '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-left:3px solid ' + col + ';border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+          '<div style="flex:1;min-width:160px;"><div style="font-size:14px;font-weight:700;color:#fff;">' + getFlag(p.home) + ' ' + App.escapeHtml(p.home) + ' ' + p.score + ' ' + App.escapeHtml(p.away) + ' ' + getFlag(p.away) + '</div>' +
+          '<div style="font-size:12px;color:rgba(255,255,255,0.4);">' + App.escapeHtml(p.market) + '</div></div>' +
+          '<div style="text-align:center;min-width:130px;"><div style="font-size:14px;font-weight:800;color:#d4a843;">' + App.escapeHtml(p.pick) + '</div>' +
+          '<div style="font-size:11px;color:rgba(255,255,255,0.45);">our call</div></div>' +
+          '<div style="width:34px;height:34px;border-radius:50%;background:' + col + (hit || miss ? '22' : '00') + ';display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:' + col + ';">' + icon + '</div>' +
+        '</div>';
+      }).join('');
+      el.innerHTML = summary + rows +
+        '<p style="font-size:11px;color:rgba(255,255,255,0.25);margin-top:12px;text-align:center;">Elite Edge consensus engine · picks recorded before kick-off. 18+ | Analysis, not betting advice | BeGambleAware.org</p>';
+    }).catch(function () {
+      var e = document.getElementById('wc-scorecard');
+      if (e) e.innerHTML = '<div style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">Scorecard unavailable right now.</div>';
+    });
+  }
+
   return {
     render: render,
     switchTab: switchTab,
@@ -703,6 +753,7 @@ var WorldCup = (function() {
     togglePreview: togglePreview,
     cleanup: cleanup,
     _loadValue: _loadValue,
+    _loadScorecard: _loadScorecard,
     _countdownInterval: null,
   };
 })();

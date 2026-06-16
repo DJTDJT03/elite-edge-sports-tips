@@ -213,6 +213,47 @@ module.exports = function(deps) {
     } catch (err) { res.status(500).json({ error: 'Broadcast failed: ' + err.message }); }
   });
 
+  // GET /api/world-cup/scorecard — our consensus picks vs actual results so far.
+  router.get('/scorecard', async function (req, res) {
+    try {
+      if (!deps.db || !deps.db.query) return res.json({ ready: false, picks: [] });
+      res.set('Cache-Control', 'no-store');
+      var sched = require('../services/wc2026Schedule');
+      var fx = await deps.db.query(
+        "SELECT id, home_team, away_team, home_goals, away_goals, kickoff FROM world_cup_fixtures " +
+        "WHERE status = 'finished' AND home_goals IS NOT NULL AND away_goals IS NOT NULL ORDER BY kickoff ASC"
+      );
+      var pv = await deps.db.query("SELECT DISTINCT ON (fixture_id) fixture_id, verdict_selection, verdict_market FROM world_cup_previews WHERE verdict_selection IS NOT NULL");
+      var pvMap = {};
+      (pv.rows || []).forEach(function (r) { pvMap[r.fixture_id] = r; });
+
+      var picks = [], correct = 0, wrong = 0;
+      (fx.rows || []).forEach(function (f) {
+        var p = pvMap[f.id];
+        if (!p) return; // no recorded pick for this game
+        var hg = f.home_goals, ag = f.away_goals, total = hg + ag;
+        var sel = String(p.verdict_selection || '').toLowerCase();
+        var outcome = null;
+        if (sel.indexOf('over 3.5') !== -1) outcome = total >= 4;
+        else if (sel.indexOf('over') !== -1 && sel.indexOf('2.5') !== -1) outcome = total >= 3;
+        else if (sel.indexOf('under') !== -1 && sel.indexOf('2.5') !== -1) outcome = total <= 2;
+        else if (sel.indexOf('btts') !== -1 || sel.indexOf('both teams') !== -1) outcome = sel.indexOf('no') !== -1 ? !(hg > 0 && ag > 0) : (hg > 0 && ag > 0);
+        else if (/^\s*draw\s*$/.test(sel) || (sel.indexOf('draw') !== -1 && sel.indexOf(' or ') === -1)) outcome = hg === ag;
+        else if (sched.teamsMatch(f.home_team, sel.replace(/to win|win/g, '').trim()) || sel.indexOf(String(f.home_team).toLowerCase()) !== -1) outcome = hg > ag;
+        else if (sched.teamsMatch(f.away_team, sel.replace(/to win|win/g, '').trim()) || sel.indexOf(String(f.away_team).toLowerCase()) !== -1) outcome = ag > hg;
+        if (outcome === true) correct++; else if (outcome === false) wrong++;
+        picks.push({
+          home: f.home_team, away: f.away_team, score: hg + '-' + ag,
+          pick: p.verdict_selection, market: p.verdict_market || 'Match Result',
+          hit: outcome === true ? true : outcome === false ? false : null,
+          kickoff: f.kickoff,
+        });
+      });
+      var scored = correct + wrong;
+      res.json({ ready: true, correct: correct, wrong: wrong, scored: scored, hitRate: scored ? Math.round((correct / scored) * 100) : 0, picks: picks });
+    } catch (err) { res.status(500).json({ error: 'Scorecard failed: ' + err.message }); }
+  });
+
   // GET /api/world-cup/value-scan — where our quant model beats the market
   router.get('/value-scan', async function (req, res) {
     try {
