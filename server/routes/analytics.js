@@ -150,6 +150,29 @@ module.exports = function(deps) {
   });
 
   // -------------------------------------------------------------------------
+  // GET /api/analytics/calibration — Brier score, reliability curve, confidence
+  // ordering and a backtest by odds band. Pure measurement (admin only).
+  // -------------------------------------------------------------------------
+  router.get('/analytics/calibration', authenticate, requireAdmin, async (req, res) => {
+    try {
+      var calibration = require('../services/calibrationEngine');
+      var days = parseInt(req.query.days) || 90;
+      var cutoff = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+      var tips = await db.getTips({ status: 'settled' });
+      var filtered = tips.filter(function (t) {
+        var d = t.date;
+        if (d && typeof d !== 'string') { try { d = new Date(d).toISOString().split('T')[0]; } catch (e) { return false; } }
+        if (req.query.sport && t.sport !== req.query.sport) return false;
+        return !(d && d < cutoff);
+      });
+      res.json(Object.assign({ period: days + ' days' }, calibration.analyse(filtered, { minSample: 10 })));
+    } catch (err) {
+      console.error('[Analytics] calibration error:', err.message);
+      res.status(500).json({ error: 'Failed to compute calibration' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // GET /api/analytics/edge-vs-results — compare predicted edge to actual
   // -------------------------------------------------------------------------
   router.get('/analytics/edge-vs-results', authenticate, requireAdmin, async (req, res) => {

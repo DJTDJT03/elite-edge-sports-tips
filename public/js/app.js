@@ -7983,7 +7983,9 @@ const App = {
             <button class="btn btn-outline btn-sm" onclick="App.adminLoadLiveData()">Refresh All Live Data</button>
             <button class="btn btn-outline btn-sm" onclick="App.adminCheckStripe()">Check Stripe</button>
             <button class="btn btn-outline btn-sm" onclick="App.adminGenerateBlog(this)">Generate Blog Now</button>
+            <button class="btn btn-outline btn-sm" onclick="App.adminShowCalibration()">Model Calibration</button>
           </div>
+          <div id="admin-calibration-out" style="display:none;margin-bottom:16px;"></div>
           <div id="admin-stripe-health" style="display:none;margin-bottom:16px;padding:12px 14px;border-radius:8px;font-size:13px;"></div>
           <div id="admin-live-racing" class="mb-16"><div class="inline-spinner">Loading live racing data...</div></div>
           <div id="admin-live-football"><div class="inline-spinner">Loading live football data...</div></div>
@@ -8331,6 +8333,41 @@ const App = {
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Generate Blog Now'; }
     }
+  },
+
+  async adminShowCalibration() {
+    var box = document.getElementById('admin-calibration-out');
+    if (!box) return;
+    box.style.display = 'block';
+    box.innerHTML = '<div class="inline-spinner">Computing model calibration…</div>';
+    try {
+      var c = await this.api('/analytics/calibration');
+      if (!c.ready) { box.innerHTML = '<div class="card" style="padding:14px;">Not enough settled tips yet for calibration (' + (c.sample || 0) + '/' + (c.minSample || 10) + ').</div>'; return; }
+      var gradeColor = c.grade === 'Excellent' ? '#22c55e' : c.grade === 'Good' ? '#84cc16' : c.grade === 'Fair' ? '#d4a843' : '#ef4444';
+      var relRows = (c.reliability || []).map(function (r) {
+        var gc = Math.abs(r.gap) <= 5 ? '#22c55e' : Math.abs(r.gap) <= 12 ? '#d4a843' : '#ef4444';
+        return '<tr><td>' + r.band + '</td><td>' + r.sample + '</td><td>' + r.predicted + '%</td><td>' + r.actual + '%</td><td style="color:' + gc + ';font-weight:700;">' + (r.gap > 0 ? '+' : '') + r.gap + '</td></tr>';
+      }).join('');
+      var confRows = (c.confidenceOrdering.bands || []).map(function (b) { return '<tr><td>' + b.confidence + '/10</td><td>' + b.sample + '</td><td>' + b.winRate + '%</td></tr>'; }).join('');
+      var analystRows = (c.byAnalyst || []).map(function (a) { return '<tr><td>' + this.escapeHtml(a.analyst) + '</td><td>' + a.sample + '</td><td>' + a.winRate + '%</td><td>' + a.brier + '</td></tr>'; }.bind(this)).join('');
+      var oddsRows = (c.backtestByOdds || []).map(function (b) { return '<tr><td>' + b.band + '</td><td>' + b.sample + '</td><td>' + b.winRate + '%</td><td style="color:' + (b.roi >= 0 ? '#22c55e' : '#ef4444') + ';font-weight:700;">' + (b.roi >= 0 ? '+' : '') + b.roi + '%</td></tr>'; }).join('');
+      box.innerHTML = '<div class="card" style="padding:18px;">' +
+        '<h4 style="margin:0 0 10px;">Model Calibration <span style="font-size:11px;color:var(--text-muted);font-weight:500;">· ' + c.period + ' · ' + c.sample + ' tips</span></h4>' +
+        '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px;">' +
+          '<div><div style="font-size:11px;color:var(--text-muted);">Calibration</div><div style="font-size:20px;font-weight:900;color:' + gradeColor + ';">' + c.grade + '</div></div>' +
+          '<div><div style="font-size:11px;color:var(--text-muted);">Brier score</div><div style="font-size:20px;font-weight:900;">' + c.brier + '</div></div>' +
+          '<div><div style="font-size:11px;color:var(--text-muted);">Skill vs base</div><div style="font-size:20px;font-weight:900;color:' + (c.brierSkillScore >= 0 ? '#22c55e' : '#ef4444') + ';">' + (c.brierSkillScore >= 0 ? '+' : '') + c.brierSkillScore + '</div></div>' +
+          '<div><div style="font-size:11px;color:var(--text-muted);">Confidence ordering</div><div style="font-size:16px;font-weight:800;color:' + (c.confidenceOrdering.healthy ? '#22c55e' : '#ef4444') + ';">' + (c.confidenceOrdering.healthy ? 'Healthy' : 'Inversions') + '</div></div>' +
+        '</div>' +
+        (c.confidenceOrdering.inversions.length ? '<div style="background:rgba(239,68,68,0.1);border-left:3px solid #ef4444;padding:8px 12px;border-radius:4px;font-size:12px;margin-bottom:14px;">⚠️ ' + c.confidenceOrdering.inversions.join('; ') + '</div>' : '') +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:12px;">' +
+          '<div><strong>Reliability (predicted vs actual)</strong><table style="width:100%;margin-top:6px;"><tr style="color:var(--text-muted);"><td>Band</td><td>N</td><td>Pred</td><td>Actual</td><td>Gap</td></tr>' + relRows + '</table></div>' +
+          '<div><strong>Win rate by confidence</strong><table style="width:100%;margin-top:6px;"><tr style="color:var(--text-muted);"><td>Conf</td><td>N</td><td>Win%</td></tr>' + confRows + '</table></div>' +
+          '<div><strong>By analyst (lower Brier = sharper)</strong><table style="width:100%;margin-top:6px;"><tr style="color:var(--text-muted);"><td>Analyst</td><td>N</td><td>Win%</td><td>Brier</td></tr>' + analystRows + '</table></div>' +
+          '<div><strong>Backtest ROI by odds band</strong><table style="width:100%;margin-top:6px;"><tr style="color:var(--text-muted);"><td>Band</td><td>N</td><td>Win%</td><td>ROI</td></tr>' + oddsRows + '</table></div>' +
+        '</div>' +
+      '</div>';
+    } catch (e) { box.innerHTML = '<div class="card" style="padding:14px;color:#ef4444;">Calibration failed: ' + (e.message || e) + '</div>'; }
   },
 
   async adminCheckStripe() {
