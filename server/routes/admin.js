@@ -142,7 +142,17 @@ module.exports = function(deps) {
   router.post('/admin/announce-pwa', authenticate, requireAdmin, async (req, res) => {
     try {
       const now = new Date().toISOString();
-      const result = { notification: false, push: false, emails: 0 };
+      const result = { notification: false, push: false, emails: 0, telegram: false };
+
+      // Telegram channel post
+      if (deps.telegramBot && deps.telegramBot.isAvailable && deps.telegramBot.isAvailable()) {
+        var tg = '📲 <b>Get Elite Edge on your phone — like an app</b>\n\n' +
+          'One tap to open. No app store, no download.\n\n' +
+          '🍏 <b>iPhone (Safari):</b> tap <b>Share</b> → <b>Add to Home Screen</b> → Add\n' +
+          '🤖 <b>Android (Chrome):</b> tap the <b>⋮</b> menu → <b>Add to Home screen</b> → Add\n\n' +
+          'eliteedgesports.co.uk\n<i>18+ | BeGambleAware.org</i>';
+        try { await deps.telegramBot.sendMessage(tg, 'HTML'); result.telegram = true; } catch (e) { console.warn('[Admin] PWA telegram failed:', e.message); }
+      }
 
       // In-app notification (the bell) — everyone
       try {

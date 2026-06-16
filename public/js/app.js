@@ -9570,7 +9570,7 @@ const App = {
     if (out) { out.style.display = 'block'; out.textContent = 'Sending announcement…'; }
     try {
       var r = await this.api('/admin/announce-pwa', { method: 'POST' });
-      if (out) out.innerHTML = '<span style="color:#22c55e;">Sent ✓</span> — in-app: ' + (r.notification ? 'yes' : 'no') + ', push: ' + (r.push ? 'yes' : 'no') + ', emails: ' + (r.emails || 0);
+      if (out) out.innerHTML = '<span style="color:#22c55e;">Sent ✓</span> — Telegram: ' + (r.telegram ? 'yes' : 'no') + ', in-app: ' + (r.notification ? 'yes' : 'no') + ', push: ' + (r.push ? 'yes' : 'no') + ', emails: ' + (r.emails || 0);
       this.showToast('Install announcement sent (' + (r.emails || 0) + ' emails)', 'success');
     } catch (e) {
       if (out) out.innerHTML = '<span style="color:#ef4444;">Failed: ' + (e.message || e) + '</span>';
