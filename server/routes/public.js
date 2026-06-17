@@ -326,12 +326,21 @@ module.exports = function(deps) {
   // GET /api/admin/racing-diagnostic — verify the racecard feed (admin only).
   router.get('/api/admin/racing-diagnostic', deps.authenticate, deps.requireAdmin, async (req, res) => {
     try {
-      var out = { hasKey: !!process.env.RACING_API_KEY, hasSecret: !!process.env.RACING_API_SECRET, cards: 0, sample: [], error: null };
-      if (!out.hasKey || !out.hasSecret) { out.error = 'Missing RACING_API_KEY and/or RACING_API_SECRET — both are required for The Racing API.'; return res.json(out); }
+      var out = { hasKey: !!process.env.RACING_API_KEY, hasSecret: !!process.env.RACING_API_SECRET, rawApiCount: 0, normalisedCount: 0, todayUkIreCount: 0, sampleFromApi: [], sampleTodayUkIre: [], error: null };
+      if (!out.hasKey || !out.hasSecret) { out.error = 'Missing RACING_API_KEY and/or RACING_API_SECRET — both are required.'; return res.json(out); }
+      // Step 1: raw API fetch (tells us if auth/plan works at all)
+      var raw = await racingSource.fetch();
+      out.rawApiCount = (raw && raw.racecards && raw.racecards.length) || 0;
+      // Step 2: normalise (our parser)
+      var norm = racingSource.normalise(raw) || [];
+      out.normalisedCount = norm.length;
+      out.sampleFromApi = norm.slice(0, 6).map(function (r) { return { region: r.region || '?', date: (r.date || '').toString().slice(0, 10), course: r.meeting || r.course || '?', time: r.time || '?' }; });
+      // Step 3: what the assistant actually gets (today + GB/IRE filter)
       var cards = await getTodaysRaceCards();
-      out.cards = cards.length;
-      out.sample = cards.slice(0, 8).map(function (c) { return (c.time || '') + ' ' + (c.meeting || '') + ' (' + ((c.runners && c.runners.length) || 0) + ' runners)'; });
-      if (!cards.length) out.error = 'Credentials present but the API returned no UK/IRE racecards for today — check the subscription/plan covers /racecards/standard, or there may be no qualifying cards today.';
+      out.todayUkIreCount = cards.length;
+      out.sampleTodayUkIre = cards.slice(0, 8).map(function (c) { return (c.time || '') + ' ' + (c.meeting || ''); });
+      if (out.rawApiCount === 0) out.error = 'The Racing API returned 0 races — credentials are likely wrong/expired, or the plan does not cover /racecards/standard or /racecards/free. Check logs for "[racing-cards]".';
+      else if (out.todayUkIreCount === 0) out.error = 'API returned ' + out.rawApiCount + ' races but 0 survived the today+GB/IRE filter — likely a region-code or date-format mismatch (see sampleFromApi). This is a fixable filter bug, not a credentials problem.';
       res.json(out);
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
