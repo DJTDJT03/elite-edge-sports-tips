@@ -1178,6 +1178,7 @@ const App = {
       case 'tennis': this.renderSportTips('tennis', 'Tennis'); break;
       case 'calculators': BetCalc.render(); break;
       case 'last-man-standing': if (typeof LMS !== 'undefined') LMS.render(); break;
+      case 'winners': this.renderWinnersPage(); break;
       case 'academy': this.renderAcademy(); break;
       case 'buy-credits': this.renderBuyCredits(); break;
       case 'refer': this.renderReferral(); break;
@@ -3116,6 +3117,7 @@ const App = {
           </div>
           <p style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px;">Real wins from Elite Edge members. 18+ | Please gamble responsibly | BeGambleAware.org</p>
           <div id="winners-wall"><div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px;">Loading winners&hellip;</div></div>
+          <div style="text-align:center;margin-top:12px;"><a href="#/winners" style="color:var(--accent);font-size:13px;font-weight:600;">See all winners &rarr;</a></div>
         </div>
 
         <!-- 13b. SUBSCRIBER LEADERBOARD — competition + social proof -->
@@ -10669,11 +10671,28 @@ const App = {
   // -----------------------------------------------------------------------
   // WINNERS WALL — subscriber-submitted wins (admin-moderated social proof)
   // -----------------------------------------------------------------------
-  async _loadWinners() {
+  renderWinnersPage() {
+    var app = document.getElementById('app');
+    app.innerHTML =
+      '<div class="container" style="padding-top:32px;max-width:1000px;">' +
+        '<div style="text-align:center;margin-bottom:8px;"><span style="display:inline-block;background:rgba(212,168,67,0.12);border:1px solid rgba(212,168,67,0.3);color:#d4a843;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:5px 14px;border-radius:6px;">Real Member Wins</span></div>' +
+        '<h1 style="text-align:center;font-size:30px;font-weight:900;margin:8px 0 4px;">&#127942; Winners Wall</h1>' +
+        '<p style="text-align:center;color:var(--text-muted);font-size:14px;margin-bottom:8px;">Genuine wins shared by Elite Edge members. Every entry is reviewed before it appears here.</p>' +
+        '<p style="text-align:center;color:var(--text-muted);font-size:11px;margin-bottom:20px;">18+ | Please gamble responsibly | BeGambleAware.org</p>' +
+        '<div style="text-align:center;margin-bottom:24px;">' +
+          (this.user ? '<button class="btn btn-gold" onclick="App.showWinnerSubmit()">Share your win</button>' : '<a href="#/pricing" class="btn btn-gold">Join Elite Edge to share yours</a>') +
+        '</div>' +
+        '<div id="winners-wall"><div style="text-align:center;padding:40px;color:var(--text-muted);">Loading winners&hellip;</div></div>' +
+      '</div>';
+    this._loadWinners(60);
+  },
+
+  async _loadWinners(limit) {
+    limit = limit || 18;
     var el = document.getElementById('winners-wall');
     if (!el) return;
     try {
-      var data = await this.api('/winners?limit=18');
+      var data = await this.api('/winners?limit=' + limit);
       el = document.getElementById('winners-wall');
       if (!el) return;
       var winners = (data && data.winners) || [];
@@ -10768,6 +10787,12 @@ const App = {
     var name = (document.getElementById('winner-name') || {}).value || '';
     var image = this._winnerImageData || '';
     var consent = document.getElementById('winner-consent');
+    var fileInput = document.getElementById('winner-image');
+    // Image chosen but still compressing — don't silently submit without it.
+    if (!image && fileInput && fileInput.files && fileInput.files.length) {
+      this.showToast('Your screenshot is still processing — give it a second and tap submit again.', 'error');
+      return;
+    }
     if (!image && !caption.trim()) { this.showToast('Add a screenshot or a few words first.', 'error'); return; }
     if (!consent || !consent.checked) { this.showToast('Please tick the consent box so we can display your win.', 'error'); return; }
     if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
