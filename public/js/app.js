@@ -8444,7 +8444,11 @@ const App = {
       if (d.rawSample && d.rawSample.length) {
         lines.push('\nRAW API values' + (d.rawSampleRace ? ' (' + d.rawSampleRace + ')' : '') + ':');
         d.rawSample.forEach(function (s) {
-          lines.push('  ' + (s.horse || '?') + ' — ofr:' + JSON.stringify(s.ofr) + ' rpr:' + JSON.stringify(s.rpr) + ' ts:' + JSON.stringify(s.ts) + ' spotlight:' + JSON.stringify(s.spotlight));
+          lines.push('  ' + (s.horse || '?') + ':');
+          lines.push('    ofr:' + JSON.stringify(s.ofr) + ' rpr:' + JSON.stringify(s.rpr) + ' ts:' + JSON.stringify(s.ts));
+          lines.push('    perf_rating:' + JSON.stringify(s.perf_rating) + ' speed_rating:' + JSON.stringify(s.speed_rating) + ' trainer_rtf:' + JSON.stringify(s.trainer_rtf));
+          lines.push('    trainer_14d:' + JSON.stringify(s.trainer_14d));
+          lines.push('    comment:' + JSON.stringify(s.comment) + ' spotlight:' + JSON.stringify(s.spotlight));
         });
       }
       if (d.error) lines.push('\n⚠ ' + d.error);

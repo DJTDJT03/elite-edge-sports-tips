@@ -367,14 +367,22 @@ module.exports = function(deps) {
         hasRPR: withRpr > 0, hasTS: withTs > 0, hasSpotlight: withSpot > 0,
         spotlightSample: exampleSpot,
       };
-      // RAW values straight from the API (bypasses our parser) — conclusive proof
-      // of what The Racing API is actually sending for rpr/ts/spotlight.
+      // RAW values from the API for a RATED race (handicap, not a 2yo maiden) — shows
+      // exactly which Pro fields actually carry content vs which are empty.
       try {
-        var rr2 = raw.racecards.find(function (x) { return x.runners && x.runners.length; });
-        out.rawSample = rr2 ? rr2.runners.slice(0, 3).map(function (rn) {
-          return { horse: rn.horse, ofr: rn.ofr, rpr: rn.rpr, ts: rn.ts, spotlight: rn.spotlight ? String(rn.spotlight).slice(0, 60) : rn.spotlight };
+        var rated = raw.racecards.find(function (x) {
+          return x.runners && x.runners.some(function (rn) { return parseInt(rn.ofr, 10) > 0; });
+        }) || raw.racecards.find(function (x) { return x.runners && x.runners.length; });
+        out.rawSample = rated ? rated.runners.slice(0, 3).map(function (rn) {
+          return {
+            horse: rn.horse, ofr: rn.ofr, rpr: rn.rpr, ts: rn.ts,
+            perf_rating: rn.performance_rating, speed_rating: rn.speed_rating,
+            trainer_rtf: rn.trainer_rtf, trainer_14d: rn.trainer_14_days,
+            comment: rn.comment ? String(rn.comment).slice(0, 50) : rn.comment,
+            spotlight: rn.spotlight ? String(rn.spotlight).slice(0, 50) : rn.spotlight,
+          };
         }) : [];
-        out.rawSampleRace = rr2 ? ((rr2.course || '') + ' ' + (rr2.off_time || rr2.time || '')) : null;
+        out.rawSampleRace = rated ? ((rated.course || '') + ' ' + (rated.off_time || rated.time || '') + ' ' + (rated.race_name || '')) : null;
       } catch (e) { out.rawSample = []; }
       if (out.rawApiCount === 0) out.error = 'The Racing API returned 0 races — credentials are likely wrong/expired, or the plan does not cover /racecards/standard or /racecards/free. Check logs for "[racing-cards]".';
       else if (out.todayUkIreCount === 0) out.error = 'API returned ' + out.rawApiCount + ' races but 0 survived the today+GB/IRE filter — likely a region-code or date-format mismatch (see sampleFromApi). This is a fixable filter bug, not a credentials problem.';
