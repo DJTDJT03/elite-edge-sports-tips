@@ -110,6 +110,7 @@ const App = {
     });
     this.route();
     this._loadNewsTicker(); // live football news ticker (persists across pages)
+    this._mountAskFab(); // site-wide floating "Ask the Edge" widget
     this.loadDailyStats();
     this.loadActivityTicker();
     this.initNotifications();
@@ -14201,6 +14202,96 @@ const App = {
         '<div style="margin-top:10px;font-size:11px;color:var(--text-muted);">Statistical prediction for entertainment. 18+ · Please gamble responsibly.</div>';
     } catch (e) {
       if (out) out.innerHTML = '<span style="color:var(--red);">Sorry, couldn\'t answer that just now — try again in a moment.</span>';
+    }
+  },
+
+  // Site-wide floating "Ask the Edge" widget — mounted once, persists across pages.
+  _mountAskFab() {
+    if (document.getElementById('ee-fab')) return;
+    if (!document.getElementById('ee-fab-style')) {
+      var st = document.createElement('style');
+      st.id = 'ee-fab-style';
+      st.textContent =
+        '#ee-fab{position:fixed;bottom:20px;right:20px;z-index:9998;width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-size:26px;box-shadow:0 8px 24px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;transition:transform .15s;}' +
+        '#ee-fab:hover{transform:scale(1.08);}' +
+        '#ee-fab::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid #d4a843;animation:ee-fab-pulse 2.4s ease-out infinite;}' +
+        '@keyframes ee-fab-pulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.7);opacity:0}}' +
+        '#ee-fab-panel{position:fixed;bottom:88px;right:20px;z-index:9999;width:min(380px,calc(100vw - 32px));max-height:min(560px,calc(100vh - 120px));background:#0f1426;border:1px solid rgba(212,168,67,0.3);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.55);display:none;flex-direction:column;overflow:hidden;}' +
+        '.ee-fab-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:linear-gradient(135deg,rgba(212,168,67,0.14),rgba(212,168,67,0.02));border-bottom:1px solid rgba(255,255,255,0.07);}' +
+        '.ee-fab-msgs{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px;}' +
+        '.ee-fab-bubble{font-size:13.5px;line-height:1.55;padding:10px 12px;border-radius:12px;max-width:92%;}' +
+        '.ee-fab-user{align-self:flex-end;background:#d4a843;color:#0a0e1a;font-weight:600;}' +
+        '.ee-fab-bot{align-self:flex-start;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);color:#e8e8ec;}' +
+        '.ee-fab-bot strong{color:#fff;}' +
+        '.ee-fab-chip{background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);color:#d4a843;font-size:11px;padding:5px 10px;border-radius:14px;cursor:pointer;}' +
+        '.ee-fab-input-row{display:flex;gap:8px;padding:12px;border-top:1px solid rgba(255,255,255,0.07);}' +
+        '.ee-fab-input-row input{flex:1;min-width:0;padding:10px 12px;background:#0a0e1a;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-size:14px;}';
+      document.head.appendChild(st);
+    }
+    var wrap = document.createElement('div');
+    wrap.innerHTML =
+      '<button id="ee-fab" title="Ask the Edge" aria-label="Ask the Edge" onclick="App.toggleAskFab()">&#128173;</button>' +
+      '<div id="ee-fab-panel">' +
+        '<div class="ee-fab-head">' +
+          '<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:18px;">&#128173;</span><div><div style="font-weight:800;color:#fff;font-size:14px;">Ask the Edge</div><div style="font-size:11px;color:#9aa3b2;">Live answers from our engine</div></div></div>' +
+          '<button onclick="App.toggleAskFab()" style="background:none;border:none;color:#888;font-size:22px;cursor:pointer;line-height:1;">&times;</button>' +
+        '</div>' +
+        '<div id="ee-fab-msgs" class="ee-fab-msgs">' +
+          '<div class="ee-fab-bubble ee-fab-bot">Ask me about any race, match or team — e.g. "Who wins the 2:45 at Kempton?" or "Team news for Arsenal v Wolves?"</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+            ['Who\'s your NAP today?', 'Best value in the football?', 'Any team news today?'].map(function (q) {
+              return '<button class="ee-fab-chip" onclick="App.askFabSend(' + JSON.stringify(q).replace(/"/g, '&quot;') + ')">' + q + '</button>';
+            }).join('') +
+          '</div>' +
+        '</div>' +
+        '<div class="ee-fab-input-row">' +
+          '<input id="ee-fab-input" type="text" placeholder="Ask anything…" onkeydown="if(event.key===\'Enter\'){App.askFabSend();}">' +
+          '<button class="btn btn-gold" style="padding:10px 16px;" onclick="App.askFabSend()">Ask</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(wrap);
+  },
+
+  toggleAskFab() {
+    var p = document.getElementById('ee-fab-panel');
+    if (!p) return;
+    var open = p.style.display === 'flex';
+    p.style.display = open ? 'none' : 'flex';
+    if (!open) { var i = document.getElementById('ee-fab-input'); if (i) setTimeout(function () { i.focus(); }, 50); }
+  },
+
+  async askFabSend(presetQ) {
+    var input = document.getElementById('ee-fab-input');
+    var msgs = document.getElementById('ee-fab-msgs');
+    if (!msgs) return;
+    var q = (presetQ || (input ? input.value : '') || '').trim();
+    if (!q) { if (input) input.focus(); return; }
+    if (input) input.value = '';
+    var add = function (cls, html) {
+      var d = document.createElement('div');
+      d.className = 'ee-fab-bubble ' + cls;
+      d.innerHTML = html;
+      msgs.appendChild(d);
+      msgs.scrollTop = msgs.scrollHeight;
+      return d;
+    };
+    add('ee-fab-user', App.escapeHtml(q));
+    var thinking = add('ee-fab-bot', '<span style="color:#9aa3b2;">Elite Edge is thinking…</span>');
+    try {
+      var data = await this.api('/chat/ai', { method: 'POST', body: JSON.stringify({ message: q }) });
+      var reply = (data && data.reply) ? this._formatAssistantText(data.reply) : 'No answer right now.';
+      var sources = ((data && data.sources) || []).filter(function (u) { return /^https?:\/\//i.test(u); });
+      var src = '';
+      if (sources.length) {
+        src = '<div style="margin-top:8px;font-size:11px;color:#7a8295;">Sources: ' + sources.slice(0, 3).map(function (u) {
+          var host = ''; try { host = new URL(u).hostname.replace('www.', ''); } catch (e) { host = 'source'; }
+          return '<a href="' + App.escapeHtml(u) + '" target="_blank" rel="noopener" style="color:#d4a843;">' + App.escapeHtml(host) + '</a>';
+        }).join(' · ') + '</div>';
+      }
+      thinking.innerHTML = reply + src;
+      msgs.scrollTop = msgs.scrollHeight;
+    } catch (e) {
+      thinking.innerHTML = '<span style="color:#ef4444;">Sorry, couldn\'t answer that just now — try again in a moment.</span>';
     }
   },
 
