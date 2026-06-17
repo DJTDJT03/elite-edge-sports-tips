@@ -202,6 +202,7 @@ app.use('/api', require('./routes/support')(deps));
 app.use('/api', require('./routes/analytics')(deps));
 app.use('/api', require('./routes/stripe')(deps));
 app.use('/api', require('./routes/userBets')(deps));
+app.use('/api', require('./routes/winners')(deps));
 // World Cup Mode — feature-flagged
 if (process.env.ENABLE_WORLD_CUP === 'true') {
   var worldCupData = require('./services/worldCupData')(deps);
@@ -375,6 +376,9 @@ app.use('/', require('./routes/public')(deps));
           "CREATE TABLE IF NOT EXISTS marketing_posts (id SERIAL PRIMARY KEY, fixture_id TEXT, post_type TEXT, platform TEXT, content JSONB, posted_at TIMESTAMPTZ DEFAULT NOW())",
           'CREATE INDEX IF NOT EXISTS idx_mp_date ON marketing_posts(posted_at)',
         ] : []),
+        // Winners Wall — subscriber-submitted wins (admin-moderated social proof)
+        "CREATE TABLE IF NOT EXISTS winner_submissions (id SERIAL PRIMARY KEY, user_id TEXT, display_name TEXT, caption TEXT, image_data TEXT, amount TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW(), approved_at TIMESTAMPTZ)",
+        'CREATE INDEX IF NOT EXISTS idx_winners_status ON winner_submissions(status, created_at DESC)',
       ];
       for (var ci = 0; ci < alterCols.length; ci++) {
         try { await db.query(alterCols[ci]); } catch(e) {}

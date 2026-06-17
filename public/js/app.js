@@ -3108,6 +3108,16 @@ const App = {
           </div>
         </div>` : ''}
 
+        <!-- 13a. WINNERS WALL — subscriber-submitted wins (admin-moderated) -->
+        <div class="section" id="winners-wall-section" style="margin-bottom:24px;">
+          <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <span><span style="color:#d4a843;">&#127942;</span> Winners Wall</span>
+            ${this.user ? `<button class="btn btn-gold btn-sm" onclick="App.showWinnerSubmit()">Share your win</button>` : `<a href="#/pricing" class="btn btn-outline btn-sm">Join to share yours</a>`}
+          </div>
+          <p style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px;">Real wins from Elite Edge members. 18+ | Please gamble responsibly | BeGambleAware.org</p>
+          <div id="winners-wall"><div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px;">Loading winners&hellip;</div></div>
+        </div>
+
         <!-- 13b. SUBSCRIBER LEADERBOARD — competition + social proof -->
         <div id="subscriber-leaderboard"></div>
 
@@ -3204,6 +3214,9 @@ const App = {
         </div>
       </div>
     `;
+
+    // Winners Wall — lazy-load approved member wins
+    this._loadWinners();
 
     // World Cup dashboard countdown
     var wcCountdownEl = document.getElementById('wc-dash-countdown');
@@ -7744,6 +7757,7 @@ const App = {
           <button class="admin-tab" onclick="App.switchAdminTab('chat', this)">Chat Logs</button>
           <button class="admin-tab" onclick="App.switchAdminTab('notifications', this)">Notifications</button>
           <button class="admin-tab" onclick="App.switchAdminTab('lms', this)">&#127942; Last Man Standing</button>
+          <button class="admin-tab" onclick="App.switchAdminTab('winners', this)">Winners Wall</button>
         </div>
 
         <!-- TIPS PANEL -->
@@ -8040,6 +8054,12 @@ const App = {
           <h3 class="mb-16">&#127942; Last Man Standing</h3>
           <div id="lms-admin-content"><p class="text-muted">Loading…</p></div>
         </div>
+
+        <div class="admin-panel" id="panel-winners">
+          <h3 class="mb-16">&#127942; Winners Wall — Moderation</h3>
+          <p class="text-muted mb-16" style="font-size:13px;">Approve member-submitted wins before they appear on the homepage. Approved entries show publicly; rejected ones stay hidden.</p>
+          <div id="winners-admin-content"><p class="text-muted">Loading…</p></div>
+        </div>
       </div>
     `;
   },
@@ -8052,6 +8072,56 @@ const App = {
     if (panelEl) panelEl.classList.add('active');
     if (panel === 'livedata') this.adminLoadLiveData();
     if (panel === 'lms') this.adminLoadLms();
+    if (panel === 'winners') this._loadAdminWinners('pending');
+  },
+
+  // ---- Winners Wall moderation (admin) -----------------------------------
+  async _loadAdminWinners(status) {
+    status = status || 'pending';
+    var box = document.getElementById('winners-admin-content');
+    if (!box) return;
+    box.innerHTML = '<p class="text-muted">Loading ' + status + ' submissions…</p>';
+    var data;
+    try {
+      data = await this.api('/admin/winners?status=' + status);
+    } catch (e) {
+      box.innerHTML = '<div class="card"><p class="text-muted">Could not load submissions.</p></div>';
+      return;
+    }
+    var rows = (data && data.winners) || [];
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]; }); };
+    var tabBtn = function (s, label) {
+      return '<button class="btn btn-sm ' + (s === status ? 'btn-gold' : 'btn-outline') + '" onclick="App._loadAdminWinners(\'' + s + '\')" style="margin-right:6px;">' + label + '</button>';
+    };
+    var header = '<div style="margin-bottom:14px;">' + tabBtn('pending', 'Pending') + tabBtn('approved', 'Approved') + tabBtn('rejected', 'Rejected') + '</div>';
+    if (!rows.length) {
+      box.innerHTML = header + '<p class="text-muted">No ' + status + ' submissions.</p>';
+      return;
+    }
+    box.innerHTML = header + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;">' +
+      rows.map(function (w) {
+        var img = w.image_data ? '<img src="' + esc(w.image_data) + '" style="width:100%;max-height:240px;object-fit:cover;border-radius:8px;margin-bottom:8px;">' : '<div style="font-size:12px;color:#888;margin-bottom:8px;">(no image)</div>';
+        var actions = '';
+        if (status !== 'approved') actions += '<button class="btn btn-gold btn-sm" onclick="App.adminWinnerAction(' + w.id + ',\'approve\')">Approve</button> ';
+        if (status !== 'rejected') actions += '<button class="btn btn-outline btn-sm" onclick="App.adminWinnerAction(' + w.id + ',\'reject\')">Reject</button> ';
+        actions += '<button class="btn btn-outline btn-sm" style="color:#ef4444;border-color:#ef4444;" onclick="if(confirm(\'Delete this submission permanently?\'))App.adminWinnerAction(' + w.id + ',\'delete\')">Delete</button>';
+        return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:14px;">' + img +
+          (w.caption ? '<div style="font-size:13px;color:#e8e8ec;margin-bottom:6px;">' + esc(w.caption) + '</div>' : '') +
+          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">' + (w.amount ? esc(w.amount) + ' &middot; ' : '') + esc(w.display_name) + ' &middot; ' + formatDateUK(w.created_at) + '</div>' +
+          '<div>' + actions + '</div></div>';
+      }).join('') + '</div>';
+  },
+
+  async adminWinnerAction(id, action) {
+    try {
+      var r = await this.api('/admin/winners/' + id + '/' + action, { method: 'POST', body: '{}' });
+      if (r && r.error) { this.showToast(r.error, 'error'); return; }
+      this.showToast('Done — ' + action + 'd.', 'success');
+      var active = document.querySelector('#winners-admin-content .btn-gold');
+      this._loadAdminWinners(active ? active.textContent.toLowerCase() : 'pending');
+    } catch (e) {
+      this.showToast(e && e.message ? e.message : 'Action failed.', 'error');
+    }
   },
 
   // ---- Last Man Standing admin (in-app) ----------------------------------
@@ -10593,6 +10663,124 @@ const App = {
       App.showToast('Your account has been deleted.', 'info');
     } catch (err) {
       App.showToast(err.message, 'error');
+    }
+  },
+
+  // -----------------------------------------------------------------------
+  // WINNERS WALL — subscriber-submitted wins (admin-moderated social proof)
+  // -----------------------------------------------------------------------
+  async _loadWinners() {
+    var el = document.getElementById('winners-wall');
+    if (!el) return;
+    try {
+      var data = await this.api('/winners?limit=18');
+      el = document.getElementById('winners-wall');
+      if (!el) return;
+      var winners = (data && data.winners) || [];
+      if (!winners.length) {
+        el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px;">No winners posted yet — ' +
+          (this.user ? 'be the first to <a href="#" onclick="App.showWinnerSubmit();return false;" style="color:var(--gold);">share yours</a>!' : 'members can share their wins here.') + '</div>';
+        return;
+      }
+      el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">' +
+        winners.map(function (w) {
+          var img = w.image ? '<div style="width:100%;aspect-ratio:1/1;overflow:hidden;background:#0a0e1a;"><img src="' + App.escapeHtml(w.image) + '" alt="Member win" loading="lazy" style="width:100%;height:100%;object-fit:cover;"></div>' : '';
+          var cap = w.caption ? '<div style="font-size:13px;color:#e8e8ec;line-height:1.4;margin-bottom:6px;">' + App.escapeHtml(w.caption) + '</div>' : '';
+          var amt = w.amount ? '<span style="color:#22c55e;font-weight:800;">' + App.escapeHtml(w.amount) + '</span> &middot; ' : '';
+          return '<div style="background:var(--card-bg);border:1px solid rgba(34,197,94,0.25);border-radius:12px;overflow:hidden;">' + img +
+            '<div style="padding:12px 14px;">' + cap +
+            '<div style="font-size:12px;color:var(--text-muted);">' + amt + App.escapeHtml(w.name || 'Elite Edge member') + '</div></div></div>';
+        }).join('') + '</div>';
+    } catch (e) {
+      var e2 = document.getElementById('winners-wall');
+      if (e2) e2.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px;">Winners unavailable right now.</div>';
+    }
+  },
+
+  showWinnerSubmit() {
+    if (!this.user) { this.showModal('login'); return; }
+    var existing = document.getElementById('winner-submit-overlay');
+    if (existing) existing.remove();
+    this._winnerImageData = null;
+    var ov = document.createElement('div');
+    ov.id = 'winner-submit-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;';
+    ov.innerHTML = '<div style="background:#11162a;border:1px solid rgba(212,168,67,0.3);border-radius:16px;max-width:440px;width:100%;padding:24px;position:relative;">' +
+      '<button onclick="document.getElementById(\'winner-submit-overlay\').remove()" style="position:absolute;top:10px;right:14px;background:none;border:none;color:#888;font-size:26px;cursor:pointer;line-height:1;">&times;</button>' +
+      '<h3 style="font-size:20px;font-weight:900;color:#d4a843;margin-bottom:4px;">Share Your Win</h3>' +
+      '<p style="font-size:13px;color:#9aa3b2;margin-bottom:16px;">Upload a screenshot and tell us about it. We review every entry before it goes on the Winners Wall.</p>' +
+      '<label style="display:block;font-size:12px;color:#9aa3b2;margin-bottom:6px;font-weight:600;">Screenshot</label>' +
+      '<input type="file" id="winner-image" accept="image/*" style="width:100%;margin-bottom:6px;color:#ccc;font-size:13px;">' +
+      '<div id="winner-image-preview" style="margin-bottom:12px;"></div>' +
+      '<label style="display:block;font-size:12px;color:#9aa3b2;margin-bottom:6px;font-weight:600;">Your win (optional)</label>' +
+      '<textarea id="winner-caption" maxlength="280" rows="2" placeholder="e.g. Followed the Sweden BTTS tip — landed nicely!" style="width:100%;background:#0a0e1a;border:1px solid #2a2f45;border-radius:8px;padding:10px;color:#fff;font-size:13px;margin-bottom:12px;resize:vertical;box-sizing:border-box;"></textarea>' +
+      '<label style="display:block;font-size:12px;color:#9aa3b2;margin-bottom:6px;font-weight:600;">Display name (optional)</label>' +
+      '<input type="text" id="winner-name" maxlength="40" placeholder="' + App.escapeHtml(this.user.name || 'Your name') + '" style="width:100%;background:#0a0e1a;border:1px solid #2a2f45;border-radius:8px;padding:10px;color:#fff;font-size:13px;margin-bottom:16px;box-sizing:border-box;">' +
+      '<label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#9aa3b2;margin-bottom:16px;cursor:pointer;"><input type="checkbox" id="winner-consent" style="margin-top:2px;flex-shrink:0;"><span>I\'m happy for Elite Edge to display this publicly, and I\'ve removed any personal details (account numbers, etc.) from the screenshot.</span></label>' +
+      '<button id="winner-submit-btn" class="btn btn-gold btn-full" onclick="App.submitWinner()">Submit for review</button>' +
+      '<p style="font-size:10px;color:#667085;text-align:center;margin-top:12px;">18+ | Please gamble responsibly | BeGambleAware.org</p>' +
+      '</div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+    var fileInput = document.getElementById('winner-image');
+    fileInput.addEventListener('change', function () {
+      var f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      var pv = document.getElementById('winner-image-preview');
+      if (pv) pv.innerHTML = '<span style="font-size:12px;color:#9aa3b2;">Processing image…</span>';
+      App._compressImage(f, function (dataUrl) {
+        App._winnerImageData = dataUrl;
+        var pv2 = document.getElementById('winner-image-preview');
+        if (pv2) pv2.innerHTML = dataUrl ? '<img src="' + dataUrl + '" style="max-width:100%;max-height:200px;border-radius:8px;border:1px solid #2a2f45;">' : '<span style="font-size:12px;color:#ef4444;">Could not read that image — try another.</span>';
+      });
+    });
+  },
+
+  _compressImage(file, cb) {
+    try {
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        var img = new Image();
+        img.onload = function () {
+          var maxDim = 1200, w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w >= h) { h = Math.round(h * maxDim / w); w = maxDim; }
+            else { w = Math.round(w * maxDim / h); h = maxDim; }
+          }
+          var canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          var q = 0.85, out = canvas.toDataURL('image/jpeg', q);
+          while (out.length > 820000 && q > 0.4) { q -= 0.1; out = canvas.toDataURL('image/jpeg', q); }
+          cb(out);
+        };
+        img.onerror = function () { cb(null); };
+        img.src = ev.target.result;
+      };
+      reader.onerror = function () { cb(null); };
+      reader.readAsDataURL(file);
+    } catch (e) { cb(null); }
+  },
+
+  async submitWinner() {
+    var btn = document.getElementById('winner-submit-btn');
+    var caption = (document.getElementById('winner-caption') || {}).value || '';
+    var name = (document.getElementById('winner-name') || {}).value || '';
+    var image = this._winnerImageData || '';
+    var consent = document.getElementById('winner-consent');
+    if (!image && !caption.trim()) { this.showToast('Add a screenshot or a few words first.', 'error'); return; }
+    if (!consent || !consent.checked) { this.showToast('Please tick the consent box so we can display your win.', 'error'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+    try {
+      var r = await this.api('/winners', { method: 'POST', body: JSON.stringify({ caption: caption, displayName: name, image: image }) });
+      if (r && r.error) { this.showToast(r.error, 'error'); if (btn) { btn.disabled = false; btn.textContent = 'Submit for review'; } return; }
+      var ov = document.getElementById('winner-submit-overlay');
+      if (ov) ov.remove();
+      this._winnerImageData = null;
+      this.showToast((r && r.message) || 'Thanks! Your win is awaiting review.', 'success');
+    } catch (e) {
+      this.showToast(e && e.message ? e.message : 'Could not submit — please try again.', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Submit for review'; }
     }
   },
 
