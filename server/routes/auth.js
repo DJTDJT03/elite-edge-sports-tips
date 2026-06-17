@@ -5,6 +5,57 @@ module.exports = function(deps) {
   const jwt = require('jsonwebtoken');
   const crypto = require('crypto');
 
+  // Reward a referrer for a VERIFIED referred friend. Fired on email verification
+  // (not signup) so throwaway-email farming is blocked. Idempotent via the friend's
+  // `referralRewarded` flag. Skips self-referral and shared-device farming.
+  // Every 3rd verified referral = 1 free month of Premium (or +50 credits if the
+  // referrer is already paid). Best-effort + non-fatal.
+  async function applyReferralReward(friend) {
+    try {
+      if (!friend || !friend.referredBy || friend.referralRewarded) return;
+      var allUsers = await db.getUsers();
+      var referrer = allUsers.find(function (u) { return u.referralCode === friend.referredBy; });
+      if (!referrer) return;
+
+      var samePerson = referrer.id === friend.id || (referrer.email && friend.email && referrer.email.toLowerCase() === friend.email.toLowerCase());
+      var refDevices = Array.isArray(referrer.trustedDevices) ? referrer.trustedDevices : [];
+      var friendDevices = Array.isArray(friend.trustedDevices) ? friend.trustedDevices : [];
+      var sameDevice = friendDevices.some(function (d) { return refDevices.indexOf(d) !== -1; });
+      // Mark the friend as processed regardless, so we never double-reward or retry-farm.
+      await db.updateUser(friend.id, { referralRewarded: true });
+      if (samePerson || sameDevice) {
+        console.log('[Referral] Skipped reward (self/same-device) for code ' + friend.referredBy);
+        return;
+      }
+
+      await db.addCredits(referrer.id, 3, 'referral_signup', 'Referral: ' + (friend.name || 'a friend') + ' joined & verified');
+      var newCount = (referrer.referralCount || 0) + 1;
+      var refUpdates = { referralCount: newCount };
+      console.log('[Referral] +3 credits to ' + referrer.email + ' for verified referral ' + friend.email);
+
+      if (newCount % 3 === 0) {
+        if (referrer.subscription === 'premium' || referrer.subscription === 'vip' || referrer.role === 'admin') {
+          await db.addCredits(referrer.id, 50, 'referral_milestone', '3-referral milestone — 50 bonus credits (already Premium)');
+          if (emailService && emailService.sendReferralReward) {
+            emailService.sendReferralReward({ name: referrer.name, email: referrer.email, rewardType: 'bonus_credits', friendName: friend.name }).catch(function () {});
+          }
+          console.log('[Referral] Milestone (already premium): +50 credits to ' + referrer.email);
+        } else {
+          var monthEnd = new Date(); monthEnd.setMonth(monthEnd.getMonth() + 1);
+          refUpdates.trialActive = true;
+          refUpdates.trialStart = new Date().toISOString();
+          refUpdates.trialEnd = monthEnd.toISOString();
+          await db.recordCreditTransaction({ userId: referrer.id, amount: 0, balanceAfter: (referrer.credits || 0), type: 'referral_milestone', description: 'Earned 1 month free Premium — 3 referrals' });
+          if (emailService && emailService.sendReferralReward) {
+            emailService.sendReferralReward({ name: referrer.name, email: referrer.email, rewardType: 'free_month', friendName: friend.name }).catch(function () {});
+          }
+          console.log('[Referral] Milestone: 1 free month Premium granted to ' + referrer.email);
+        }
+      }
+      await db.updateUser(referrer.id, refUpdates);
+    } catch (e) { console.warn('[Referral] reward failed: ' + e.message); }
+  }
+
   // ---------------------------------------------------------------------------
   // REGISTER
   // ---------------------------------------------------------------------------
@@ -109,44 +160,9 @@ module.exports = function(deps) {
       // Record signup credits
       await db.recordCreditTransaction({ userId: user.id, amount: 10, balanceAfter: 10, type: 'signup_bonus', description: 'Welcome bonus — 10 free credits' });
 
-      // Reward referrer if this user was referred
-      if (req.body.referralCode) {
-        try {
-          var allUsers = await db.getUsers();
-          var referrer = allUsers.find(function(u) { return u.referralCode === req.body.referralCode; });
-          if (referrer) {
-            // Anti-abuse: no self-referral, and block obvious same-device farming.
-            var samePerson = referrer.id === user.id || (referrer.email && referrer.email.toLowerCase() === String(email).toLowerCase());
-            var sameDevice = Array.isArray(referrer.trustedDevices) && referrer.trustedDevices.indexOf(deviceHash) !== -1;
-            if (samePerson || sameDevice) {
-              console.log('[Referral] Skipped reward (self/same-device) for code ' + req.body.referralCode);
-            } else {
-              await db.addCredits(referrer.id, 3, 'referral_signup', 'Referral: ' + user.name + ' signed up');
-              var newCount = (referrer.referralCount || 0) + 1;
-              var refUpdates = { referralCount: newCount };
-              console.log('[Referral] +3 credits to ' + referrer.email + ' for referring ' + user.email);
-
-              // Milestone — every 3 referrals earns 1 free month of Premium.
-              if (newCount % 3 === 0) {
-                if (referrer.subscription === 'premium' || referrer.subscription === 'vip' || referrer.role === 'admin') {
-                  // Already Premium/VIP — a comp month adds nothing, so give bonus credits instead.
-                  await db.addCredits(referrer.id, 50, 'referral_milestone', '3-referral milestone — 50 bonus credits (already Premium)');
-                  console.log('[Referral] Milestone (already premium): +50 credits to ' + referrer.email);
-                } else {
-                  // Comp 1 month of Premium via the trial flags (auto-expires to free).
-                  var monthEnd = new Date(); monthEnd.setMonth(monthEnd.getMonth() + 1);
-                  refUpdates.trialActive = true;
-                  refUpdates.trialStart = new Date().toISOString();
-                  refUpdates.trialEnd = monthEnd.toISOString();
-                  await db.recordCreditTransaction({ userId: referrer.id, amount: 0, balanceAfter: (referrer.credits || 0), type: 'referral_milestone', description: 'Earned 1 month free Premium — 3 referrals' });
-                  console.log('[Referral] Milestone: 1 free month Premium granted to ' + referrer.email);
-                }
-              }
-              await db.updateUser(referrer.id, refUpdates);
-            }
-          }
-        } catch (refErr) { /* non-fatal */ }
-      }
+      // Referral reward is NOT granted here — it fires when the referred friend
+      // VERIFIES their email (see /verify-email → applyReferralReward), which blocks
+      // throwaway-email farming. We only store `referredBy` on the new user (above).
 
       // Send welcome email with verification link (async, non-blocking)
       var verifyUrl = 'https://eliteedgesports.co.uk/api/auth/verify-email?token=' + verifyToken;
@@ -347,6 +363,14 @@ module.exports = function(deps) {
       });
 
       console.log('[Auth] Email verified for:', user.email);
+
+      // Now that the email is verified, pay out the referrer (anti-farming gate).
+      // Re-read the user so the helper sees the fresh verified record.
+      try {
+        var verifiedUser = await db.getUserById(user.id);
+        await applyReferralReward(verifiedUser || user);
+      } catch (e) { /* non-fatal */ }
+
       res.redirect('/#/pricing?verified=true');
     } catch (err) {
       console.error('[Auth] Email verification error:', err.message);

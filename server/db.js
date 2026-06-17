@@ -201,6 +201,7 @@ function dbUserToApp(row) {
     referralCode: row.referral_code || null,
     referredBy: row.referred_by || null,
     referralCount: parseInt(row.referral_count) || 0,
+    referralRewarded: row.referral_rewarded || false,
     emailVerified: row.email_verified || false,
     emailVerifyToken: row.email_verify_token || null,
     paymentFailedAt: row.payment_failed_at || null,
@@ -250,6 +251,7 @@ function appUserToDb(data) {
   if (data.referralCode !== undefined) result.referral_code = data.referralCode;
   if (data.referredBy !== undefined) result.referred_by = data.referredBy;
   if (data.referralCount !== undefined) result.referral_count = data.referralCount;
+  if (data.referralRewarded !== undefined) result.referral_rewarded = data.referralRewarded;
   if (data.emailVerified !== undefined) result.email_verified = data.emailVerified;
   if (data.emailVerifyToken !== undefined) result.email_verify_token = data.emailVerifyToken;
   if (data.paymentFailedAt !== undefined) result.payment_failed_at = data.paymentFailedAt;

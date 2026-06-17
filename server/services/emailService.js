@@ -1152,6 +1152,30 @@ Unsubscribe: https://eliteedgesports.co.uk/#/unsubscribe`;
     return this._sendEmail({ to: email, subject, html, text, emailType: 'big_win' });
   }
 
+  // Referral milestone reward — 1 free month of Premium (or bonus credits if already paid).
+  async sendReferralReward({ name, email, rewardType, friendName }) {
+    const isMonth = rewardType !== 'bonus_credits';
+    const headline = isMonth ? "You've earned a FREE month of Premium!" : "You've earned 50 bonus credits!";
+    const subject = '🎉 ' + headline;
+    const body = isMonth
+      ? "You've now referred 3 friends to Elite Edge — so your next month of Premium is on us. Full access to every tip, full analysis and AI match previews for the next 30 days, starting right now."
+      : "You've now referred 3 friends to Elite Edge. As you're already on Premium, we've dropped 50 bonus credits into your account instead — enjoy!";
+    const html = this._wrapHTML(`
+        <h2 style="color:#ffffff;margin:0 0 16px;font-size:20px;">Hi ${this._esc(name)},</h2>
+        <div style="background:#1f1a0a;padding:22px;border-radius:8px;margin:16px 0;border-left:4px solid #d4a843;text-align:center;">
+          <p style="color:#d4a843;font-size:18px;font-weight:800;margin:0 0 10px;">&#127881; ${this._esc(headline)}</p>
+          <p style="color:#cbd5e1;font-size:14px;line-height:1.6;margin:0;">${this._esc(body)}</p>
+        </div>
+        <p style="color:#cbd5e1;font-size:14px;line-height:1.6;">Keep sharing your link — <strong>every 3 friends who join earns you another free month</strong>.</p>
+        <div style="text-align:center;margin:24px 0;">
+          <a href="https://eliteedgesports.co.uk/#/refer" style="display:inline-block;padding:12px 32px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">Your Referral Link</a>
+        </div>
+        <p style="color:#cbd5e1;font-size:14px;"><strong style="color:#d4a843;">The Elite Edge Team</strong></p>
+    `, headline);
+    const text = `Hi ${name},\n\n${headline}\n\n${body}\n\nKeep sharing — every 3 friends who join earns you another free month.\nYour link: https://eliteedgesports.co.uk/#/refer\n\nThe Elite Edge Team\n18+ | Please gamble responsibly | BeGambleAware.org`;
+    return this._sendEmail({ to: email, subject, html, text, emailType: 'referral_reward' });
+  }
+
   // -----------------------------------------------------------------------
   // Original bulletin methods (compose + send)
   // -----------------------------------------------------------------------

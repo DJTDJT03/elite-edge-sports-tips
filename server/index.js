@@ -294,6 +294,7 @@ app.use('/', require('./routes/public')(deps));
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT',
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by TEXT',
         'ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_count INTEGER DEFAULT 0',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_rewarded BOOLEAN DEFAULT FALSE',
         "CREATE TABLE IF NOT EXISTS credit_transactions (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, amount INTEGER NOT NULL, balance_after INTEGER NOT NULL, type TEXT NOT NULL, description TEXT, tip_id TEXT, created_at TIMESTAMPTZ DEFAULT NOW())",
         'CREATE INDEX IF NOT EXISTS idx_credit_tx_user ON credit_transactions(user_id, created_at DESC)',
         // Email verification
