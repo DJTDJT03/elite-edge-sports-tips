@@ -242,6 +242,7 @@ module.exports = function(deps) {
 
   // Light per-IP rate limit for the AI assistant (cost control) — 20 / 10 min.
   var _aiChatHits = new Map();
+  var _chatModelDown = false; // sticky: if the preferred chat model errors, use fallback
   function aiChatRateLimited(ip) {
     var now = Date.now();
     var arr = (_aiChatHits.get(ip) || []).filter(function (t) { return now - t < 600000; });
@@ -306,6 +307,34 @@ module.exports = function(deps) {
       return null;
     } catch (e) { return null; }
   }
+
+  // GET /api/assistant/popular — most-asked questions (adaptive suggested prompts).
+  router.get('/api/assistant/popular', async (req, res) => {
+    try {
+      if (!db || !db.query) return res.json({ questions: [] });
+      res.set('Cache-Control', 'public, max-age=600');
+      var r = await db.query(
+        "SELECT question, COUNT(*)::int AS n FROM assistant_queries " +
+        "WHERE created_at > NOW() - INTERVAL '14 days' AND length(question) BETWEEN 8 AND 80 " +
+        "GROUP BY question ORDER BY n DESC, MAX(created_at) DESC LIMIT 6"
+      );
+      var qs = (r.rows || []).filter(function (x) { return x.n >= 2; }).map(function (x) { return x.question; });
+      res.json({ questions: qs });
+    } catch (e) { res.json({ questions: [] }); }
+  });
+
+  // GET /api/admin/assistant-queries — demand intel (admin only).
+  router.get('/api/admin/assistant-queries', deps.authenticate, deps.requireAdmin, async (req, res) => {
+    try {
+      var recent = await db.query("SELECT question, created_at FROM assistant_queries ORDER BY created_at DESC LIMIT 100");
+      var top = await db.query(
+        "SELECT question, COUNT(*)::int AS n, MAX(created_at) AS last FROM assistant_queries " +
+        "WHERE created_at > NOW() - INTERVAL '30 days' GROUP BY question ORDER BY n DESC, last DESC LIMIT 40"
+      );
+      var totalRow = await db.query("SELECT COUNT(*)::int AS n FROM assistant_queries WHERE created_at > NOW() - INTERVAL '7 days'");
+      res.json({ recent: recent.rows || [], top: top.rows || [], last7days: (totalRow.rows[0] && totalRow.rows[0].n) || 0 });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
 
   // POST /api/chat/ai — AI-powered chatbot using Claude with live data context
   router.post('/api/chat/ai', async (req, res) => {
@@ -521,15 +550,34 @@ module.exports = function(deps) {
         '- Never guarantee outcomes — these are statistical predictions for entertainment. 18+. If someone sounds like they are chasing losses, a quick word on gambling responsibly.' +
         liveContext;
 
-      var response = await aiReports.client.messages.create({
-        model: process.env.AI_CHAT_MODEL || 'claude-sonnet-4-20250514',
-        max_tokens: 1400,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: message }],
-      });
+      // Prefer Sonnet for richer answers, but fall back to the known-working Haiku
+      // if that model isn't enabled on the key (so chat can never hard-fail on it).
+      var preferred = process.env.AI_CHAT_MODEL || 'claude-sonnet-4-20250514';
+      var fallback = process.env.AI_MODEL || 'claude-haiku-4-5-20251001';
+      var response;
+      try {
+        response = await aiReports.client.messages.create({
+          model: (_chatModelDown && preferred !== fallback) ? fallback : preferred,
+          max_tokens: 1400, system: systemPrompt, messages: [{ role: 'user', content: message }],
+        });
+      } catch (modelErr) {
+        console.warn('[AI Chat] model "' + preferred + '" failed (' + modelErr.message + ') — falling back to ' + fallback);
+        _chatModelDown = true; // remember so we go straight to the fallback next time
+        response = await aiReports.client.messages.create({
+          model: fallback, max_tokens: 1200, system: systemPrompt, messages: [{ role: 'user', content: message }],
+        });
+      }
 
       var reply = response.content[0].text;
       res.json({ reply: reply, sources: webCitations });
+
+      // Log the question (demand intel + adaptive prompts) — fire-and-forget.
+      try {
+        if (db.query) {
+          var ipHash = require('crypto').createHash('sha256').update(ip || '').digest('hex').slice(0, 16);
+          db.query("INSERT INTO assistant_queries (question, answered, ip_hash) VALUES ($1, TRUE, $2)", [message.slice(0, 300), ipHash]).catch(function () {});
+        }
+      } catch (e) { /* non-fatal */ }
     } catch (err) {
       console.error('[AI Chat] Error:', err.message);
       res.json({ reply: 'Sorry, I couldn\'t process that right now. Please try again or contact support.' });

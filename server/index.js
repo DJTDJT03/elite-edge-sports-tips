@@ -380,6 +380,9 @@ app.use('/', require('./routes/public')(deps));
         // Winners Wall — subscriber-submitted wins (admin-moderated social proof)
         "CREATE TABLE IF NOT EXISTS winner_submissions (id SERIAL PRIMARY KEY, user_id TEXT, display_name TEXT, caption TEXT, image_data TEXT, amount TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW(), approved_at TIMESTAMPTZ)",
         'CREATE INDEX IF NOT EXISTS idx_winners_status ON winner_submissions(status, created_at DESC)',
+        // Ask the Edge — log of questions asked (demand intel + adaptive prompts)
+        "CREATE TABLE IF NOT EXISTS assistant_queries (id SERIAL PRIMARY KEY, question TEXT NOT NULL, answered BOOLEAN DEFAULT TRUE, ip_hash TEXT, created_at TIMESTAMPTZ DEFAULT NOW())",
+        'CREATE INDEX IF NOT EXISTS idx_aq_created ON assistant_queries(created_at DESC)',
       ];
       for (var ci = 0; ci < alterCols.length; ci++) {
         try { await db.query(alterCols[ci]); } catch(e) {}

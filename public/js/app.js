@@ -7830,6 +7830,7 @@ const App = {
           <button class="admin-tab" onclick="App.switchAdminTab('notifications', this)">Notifications</button>
           <button class="admin-tab" onclick="App.switchAdminTab('lms', this)">&#127942; Last Man Standing</button>
           <button class="admin-tab" onclick="App.switchAdminTab('winners', this)">Winners Wall</button>
+          <button class="admin-tab" onclick="App.switchAdminTab('asklog', this)">Ask Log</button>
         </div>
 
         <!-- TIPS PANEL -->
@@ -8132,6 +8133,12 @@ const App = {
           <p class="text-muted mb-16" style="font-size:13px;">Approve member-submitted wins before they appear on the homepage. Approved entries show publicly; rejected ones stay hidden.</p>
           <div id="winners-admin-content"><p class="text-muted">Loading…</p></div>
         </div>
+
+        <div class="admin-panel" id="panel-asklog">
+          <h3 class="mb-16">&#128173; Ask the Edge — What People Are Asking</h3>
+          <p class="text-muted mb-16" style="font-size:13px;">Live demand intel from the assistant. Use the most-asked questions to decide which fixtures/races to prioritise for previews and content.</p>
+          <div id="asklog-content"><p class="text-muted">Loading…</p></div>
+        </div>
       </div>
     `;
   },
@@ -8145,6 +8152,32 @@ const App = {
     if (panel === 'livedata') this.adminLoadLiveData();
     if (panel === 'lms') this.adminLoadLms();
     if (panel === 'winners') this._loadAdminWinners('pending');
+    if (panel === 'asklog') this._loadAssistantQueries();
+  },
+
+  async _loadAssistantQueries() {
+    var box = document.getElementById('asklog-content');
+    if (!box) return;
+    box.innerHTML = '<p class="text-muted">Loading…</p>';
+    var data;
+    try { data = await this.api('/admin/assistant-queries'); }
+    catch (e) { box.innerHTML = '<div class="card"><p class="text-muted">Could not load.</p></div>'; return; }
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]; }); };
+    var top = (data && data.top) || [];
+    var recent = (data && data.recent) || [];
+    var topHtml = top.length
+      ? '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+          '<tr style="text-align:left;color:var(--text-muted);"><th style="padding:6px 8px;">Question</th><th style="padding:6px 8px;width:60px;">Asked</th></tr>' +
+          top.map(function (t) { return '<tr style="border-top:1px solid var(--border);"><td style="padding:6px 8px;color:#fff;">' + esc(t.question) + '</td><td style="padding:6px 8px;color:#d4a843;font-weight:700;">' + t.n + '&times;</td></tr>'; }).join('') +
+        '</table>'
+      : '<p class="text-muted">No questions logged yet.</p>';
+    var recentHtml = recent.length
+      ? recent.slice(0, 40).map(function (r) { return '<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;color:#cbd5e1;">' + esc(r.question) + ' <span style="color:var(--text-muted);font-size:11px;">· ' + (r.created_at ? formatDateUK(r.created_at) : '') + '</span></div>'; }).join('')
+      : '<p class="text-muted">Nothing yet.</p>';
+    box.innerHTML =
+      '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;"><div style="font-size:12px;color:var(--text-muted);">Questions asked (last 7 days)</div><div style="font-size:28px;font-weight:900;color:#d4a843;">' + ((data && data.last7days) || 0) + '</div></div>' +
+      '<h4 style="margin:8px 0;">Most asked (30 days)</h4>' + topHtml +
+      '<h4 style="margin:16px 0 8px;">Recent questions</h4>' + recentHtml;
   },
 
   // ---- Winners Wall moderation (admin) -----------------------------------
@@ -14238,7 +14271,7 @@ const App = {
         '</div>' +
         '<div id="ee-fab-msgs" class="ee-fab-msgs">' +
           '<div class="ee-fab-bubble ee-fab-bot">Ask me about any race, match or team — e.g. "Who wins the 2:45 at Kempton?" or "Team news for Arsenal v Wolves?"</div>' +
-          '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+          '<div id="ee-fab-chips" style="display:flex;gap:6px;flex-wrap:wrap;">' +
             ['Who\'s your NAP today?', 'Best value in the football?', 'Any team news today?'].map(function (q) {
               return '<button class="ee-fab-chip" onclick="App.askFabSend(' + JSON.stringify(q).replace(/"/g, '&quot;') + ')">' + q + '</button>';
             }).join('') +
@@ -14250,6 +14283,21 @@ const App = {
         '</div>' +
       '</div>';
     document.body.appendChild(wrap);
+    this._loadPopularChips();
+  },
+
+  // Adaptive prompts — replace the default chips with what people actually ask most.
+  async _loadPopularChips() {
+    try {
+      var data = await this.api('/assistant/popular');
+      var qs = (data && data.questions) || [];
+      if (!qs.length) return;
+      var row = document.getElementById('ee-fab-chips');
+      if (!row) return;
+      row.innerHTML = qs.slice(0, 4).map(function (q) {
+        return '<button class="ee-fab-chip" onclick="App.askFabSend(' + JSON.stringify(q).replace(/"/g, '&quot;') + ')">' + App.escapeHtml(q) + '</button>';
+      }).join('');
+    } catch (e) { /* keep defaults */ }
   },
 
   toggleAskFab() {
