@@ -428,6 +428,59 @@ module.exports = function (deps) {
     }
   });
 
+  // GET /api/lms/admin/competitions/:id/diagnose — why is the round stuck?
+  // Shows which round fixtures have results, whether the round is complete (and
+  // would advance to open the next matchday's picks), and how each alive pick
+  // resolves — so a stuck Spain draw or a missing result is obvious at a glance.
+  router.get('/admin/competitions/:id/diagnose', authenticate, requireAdmin, async function (req, res) {
+    if (!guard(req, res)) return;
+    try {
+      const schedule = require('../services/wc2026Schedule');
+      const c = await lmsStore.getCompetitionById(req.params.id);
+      if (!c) return res.status(404).json({ error: 'Competition not found' });
+      const round = c.currentRound;
+      const finished = await lmsStore.getFinishedWcResults();
+      const fixtures = (c.phase === 'world_cup' ? (schedule.roundFixtures(round) || []) : []);
+      const fxStatus = fixtures.map(function (fx) {
+        const placeholder = schedule.isPlaceholder(fx.home) || schedule.isPlaceholder(fx.away);
+        const r = placeholder ? null : (finished || []).find(function (x) {
+          return (schedule.teamsMatch(x.home_team, fx.home) && schedule.teamsMatch(x.away_team, fx.away)) ||
+                 (schedule.teamsMatch(x.home_team, fx.away) && schedule.teamsMatch(x.away_team, fx.home));
+        });
+        const hasResult = !!(r && r.home_goals !== null && r.away_goals !== null);
+        return { fixture: fx.home + ' v ' + fx.away, placeholder: placeholder, hasResult: hasResult, score: hasResult ? (r.home_goals + '-' + r.away_goals) : null };
+      });
+      const alive = await lmsStore.getEntriesForCompetition(c.id, 'alive');
+      const users = await db.getUsers(); const byId = {}; users.forEach(function (u) { byId[u.id] = u; });
+      const picks = [];
+      for (let i = 0; i < alive.length; i++) {
+        const e = alive[i];
+        const p = await lmsStore.getPick(e.id, round);
+        let resolved = null;
+        if (p) { try { resolved = await lms.resolveTeamResult(c, round, p.team, finished); } catch (er) {} }
+        picks.push({
+          pickId: p ? p.id : null,
+          user: (byId[e.userId] && (byId[e.userId].name || byId[e.userId].email)) || String(e.userId),
+          team: p ? p.team : '(no pick)',
+          storedResult: p ? p.result : null,
+          resolvesAs: resolved ? resolved.status : null,
+          detail: resolved ? resolved.detail : null,
+        });
+      }
+      const roundComplete = fxStatus.length > 0 && fxStatus.every(function (f) { return f.hasResult; });
+      res.json({
+        round: round, roundLabel: lms.roundLabel(c.phase, round),
+        fixturesTotal: fxStatus.length,
+        fixturesWithResult: fxStatus.filter(function (f) { return f.hasResult; }).length,
+        roundComplete: roundComplete,
+        wouldAdvanceTo: roundComplete ? lms.roundLabel(c.phase, round + 1) : null,
+        missingResults: fxStatus.filter(function (f) { return !f.hasResult && !f.placeholder; }).map(function (f) { return f.fixture; }),
+        pendingPicks: picks.filter(function (p) { return p.storedResult === 'pending'; }),
+        picks: picks,
+      });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // POST /api/lms/admin/picks/:pickId/result  { result } — manual override
   // For penalty shootouts and PL fixtures the admin confirms won/lost.
   router.post('/admin/picks/:pickId/result', authenticate, requireAdmin, async function (req, res) {

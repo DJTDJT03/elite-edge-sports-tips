@@ -8247,9 +8247,11 @@ const App = {
       var actions = '';
       if (c.status === 'open') actions += '<button class="btn btn-gold btn-sm" onclick="App.lmsSetStatus(' + c.id + ',\'active\')">Activate</button> ';
       if (c.status !== 'completed') {
+        actions += '<button class="btn btn-outline btn-sm" onclick="App.lmsDiagnoseRound(' + c.id + ')">Diagnose round</button> ';
         actions += '<button class="btn btn-outline btn-sm" onclick="App.lmsSettle(' + c.id + ',false)">Settle round</button> ';
-        actions += '<button class="btn btn-outline btn-sm" onclick="App.lmsSettle(' + c.id + ',true)">Force settle</button> ';
+        actions += '<button class="btn btn-outline btn-sm" title="Settles all finished picks, eliminates anyone unsettled, and advances to the next matchday\'s picks" onclick="if(confirm(\'Force settle: eliminates any alive entry whose pick is NOT a confirmed win, then advances to the next round. Make sure this round\\u2019s results are all in first.\'))App.lmsSettle(' + c.id + ',true)">Force settle &amp; advance</button> ';
       }
+      actions += '<div id="lms-diag-' + c.id + '" style="margin-top:10px;"></div>';
       return '<div class="card mb-16">' +
         '<div class="flex-between"><div><strong>' + esc(c.name) + '</strong> <span class="text-sm text-muted">(' + esc(c.phase) + ')</span></div>' +
         '<div class="text-sm">Status: <strong>' + esc(c.status) + '</strong> · ' + esc(c.roundLabel || ('Round ' + c.currentRound)) + ' · Alive: ' + (c.aliveCount != null ? c.aliveCount : '-') + ' · Pot: &pound;' + (c.prizePot || 0).toFixed(0) + '</div></div>' +
@@ -8403,6 +8405,41 @@ const App = {
       this.showToast('Status: ' + status, 'success');
       this.adminLoadLms();
     } catch (e) { this.showToast('Failed: ' + (e.message || e), 'error'); }
+  },
+
+  async lmsDiagnoseRound(id) {
+    var box = document.getElementById('lms-diag-' + id);
+    if (box) box.innerHTML = '<span class="text-muted text-sm">Diagnosing…</span>';
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]; }); };
+    try {
+      var d = await this.api('/lms/admin/competitions/' + id + '/diagnose');
+      box = document.getElementById('lms-diag-' + id);
+      if (!box) return;
+      var head = '<div style="font-size:13px;margin-bottom:8px;"><strong>' + esc(d.roundLabel) + '</strong> — ' +
+        d.fixturesWithResult + '/' + d.fixturesTotal + ' fixtures have results · ' +
+        (d.roundComplete ? '<span style="color:#22c55e;">round complete → would advance to ' + esc(d.wouldAdvanceTo) + ' (run Settle round)</span>' : '<span style="color:#f59e0b;">round NOT complete — survivors can\'t pick the next matchday until it is</span>') + '</div>';
+      if (d.missingResults && d.missingResults.length) {
+        head += '<div style="font-size:12px;color:#f59e0b;margin-bottom:8px;">Missing results (' + d.missingResults.length + '): ' + d.missingResults.slice(0, 10).map(esc).join(', ') + (d.missingResults.length > 10 ? '…' : '') + '<br><span style="color:var(--text-muted);">If these games have finished, click "Sync fixtures now" above to pull results.</span></div>';
+      }
+      var rows = (d.picks || []).map(function (p) {
+        var col = p.storedResult === 'won' ? '#22c55e' : p.storedResult === 'lost' ? '#ef4444' : p.resolvesAs === 'lost' ? '#f59e0b' : p.resolvesAs === 'won' ? '#84cc16' : 'var(--text-muted)';
+        var override = p.pickId ? ' <button class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:11px;" onclick="App.lmsOverridePick(' + id + ',' + p.pickId + ',\'lost\')">mark lost</button> <button class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:11px;" onclick="App.lmsOverridePick(' + id + ',' + p.pickId + ',\'won\')">won</button>' : '';
+        return '<tr style="border-top:1px solid var(--border);"><td style="padding:4px 8px;">' + esc(p.user) + '</td><td style="padding:4px 8px;">' + esc(p.team) + '</td>' +
+          '<td style="padding:4px 8px;color:' + col + ';">' + esc(p.storedResult || '-') + (p.resolvesAs && p.resolvesAs !== p.storedResult ? ' → resolves as <strong>' + esc(p.resolvesAs) + '</strong>' : '') + (p.detail ? ' <span style="color:var(--text-muted);">(' + esc(p.detail) + ')</span>' : '') + '</td>' +
+          '<td style="padding:4px 8px;">' + override + '</td></tr>';
+      }).join('');
+      box.innerHTML = head + (rows ? '<table style="width:100%;border-collapse:collapse;font-size:12px;"><tr style="text-align:left;color:var(--text-muted);"><th style="padding:4px 8px;">Player</th><th style="padding:4px 8px;">Pick</th><th style="padding:4px 8px;">Status</th><th></th></tr>' + rows + '</table>' : '<span class="text-muted text-sm">No alive picks this round.</span>');
+    } catch (e) {
+      if (box) box.innerHTML = '<span style="color:var(--red);font-size:12px;">Diagnose failed: ' + esc(e.message || e) + '</span>';
+    }
+  },
+
+  async lmsOverridePick(compId, pickId, result) {
+    try {
+      await this.api('/lms/admin/picks/' + pickId + '/result', { method: 'POST', body: JSON.stringify({ result: result }) });
+      this.showToast('Pick marked ' + result, 'success');
+      this.lmsDiagnoseRound(compId);
+    } catch (e) { this.showToast('Override failed: ' + (e.message || e), 'error'); }
   },
 
   showAddTipForm() {
