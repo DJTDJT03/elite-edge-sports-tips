@@ -10814,13 +10814,19 @@ const App = {
     }
   },
 
-  showReferral() {
+  async showReferral() {
     this.showModal('referral');
     const content = document.getElementById('referral-content');
     if (!content) return;
-    const code = this.getReferralCode();
-    const link = 'https://eliteedgesports.co.uk/?ref=' + code;
-    const count = this.getReferralCount();
+    // Pull authoritative stats from the server (real code, count, pending referrals)
+    var stats = {};
+    try { stats = await this.api('/referral'); } catch (e) {}
+    content = document.getElementById('referral-content');
+    if (!content) return;
+    const code = stats.referralCode || this.getReferralCode();
+    const link = stats.referralLink || ('https://eliteedgesports.co.uk/?ref=' + code);
+    const count = (typeof stats.referralCount === 'number') ? stats.referralCount : this.getReferralCount();
+    const pending = stats.pendingReferrals || 0;
     const earnedMonths = Math.floor(count / 3);
     const progress = count % 3; // progress towards the next free month
     content.innerHTML = `
@@ -10834,13 +10840,17 @@ const App = {
           <button class="share-social-btn whatsapp" onclick="window.open('https://wa.me/?text=${encodeURIComponent('Check out Elite Edge Sports Tips - data-driven betting intelligence! ' + link)}','_blank')">WhatsApp</button>
           <button class="share-social-btn email-share" onclick="window.open('mailto:?subject=Elite Edge Sports Tips&body=${encodeURIComponent('Join me on Elite Edge Sports Tips! ' + link)}')">Email</button>
         </div>
+        ${pending > 0 ? `<div style="margin-top:16px;padding:12px 14px;background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.25);border-radius:8px;text-align:left;">
+          <p style="font-size:13px;color:#d4a843;font-weight:700;margin:0 0 4px;">&#8987; ${pending} friend${pending > 1 ? 's' : ''} joined but haven't verified yet</p>
+          <p style="font-size:12px;color:var(--text-muted);margin:0;">Referrals only count once your friend verifies their email. Give them a nudge to check their inbox (and spam) for the verification link — then your reward lands automatically.</p>
+        </div>` : ''}
         <div style="margin-top:20px;padding:16px;background:var(--bg-elevated);border-radius:var(--radius-sm);">
           <p class="text-sm text-muted mb-8">Referral Progress</p>
           <div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px;">
             ${[1,2,3].map(i => `<div style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;${i <= progress ? 'background:var(--gold);color:var(--bg-deep);' : 'background:var(--bg-card);border:2px solid var(--border);color:var(--text-dim);'}">${i}</div>`).join('')}
           </div>
           <p class="text-xs text-muted">Every 3 friends who join = 1 month free Premium</p>
-          ${earnedMonths > 0 ? `<p class="text-gold" style="font-weight:700;margin-top:4px;">&#127881; ${earnedMonths} free month${earnedMonths > 1 ? 's' : ''} earned &bull; ${count} referral${count !== 1 ? 's' : ''} total</p>` : `<p class="text-gold" style="font-weight:700;margin-top:4px;">${progress}/3 towards your first free month</p>`}
+          ${earnedMonths > 0 ? `<p class="text-gold" style="font-weight:700;margin-top:4px;">&#127881; ${earnedMonths} free month${earnedMonths > 1 ? 's' : ''} earned &bull; ${count} verified referral${count !== 1 ? 's' : ''}</p>` : `<p class="text-gold" style="font-weight:700;margin-top:4px;">${progress}/3 towards your first free month</p>`}
         </div>
       </div>
     `;

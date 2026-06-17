@@ -509,10 +509,25 @@ module.exports = function(deps) {
     try {
       var user = await db.getUserById(req.user.id);
       if (!user) return res.status(404).json({ error: 'User not found' });
+      // Count friends who joined with this code but haven't verified yet — the
+      // referrer is paid only on verification, so surface these so they can nudge.
+      var pendingReferrals = 0, verifiedReferrals = 0;
+      try {
+        if (user.referralCode) {
+          var all = await db.getUsers();
+          all.forEach(function (u) {
+            if (u.id !== user.id && u.referredBy && u.referredBy === user.referralCode) {
+              if (u.emailVerified) verifiedReferrals++; else pendingReferrals++;
+            }
+          });
+        }
+      } catch (e) { /* non-fatal */ }
       res.json({
         referralCode: user.referralCode,
         referralCount: user.referralCount || 0,
         referralLink: 'https://eliteedgesports.co.uk/?ref=' + (user.referralCode || ''),
+        pendingReferrals: pendingReferrals,
+        verifiedReferrals: verifiedReferrals,
       });
     } catch (err) {
       res.status(500).json({ error: err.message });
