@@ -881,6 +881,18 @@ class RacingCardsSource extends DataSource {
             sex: r.sex_restriction || '',
             silkUrl: r.silk_url,
             ownerName: r.owner,
+            // Richer signals (additive — the analyst data we pay for): used by the
+            // assistant + available to the engine. Never overwrite existing fields.
+            rpr: r.rpr || null,                          // Racing Post Rating
+            ts: r.ts || r.tsr || null,                   // Topspeed
+            lastRun: r.last_run != null ? r.last_run : null, // days since last run
+            headgear: r.headgear || '',
+            wind: r.wind_surgery || '',
+            comment: r.comment || '',
+            spotlight: r.spotlight || '',                // Racing Post written analysis
+            trainer14: r.trainer_14_days || null,        // {runs,wins,percent}
+            jockey14: r.jockey_14_days || null,
+            number: r.number != null ? r.number : null,
             isNonRunner: !!(r.is_non_runner || r.nonRunner || r.non_runner || r.status === 'NR' || r.status === 'Withdrawn' || r.scratched)
           };
         })

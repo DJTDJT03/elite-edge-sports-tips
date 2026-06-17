@@ -504,9 +504,15 @@ module.exports = function(deps) {
               return cOk || tOk;
             }).slice(0, 3);
             detail.forEach(function (r) {
-              liveContext += '\nRUNNERS — ' + (r.time || '') + ' ' + (r.meeting || '') + (r.going ? ' (going: ' + r.going + ')' : '') + (r.distance ? ', ' + r.distance : '') + ':\n';
-              (r.runners || []).slice(0, 18).forEach(function (rn) {
-                liveContext += '  - ' + (rn.horseName || '') + ' @ ' + (rn.odds || '?') + ' | OR ' + (rn.officialRating || '-') + ' | form ' + (rn.form || '-') + ' | ' + (rn.jockey || '-') + ' / ' + (rn.trainer || '-') + '\n';
+              liveContext += '\nRUNNERS — ' + (r.time || '') + ' ' + (r.meeting || '') + (r.raceName ? ' ' + r.raceName : '') + (r.raceClass ? ' (Class ' + r.raceClass + ')' : '') + (r.going ? ' [going: ' + r.going + ']' : '') + (r.distance ? ', ' + r.distance : '') + ':\n';
+              (r.runners || []).slice(0, 20).forEach(function (rn) {
+                var t14 = rn.trainer14 && rn.trainer14.percent != null ? ' | trnr14d ' + rn.trainer14.percent + '%' : '';
+                var j14 = rn.jockey14 && rn.jockey14.percent != null ? ' | jky14d ' + rn.jockey14.percent + '%' : '';
+                liveContext += '  - ' + (rn.horseName || '') + (rn.draw ? ' (draw ' + rn.draw + ')' : '') + ' @ ' + (rn.odds || 'SP') +
+                  ' | OR ' + (rn.officialRating || '-') + ' | RPR ' + (rn.rpr || '-') + ' | TS ' + (rn.ts || '-') +
+                  ' | form ' + (rn.form || '-') + (rn.lastRun != null ? ' | ' + rn.lastRun + 'd off' : '') + (rn.headgear ? ' | ' + rn.headgear : '') +
+                  ' | ' + (rn.jockey || '-') + ' / ' + (rn.trainer || '-') + t14 + j14 +
+                  (rn.spotlight ? '\n      Spotlight: ' + String(rn.spotlight).replace(/\s+/g, ' ').slice(0, 260) : '') + '\n';
               });
             });
           }
@@ -557,11 +563,13 @@ module.exports = function(deps) {
         '- Sound like a real person who knows their sport, not a chatbot. Banned: "I appreciate the question", "Here\'s what I can help with", "I need to be straight with you", "dual AI system", corporate waffle, and long bulleted sales pitches. No rule-of-three lists. No emoji spam.\n' +
         '- Do NOT pitch the free trial, pricing, or features unless they specifically ask about access or signing up.\n\n' +
         'ANSWERING QUESTIONS — always from OUR data below, never invent a pick or score:\n' +
-        '- "Who wins the [time] at [course]?" → first check TODAY\'S RACE PREDICTIONS for Our Pick. If we have not pre-published one BUT the race is in TODAY\'S LIVE RACECARDS, ANALYSE IT YOURSELF: give a clear winner and a top-3, reasoning from the runners, odds, form and official ratings shown. This is our edge over ChatGPT — we can see the actual card. Always give a real, data-backed answer; only say you cannot if the race genuinely is not in the predictions or the racecards.\n' +
-        '- Lead with the pick. e.g. "1st: X @ odds — [why]. Also consider: Y, Z." Mention going/draw/form when relevant. Be decisive like a tipster, not wishy-washy.\n' +
+        '- "Who/what wins the [time] at [course]?" → this is a PRE-RACE PREDICTION for an UPCOMING race. NEVER report a past/historical result as the answer (e.g. do not say "X won" — the race has not run). Predict it. First check TODAY\'S RACE PREDICTIONS for Our Pick; if none, ANALYSE the card in TODAY\'S LIVE RACECARDS yourself. This is our edge over ChatGPT — we can see the actual declared field.\n' +
+        '- JUSTIFY every selection with concrete card data — that reasoning is the whole point. For each pick cite the specifics that make it: official rating (OR), RPR, Topspeed (TS), recent form figures, days since last run, headgear, draw, going suitability, trainer & jockey 14-day strike rates, and the Racing Post "Spotlight" note where it adds something. Don\'t just name a horse — explain WHY from these numbers.\n' +
+        '- Lead with the verdict, then a top-3. e.g. "**1.** Horse @ price — OR 98, RPR top of field, 2 wins from last 3, strong draw, trainer 24% last 14d." Be decisive like a tipster. If odds aren\'t in the card show "SP".\n' +
+        '- For race RESULTS (a race that has already run / "who won"), THEN you may use the result from web intel.\n' +
         '- "Who wins / how many goals in [match]?" → find it in MATCH PREDICTIONS or WORLD CUP fixtures, give Our Take / predicted scoreline + confidence + why.\n' +
         '- World Cup: we HAVE the full fixture schedule synced (see below) — so you always know who plays who and when, including the opener. If our detailed prediction for that game has not generated yet, tell them the fixture and that the full breakdown lands closer to kickoff — do not claim we lack the fixtures.\n' +
-        '- LIVE WEB INTEL (if present below) is current real-time info — use it for facts, news, fitness, line-ups and the current market. Weave it in naturally; never say "according to my search". The actual betting pick should still come from OUR engine/data when we have it.\n' +
+        '- LIVE WEB INTEL (if present below) is current real-time info — use it for facts, news, fitness, line-ups, going changes, non-runners and the current market. Weave it in naturally; never say "according to my search". The actual pick comes from OUR card/engine. CRUCIAL: when asked who wins an UPCOMING race, do NOT let web intel make you report a finished result — predict from the card instead.\n' +
         '- If something genuinely is not in our data AND there is no web intel, say so plainly in one line and point them to the right page.\n' +
         '- IMPORTANT (conversion): you may answer a question about a SPECIFIC race/match in full. But if asked to list ALL of today\'s tips/picks/NAPs at once, give just ONE taster pick and invite them to see the full card on the Tips page / with a subscription — never dump the entire day\'s premium selections in one reply.\n\n' +
         'FORMAT — make answers feel ELITE and easy to read:\n' +
