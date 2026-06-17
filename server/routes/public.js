@@ -13,8 +13,12 @@ module.exports = function(deps) {
       var norm = racingSource.normalise(raw) || [];
       var today = new Date().toISOString().split('T')[0];
       norm = norm.filter(function (r) {
-        if (r.region && r.region !== 'GB' && r.region !== 'IRE') return false;
-        if (r.date) { var d = r.date.toString().split('T')[0].substring(0, 10); if (d !== today && d !== '') return false; }
+        // The Racing API standard/free racecards are already GB & IRE only, so be
+        // lenient on region (accept GB/UK/IRE variants OR blank) and only drop a
+        // card if it's explicitly a different date.
+        var reg = String(r.region || '').toUpperCase().trim();
+        if (reg && ['GB', 'UK', 'GBR', 'IRE', 'IRL', 'IE'].indexOf(reg) === -1) return false;
+        if (r.date) { var d = r.date.toString().split('T')[0].substring(0, 10); if (d && d !== today) return false; }
         return true;
       });
       norm.forEach(function (race) {
@@ -377,7 +381,12 @@ module.exports = function(deps) {
       // Kick off live web grounding IN PARALLEL (skip pure service/account questions).
       var msgL0 = message.toLowerCase();
       var serviceQ = /(price|pricing|cost|subscri|how do i|how does|what sports|sign ?up|free trial|account|log ?in|cancel|refund|\bcredit|install|app\b)/.test(msgL0);
-      var webPromise = (!serviceQ && message.trim().length > 6) ? askPerplexitySonar(message) : Promise.resolve(null);
+      // RACING questions must be answered ONLY from our verified Racing API card —
+      // never from a web search (which hallucinates runners that aren't even in the
+      // race). So we do NOT web-ground racing questions.
+      var racingQ = /\brace\b|racing|racecard|\brunner|\bnap\b|each.?way|favourite|favorite|\bgoing\b|\bdraw\b|\b\d{1,2}[.:]\d{2}\b|kempton|ascot|newmarket|york|goodwood|doncaster|sandown|haydock|aintree|cheltenham|epsom|newbury|chester|ayr|chepstow|leopardstown|curragh|punchestown/.test(msgL0);
+      var haveRaceCardDetail = false;
+      var webPromise = (!serviceQ && !racingQ && message.trim().length > 6) ? askPerplexitySonar(message) : Promise.resolve(null);
       var webCitations = [];
 
       // Fetch live context for the chatbot
@@ -503,6 +512,7 @@ module.exports = function(deps) {
               if (mentionedCourse && tMatch) return cOk && tOk;
               return cOk || tOk;
             }).slice(0, 3);
+            if (detail.length) haveRaceCardDetail = true;
             detail.forEach(function (r) {
               liveContext += '\nRUNNERS — ' + (r.time || '') + ' ' + (r.meeting || '') + (r.raceName ? ' ' + r.raceName : '') + (r.raceClass ? ' (Class ' + r.raceClass + ')' : '') + (r.going ? ' [going: ' + r.going + ']' : '') + (r.distance ? ', ' + r.distance : '') + ':\n';
               (r.runners || []).slice(0, 20).forEach(function (rn) {
@@ -519,6 +529,12 @@ module.exports = function(deps) {
         } catch (e) {}
       } catch (ctxErr) {
         // Non-fatal — chatbot works without live context
+      }
+
+      // RACING INTEGRITY GUARD — if this is a race question but we could NOT load
+      // the verified racecard for it, the assistant must NOT invent runners.
+      if (racingQ && !haveRaceCardDetail) {
+        liveContext += "\n\nRACING DATA STATUS: We do NOT have a verified racecard for the race asked about right now. You MUST NOT name any horses, give a selection, or list a top-3 — there is no card to read and guessing/using web info for runners is forbidden. Reply briefly that you can't pull the live card for that race at the moment and point them to the Racing page / to try again shortly. Do not invent runners under any circumstances.\n";
       }
 
       // ELITE EDGE QUANT MODEL — attach OUR engine's live probabilities for the
@@ -563,7 +579,8 @@ module.exports = function(deps) {
         '- Sound like a real person who knows their sport, not a chatbot. Banned: "I appreciate the question", "Here\'s what I can help with", "I need to be straight with you", "dual AI system", corporate waffle, and long bulleted sales pitches. No rule-of-three lists. No emoji spam.\n' +
         '- Do NOT pitch the free trial, pricing, or features unless they specifically ask about access or signing up.\n\n' +
         'ANSWERING QUESTIONS — always from OUR data below, never invent a pick or score:\n' +
-        '- "Who/what wins the [time] at [course]?" → this is a PRE-RACE PREDICTION for an UPCOMING race. NEVER report a past/historical result as the answer (e.g. do not say "X won" — the race has not run). Predict it. First check TODAY\'S RACE PREDICTIONS for Our Pick; if none, ANALYSE the card in TODAY\'S LIVE RACECARDS yourself. This is our edge over ChatGPT — we can see the actual declared field.\n' +
+        '- RACING INTEGRITY (CRITICAL): you may ONLY name a horse that explicitly appears in a "RUNNERS —" list we provide below. NEVER name a runner from memory, training data, or web info — those will be wrong/non-existent horses and that is unacceptable. If there is no "RUNNERS —" list for the race asked about (or a RACING DATA STATUS note says we lack the card), do NOT name any horse or give a selection — say plainly you can\'t pull the live card for that race right now and point them to the Racing page. Better to say "I can\'t confirm the card" than to give a single wrong runner.\n' +
+        '- "Who/what wins the [time] at [course]?" → this is a PRE-RACE PREDICTION for an UPCOMING race. NEVER report a past/historical result as the answer (e.g. do not say "X won" — the race has not run). Predict it ONLY from the provided RUNNERS list / RACE PREDICTIONS. This is our edge over ChatGPT — we can see the actual declared field.\n' +
         '- JUSTIFY every selection with concrete card data — that reasoning is the whole point. For each pick cite the specifics that make it: official rating (OR), RPR, Topspeed (TS), recent form figures, days since last run, headgear, draw, going suitability, trainer & jockey 14-day strike rates, and the Racing Post "Spotlight" note where it adds something. Don\'t just name a horse — explain WHY from these numbers.\n' +
         '- Lead with the verdict, then a top-3. e.g. "**1.** Horse @ price — OR 98, RPR top of field, 2 wins from last 3, strong draw, trainer 24% last 14d." Be decisive like a tipster. If odds aren\'t in the card show "SP".\n' +
         '- For race RESULTS (a race that has already run / "who won"), THEN you may use the result from web intel.\n' +
