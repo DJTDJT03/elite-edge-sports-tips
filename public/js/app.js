@@ -8102,7 +8102,7 @@ const App = {
     }
     box.innerHTML = header + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;">' +
       rows.map(function (w) {
-        var img = w.image_data ? '<img src="' + esc(w.image_data) + '" style="width:100%;max-height:240px;object-fit:cover;border-radius:8px;margin-bottom:8px;">' : '<div style="font-size:12px;color:#888;margin-bottom:8px;">(no image)</div>';
+        var img = w.image_data ? '<img src="' + esc(w.image_data) + '" style="width:100%;height:auto;max-height:600px;object-fit:contain;border-radius:8px;margin-bottom:8px;background:#0a0e1a;">' : '<div style="font-size:12px;color:#888;margin-bottom:8px;">(no image)</div>';
         var actions = '';
         if (status !== 'approved') actions += '<button class="btn btn-gold btn-sm" onclick="App.adminWinnerAction(' + w.id + ',\'approve\')">Approve</button> ';
         if (status !== 'rejected') actions += '<button class="btn btn-outline btn-sm" onclick="App.adminWinnerAction(' + w.id + ',\'reject\')">Reject</button> ';
@@ -10703,7 +10703,7 @@ const App = {
       }
       el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">' +
         winners.map(function (w) {
-          var img = w.image ? '<div style="width:100%;aspect-ratio:1/1;overflow:hidden;background:#0a0e1a;"><img src="' + App.escapeHtml(w.image) + '" alt="Member win" loading="lazy" style="width:100%;height:100%;object-fit:cover;"></div>' : '';
+          var img = w.image ? '<div style="width:100%;background:#0a0e1a;text-align:center;"><img src="' + App.escapeHtml(w.image) + '" alt="Member win" loading="lazy" style="width:100%;height:auto;max-height:560px;object-fit:contain;display:block;"></div>' : '';
           var cap = w.caption ? '<div style="font-size:13px;color:#e8e8ec;line-height:1.4;margin-bottom:6px;">' + App.escapeHtml(w.caption) + '</div>' : '';
           var amt = w.amount ? '<span style="color:#22c55e;font-weight:800;">' + App.escapeHtml(w.amount) + '</span> &middot; ' : '';
           return '<div style="background:var(--card-bg);border:1px solid rgba(34,197,94,0.25);border-radius:12px;overflow:hidden;">' + img +
