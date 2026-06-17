@@ -8436,10 +8436,9 @@ const App = {
       if (d.richFields && typeof d.richFields === 'object') {
         var rf = d.richFields;
         lines.push('\nData depth (across ' + rf.totalRunners + ' runners today):');
-        lines.push('  OR: ' + rf.withOR + ' · RPR: ' + rf.withRPR + ' · Topspeed: ' + rf.withTS + ' · Spotlight: ' + rf.withSpotlight);
-        lines.push('  Racing Post Spotlight: ' + (rf.hasSpotlight ? '✓ AVAILABLE' : '✗ not present'));
+        lines.push('  OR: ' + rf.withOR + ' · Power rating: ' + rf.withRPR + ' · Speed: ' + rf.withTS + ' · Written analysis: ' + rf.withSpotlight);
         if (rf.spotlightSample) lines.push('  e.g. "' + rf.spotlightSample + '…"');
-        if (rf.hasSpotlight && rf.hasRPR) lines.push('  → PRO data confirmed — write-ups now use Spotlight + RPR/TS. 🎯');
+        if (rf.hasSpotlight && rf.hasRPR) lines.push('  → PRO data confirmed — write-ups now use Power/Speed ratings + per-horse analysis. 🎯');
       }
       if (d.rawSample && d.rawSample.length) {
         lines.push('\nRAW API values' + (d.rawSampleRace ? ' (' + d.rawSampleRace + ')' : '') + ':');

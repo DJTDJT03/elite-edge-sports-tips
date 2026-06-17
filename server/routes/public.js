@@ -358,7 +358,7 @@ module.exports = function(deps) {
           totalRunners++;
           if (rn.rpr != null && rn.rpr !== '') withRpr++;
           if (rn.ts != null && rn.ts !== '') withTs++;
-          if (rn.officialRating != null && rn.officialRating !== '') withOr++;
+          if (rn.officialRating != null && rn.officialRating !== '' && rn.officialRating !== '-') withOr++;
           if (rn.spotlight) { withSpot++; if (!exampleSpot) exampleSpot = String(rn.spotlight).replace(/\s+/g, ' ').slice(0, 160); }
         });
       });
@@ -562,10 +562,10 @@ module.exports = function(deps) {
                 var t14 = rn.trainer14 && rn.trainer14.percent != null ? ' | trnr14d ' + rn.trainer14.percent + '%' : '';
                 var j14 = rn.jockey14 && rn.jockey14.percent != null ? ' | jky14d ' + rn.jockey14.percent + '%' : '';
                 liveContext += '  - ' + (rn.horseName || '') + (rn.draw ? ' (draw ' + rn.draw + ')' : '') + ' @ ' + (rn.odds || 'SP') +
-                  ' | OR ' + (rn.officialRating || '-') + ' | RPR ' + (rn.rpr || '-') + ' | TS ' + (rn.ts || '-') +
+                  ((rn.officialRating && rn.officialRating !== '-') ? ' | OR ' + rn.officialRating : '') + ' | Power ' + (rn.rpr || '-') + ' | Speed ' + (rn.ts || '-') +
                   ' | form ' + (rn.form || '-') + (rn.lastRun != null ? ' | ' + rn.lastRun + 'd off' : '') + (rn.headgear ? ' | ' + rn.headgear : '') +
                   ' | ' + (rn.jockey || '-') + ' / ' + (rn.trainer || '-') + t14 + j14 +
-                  (rn.spotlight ? '\n      Spotlight: ' + String(rn.spotlight).replace(/\s+/g, ' ').slice(0, 260) : '') + '\n';
+                  (rn.spotlight ? '\n      Analysis: ' + String(rn.spotlight).replace(/\s+/g, ' ').slice(0, 260) : '') + '\n';
               });
             });
           }

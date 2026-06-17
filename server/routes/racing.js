@@ -454,9 +454,10 @@ module.exports = function(deps) {
           if (isFlat && favourite.draw && (isSprint || fieldSize >= 12)) {
             favInsight += ' Drawn ' + favourite.draw + ' of ' + fieldSize + (parseInt(favourite.draw) <= Math.floor(fieldSize / 3) ? ' -- a low draw that could prove advantageous.' : parseInt(favourite.draw) >= Math.ceil(fieldSize * 0.66) ? ' -- a high draw that is a potential concern.' : '.');
           }
-          // Ratings + the Racing Post Spotlight (unique professional comment per horse)
-          if (favourite.rpr || favourite.ts) favInsight += ' Ratings: OR ' + (favourite.officialRating || '-') + (favourite.rpr ? ', RPR ' + favourite.rpr : '') + (favourite.ts ? ', TS ' + favourite.ts : '') + '.';
-          if (favourite.spotlight) favInsight += ' Spotlight: "' + clip(favourite.spotlight, 260) + '"';
+          // Ratings + the per-horse written analysis (unique to each runner)
+          if (favourite.rpr || favourite.ts) favInsight += ' Ratings: ' + ((favourite.officialRating && favourite.officialRating !== '-') ? 'OR ' + favourite.officialRating + ', ' : '') + (favourite.rpr ? 'Power ' + favourite.rpr : '') + (favourite.ts ? ', Speed ' + favourite.ts : '') + '.';
+          if (favourite.trainer14 && favourite.trainer14.percent) favInsight += ' Trainer striking at ' + favourite.trainer14.percent + '% over the last 14 days.';
+          if (favourite.spotlight) favInsight += ' Analysis: "' + clip(favourite.spotlight, 260) + '"';
         }
 
         var dangerInsight = '';
@@ -469,7 +470,8 @@ module.exports = function(deps) {
             else dangerInsight += ' Form reads ' + dangerForm.raw + ' -- perhaps unexposed and could improve for this scenario.';
           }
           if (danger.jockey) dangerInsight += ' ' + danger.jockey + ' takes the ride' + (danger.trainer ? ' for ' + danger.trainer : '') + '.';
-          if (danger.spotlight) dangerInsight += ' Spotlight: "' + clip(danger.spotlight, 220) + '"';
+          if (danger.rpr) dangerInsight += ' Power rating ' + danger.rpr + (danger.ts ? ', Speed ' + danger.ts : '') + '.';
+          if (danger.spotlight) dangerInsight += ' Analysis: "' + clip(danger.spotlight, 220) + '"';
         }
 
         var outsiderInsight = '';
@@ -480,7 +482,7 @@ module.exports = function(deps) {
           if (outsider.trainer) outsiderInsight += ' ' + outsider.trainer + '\'s record in similar races is noteworthy.';
           if (outsider.jockey) outsiderInsight += ' ' + outsider.jockey + ' is an interesting jockey booking at this price.';
           outsiderInsight += ' Worth a look for each-way value in a ' + fieldSize + '-runner field.';
-          if (outsider.spotlight) outsiderInsight += ' Spotlight: "' + clip(outsider.spotlight, 200) + '"';
+          if (outsider.spotlight) outsiderInsight += ' Analysis: "' + clip(outsider.spotlight, 200) + '"';
         }
 
         // Class analysis
