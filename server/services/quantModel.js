@@ -188,11 +188,19 @@ module.exports = function (deps) {
 
   ensureLoaded().catch(function () {});
 
+  // Do we have a real (non-default) rating for this team? Used so callers only
+  // surface model probabilities when they're meaningful (not the fallback default).
+  function knows(name) {
+    var c = canon(name);
+    return _ratings[c] != null || BASELINE[c] != null;
+  }
+
   return {
     predict: predict,             // sync (uses cache/baseline)
     predictAsync: predictAsync,   // ensures DB ratings loaded first
     updateFromResult: updateFromResult,
     getRating: getRating,
+    knows: knows,
     ensureLoaded: ensureLoaded,
     _baseline: BASELINE,
   };

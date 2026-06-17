@@ -1,7 +1,7 @@
 module.exports = function(deps) {
   const router = require('express').Router();
   const path = require('path');
-  const { db, racingSource, footballSource, oddsSource, racingOddsSource, movementTracker, dataIngestion, aiReports, newsService } = deps;
+  const { db, racingSource, footballSource, oddsSource, racingOddsSource, movementTracker, dataIngestion, aiReports, newsService, quantModel } = deps;
 
   // Cache today's racecards for the Ask Elite Edge assistant (10 min)
   var _raceCardCache = { ts: 0, cards: [] };
@@ -285,6 +285,28 @@ module.exports = function(deps) {
     });
   }
 
+  // Pull two team names out of a "X v Y" style question and return them ONLY if
+  // our quant model genuinely knows both (so we never attach meaningless numbers).
+  function extractKnownMatch(msg) {
+    try {
+      if (!quantModel || !quantModel.knows) return null;
+      var m = String(msg).match(/(.{2,40}?)\s+(?:v|vs|versus|against)\s+(.{2,40})/i);
+      if (!m) return null;
+      var leftTokens = m[1].trim().split(/\s+/).slice(-3);
+      var rightRaw = m[2].trim().replace(/[?.!,].*$/, '').replace(/\b(today|tonight|tomorrow|this|now|game|match|fixture|prediction|tip|result|score|win|wins)\b.*$/i, '').trim();
+      var rightTokens = rightRaw.split(/\s+/).slice(0, 3);
+      for (var li = 0; li < leftTokens.length; li++) {
+        var a = leftTokens.slice(li).join(' ');
+        if (!quantModel.knows(a)) continue;
+        for (var ri = rightTokens.length; ri >= 1; ri--) {
+          var b = rightTokens.slice(0, ri).join(' ');
+          if (quantModel.knows(b)) return { home: a, away: b };
+        }
+      }
+      return null;
+    } catch (e) { return null; }
+  }
+
   // POST /api/chat/ai — AI-powered chatbot using Claude with live data context
   router.post('/api/chat/ai', async (req, res) => {
     try {
@@ -441,6 +463,23 @@ module.exports = function(deps) {
       } catch (ctxErr) {
         // Non-fatal — chatbot works without live context
       }
+
+      // ELITE EDGE QUANT MODEL — attach OUR engine's live probabilities for the
+      // match in question (only when the model genuinely knows both teams), so the
+      // answer is verified by our own Elo + Dixon-Coles engine, not just reasoning.
+      try {
+        var mt = extractKnownMatch(message);
+        if (mt && quantModel && quantModel.predictAsync) {
+          var qp = await quantModel.predictAsync(mt.home, mt.away, { neutral: true });
+          if (qp && qp.winProb) {
+            liveContext += '\n\nELITE EDGE QUANT MODEL (our in-house Elo + Dixon-Coles engine) — ' + mt.home + ' v ' + mt.away + ':\n' +
+              '- ' + mt.home + ' win ' + qp.winProb.home + '%, Draw ' + qp.winProb.draw + '%, ' + mt.away + ' win ' + qp.winProb.away + '%\n' +
+              '- Over 2.5 ' + qp.over25 + '% | BTTS ' + qp.btts + '% | most likely ' + (qp.topScorelines && qp.topScorelines[0] ? qp.topScorelines[0].score : '?') + '\n' +
+              '- Model lean: ' + (qp.pick ? qp.pick.selection + ' (' + qp.pick.prob + '%, conf ' + qp.pick.confidence + '/10)' : 'n/a') + '\n' +
+              'Treat these as OUR engine\'s verified numbers. If they DISAGREE with a published Our Take/pick above, say so honestly (e.g. "our published take is X, though the live model now leans Y").\n';
+          }
+        }
+      } catch (e) { /* quant optional */ }
 
       // Fold in the parallel live web search (current facts/news with sources).
       try {
