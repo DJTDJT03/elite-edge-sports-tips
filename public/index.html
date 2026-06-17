@@ -80,6 +80,15 @@
     .news-ticker-dot { color:#d4a843; }
     .news-ticker-src { color:#7a8295; font-size:11px; margin-left:6px; }
     @keyframes ee-ticker { from { transform:translateX(0); } to { transform:translateX(-50%); } }
+    .live-strip { background:#0a0f1e; border-bottom:1px solid rgba(212,168,67,0.18); overflow:hidden; white-space:nowrap; }
+    .live-strip-track { display:inline-block; white-space:nowrap; padding:7px 0; animation: ee-ticker 75s linear infinite; will-change:transform; }
+    .live-strip:hover .live-strip-track { animation-play-state:paused; }
+    .live-strip-item { display:inline-flex; align-items:center; gap:7px; font-size:13px; padding:0 20px; border-right:1px solid rgba(255,255,255,0.07); color:#cbd5e1; }
+    .live-strip-score { font-weight:800; color:#fff; }
+    .live-badge { background:#ef4444; color:#fff; font-size:9px; font-weight:800; padding:1px 5px; border-radius:3px; letter-spacing:.5px; animation: ee-livepulse 1.6s ease-in-out infinite; }
+    .live-strip-won { color:#22c55e; font-weight:700; }
+    .live-strip-lost { color:#ef4444; font-weight:700; }
+    @keyframes ee-livepulse { 0%,100%{opacity:1} 50%{opacity:.45} }
   </style>
 </head>
 <body>
@@ -179,6 +188,9 @@
       </div>
     </div>
   </nav>
+
+  <!-- Live scoreboard strip (today's WC scores + results landing; hidden if none) -->
+  <div id="live-strip" class="live-strip" style="display:none;"></div>
 
   <!-- Live football news ticker (populated by app.js; hidden if no feed) -->
   <div id="news-ticker" class="news-ticker" style="display:none;"></div>
@@ -584,7 +596,7 @@
   <script src="/js/calculators.js?v=20260501c"></script>
   <script src="/js/worldCup.js?v=20260616c"></script>
   <script src="/js/lms.js?v=20260612b"></script>
-  <script src="/js/app.js?v=20260617u"></script>
+  <script src="/js/app.js?v=20260617v"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

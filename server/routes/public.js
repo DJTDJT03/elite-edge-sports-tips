@@ -117,6 +117,37 @@ module.exports = function(deps) {
     }
   });
 
+  // GET /api/live-now — powers the live scoreboard strip + homepage live section.
+  // Today's World Cup matches (in-play/finished/upcoming) + the latest settled
+  // results landing. DB-only, fast, refreshed client-side every ~60s.
+  router.get('/api/live-now', async (req, res) => {
+    try {
+      res.set('Cache-Control', 'public, max-age=30');
+      var out = { live: [], results: [] };
+      if (db && db.query && process.env.ENABLE_WORLD_CUP === 'true') {
+        try {
+          var wc = await db.query(
+            "SELECT home_team, away_team, kickoff, status, home_goals, away_goals FROM world_cup_fixtures " +
+            "WHERE kickoff >= NOW() - INTERVAL '3 hours' AND kickoff <= NOW() + INTERVAL '14 hours' " +
+            "AND home_team !~ '^[0-9]' AND home_team NOT ILIKE '%winner%' ORDER BY kickoff ASC LIMIT 14"
+          );
+          (wc.rows || []).forEach(function (r) {
+            out.live.push({ comp: 'World Cup', home: r.home_team, away: r.away_team, hg: r.home_goals, ag: r.away_goals, status: r.status, kickoff: r.kickoff });
+          });
+        } catch (e) { /* non-fatal */ }
+      }
+      try {
+        var results = (await db.getResults()) || [];
+        out.results = results
+          .filter(function (r) { return r.result === 'won' || r.result === 'lost' || r.result === 'placed' || r.result === 'void'; })
+          .sort(function (a, b) { return String(b.settledAt || b.date || '').localeCompare(String(a.settledAt || a.date || '')); })
+          .slice(0, 10)
+          .map(function (r) { return { selection: r.selection, event: r.event, odds: r.odds, result: r.result, pnl: r.pnl, sport: r.sport }; });
+      } catch (e) { /* non-fatal */ }
+      res.json(out);
+    } catch (e) { res.json({ live: [], results: [] }); }
+  });
+
   // GET /api/football-news — free RSS football headlines (BBC/Sky/Guardian).
   // No API key needed; aggregated headline + source + link back to the article.
   var footballNews = require('../services/footballNews');

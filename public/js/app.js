@@ -110,6 +110,8 @@ const App = {
     });
     this.route();
     this._loadNewsTicker(); // live football news ticker (persists across pages)
+    this._loadLiveStrip();  // site-wide live scoreboard strip
+    if (!this._liveStripTimer) this._liveStripTimer = setInterval(function () { App._loadLiveStrip(); }, 60000);
     this._mountAskFab(); // site-wide floating "Ask the Edge" widget
     this.loadDailyStats();
     this.loadActivityTicker();
@@ -3111,6 +3113,9 @@ const App = {
           </div>
         </div>` : ''}
 
+        <!-- 12b. LIVE & LATEST — in-play scores + results landing (feels alive) -->
+        <div id="live-now-section"></div>
+
         <!-- 13a. WINNERS WALL — subscriber-submitted wins (admin-moderated) -->
         <div class="section" id="winners-wall-section" style="margin-bottom:24px;">
           <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
@@ -3222,7 +3227,8 @@ const App = {
       </div>
     `;
 
-    // Winners Wall — lazy-load approved member wins
+    // Live & Latest (in-play scores + results landing) + Winners Wall
+    this._loadLiveNow();
     this._loadWinners();
 
     // World Cup dashboard countdown
@@ -3554,6 +3560,69 @@ const App = {
       ticker.innerHTML = '<div class="news-ticker-track">' + items + items + '</div>';
       ticker.style.display = 'block';
     } catch (e) { ticker.style.display = 'none'; }
+  },
+
+  _liveMatchLabel(m) {
+    var score = (m.hg != null && m.ag != null) ? (m.hg + '–' + m.ag) : null;
+    var finished = m.status === 'finished';
+    var scheduled = m.status === 'scheduled';
+    if (finished && score) return '<span class="live-strip-score">' + App.escapeHtml(m.home) + ' ' + score + ' ' + App.escapeHtml(m.away) + '</span> <span style="color:#7a8295;font-size:11px;">FT</span>';
+    if (score && !scheduled) return '<span class="live-badge">LIVE</span> <span class="live-strip-score">' + App.escapeHtml(m.home) + ' ' + score + ' ' + App.escapeHtml(m.away) + '</span>';
+    var ko = m.kickoff ? new Date(m.kickoff).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+    return App.escapeHtml(m.home) + ' v ' + App.escapeHtml(m.away) + (ko ? ' <span style="color:#7a8295;font-size:11px;">' + ko + '</span>' : '');
+  },
+
+  // Site-wide live scoreboard strip (today's WC scores + results landing).
+  async _loadLiveStrip() {
+    var strip = document.getElementById('live-strip');
+    if (!strip) return;
+    try {
+      var d = await this.api('/live-now');
+      strip = document.getElementById('live-strip');
+      if (!strip) return;
+      var items = [];
+      (d.live || []).forEach(function (m) {
+        items.push('<span class="live-strip-item">&#9917; ' + App._liveMatchLabel(m) + '</span>');
+      });
+      (d.results || []).slice(0, 8).forEach(function (r) {
+        var won = r.result === 'won' || r.result === 'placed';
+        var cls = won ? 'live-strip-won' : 'live-strip-lost';
+        var icon = won ? '&#10003;' : '&#10007;';
+        items.push('<span class="live-strip-item"><span class="' + cls + '">' + icon + ' ' + App.escapeHtml(r.selection || '') + '</span>' + (r.odds ? ' <span style="color:#7a8295;font-size:11px;">@ ' + App.escapeHtml(App.formatOdds ? App.formatOdds(r.odds) : String(r.odds)) + '</span>' : '') + '</span>');
+      });
+      if (!items.length) { strip.style.display = 'none'; return; }
+      strip.innerHTML = '<div class="live-strip-track">' + items.join('') + items.join('') + '</div>';
+      strip.style.display = 'block';
+    } catch (e) { strip.style.display = 'none'; }
+  },
+
+  // Homepage "LIVE & LATEST" section.
+  async _loadLiveNow() {
+    var box = document.getElementById('live-now-section');
+    if (!box) return;
+    try {
+      var d = await this.api('/live-now');
+      box = document.getElementById('live-now-section');
+      if (!box) return;
+      var live = d.live || [], results = d.results || [];
+      if (!live.length && !results.length) { box.innerHTML = ''; return; }
+      var matchRows = live.slice(0, 6).map(function (m) {
+        return '<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">&#9917; ' + App._liveMatchLabel(m) + '</div>';
+      }).join('');
+      var resultRows = results.slice(0, 6).map(function (r) {
+        var won = r.result === 'won' || r.result === 'placed';
+        var col = won ? '#22c55e' : '#ef4444';
+        return '<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;display:flex;justify-content:space-between;gap:8px;">' +
+          '<span><span style="color:' + col + ';font-weight:700;">' + (won ? '&#10003;' : '&#10007;') + '</span> ' + App.escapeHtml(r.selection || '') + (r.event ? ' <span style="color:var(--text-muted);font-size:11px;">' + App.escapeHtml(r.event) + '</span>' : '') + '</span>' +
+          '<span style="color:' + col + ';font-weight:700;white-space:nowrap;">' + (r.pnl != null ? (r.pnl >= 0 ? '+' : '') + Number(r.pnl).toFixed(2) + 'u' : (won ? 'WON' : 'LOST')) + '</span></div>';
+      }).join('');
+      box.innerHTML =
+        '<div class="section" style="margin-bottom:24px;"><div class="section-title"><span style="color:#ef4444;">&#128308;</span> Live &amp; Latest</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">' +
+          (matchRows ? '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:16px;"><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Today\'s World Cup</div>' + matchRows + '</div>' : '') +
+          (resultRows ? '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:16px;"><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Results landing</div>' + resultRows + '</div>' : '') +
+        '</div></div>';
+    } catch (e) { /* silently skip */ }
   },
 
   async _fetchDashboardNews() {
