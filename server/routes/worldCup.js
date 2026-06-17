@@ -192,6 +192,36 @@ module.exports = function(deps) {
     }
   });
 
+  // POST /api/world-cup/admin/set-verdict — manually lock a fixture's "Our Take"
+  // (e.g. to restore the genuine pre-match verdict that wasn't auto-locked). Once
+  // set, the match-intel modal reads this as the consensus verdict and stops
+  // recomputing — so it stays put before AND after the match.
+  router.post('/admin/set-verdict', authenticate, requireAdmin, async function (req, res) {
+    try {
+      if (!db || !db.query) return res.status(503).json({ error: 'DB unavailable' });
+      var sched = require('../services/wc2026Schedule');
+      var b = req.body || {};
+      var home = String(b.home || '').trim(), away = String(b.away || '').trim();
+      var selection = String(b.selection || '').trim();
+      if (!home || !away || !selection) return res.status(400).json({ error: 'home, away and selection are required' });
+      var market = String(b.market || 'Match Result').trim();
+      var reason = String(b.reason || '').trim() || 'Elite Edge pre-match verdict.';
+      var confidence = parseInt(b.confidence, 10) || 6;
+      var rows = (await db.query("SELECT id, home_team, away_team, kickoff FROM world_cup_fixtures")).rows || [];
+      var fx = rows.find(function (r) {
+        return (sched.teamsMatch(r.home_team, home) && sched.teamsMatch(r.away_team, away)) ||
+               (sched.teamsMatch(r.home_team, away) && sched.teamsMatch(r.away_team, home));
+      });
+      if (!fx) return res.status(404).json({ error: 'No World Cup fixture found for ' + home + ' v ' + away });
+      await db.query(
+        "INSERT INTO world_cup_previews (fixture_id, home_team, away_team, kickoff, verdict, verdict_market, verdict_selection, confidence) " +
+        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (fixture_id) DO UPDATE SET verdict = $5, verdict_market = $6, verdict_selection = $7, confidence = $8, generated_at = NOW()",
+        [fx.id, fx.home_team, fx.away_team, fx.kickoff || null, reason, market, selection, confidence]
+      );
+      res.json({ ok: true, fixture: fx.home_team + ' v ' + fx.away_team, selection: selection, market: market });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // GET /api/world-cup/admin/broadcast-preview — see the day's "Our View" content
   // (no send). POST /admin/broadcast — actually send it to all channels.
   router.get('/admin/broadcast-preview', authenticate, requireAdmin, async function (req, res) {

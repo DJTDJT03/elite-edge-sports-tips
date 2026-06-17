@@ -8280,6 +8280,20 @@ const App = {
         '<button class="btn btn-outline btn-sm" onclick="App.wcBroadcastTelegram()">Resend to Telegram only</button>' +
         '<pre id="lms-wc-feed-out" style="display:none;white-space:pre-wrap;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;margin-top:10px;font-size:11px;max-height:240px;overflow:auto;"></pre>' +
       '</div>' +
+      '<div class="card mb-16" style="border-color:rgba(212,168,67,0.35);">' +
+        '<h4 class="mb-8">Lock a match verdict (Our Take)</h4>' +
+        '<p class="text-sm text-muted mb-8">Set/restore the verdict shown on a World Cup match — it then stays put before and after the game. Use to fix a match whose take wasn\'t auto-locked.</p>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">' +
+          '<label class="text-sm text-muted">Home<br><input id="wc-v-home" placeholder="Portugal" style="padding:8px;width:130px;"></label>' +
+          '<label class="text-sm text-muted">Away<br><input id="wc-v-away" placeholder="Congo DR" style="padding:8px;width:130px;"></label>' +
+          '<label class="text-sm text-muted">Selection<br><input id="wc-v-sel" placeholder="Under 2.5 Goals" style="padding:8px;width:160px;"></label>' +
+          '<label class="text-sm text-muted">Market<br><input id="wc-v-mkt" placeholder="Total Goals" value="Total Goals" style="padding:8px;width:140px;"></label>' +
+          '<label class="text-sm text-muted">Conf<br><input id="wc-v-conf" type="number" value="6" style="padding:8px;width:60px;"></label>' +
+        '</div>' +
+        '<label class="text-sm text-muted" style="display:block;margin-top:8px;">Reasoning (optional)<br><textarea id="wc-v-reason" rows="2" placeholder="A low-scoring affair looks most likely..." style="width:100%;padding:8px;box-sizing:border-box;"></textarea></label>' +
+        '<button class="btn btn-gold btn-sm" style="margin-top:8px;" onclick="App.wcSetVerdict()">Lock verdict</button>' +
+        '<span id="wc-v-out" class="text-sm" style="margin-left:10px;"></span>' +
+      '</div>' +
       '<div class="card mb-16">' +
         '<h4 class="mb-16">Create competition</h4>' +
         '<div class="form-row" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">' +
@@ -8458,6 +8472,18 @@ const App = {
     } catch (e) {
       if (out) out.textContent = 'Diagnostic failed: ' + (e.message || e);
     }
+  },
+
+  async wcSetVerdict() {
+    var out = document.getElementById('wc-v-out');
+    var g = function (id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; };
+    var body = { home: g('wc-v-home'), away: g('wc-v-away'), selection: g('wc-v-sel'), market: g('wc-v-mkt'), confidence: g('wc-v-conf'), reason: g('wc-v-reason') };
+    if (!body.home || !body.away || !body.selection) { if (out) { out.style.color = '#ef4444'; out.textContent = 'Home, away and selection are required.'; } return; }
+    if (out) { out.style.color = ''; out.textContent = 'Locking…'; }
+    try {
+      var r = await this.api('/world-cup/admin/set-verdict', { method: 'POST', body: JSON.stringify(body) });
+      if (out) { out.style.color = '#22c55e'; out.textContent = '✓ Locked: ' + r.fixture + ' → ' + r.selection; }
+    } catch (e) { if (out) { out.style.color = '#ef4444'; out.textContent = 'Failed: ' + (e.message || e); } }
   },
 
   async lmsDiagnoseRound(id) {
