@@ -4339,7 +4339,7 @@ const App = {
     if (intel) {
       var blurClass = isPremium ? '' : ' race-analysis-blurred';
       analysisHtml = '<div class="race-analysis-section">' +
-        '<div class="race-analysis-header">ELITE EDGE ANALYSIS</div>' +
+        '<div class="race-analysis-header">FORM &amp; STATS</div>' +
         '<div class="race-analysis-content' + blurClass + '">';
 
       // Verdict
@@ -4419,20 +4419,24 @@ const App = {
           (intel && intel.topRated ? ' | Top rated: ' + intel.topRated.name + ' (' + intel.topRated.rating + ')' : '') +
         '</div>' +
       '</div>' +
+      // Headline analysis = the AI-written, race-specific preview (auto-loads).
+      '<div class="race-analysis-section" style="margin-top:20px;" id="racing-ai-preview-section">' +
+        '<div class="race-analysis-header">ELITE EDGE ANALYSIS</div>' +
+        '<div style="padding:14px 16px 16px;">' +
+          '<div id="racing-ai-preview-content"><p class="text-muted" style="margin:4px 0;"><span class="loading-spinner" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:8px;"></span>Analysing the race&hellip;</p></div>' +
+          '<button class="btn btn-gold btn-sm" id="racing-ai-preview-btn" style="display:none;margin-top:10px;" onclick="App.loadRacingAIPreview(\'' + (race.raceId || race.time || '').replace(/'/g, "\\'") + '\')">Retry analysis</button>' +
+        '</div>' +
+      '</div>' +
+      // Supporting structured detail (form/ratings/draw) below the headline.
       analysisHtml +
       '<div style="margin:20px 0;">' +
         '<button class="btn btn-outline btn-sm" onclick="var el=document.getElementById(\'runners-table\');el.style.display=el.style.display===\'none\'?\'block\':\'none\';this.textContent=el.style.display===\'none\'?\'Show Full Race Card ('+runners.length+' Runners)\':\'Hide Race Card\'">Show Full Race Card (' + runners.length + ' Runners)</button>' +
       '</div>' +
       '<div id="runners-table" style="display:none;">' + runnersHtml + '</div>' +
-      '<div class="race-analysis-section" style="margin-top:20px;" id="racing-ai-preview-section">' +
-        '<div class="race-analysis-header">AI RACE PREVIEW</div>' +
-        '<p class="text-muted" style="font-size:12px;margin:12px 16px 12px;">Powered by Claude AI — professional written race analysis unique to Elite Edge.</p>' +
-        '<div style="padding:0 16px 16px;">' +
-          '<button class="btn btn-gold" id="racing-ai-preview-btn" onclick="App.loadRacingAIPreview(\'' + (race.raceId || race.time || '').replace(/'/g, "\\'") + '\')" style="margin-bottom:12px;">Generate AI Preview</button>' +
-          '<div id="racing-ai-preview-content"></div>' +
-        '</div>' +
-      '</div>' +
     '</div>';
+
+    // Auto-generate the headline AI analysis (cached per race).
+    this.loadRacingAIPreview((race.raceId || race.time || ''));
 
     if (typeof trackEvent === 'function') trackEvent('racing', 'race_detail', meetingName + ' ' + race.time);
   },
@@ -4442,34 +4446,32 @@ const App = {
   async loadRacingAIPreview(raceId) {
     var btn = document.getElementById('racing-ai-preview-btn');
     var contentDiv = document.getElementById('racing-ai-preview-content');
-    if (!btn || !contentDiv) return;
+    if (!contentDiv) return;
 
     // Check cache
     if (this._racingAIPreviewCache[raceId]) {
       this._renderRacingAIPreview(contentDiv, this._racingAIPreviewCache[raceId]);
-      btn.style.display = 'none';
+      if (btn) btn.style.display = 'none';
       return;
     }
-
-    btn.disabled = true;
-    btn.innerHTML = '<span class="loading-spinner" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:8px;"></span> Generating...';
-    contentDiv.innerHTML = '';
+    // (contentDiv already shows an "Analysing the race…" placeholder)
 
     try {
       var data = await this.api('/racing/ai-preview/' + encodeURIComponent(raceId));
+      contentDiv = document.getElementById('racing-ai-preview-content'); btn = document.getElementById('racing-ai-preview-btn');
+      if (!contentDiv) return;
       if (data && data.aiPreview) {
         this._racingAIPreviewCache[raceId] = data.aiPreview;
         this._renderRacingAIPreview(contentDiv, data.aiPreview);
-        btn.style.display = 'none';
+        if (btn) btn.style.display = 'none';
       } else {
-        contentDiv.innerHTML = '<p class="text-muted">AI preview unavailable. The service may not be configured.</p>';
-        btn.disabled = false;
-        btn.innerHTML = 'Generate AI Preview';
+        contentDiv.innerHTML = '<p class="text-muted">Analysis unavailable right now — the full race card is below.</p>';
+        if (btn) { btn.style.display = ''; btn.disabled = false; btn.innerHTML = 'Retry analysis'; }
       }
     } catch (err) {
-      contentDiv.innerHTML = '<p class="text-muted">Unable to generate AI preview: ' + (err.message || 'Unknown error') + '</p>';
-      btn.disabled = false;
-      btn.innerHTML = 'Retry AI Preview';
+      contentDiv = document.getElementById('racing-ai-preview-content'); btn = document.getElementById('racing-ai-preview-btn');
+      if (contentDiv) contentDiv.innerHTML = '<p class="text-muted">Analysis unavailable right now — the full race card is below.</p>';
+      if (btn) { btn.style.display = ''; btn.disabled = false; btn.innerHTML = 'Retry analysis'; }
     }
   },
 

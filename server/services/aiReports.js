@@ -210,6 +210,20 @@ class AIReportGenerator {
       userPrompt += 'Going: ' + (data.going || 'N/A') + '\n';
       userPrompt += 'Runners: ' + (data.runners || 'N/A') + '\n\n';
 
+      // Full field with the rich data — analyse the RACE, not just the favourite.
+      if (Array.isArray(data.field) && data.field.length) {
+        userPrompt += 'THE FIELD (by market rank — Power = power rating, Speed = speed figure; the Analysis line is the official per-horse comment):\n';
+        data.field.forEach(function (h, i) {
+          userPrompt += (i + 1) + '. ' + (h.name || '?') + ' @ ' + (h.odds || 'SP') +
+            (h.or ? ' | OR ' + h.or : '') + (h.power ? ' | Power ' + h.power : '') + (h.speed ? ' | Speed ' + h.speed : '') +
+            (h.form ? ' | form ' + h.form : '') + (h.lastRun != null ? ' | ' + h.lastRun + 'd off' : '') + (h.headgear ? ' | ' + h.headgear : '') +
+            (h.draw ? ' | draw ' + h.draw : '') +
+            ' | ' + (h.jockey || '?') + ' / ' + (h.trainer || '?') + (h.trainerStrike ? ' (trainer ' + h.trainerStrike + ' last 14d)' : '') + '\n';
+          if (h.comment) userPrompt += '   Analysis: ' + h.comment + '\n';
+        });
+        userPrompt += '\n';
+      }
+
       if (data.selection) {
         userPrompt += 'OUR SELECTION:\n';
         userPrompt += '  Name: ' + (data.selection.name || 'N/A') + '\n';
@@ -253,19 +267,19 @@ class AIReportGenerator {
       }
 
       userPrompt += 'Return your response as JSON with these fields:\n';
-      userPrompt += '- preview: the full written preview (200-300 words)\n';
-      userPrompt += '- headline: a punchy headline for this preview (max 80 chars)\n';
-      userPrompt += '- keyFactors: array of 3-5 key factors in favour of the selection (short strings)\n';
-      userPrompt += '- verdict: one-sentence final verdict\n';
+      userPrompt += '- preview: the full written race analysis (220-320 words), assessing the RACE — weigh the main contenders against each other using their Power/Speed ratings, form, the per-horse Analysis comments, trainer/jockey form, draw and the going. Reach a reasoned conclusion.\n';
+      userPrompt += '- headline: a punchy, race-specific headline (max 80 chars)\n';
+      userPrompt += '- keyFactors: array of 3-5 short, race-specific factors (not generic)\n';
+      userPrompt += '- verdict: one-sentence final verdict naming your selection and the price\n';
 
-      var racingSystemPrompt = 'You are an elite UK horse racing analyst writing for Elite Edge Sports Tips. Write a professional race preview focused on our selection. Reference form figures, going preference, trainer/jockey stats, draw position, and course suitability. British English. Around 200-300 words. Be analytical, not promotional. Always respond with valid JSON only — no markdown, no code fences.';
+      var racingSystemPrompt = 'You are an elite UK horse racing analyst writing for Elite Edge Sports Tips. Analyse THIS race from the data provided — compare the leading contenders, cite their Power/Speed ratings, form figures, the per-horse Analysis comments, trainer/jockey 14-day form, draw and going, then give a clear, reasoned selection. Write like a sharp human tipster: every preview must be unique to this race — NEVER use stock phrases or a fixed template (banned: "sort the wheat from the chaff", "fair gallop", "travel well and quicken", "the market disagrees with the ratings"). Vary sentence structure. Only name horses that appear in the field provided. British English, ~250 words, analytical not promotional. Respond with valid JSON only — no markdown, no code fences.';
       if (data.analystStyle) {
         racingSystemPrompt += ' Additional style guidance: ' + data.analystStyle;
       }
 
       var response = await this.client.messages.create({
-        model: this.model,
-        max_tokens: 1024,
+        model: process.env.AI_CHAT_MODEL || this.model,   // Sonnet if configured — better prose
+        max_tokens: 1300,
         system: racingSystemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       });

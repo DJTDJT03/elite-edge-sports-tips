@@ -303,6 +303,19 @@ module.exports = function(deps) {
         }
       }
 
+      // Full field (top by market) with the rich Pro data — so Claude analyses the
+      // RACE, not just the favourite, and writes something unique every time.
+      var fieldForAI = (sortedByOdds.length ? sortedByOdds : runners).slice(0, 9).map(function (r) {
+        return {
+          name: r.horseName, odds: r.odds || 'SP', power: r.rpr || null, speed: r.ts || null,
+          or: (r.officialRating && r.officialRating !== '-') ? r.officialRating : null, form: r.form || null,
+          trainer: r.trainer || null, trainerStrike: (r.trainer14 && r.trainer14.percent) ? r.trainer14.percent + '%' : null,
+          jockey: r.jockey || null, draw: r.draw || null, headgear: r.headgear || null,
+          lastRun: r.lastRun != null ? r.lastRun : null,
+          comment: (r.spotlight || r.comment || '').toString().slice(0, 300) || null,
+        };
+      });
+
       var previewData = {
         meeting: race.meeting,
         raceTime: race.time,
@@ -311,6 +324,7 @@ module.exports = function(deps) {
         distance: race.distance || '',
         going: race.going || '',
         runners: runners.length,
+        field: fieldForAI,
         selection: {
           name: favourite.horseName,
           trainer: favourite.trainer,
