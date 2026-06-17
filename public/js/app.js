@@ -8260,6 +8260,12 @@ const App = {
     }).join('');
 
     box.innerHTML =
+      '<div class="card mb-16" style="border-color:rgba(212,168,67,0.35);">' +
+        '<h4 class="mb-8">&#127937; Racecard feed (The Racing API)</h4>' +
+        '<p class="text-sm text-muted mb-8">Confirms whether today\'s racecards are actually reaching the system. Run this if Ask the Edge can\'t see a race.</p>' +
+        '<button class="btn btn-gold btn-sm" onclick="App.racingDiagnose()">Diagnose racecard feed</button>' +
+        '<pre id="racing-diag-out" style="display:none;white-space:pre-wrap;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;margin-top:10px;font-size:11px;max-height:300px;overflow:auto;"></pre>' +
+      '</div>' +
       '<div class="card mb-16">' +
         '<h4 class="mb-8">World Cup data feed</h4>' +
         '<p class="text-sm text-muted mb-8">Pulls fixtures from SportMonks (falls back to API-Football). Run Diagnose to confirm the feed, then Sync to load fixtures.</p>' +
@@ -8405,6 +8411,32 @@ const App = {
       this.showToast('Status: ' + status, 'success');
       this.adminLoadLms();
     } catch (e) { this.showToast('Failed: ' + (e.message || e), 'error'); }
+  },
+
+  async racingDiagnose() {
+    var out = document.getElementById('racing-diag-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Checking The Racing API…'; }
+    try {
+      var d = await this.api('/admin/racing-diagnostic');
+      var lines = [];
+      lines.push('Credentials: key ' + (d.hasKey ? '✓' : '✗ MISSING') + ' · secret ' + (d.hasSecret ? '✓' : '✗ MISSING'));
+      lines.push('Raw races from API: ' + d.rawApiCount);
+      lines.push('After parsing: ' + d.normalisedCount);
+      lines.push("Today's GB/IRE cards (what the assistant gets): " + d.todayUkIreCount);
+      if (d.sampleFromApi && d.sampleFromApi.length) {
+        lines.push('\nSample from API (region | date | course | time):');
+        d.sampleFromApi.forEach(function (s) { lines.push('  ' + s.region + ' | ' + s.date + ' | ' + s.course + ' | ' + s.time); });
+      }
+      if (d.sampleTodayUkIre && d.sampleTodayUkIre.length) {
+        lines.push('\nToday\'s cards available to the assistant:');
+        d.sampleTodayUkIre.forEach(function (s) { lines.push('  ' + s); });
+      }
+      if (d.error) lines.push('\n⚠ ' + d.error);
+      else if (d.todayUkIreCount > 0) lines.push('\n✅ Racecards are flowing — the assistant can read them.');
+      if (out) out.textContent = lines.join('\n');
+    } catch (e) {
+      if (out) out.textContent = 'Diagnostic failed: ' + (e.message || e);
+    }
   },
 
   async lmsDiagnoseRound(id) {
