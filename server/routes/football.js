@@ -4,6 +4,27 @@ module.exports = function(deps) {
   const { storeOddsSnapshot, analyseOddsMovement } = deps.oddsHelpers;
 
   // ---------------------------------------------------------------------------
+  // VERDICT LOCK — integrity guard for the World Cup "Our Take".
+  // The first time a verdict is generated for a WC fixture (always pre-kick-off),
+  // freeze it to world_cup_previews so it can NEVER be recomputed once the result
+  // is known. Write-once (ON CONFLICT DO NOTHING) + skip if the game has already
+  // kicked off, so a published pick stays exactly as the subscriber saw it.
+  async function lockWcVerdict(cf, reason, market, pick, conf) {
+    try {
+      if (!db || !db.query || !cf || !cf.id || !pick) return;
+      var ko = cf.kickoff ? new Date(cf.kickoff) : null;
+      var started = (cf.status === 'finished') || (ko && ko.getTime() <= Date.now());
+      if (started) return; // never lock a pick using post-kick-off / post-result data
+      await db.query(
+        "INSERT INTO world_cup_previews (fixture_id, home_team, away_team, kickoff, verdict, verdict_market, verdict_selection, confidence) " +
+        "VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (fixture_id) DO NOTHING",
+        [cf.id, cf.home_team || null, cf.away_team || null, cf.kickoff || null, reason || null, market || null, pick || null, conf || null]
+      );
+      console.log('[Match Intelligence] WC verdict LOCKED pre-match: ' + pick + ' (' + market + ') fixture ' + cf.id);
+    } catch (e) { console.warn('[Match Intelligence] verdict lock failed: ' + e.message); }
+  }
+
+  // ---------------------------------------------------------------------------
   // LIVE FOOTBALL DATA — SportMonks primary, API-Football fallback
   // ---------------------------------------------------------------------------
 
@@ -384,6 +405,17 @@ module.exports = function(deps) {
             };
             // No draw-guard / market override — the engine's verdict stands as-is.
 
+            // Lock the verdict pre-kick-off if it came from the live model (not a
+            // stored consensus), so it can't rewrite itself after the result.
+            if (!wcConsensusVerdict && _finalVerdict && _finalVerdict.pick) {
+              try {
+                var _wcfx = await db.query("SELECT id, home_team, away_team, kickoff, status FROM world_cup_fixtures WHERE external_fixture_id::text = $1 LIMIT 1", [String(fixtureId)]);
+                if (_wcfx.rows && _wcfx.rows.length) {
+                  await lockWcVerdict(_wcfx.rows[0], _finalVerdict.reason, _finalVerdict.market, _finalVerdict.pick, _finalVerdict.confidence);
+                }
+              } catch (e) { /* non-fatal */ }
+            }
+
             return res.json({
               fixtureId: parseInt(fixtureId),
               source: 'sportmonks',
@@ -578,7 +610,7 @@ module.exports = function(deps) {
         try {
           var _csched = require('../services/wc2026Schedule');
           if (db.query) {
-            var _crows = await db.query("SELECT id, home_team, away_team FROM world_cup_fixtures");
+            var _crows = await db.query("SELECT id, home_team, away_team, kickoff, status FROM world_cup_fixtures");
             var _chn = homeTeam.name, _can = awayTeam.name;
             var _cf = (_crows.rows || []).find(function (r) {
               return (_csched.teamsMatch(r.home_team, _chn) && _csched.teamsMatch(r.away_team, _can)) ||
@@ -688,6 +720,13 @@ module.exports = function(deps) {
       // Confidence floor — never show below 6 or above 9 in auto-generated verdicts
       if (confidence < 6) confidence = 6;
       if (confidence > 9) confidence = 9;
+
+      // Lock the verdict pre-kick-off if it was auto-generated from live stats
+      // (not a stored consensus or published tip), so it can't rewrite itself
+      // after the result — this is the integrity fix for the WC "Our Take".
+      if (typeof _cf !== 'undefined' && _cf && !fromConsensus && !fromPublishedTip && verdictPick) {
+        await lockWcVerdict(_cf, verdictReason, verdictMarket, verdictPick, confidence);
+      }
 
       // Generate written analysis paragraphs
       var overviewText = homeTeam.name + ' welcome ' + awayTeam.name + ' to ' +
