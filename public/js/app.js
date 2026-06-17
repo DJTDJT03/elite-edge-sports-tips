@@ -10263,11 +10263,15 @@ const App = {
   // REFERRAL SYSTEM (Feature #5)
   // -----------------------------------------------------------------------
   getReferralCode() {
-    if (!this.user || !this.user.email) return 'ELITE-XXXX';
-    return 'ELITE-' + this.user.email.substring(0, 4).toUpperCase();
+    // MUST return the real server-stored code, or shared links credit nobody.
+    if (this.user && this.user.referralCode) return this.user.referralCode;
+    if (!this.user || !this.user.email) return '';
+    return 'ELITE-' + this.user.email.substring(0, 4).toUpperCase(); // fallback only
   },
 
   getReferralCount() {
+    // Real count comes from the server on the user object; localStorage is a fallback.
+    if (this.user && typeof this.user.referralCount === 'number') return this.user.referralCount;
     return parseInt(localStorage.getItem('ee_referral_count') || '0');
   },
 

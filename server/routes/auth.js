@@ -115,9 +115,16 @@ module.exports = function(deps) {
           var allUsers = await db.getUsers();
           var referrer = allUsers.find(function(u) { return u.referralCode === req.body.referralCode; });
           if (referrer) {
-            await db.addCredits(referrer.id, 3, 'referral_signup', 'Referral: ' + user.name + ' signed up');
-            await db.updateUser(referrer.id, { referralCount: (referrer.referralCount || 0) + 1 });
-            console.log('[Referral] +3 credits to ' + referrer.email + ' for referring ' + user.email);
+            // Anti-abuse: no self-referral, and block obvious same-device farming.
+            var samePerson = referrer.id === user.id || (referrer.email && referrer.email.toLowerCase() === String(email).toLowerCase());
+            var sameDevice = Array.isArray(referrer.trustedDevices) && referrer.trustedDevices.indexOf(deviceHash) !== -1;
+            if (samePerson || sameDevice) {
+              console.log('[Referral] Skipped reward (self/same-device) for code ' + req.body.referralCode);
+            } else {
+              await db.addCredits(referrer.id, 3, 'referral_signup', 'Referral: ' + user.name + ' signed up');
+              await db.updateUser(referrer.id, { referralCount: (referrer.referralCount || 0) + 1 });
+              console.log('[Referral] +3 credits to ' + referrer.email + ' for referring ' + user.email);
+            }
           }
         } catch (refErr) { /* non-fatal */ }
       }
