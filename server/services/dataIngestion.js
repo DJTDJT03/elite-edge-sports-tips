@@ -719,8 +719,9 @@ class RacingCardsSource extends DataSource {
 
     try {
       const auth = Buffer.from(apiKey + ':' + apiSecret).toString('base64');
-      // Standard plan first (most common), then fallback
-      const endpoints = ['/racecards/standard', '/racecards/free'];
+      // PRO first (Spotlight, RPR, Topspeed, trainer/jockey stats), then graceful
+      // fallback to standard/free if the plan doesn't include it.
+      const endpoints = ['/racecards/pro', '/racecards/standard', '/racecards/free'];
       for (const endpoint of endpoints) {
         try {
           const racecards = await this._apiGet(endpoint, auth);
