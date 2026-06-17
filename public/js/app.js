@@ -2905,15 +2905,15 @@ const App = {
             <span style="font-size:20px;">&#128173;</span>
             <div>
               <div style="font-size:16px;font-weight:800;color:#fff;">Ask Elite Edge</div>
-              <div style="font-size:12px;color:var(--text-secondary);">Ask anything — our engine answers from its own predictions. "Who wins the 2.45 at Kempton?" · "How many goals in Arsenal v Wolves?"</div>
+              <div style="font-size:12px;color:var(--text-secondary);">Live, data-backed answers from our engine + real-time research. Try "Who wins the 2:45 at Kempton today?" or "Team news for Arsenal v Wolves?"</div>
             </div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:nowrap;">
-            <input id="ee-ask-input" type="text" placeholder="Ask about any race or match…" onkeydown="if(event.key==='Enter'){App.askEliteEdge();}" style="flex:1;min-width:0;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text-primary);font-size:14px;">
+            <input id="ee-ask-input" type="text" placeholder="Ask about any race, match or team…" onkeydown="if(event.key==='Enter'){App.askEliteEdge();}" style="flex:1;min-width:0;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text-primary);font-size:14px;">
             <button onclick="App.askEliteEdge()" class="btn btn-gold" style="white-space:nowrap;padding:12px 22px;">Ask</button>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
-            ${["Who's your NAP today?","Best bet at the races?","Any value in the football?"].map(function(q){ return '<button onclick="App.askEliteEdge(' + JSON.stringify(q).replace(/"/g,'&quot;') + ')" style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);color:#d4a843;font-size:11px;padding:5px 10px;border-radius:14px;cursor:pointer;">' + q + '</button>'; }).join('')}
+            ${["Who's your NAP today?","Who wins the next at Kempton?","Best value in the football?","Any team news for today's games?"].map(function(q){ return '<button onclick="App.askEliteEdge(' + JSON.stringify(q).replace(/"/g,'&quot;') + ')" style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);color:#d4a843;font-size:11px;padding:5px 10px;border-radius:14px;cursor:pointer;">' + q + '</button>'; }).join('')}
           </div>
           <div id="ee-ask-answer" style="display:none;margin-top:14px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:14px;line-height:1.6;color:var(--text-primary);"></div>
         </div>
@@ -14184,12 +14184,48 @@ const App = {
     }
     try {
       var data = await this.api('/chat/ai', { method: 'POST', body: JSON.stringify({ message: q }) });
-      var reply = (data && data.reply) ? this.escapeHtml(data.reply).replace(/\n/g, '<br>') : 'No answer right now.';
-      if (out) out.innerHTML = '<div style="font-size:11px;font-weight:700;color:#d4a843;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#128173; Elite Edge says</div>' + reply +
+      var reply = (data && data.reply) ? this._formatAssistantText(data.reply) : 'No answer right now.';
+      var sources = (data && data.sources) || [];
+      var srcHtml = '';
+      sources = sources.filter(function (u) { return /^https?:\/\//i.test(u); }); // safe schemes only
+      if (sources.length) {
+        srcHtml = '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">Sources: ' +
+          sources.slice(0, 4).map(function (u, i) {
+            var host = '';
+            try { host = new URL(u).hostname.replace('www.', ''); } catch (e) { host = 'source ' + (i + 1); }
+            return '<a href="' + App.escapeHtml(u) + '" target="_blank" rel="noopener" style="color:#d4a843;">' + App.escapeHtml(host) + '</a>';
+          }).join(' · ') + '</div>';
+      }
+      if (out) out.innerHTML = '<div style="font-size:11px;font-weight:700;color:#d4a843;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#128173; Elite Edge says</div>' +
+        '<div style="line-height:1.6;">' + reply + '</div>' + srcHtml +
         '<div style="margin-top:10px;font-size:11px;color:var(--text-muted);">Statistical prediction for entertainment. 18+ · Please gamble responsibly.</div>';
     } catch (e) {
       if (out) out.innerHTML = '<span style="color:var(--red);">Sorry, couldn\'t answer that just now — try again in a moment.</span>';
     }
+  },
+
+  // Lightweight, SAFE markdown formatter for the assistant's answer.
+  _formatAssistantText(raw) {
+    var esc = this.escapeHtml(String(raw || ''));
+    // **bold**
+    esc = esc.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    // headings like "### X" → bold line
+    esc = esc.replace(/^#{1,4}\s*(.+)$/gm, '<strong>$1</strong>');
+    // bullet lines (-, *, •) → list items
+    var lines = esc.split('\n');
+    var html = '', inList = false;
+    lines.forEach(function (ln) {
+      var m = ln.match(/^\s*(?:[-*•]|\d+\.)\s+(.*)$/);
+      if (m) {
+        if (!inList) { html += '<ul style="margin:6px 0;padding-left:18px;">'; inList = true; }
+        html += '<li style="margin:2px 0;">' + m[1] + '</li>';
+      } else {
+        if (inList) { html += '</ul>'; inList = false; }
+        if (ln.trim()) html += '<p style="margin:6px 0;">' + ln + '</p>';
+      }
+    });
+    if (inList) html += '</ul>';
+    return html;
   },
 
   // Data-driven Last Man Standing dashboard banner. Pulls the live competition

@@ -240,6 +240,51 @@ module.exports = function(deps) {
     }
   });
 
+  // Light per-IP rate limit for the AI assistant (cost control) — 20 / 10 min.
+  var _aiChatHits = new Map();
+  function aiChatRateLimited(ip) {
+    var now = Date.now();
+    var arr = (_aiChatHits.get(ip) || []).filter(function (t) { return now - t < 600000; });
+    arr.push(now);
+    _aiChatHits.set(ip, arr);
+    if (_aiChatHits.size > 5000) _aiChatHits.clear();
+    return arr.length > 20;
+  }
+
+  // Direct Perplexity Sonar call for live, cited web grounding (so answers about
+  // things outside our own data are CURRENT, not from the model's training cutoff).
+  function askPerplexitySonar(question) {
+    return new Promise(function (resolve) {
+      var key = process.env.PERPLEXITY_API_KEY;
+      if (!key) return resolve(null);
+      var https = require('https');
+      var payload = JSON.stringify({
+        model: 'sonar',
+        max_tokens: 500,
+        messages: [
+          { role: 'system', content: 'You are a sports research assistant. Give CURRENT, factual info as of today: latest team/player news, injuries/fitness, expected line-ups, the current market favourite and rough odds where relevant. UK focus, concise. No betting guarantees.' },
+          { role: 'user', content: question },
+        ],
+      });
+      var opts = { method: 'POST', hostname: 'api.perplexity.ai', path: '/chat/completions', headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }, timeout: 13000 };
+      var req2 = https.request(opts, function (r) {
+        var data = '';
+        r.on('data', function (c) { data += c; });
+        r.on('end', function () {
+          try {
+            var j = JSON.parse(data);
+            var text = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+            var cites = (j.citations || []).map(function (c) { return typeof c === 'string' ? c : (c && c.url) || ''; }).filter(Boolean).slice(0, 5);
+            resolve(text ? { text: text, citations: cites } : null);
+          } catch (e) { resolve(null); }
+        });
+      });
+      req2.on('timeout', function () { req2.destroy(); resolve(null); });
+      req2.on('error', function () { resolve(null); });
+      req2.write(payload); req2.end();
+    });
+  }
+
   // POST /api/chat/ai — AI-powered chatbot using Claude with live data context
   router.post('/api/chat/ai', async (req, res) => {
     try {
@@ -247,10 +292,20 @@ module.exports = function(deps) {
       if (!message.trim()) {
         return res.status(400).json({ reply: 'Please send a message.' });
       }
+      var ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+      if (aiChatRateLimited(ip)) {
+        return res.json({ reply: "You're firing questions in fast! Give it a minute and ask again." });
+      }
 
       if (!aiReports || !aiReports.isAvailable() || !aiReports.client) {
         return res.status(503).json({ reply: 'AI chat is temporarily unavailable. Please try again later.' });
       }
+
+      // Kick off live web grounding IN PARALLEL (skip pure service/account questions).
+      var msgL0 = message.toLowerCase();
+      var serviceQ = /(price|pricing|cost|subscri|how do i|how does|what sports|sign ?up|free trial|account|log ?in|cancel|refund|\bcredit|install|app\b)/.test(msgL0);
+      var webPromise = (!serviceQ && message.trim().length > 6) ? askPerplexitySonar(message) : Promise.resolve(null);
+      var webCitations = [];
 
       // Fetch live context for the chatbot
       var today = new Date().toISOString().split('T')[0];
@@ -351,13 +406,27 @@ module.exports = function(deps) {
             cards.forEach(function (r) {
               liveContext += '- ' + (r.time || '') + ' ' + (r.meeting || '') + (r.raceName ? ' — ' + r.raceName : '') + ' (' + ((r.runners && r.runners.length) || 0) + ' runners)\n';
             });
-            // Detailed runners for the race(s) the question is about
+            // Detailed runners for the race(s) the question is about. Match the
+            // course even when the user types a short name ("Kempton" vs "Kempton
+            // Park (AW)"), and match the time in both 12h and 24h form ("2:45" → 14:45).
             var courses = cards.map(function (c) { return c.meeting; }).filter(Boolean);
-            var mentionedCourse = courses.find(function (c) { return msgLower.indexOf(c.toLowerCase()) !== -1; });
+            var courseWords = function (m) { return m.toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z ]/g, '').split(/\s+/).filter(function (w) { return w.length > 3; }); };
+            var mentionedCourse = courses.find(function (c) {
+              if (msgLower.indexOf(c.toLowerCase()) !== -1) return true;
+              return courseWords(c).some(function (w) { return msgLower.indexOf(w) !== -1; });
+            });
             var tMatch = msgLower.match(/(\d{1,2})[.:](\d{2})/);
+            var timeMatches = function (rtime) {
+              if (!tMatch) return false;
+              var digits = (rtime || '').replace(/[^0-9]/g, '');
+              var hh = parseInt(tMatch[1], 10), mm = tMatch[2];
+              var c1 = ('0' + hh).slice(-2) + mm;
+              var c2 = ('0' + ((hh % 12) + 12)).slice(-2) + mm; // afternoon (PM) variant
+              return digits.indexOf(c1) !== -1 || digits.indexOf(c2) !== -1;
+            };
             var detail = cards.filter(function (r) {
               var cOk = mentionedCourse ? (r.meeting === mentionedCourse) : false;
-              var tOk = tMatch ? ((r.time || '').replace(/[^0-9]/g, '').indexOf(('0' + tMatch[1]).slice(-2) + tMatch[2]) !== -1) : false;
+              var tOk = timeMatches(r.time);
               if (mentionedCourse && tMatch) return cOk && tOk;
               return cOk || tOk;
             }).slice(0, 3);
@@ -372,6 +441,15 @@ module.exports = function(deps) {
       } catch (ctxErr) {
         // Non-fatal — chatbot works without live context
       }
+
+      // Fold in the parallel live web search (current facts/news with sources).
+      try {
+        var web = await webPromise;
+        if (web && web.text) {
+          liveContext += '\n\nLIVE WEB INTEL (current, from a real-time web search — use this for up-to-date facts, team/runner news, fitness, line-ups, current market favourite/odds. PREFER OUR OWN data above for the actual pick):\n' + web.text.substring(0, 1600) + '\n';
+          webCitations = web.citations || [];
+        }
+      } catch (e) { /* web grounding optional */ }
 
       var systemPrompt = 'You are the Elite Edge assistant — the helpful AI chatbot for Elite Edge Sports Tips, the UK\'s most advanced multi-sport betting analysis platform.\n\n' +
         'ABOUT THE SERVICE:\n' +
@@ -393,20 +471,26 @@ module.exports = function(deps) {
         '- Lead with the pick. e.g. "1st: X @ odds — [why]. Also consider: Y, Z." Mention going/draw/form when relevant. Be decisive like a tipster, not wishy-washy.\n' +
         '- "Who wins / how many goals in [match]?" → find it in MATCH PREDICTIONS or WORLD CUP fixtures, give Our Take / predicted scoreline + confidence + why.\n' +
         '- World Cup: we HAVE the full fixture schedule synced (see below) — so you always know who plays who and when, including the opener. If our detailed prediction for that game has not generated yet, tell them the fixture and that the full breakdown lands closer to kickoff — do not claim we lack the fixtures.\n' +
-        '- If something genuinely is not in the data, say so plainly in one line and point them to the right page.\n' +
-        '- Keep it tight — a few sentences. Detailed when the question needs it, never padded.\n' +
+        '- LIVE WEB INTEL (if present below) is current real-time info — use it for facts, news, fitness, line-ups and the current market. Weave it in naturally; never say "according to my search". The actual betting pick should still come from OUR engine/data when we have it.\n' +
+        '- If something genuinely is not in our data AND there is no web intel, say so plainly in one line and point them to the right page.\n' +
+        '- IMPORTANT (conversion): you may answer a question about a SPECIFIC race/match in full. But if asked to list ALL of today\'s tips/picks/NAPs at once, give just ONE taster pick and invite them to see the full card on the Tips page / with a subscription — never dump the entire day\'s premium selections in one reply.\n\n' +
+        'FORMAT — make answers feel ELITE and easy to read:\n' +
+        '- Open with a one-line verdict in **bold** (the answer to their actual question).\n' +
+        '- For a specific race: give the verdict, then a short top-3 as a list — "**1.** Horse @ odds — one-line why (form/going/draw/rating)", then a line on the key danger or pace/going angle.\n' +
+        '- For a match: bold verdict (Our Take + predicted scoreline + confidence), then 2-3 short lines of reasoning (form, key men, team news from web intel).\n' +
+        '- Use **bold** for selections and short bullet lists; keep paragraphs to 1-2 sentences. Detailed and confident, but never padded waffle.\n' +
         '- Never guarantee outcomes — these are statistical predictions for entertainment. 18+. If someone sounds like they are chasing losses, a quick word on gambling responsibly.' +
         liveContext;
 
       var response = await aiReports.client.messages.create({
-        model: process.env.AI_MODEL || 'claude-haiku-4-5-20251001',
-        max_tokens: 700,
+        model: process.env.AI_CHAT_MODEL || 'claude-sonnet-4-20250514',
+        max_tokens: 1400,
         system: systemPrompt,
         messages: [{ role: 'user', content: message }],
       });
 
       var reply = response.content[0].text;
-      res.json({ reply: reply });
+      res.json({ reply: reply, sources: webCitations });
     } catch (err) {
       console.error('[AI Chat] Error:', err.message);
       res.json({ reply: 'Sorry, I couldn\'t process that right now. Please try again or contact support.' });
