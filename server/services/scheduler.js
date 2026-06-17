@@ -5851,17 +5851,20 @@ module.exports = function startScheduler(deps) {
         var resetDate = typeof u.creditsResetDate === 'string' ? u.creditsResetDate.split('T')[0] : '';
         if (resetDate > today) continue; // not due yet
 
-        // Reset credits to monthly allowance
+        // Top UP to the monthly allowance — never reduce. Protects purchased
+        // credit packs: a user holding more than their allowance keeps them.
         var nextReset = new Date();
         nextReset.setMonth(nextReset.getMonth() + 1);
+        var current = u.credits || 0;
+        var topUp = Math.max(u.creditsMonthlyAllowance, current);
         await db.updateUser(u.id, {
-          credits: u.creditsMonthlyAllowance,
+          credits: topUp,
           creditsResetDate: nextReset.toISOString().split('T')[0],
         });
         await db.recordCreditTransaction({
-          userId: u.id, amount: u.creditsMonthlyAllowance,
-          balanceAfter: u.creditsMonthlyAllowance,
-          type: 'monthly_reset', description: 'Monthly credit reset — ' + u.creditsMonthlyAllowance + ' credits',
+          userId: u.id, amount: Math.max(0, topUp - current),
+          balanceAfter: topUp,
+          type: 'monthly_reset', description: 'Monthly credit top-up — to ' + u.creditsMonthlyAllowance + ' credits',
         });
         resetCount++;
       }

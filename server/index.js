@@ -879,13 +879,17 @@ app.use('/', require('./routes/public')(deps));
         updates.creditsResetDate = resetDate2.toISOString().split('T')[0];
         needsUpdate = true;
       } else if (u.subscription === 'free' && u.role !== 'admin') {
-        // Free users: 3 credits/month with renewal
-        if (u.creditsMonthlyAllowance !== 3) {
-          updates.creditsMonthlyAllowance = 3;
+        // Free users: 10 credits/month WITH renewal. (Previously a one-time 3 whose
+        // renewal never fired because no reset date was set — and a clawback that
+        // wiped purchased credits. Both fixed here.)
+        if (u.creditsMonthlyAllowance !== 10) {
+          updates.creditsMonthlyAllowance = 10;
           needsUpdate = true;
         }
-        if (u.credits > 3) {
-          updates.credits = 3;
+        // Set a reset date so the monthly job actually tops them up. Setting it to
+        // today means the next 1am reset lifts them to 10, then monthly thereafter.
+        if (!u.creditsResetDate) {
+          updates.creditsResetDate = new Date().toISOString().split('T')[0];
           needsUpdate = true;
         }
       }

@@ -42,6 +42,38 @@ module.exports = function(deps) {
     }
   }
 
+  // Free Pick of the Day — ONE tip shown fully & free to everyone (incl. logged-out),
+  // so free users always taste the quality. Deterministic per day (lowest id among
+  // today's active tips, preferring a premium one) so it never changes through the
+  // day. This is display/access gating only — it does NOT touch tip generation or
+  // selection (the locked core).
+  function _normDateStr(d) {
+    if (!d) return '';
+    if (d instanceof Date) return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    return d.toString().split('T')[0].substring(0, 10);
+  }
+  function _pickFreeTipId(tipsArr, todayStr) {
+    var todays = (tipsArr || []).filter(function (t) {
+      if (t.isWeeklyAcca) return false;
+      if (t.status && t.status !== 'active') return false;
+      var d = _normDateStr(t.date);
+      return !d || d === todayStr;
+    });
+    if (!todays.length) return null;
+    var pool = todays.filter(function (t) { return t.isPremium; });
+    if (!pool.length) pool = todays;
+    pool.sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
+    return pool[0] ? pool[0].id : null;
+  }
+  async function getFreePickId() {
+    try {
+      var all = await db.getTips();
+      var ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+      var todayStr = ukNow.getFullYear() + '-' + String(ukNow.getMonth() + 1).padStart(2, '0') + '-' + String(ukNow.getDate()).padStart(2, '0');
+      return _pickFreeTipId(all, todayStr);
+    } catch (e) { return null; }
+  }
+
   // DEBUG: test access level
   router.get('/tips/debug-access', async (req, res) => {
     var access = await getUserAccess(req);
@@ -106,13 +138,22 @@ module.exports = function(deps) {
 
       var access = await getUserAccess(req);
 
+      // Free Pick of the Day — one tip everyone sees in full (display gating only).
+      // Derive from the UNFILTERED global today-list (same as GET /tips/:id) so the
+      // badged free tip is identical regardless of the sport/date/premium filter —
+      // otherwise the detail route would still charge a credit for it.
+      var freePickId = await getFreePickId();
+
       // Starter: sees 3 tips (selection + odds only, no analysis)
       var starterCount = 0;
       var STARTER_TIP_LIMIT = 3;
 
       const result = filtered.map(tip => {
-        // Free users: locked on premium tips
+        // Free users: locked on premium tips — EXCEPT the daily Free Pick, shown in full
         if (tip.isPremium && access === 'free') {
+          if (freePickId != null && tip.id === freePickId) {
+            return { ...tip, locked: false, freePick: true };
+          }
           return {
             ...tip,
             selection: 'Premium Pick — Upgrade to View',
@@ -165,6 +206,11 @@ module.exports = function(deps) {
 
       // Free/Starter: premium tips require credits
       if (tip.isPremium) {
+        // Free Pick of the Day — free to view for everyone, no credit charged.
+        var freePickId = await getFreePickId();
+        if (freePickId != null && String(tip.id) === String(freePickId)) {
+          return res.json({ ...tip, locked: false, freePick: true });
+        }
         // Check if user has credits
         var authHeader = req.headers.authorization;
         var userId = null;
@@ -176,7 +222,7 @@ module.exports = function(deps) {
         }
 
         if (!userId) {
-          return res.json({ ...tip, selection: 'Premium Pick — Sign Up to View', analysis: { summary: 'Create a free account to get 5 credits.' }, locked: true });
+          return res.json({ ...tip, selection: 'Premium Pick — Sign Up to View', analysis: { summary: 'Create a free account to get 10 free credits a month.' }, locked: true });
         }
 
         var user = await db.getUserById(userId);

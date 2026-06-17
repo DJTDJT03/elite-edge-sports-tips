@@ -85,8 +85,9 @@ module.exports = function(deps) {
         emailPrefs: { dailyBulletin: true, weeklySummary: true, marketing: true, bigWins: true },
         emailVerified: false,
         emailVerifyToken: verifyToken,
-        credits: 3,
-        creditsMonthlyAllowance: 0,
+        credits: 10,
+        creditsMonthlyAllowance: 10,
+        creditsResetDate: (function () { var d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().split('T')[0]; })(),
         referralCode: referralCode,
         referredBy: req.body.referralCode || null,
         referralCount: 0,
@@ -106,7 +107,7 @@ module.exports = function(deps) {
       const tokenExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
 
       // Record signup credits
-      await db.recordCreditTransaction({ userId: user.id, amount: 3, balanceAfter: 3, type: 'signup_bonus', description: 'Welcome bonus — 3 free credits' });
+      await db.recordCreditTransaction({ userId: user.id, amount: 10, balanceAfter: 10, type: 'signup_bonus', description: 'Welcome bonus — 10 free credits' });
 
       // Reward referrer if this user was referred
       if (req.body.referralCode) {

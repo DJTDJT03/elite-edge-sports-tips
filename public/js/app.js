@@ -3661,6 +3661,7 @@ const App = {
           <div class="tip-badges">
             <span class="tip-sport-badge ${tip.sport === 'racing' ? 'badge-racing' : 'badge-football'}">${tip.sport === 'racing' ? 'Racing' : tip.sport === 'basketball' ? 'NBA' : tip.sport === 'tennis' ? 'Tennis' : tip.sport === 'rugby' ? 'Rugby' : tip.sport === 'american-football' ? 'NFL' : 'Football'}</span>
             ${tip.isOutsider ? '<span class="badge-outsider">Outsider</span>' : `<span class="${tip.isPremium ? 'badge-premium' : 'badge-free'}">${tip.isPremium ? 'Premium' : 'Free'}</span>`}
+            ${tip.freePick ? '<span style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;letter-spacing:0.5px;">&#127942; FREE PICK</span>' : ''}
             ${tip.valueRating ? `<span class="badge-premium">${tip.valueRating}</span>` : ''}
             ${tip.tipsterProfile ? `<span class="analyst-badge ${tip.tipsterProfile === 'The Professor' ? 'professor' : tip.tipsterProfile === 'The Scout' ? 'scout' : tip.tipsterProfile === 'The Clocker' ? 'clocker' : tip.tipsterProfile === 'The Tactician' ? 'tactician' : 'edge'}">${tip.tipsterProfile}</span>` : ''}
             ${tip.analysis && tip.analysis.dualAIVerified ? '<span style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;letter-spacing:0.5px;">DUAL AI VERIFIED</span>' : ''}
@@ -7446,14 +7447,14 @@ const App = {
             <p class="text-muted">See what all the fuss is about</p>
             <div class="pricing-price">&pound;<span style="font-size:42px;">0</span><span class="period">/month</span></div>
             <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);border-radius:8px;padding:14px;margin:8px 0 12px;text-align:center;">
-              <div style="font-size:32px;font-weight:900;color:var(--gold);">3</div>
+              <div style="font-size:32px;font-weight:900;color:var(--gold);">10</div>
               <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
               <div style="font-size:11px;color:#22c55e;font-weight:600;margin-top:4px;">&#10003; Auto-renews monthly</div>
             </div>
             <ul class="pricing-features">
-              <li>3 credits renewed every month</li>
-              <li>View 3 tips or AI previews</li>
-              <li>1 free daily tip (after the race)</li>
+              <li>10 credits renewed every month</li>
+              <li>View 10 tips or AI previews</li>
+              <li>1 full free tip every day</li>
               <li>Full results + track record</li>
               <li>Betting calculators</li>
               <li>Top up anytime from &pound;1.99</li>
@@ -11951,7 +11952,7 @@ const App = {
 
   _onboardingSteps: [
     { title: 'Welcome to Elite Edge', desc: 'The UK\'s most advanced sports tipping platform. AI-powered tips across 6 sports — Racing, Football, NBA, Tennis, Rugby, and NFL. Every selection analysed by 3 AI engines before publication.' },
-    { title: 'Your 5 Free Credits', desc: 'You\'ve received 5 free credits. Each premium tip costs 1 credit to view. Your credit balance is shown in the top menu bar. When you run out, buy more credit packs from £1.99 or upgrade to a subscription for monthly credits.' },
+    { title: 'Your 10 Free Credits', desc: 'You\'ve received 10 free credits, and they renew every month. Each premium tip costs 1 credit to view, and there\'s a full free tip every day that costs nothing. Your credit balance is shown in the top menu bar. When you run out, buy more credit packs from £1.99 or upgrade for more monthly credits.' },
     { title: 'Browse Tips & Tools', desc: 'Check today\'s selections on the Dashboard. Use the Smart Acca Generator to build accumulators across all 6 sports. Explore the Betting Calculators for returns on any bet type. Visit the Betting Academy to sharpen your knowledge.' },
     { title: 'Earn Free Credits', desc: 'Refer a friend and earn +3 credits when they sign up (+5 more if they start a trial). Share a tip on social media for +1 credit per day. Check your referral link and stats on the Refer & Earn page.' },
     { title: 'Start Your Free Trial', desc: 'Ready for full access? Start a 14-day free trial — get 120 credits per month, full AI analysis, email bulletins, alerts, and the acca generator. Card required but you won\'t be charged for 14 days. Cancel anytime.' },
