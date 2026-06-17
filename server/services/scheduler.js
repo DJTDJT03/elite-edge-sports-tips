@@ -4560,6 +4560,42 @@ module.exports = function startScheduler(deps) {
           if (p && p.generated) console.log('[WorldCup] Consensus previews generated: ' + p.generated);
         } catch (e) { console.warn('[WorldCup] preview generation failed:', e.message); }
       }
+
+      // PRE-LOCK verdicts before kick-off so no game's "Our Take" ever depends on
+      // someone opening it first (and so it can never recompute after the result).
+      // The 5-analyst consensus above gets first dibs over the days beforehand; this
+      // only fills fixtures STILL without a verdict as kick-off nears (<= 6h), using
+      // our quant model's pick. DO NOTHING => never overwrites consensus/manual takes.
+      try {
+        if (deps.db && deps.db.query && deps.quantModel && deps.quantModel.predictAsync) {
+          var up = await deps.db.query(
+            "SELECT f.id, f.home_team, f.away_team, f.kickoff FROM world_cup_fixtures f " +
+            "LEFT JOIN world_cup_previews p ON f.id = p.fixture_id " +
+            "WHERE f.status = 'scheduled' AND f.kickoff > NOW() AND f.kickoff <= NOW() + INTERVAL '6 hours' " +
+            "AND p.id IS NULL AND f.home_team !~ '^[0-9]' AND f.home_team NOT ILIKE '%winner%' " +
+            "AND f.home_team NOT ILIKE '%group%' AND f.home_team NOT ILIKE '%/%' ORDER BY f.kickoff ASC LIMIT 40"
+          );
+          var preLocked = 0;
+          for (var pli = 0; pli < (up.rows || []).length; pli++) {
+            var pf = up.rows[pli];
+            try {
+              var qp = await deps.quantModel.predictAsync(pf.home_team, pf.away_team, { neutral: true });
+              if (!qp || !qp.pick) continue;
+              var topScore = (qp.topScorelines && qp.topScorelines[0]) ? qp.topScorelines[0].score : '';
+              var reason = 'Elite Edge model (Elo + Dixon-Coles): ' + pf.home_team + ' ' + qp.winProb.home + '%, Draw ' + qp.winProb.draw + '%, ' + pf.away_team + ' ' + qp.winProb.away + '%'
+                + (topScore ? ', most likely ' + topScore : '') + '. Over 2.5 ' + qp.over25 + '%, BTTS ' + qp.btts + '%. The edge points to ' + qp.pick.selection + '.';
+              await deps.db.query(
+                "INSERT INTO world_cup_previews (fixture_id, home_team, away_team, kickoff, verdict, verdict_market, verdict_selection, predicted_scoreline, confidence) " +
+                "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (fixture_id) DO NOTHING",
+                [pf.id, pf.home_team, pf.away_team, pf.kickoff || null, reason, qp.pick.market, qp.pick.selection, topScore || null, qp.pick.confidence || 6]
+              );
+              preLocked++;
+            } catch (e) { /* skip one fixture */ }
+          }
+          if (preLocked > 0) console.log('[WorldCup] Pre-locked ' + preLocked + ' fixture verdict(s) from the quant model');
+        }
+      } catch (e) { console.warn('[WorldCup] verdict pre-lock failed:', e.message); }
+
       // Settle Last Man Standing straight after the results land — each pick is
       // resolved the moment its match finishes, not at the end of the round.
       if (process.env.ENABLE_LMS === 'true') {
