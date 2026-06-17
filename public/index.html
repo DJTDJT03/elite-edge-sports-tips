@@ -71,6 +71,16 @@
   <link rel="icon" type="image/svg+xml" href="/images/app-icon.svg">
   <link rel="icon" sizes="any" href="/images/app-icon.svg">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    .news-ticker { background:#0d1220; border-bottom:1px solid rgba(255,255,255,0.08); overflow:hidden; white-space:nowrap; position:relative; }
+    .news-ticker-track { display:inline-block; white-space:nowrap; padding:8px 0; animation: ee-ticker 90s linear infinite; will-change:transform; }
+    .news-ticker:hover .news-ticker-track { animation-play-state:paused; }
+    .news-ticker-item { display:inline-flex; align-items:center; gap:6px; color:#cbd5e1; text-decoration:none; font-size:13px; padding:0 22px; border-right:1px solid rgba(255,255,255,0.08); }
+    .news-ticker-item:hover { color:#fff; }
+    .news-ticker-dot { color:#d4a843; }
+    .news-ticker-src { color:#7a8295; font-size:11px; margin-left:6px; }
+    @keyframes ee-ticker { from { transform:translateX(0); } to { transform:translateX(-50%); } }
+  </style>
 </head>
 <body>
   <!-- Top nav -->
@@ -169,6 +179,9 @@
       </div>
     </div>
   </nav>
+
+  <!-- Live football news ticker (populated by app.js; hidden if no feed) -->
+  <div id="news-ticker" class="news-ticker" style="display:none;"></div>
 
   <!-- Sponsor Header Banner -->
   <div class="sponsor-header" id="sponsor-header">
@@ -571,7 +584,7 @@
   <script src="/js/calculators.js?v=20260501c"></script>
   <script src="/js/worldCup.js?v=20260616c"></script>
   <script src="/js/lms.js?v=20260612b"></script>
-  <script src="/js/app.js?v=20260617g"></script>
+  <script src="/js/app.js?v=20260617h"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

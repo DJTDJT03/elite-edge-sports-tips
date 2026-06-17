@@ -113,6 +113,20 @@ module.exports = function(deps) {
     }
   });
 
+  // GET /api/football-news — free RSS football headlines (BBC/Sky/Guardian).
+  // No API key needed; aggregated headline + source + link back to the article.
+  var footballNews = require('../services/footballNews');
+  router.get('/api/football-news', async (req, res) => {
+    try {
+      res.set('Cache-Control', 'public, max-age=300');
+      var limit = Math.min(parseInt(req.query.limit, 10) || 20, 40);
+      var news = await footballNews.getNews();
+      res.json({ news: news.slice(0, limit), count: news.length });
+    } catch (err) {
+      res.json({ news: [], count: 0 });
+    }
+  });
+
   // GET /api/news/latest — latest UK sports headlines
   router.get('/api/news/latest', async (req, res) => {
     try {

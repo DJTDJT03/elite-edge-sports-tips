@@ -109,6 +109,7 @@ const App = {
       this.route();
     });
     this.route();
+    this._loadNewsTicker(); // live football news ticker (persists across pages)
     this.loadDailyStats();
     this.loadActivityTicker();
     this.initNotifications();
@@ -3123,6 +3124,9 @@ const App = {
         <!-- 13b. SUBSCRIBER LEADERBOARD — competition + social proof -->
         <div id="subscriber-leaderboard"></div>
 
+        <!-- 13c. FOOTBALL NEWS — live RSS feed (keeps the site fresh) -->
+        <div id="football-news-section"></div>
+
         <!-- 14. NEWS + REFERRAL — community & growth -->
         <div id="dashboard-news-section"></div>
 
@@ -3260,6 +3264,7 @@ const App = {
 
     // Fetch and render breaking news section
     this._fetchDashboardNews();
+    this._loadFootballNews();
 
     // Render personalised stats for premium users
     this.renderPersonalStats();
@@ -3485,6 +3490,69 @@ const App = {
           '</div>' : '') +
         '</div>' +
       '</div>';
+  },
+
+  _newsTimeAgo(dateStr) {
+    if (!dateStr) return '';
+    var diff = Date.now() - new Date(dateStr).getTime();
+    if (isNaN(diff) || diff < 0) return '';
+    var mins = Math.floor(diff / 60000);
+    if (mins < 60) return mins + 'm ago';
+    var hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + 'h ago';
+    return Math.floor(hours / 24) + 'd ago';
+  },
+
+  async _loadFootballNews() {
+    var container = document.getElementById('football-news-section');
+    if (!container) return;
+    try {
+      var data = await this.api('/football-news?limit=12');
+      container = document.getElementById('football-news-section');
+      if (!container) return;
+      var news = (data && data.news) || [];
+      if (!news.length) return; // silently skip if feeds unavailable
+      var self = this;
+      var cards = news.slice(0, 8).map(function (n) {
+        var img = n.image
+          ? '<div style="width:84px;height:64px;flex-shrink:0;border-radius:8px;overflow:hidden;background:#0a0e1a;"><img src="' + App.escapeHtml(n.image) + '" loading="lazy" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentNode.style.display=\'none\'"></div>'
+          : '';
+        return '<a href="' + App.escapeHtml(n.url) + '" target="_blank" rel="noopener" style="display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--border);text-decoration:none;">' +
+          img +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:13px;font-weight:600;color:#fff;line-height:1.4;">' + App.escapeHtml(n.title) + '</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);margin-top:3px;">' + App.escapeHtml(n.source || '') + (n.publishedAt ? ' &bull; ' + self._newsTimeAgo(n.publishedAt) : '') + '</div>' +
+          '</div>' +
+        '</a>';
+      }).join('');
+      container.innerHTML =
+        '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">' +
+            '<div style="display:flex;align-items:center;gap:10px;"><div style="font-size:22px;">&#9917;</div><div style="font-size:16px;font-weight:800;color:#fff;">Football News</div></div>' +
+            '<span style="font-size:11px;color:var(--text-muted);">Live &bull; auto-updates</span>' +
+          '</div>' +
+          cards +
+          '<p style="font-size:10px;color:var(--text-muted);margin-top:10px;text-align:center;">Headlines from BBC Sport, Sky Sports &amp; The Guardian. Tap to read the full story at the source.</p>' +
+        '</div>';
+    } catch (e) { /* silently skip */ }
+  },
+
+  async _loadNewsTicker() {
+    var ticker = document.getElementById('news-ticker');
+    if (!ticker) return;
+    try {
+      var data = await this.api('/football-news?limit=15');
+      var news = (data && data.news) || [];
+      if (!news.length) { ticker.style.display = 'none'; return; }
+      var items = news.slice(0, 15).map(function (n) {
+        return '<a href="' + App.escapeHtml(n.url) + '" target="_blank" rel="noopener" class="news-ticker-item">' +
+          '<span class="news-ticker-dot">&#9917;</span>' + App.escapeHtml(n.title) +
+          '<span class="news-ticker-src">' + App.escapeHtml(n.source || '') + '</span></a>';
+      }).join('');
+      // Duplicate the track so the marquee loops seamlessly.
+      ticker.innerHTML = '<div class="news-ticker-track">' + items + items + '</div>';
+      ticker.style.display = 'block';
+    } catch (e) { ticker.style.display = 'none'; }
   },
 
   async _fetchDashboardNews() {
