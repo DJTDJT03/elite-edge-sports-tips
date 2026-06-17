@@ -854,6 +854,9 @@ class RacingCardsSource extends DataSource {
         raceType: race.type || '',
         sex: race.sex_restriction || '',
         runners: (race.runners || []).map(r => {
+          // The API uses "" AND "-" as "no value" — treat both as empty so rating
+          // fallbacks (rpr->performance_rating etc.) actually fire.
+          var real = function (v) { var s = v == null ? '' : String(v).trim(); return (s === '' || s === '-') ? null : v; };
           // Extract odds: if array of bookmaker odds, take first decimal; otherwise use raw value
           var oddsArray = Array.isArray(r.odds) ? r.odds : (Array.isArray(r.forecast_price) ? r.forecast_price : null);
           var primaryOdds = null;
@@ -875,8 +878,8 @@ class RacingCardsSource extends DataSource {
             age: r.age,
             weight: r.weight || r.lbs,
             draw: r.draw || r.stall,
-            or: r.ofr || r.or || r.official_rating,
-            officialRating: r.ofr || r.or || r.official_rating,
+            or: real(r.ofr) || real(r.or) || real(r.official_rating),
+            officialRating: real(r.ofr) || real(r.or) || real(r.official_rating),
             form: r.form,
             odds: primaryOdds,
             allOdds: allOdds,
@@ -887,17 +890,17 @@ class RacingCardsSource extends DataSource {
             // assistant + available to the engine. Never overwrite existing fields.
             // Ratings: prefer Racing Post (rpr/ts) but fall back to The Racing API's
             // own power/speed figures, which the Pro plan actually populates.
-            rpr: r.rpr || r.performance_rating || null,  // power rating
-            ts: r.ts || r.tsr || r.speed_rating || null, // speed figure
+            rpr: real(r.rpr) || real(r.performance_rating) || null,  // power rating
+            ts: real(r.ts) || real(r.tsr) || real(r.speed_rating) || null, // speed figure
             lastRun: r.last_run != null ? r.last_run : null, // days since last run
             headgear: r.headgear || '',
             wind: r.wind_surgery || '',
             // Written per-horse analysis — RP "spotlight" if licensed, else the
             // Racing API's own "comment" (populated on Pro).
-            comment: r.comment || '',
-            spotlight: r.spotlight || r.comment || '',
+            comment: real(r.comment) || '',
+            spotlight: real(r.spotlight) || real(r.comment) || '',
             trainer14: r.trainer_14_days || null,        // {runs,wins,percent}
-            trainerRtf: r.trainer_rtf || null,           // recent run-to-form %
+            trainerRtf: real(r.trainer_rtf) || null,     // recent run-to-form %
             jockey14: r.jockey_14_days || null,
             number: r.number != null ? r.number : null,
             isNonRunner: !!(r.is_non_runner || r.nonRunner || r.non_runner || r.status === 'NR' || r.status === 'Withdrawn' || r.scratched)
