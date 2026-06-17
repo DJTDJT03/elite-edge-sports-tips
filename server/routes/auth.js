@@ -122,8 +122,27 @@ module.exports = function(deps) {
               console.log('[Referral] Skipped reward (self/same-device) for code ' + req.body.referralCode);
             } else {
               await db.addCredits(referrer.id, 3, 'referral_signup', 'Referral: ' + user.name + ' signed up');
-              await db.updateUser(referrer.id, { referralCount: (referrer.referralCount || 0) + 1 });
+              var newCount = (referrer.referralCount || 0) + 1;
+              var refUpdates = { referralCount: newCount };
               console.log('[Referral] +3 credits to ' + referrer.email + ' for referring ' + user.email);
+
+              // Milestone — every 3 referrals earns 1 free month of Premium.
+              if (newCount % 3 === 0) {
+                if (referrer.subscription === 'premium' || referrer.subscription === 'vip' || referrer.role === 'admin') {
+                  // Already Premium/VIP — a comp month adds nothing, so give bonus credits instead.
+                  await db.addCredits(referrer.id, 50, 'referral_milestone', '3-referral milestone — 50 bonus credits (already Premium)');
+                  console.log('[Referral] Milestone (already premium): +50 credits to ' + referrer.email);
+                } else {
+                  // Comp 1 month of Premium via the trial flags (auto-expires to free).
+                  var monthEnd = new Date(); monthEnd.setMonth(monthEnd.getMonth() + 1);
+                  refUpdates.trialActive = true;
+                  refUpdates.trialStart = new Date().toISOString();
+                  refUpdates.trialEnd = monthEnd.toISOString();
+                  await db.recordCreditTransaction({ userId: referrer.id, amount: 0, balanceAfter: (referrer.credits || 0), type: 'referral_milestone', description: 'Earned 1 month free Premium — 3 referrals' });
+                  console.log('[Referral] Milestone: 1 free month Premium granted to ' + referrer.email);
+                }
+              }
+              await db.updateUser(referrer.id, refUpdates);
             }
           }
         } catch (refErr) { /* non-fatal */ }

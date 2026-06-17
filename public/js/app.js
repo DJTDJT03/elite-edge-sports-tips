@@ -10821,7 +10821,8 @@ const App = {
     const code = this.getReferralCode();
     const link = 'https://eliteedgesports.co.uk/?ref=' + code;
     const count = this.getReferralCount();
-    const progress = Math.min(count, 3);
+    const earnedMonths = Math.floor(count / 3);
+    const progress = count % 3; // progress towards the next free month
     content.innerHTML = `
       <div class="referral-box">
         <p class="text-muted mb-8">Your referral code</p>
@@ -10838,8 +10839,8 @@ const App = {
           <div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px;">
             ${[1,2,3].map(i => `<div style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;${i <= progress ? 'background:var(--gold);color:var(--bg-deep);' : 'background:var(--bg-card);border:2px solid var(--border);color:var(--text-dim);'}">${i}</div>`).join('')}
           </div>
-          <p class="text-xs text-muted">Refer 3 friends, get 1 month free Premium</p>
-          <p class="text-gold" style="font-weight:700;margin-top:4px;">${count}/3 referrals</p>
+          <p class="text-xs text-muted">Every 3 friends who join = 1 month free Premium</p>
+          ${earnedMonths > 0 ? `<p class="text-gold" style="font-weight:700;margin-top:4px;">&#127881; ${earnedMonths} free month${earnedMonths > 1 ? 's' : ''} earned &bull; ${count} referral${count !== 1 ? 's' : ''} total</p>` : `<p class="text-gold" style="font-weight:700;margin-top:4px;">${progress}/3 towards your first free month</p>`}
         </div>
       </div>
     `;
