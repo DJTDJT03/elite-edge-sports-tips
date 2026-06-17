@@ -8435,11 +8435,11 @@ const App = {
       }
       if (d.richFields && typeof d.richFields === 'object') {
         var rf = d.richFields;
-        lines.push('\nData depth per runner (sample: ' + (rf.horse || '?') + '):');
-        lines.push('  OR ' + (rf.OR || '-') + ' · RPR ' + (rf.hasRPR ? '✓' : '✗') + ' · TS ' + (rf.hasTS ? '✓' : '✗') + ' · form ' + (rf.hasForm ? '✓' : '✗'));
-        lines.push('  Racing Post Spotlight: ' + (rf.hasSpotlight ? '✓ AVAILABLE' : '✗ not in this plan'));
+        lines.push('\nData depth (across ' + rf.totalRunners + ' runners today):');
+        lines.push('  OR: ' + rf.withOR + ' · RPR: ' + rf.withRPR + ' · Topspeed: ' + rf.withTS + ' · Spotlight: ' + rf.withSpotlight);
+        lines.push('  Racing Post Spotlight: ' + (rf.hasSpotlight ? '✓ AVAILABLE' : '✗ not present'));
         if (rf.spotlightSample) lines.push('  e.g. "' + rf.spotlightSample + '…"');
-        if (!rf.hasSpotlight && !rf.hasRPR) lines.push('  → Your plan returns OR + form but NOT Spotlight/RPR/TS (those are Pro-tier). Write-ups use what\'s available.');
+        if (rf.hasSpotlight && rf.hasRPR) lines.push('  → PRO data confirmed — write-ups now use Spotlight + RPR/TS. 🎯');
       }
       if (d.error) lines.push('\n⚠ ' + d.error);
       else if (d.todayUkIreCount > 0) lines.push('\n✅ Racecards are flowing — the assistant can read them.');
