@@ -498,13 +498,15 @@ module.exports = function(deps) {
               return courseWords(c).some(function (w) { return msgLower.indexOf(w) !== -1; });
             });
             var tMatch = msgLower.match(/(\d{1,2})[.:](\d{2})/);
+            // Match on hour+minute with 12h/24h ambiguity handled BOTH ways: the
+            // user may type "17:00" while the card stores "5:00" (or vice-versa).
             var timeMatches = function (rtime) {
               if (!tMatch) return false;
-              var digits = (rtime || '').replace(/[^0-9]/g, '');
-              var hh = parseInt(tMatch[1], 10), mm = tMatch[2];
-              var c1 = ('0' + hh).slice(-2) + mm;
-              var c2 = ('0' + ((hh % 12) + 12)).slice(-2) + mm; // afternoon (PM) variant
-              return digits.indexOf(c1) !== -1 || digits.indexOf(c2) !== -1;
+              var rm = String(rtime || '').match(/(\d{1,2})[.:](\d{2})/);
+              if (!rm) return false;
+              var rh = parseInt(rm[1], 10), uh = parseInt(tMatch[1], 10);
+              if (rm[2] !== tMatch[2]) return false;            // minutes must match
+              return rh === uh || (rh % 12) === (uh % 12);      // 5 ≡ 17, 17 ≡ 5
             };
             var detail = cards.filter(function (r) {
               var cOk = mentionedCourse ? (r.meeting === mentionedCourse) : false;
