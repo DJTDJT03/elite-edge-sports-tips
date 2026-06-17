@@ -610,7 +610,7 @@ module.exports = function(deps) {
         try {
           var _csched = require('../services/wc2026Schedule');
           if (db.query) {
-            var _crows = await db.query("SELECT id, home_team, away_team, kickoff, status FROM world_cup_fixtures");
+            var _crows = await db.query("SELECT id, home_team, away_team, kickoff, status, home_goals, away_goals FROM world_cup_fixtures");
             var _chn = homeTeam.name, _can = awayTeam.name;
             var _cf = (_crows.rows || []).find(function (r) {
               return (_csched.teamsMatch(r.home_team, _chn) && _csched.teamsMatch(r.away_team, _can)) ||
@@ -631,6 +631,20 @@ module.exports = function(deps) {
             }
           }
         } catch (e) { /* non-fatal — fall through to market/heuristics */ }
+      }
+
+      // SAFETY NET: a World Cup match that has FINISHED must NEVER show a freshly
+      // recomputed verdict. Once it's played, the live form includes the result, so
+      // the heuristic would just rationalise the score — that's the "verdict changed
+      // after the match" bug. If we locked a pre-match take it's used above; if not,
+      // we show the result, not a retrospective pick.
+      if (typeof _cf !== 'undefined' && _cf && _cf.status === 'finished' && !fromConsensus && !fromPublishedTip) {
+        var _hg = _cf.home_goals, _ag = _cf.away_goals;
+        verdictMarket = 'Full-Time Result';
+        verdictPick = (_hg != null && _ag != null) ? (_cf.home_team + ' ' + _hg + '–' + _ag + ' ' + _cf.away_team) : 'Match finished';
+        verdictReason = 'This match has been played. We lock our verdict in before kick-off and never publish one after the result is known — so there\'s no pre-match take on record for this game.';
+        confidence = 6;
+        riskLevel = 'Medium';
       }
 
       // Ensure stats have safe defaults
