@@ -726,6 +726,7 @@ class RacingCardsSource extends DataSource {
         try {
           const racecards = await this._apiGet(endpoint, auth);
           if (racecards && racecards.racecards && racecards.racecards.length > 0) {
+            try { Object.defineProperty(racecards, '_endpoint', { value: endpoint, enumerable: false }); } catch (e) {}
             console.log(`[${this.name}] Fetched ${racecards.racecards.length} races via ${endpoint}`);
             // Also fetch big-races (future festival headline races) and merge
             try {

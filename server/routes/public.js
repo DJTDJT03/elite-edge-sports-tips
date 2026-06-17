@@ -335,6 +335,13 @@ module.exports = function(deps) {
       // Step 1: raw API fetch (tells us if auth/plan works at all)
       var raw = await racingSource.fetch();
       out.rawApiCount = (raw && raw.racecards && raw.racecards.length) || 0;
+      out.endpointUsed = (raw && raw._endpoint) || 'unknown';
+      // Exact field names the API returns per runner (definitive — shows if Pro
+      // fields like spotlight/rpr/ts are actually present and under what names).
+      try {
+        var rr = raw.racecards.find(function (x) { return x.runners && x.runners.length; });
+        out.rawRunnerKeys = rr ? Object.keys(rr.runners[0]).sort() : [];
+      } catch (e) { out.rawRunnerKeys = []; }
       // Step 2: normalise (our parser)
       var norm = racingSource.normalise(raw) || [];
       out.normalisedCount = norm.length;

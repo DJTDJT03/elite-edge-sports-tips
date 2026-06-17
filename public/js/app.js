@@ -8420,7 +8420,9 @@ const App = {
       var d = await this.api('/admin/racing-diagnostic');
       var lines = [];
       lines.push('Credentials: key ' + (d.hasKey ? '✓' : '✗ MISSING') + ' · secret ' + (d.hasSecret ? '✓' : '✗ MISSING'));
+      lines.push('Endpoint used: ' + (d.endpointUsed || '?'));
       lines.push('Raw races from API: ' + d.rawApiCount);
+      if (d.rawRunnerKeys && d.rawRunnerKeys.length) lines.push('API runner fields: ' + d.rawRunnerKeys.join(', '));
       lines.push('After parsing: ' + d.normalisedCount);
       lines.push("Today's GB/IRE cards (what the assistant gets): " + d.todayUkIreCount);
       if (d.sampleFromApi && d.sampleFromApi.length) {
