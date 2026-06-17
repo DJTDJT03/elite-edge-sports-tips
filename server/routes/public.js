@@ -367,6 +367,15 @@ module.exports = function(deps) {
         hasRPR: withRpr > 0, hasTS: withTs > 0, hasSpotlight: withSpot > 0,
         spotlightSample: exampleSpot,
       };
+      // RAW values straight from the API (bypasses our parser) — conclusive proof
+      // of what The Racing API is actually sending for rpr/ts/spotlight.
+      try {
+        var rr2 = raw.racecards.find(function (x) { return x.runners && x.runners.length; });
+        out.rawSample = rr2 ? rr2.runners.slice(0, 3).map(function (rn) {
+          return { horse: rn.horse, ofr: rn.ofr, rpr: rn.rpr, ts: rn.ts, spotlight: rn.spotlight ? String(rn.spotlight).slice(0, 60) : rn.spotlight };
+        }) : [];
+        out.rawSampleRace = rr2 ? ((rr2.course || '') + ' ' + (rr2.off_time || rr2.time || '')) : null;
+      } catch (e) { out.rawSample = []; }
       if (out.rawApiCount === 0) out.error = 'The Racing API returned 0 races — credentials are likely wrong/expired, or the plan does not cover /racecards/standard or /racecards/free. Check logs for "[racing-cards]".';
       else if (out.todayUkIreCount === 0) out.error = 'API returned ' + out.rawApiCount + ' races but 0 survived the today+GB/IRE filter — likely a region-code or date-format mismatch (see sampleFromApi). This is a fixable filter bug, not a credentials problem.';
       res.json(out);

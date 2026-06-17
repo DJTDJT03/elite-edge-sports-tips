@@ -8441,6 +8441,12 @@ const App = {
         if (rf.spotlightSample) lines.push('  e.g. "' + rf.spotlightSample + '…"');
         if (rf.hasSpotlight && rf.hasRPR) lines.push('  → PRO data confirmed — write-ups now use Spotlight + RPR/TS. 🎯');
       }
+      if (d.rawSample && d.rawSample.length) {
+        lines.push('\nRAW API values' + (d.rawSampleRace ? ' (' + d.rawSampleRace + ')' : '') + ':');
+        d.rawSample.forEach(function (s) {
+          lines.push('  ' + (s.horse || '?') + ' — ofr:' + JSON.stringify(s.ofr) + ' rpr:' + JSON.stringify(s.rpr) + ' ts:' + JSON.stringify(s.ts) + ' spotlight:' + JSON.stringify(s.spotlight));
+        });
+      }
       if (d.error) lines.push('\n⚠ ' + d.error);
       else if (d.todayUkIreCount > 0) lines.push('\n✅ Racecards are flowing — the assistant can read them.');
       if (out) out.textContent = lines.join('\n');
