@@ -133,10 +133,21 @@ function isPlaceholder(name) {
 
 // Normalise a team name for matching against the results feed (handles common
 // World Cup naming differences).
+// Every known naming variant maps to ONE canonical token (after norm() lowercases
+// + strips accents/punctuation). Both sides of a match get normalised, so e.g.
+// "Türkiye" and "Turkey" both become "turkiye"; "Cape Verde Islands", "Cape Verde"
+// and "Cabo Verde" all become "cape verde".
 var ALIASES = {
-  'south korea': 'korea republic', 'usa': 'united states', 'ivory coast': 'cote divoire',
-  'dr congo': 'congo dr', 'cape verde': 'cabo verde', 'curacao': 'curacao',
-  'bosnia herzegovina': 'bosnia and herzegovina',
+  'south korea': 'korea republic', 'korea rep': 'korea republic', 'korea republic': 'korea republic', 'republic of korea': 'korea republic',
+  'usa': 'united states', 'us': 'united states', 'united states of america': 'united states', 'united states': 'united states',
+  'ivory coast': 'cote divoire', 'cote d ivoire': 'cote divoire', 'cote divoire': 'cote divoire',
+  'dr congo': 'congo dr', 'congo dr': 'congo dr', 'drc': 'congo dr', 'democratic republic of congo': 'congo dr', 'democratic republic of the congo': 'congo dr',
+  'cape verde': 'cape verde', 'cape verde islands': 'cape verde', 'cabo verde': 'cape verde',
+  'turkey': 'turkiye', 'turkiye': 'turkiye',
+  'bosnia': 'bosnia', 'bosnia herzegovina': 'bosnia', 'bosnia and herzegovina': 'bosnia',
+  'czechia': 'czech republic', 'czech republic': 'czech republic',
+  'china pr': 'china', 'china': 'china',
+  'ir iran': 'iran', 'iran': 'iran',
 };
 function norm(name) {
   var s = String(name || '').toLowerCase()
