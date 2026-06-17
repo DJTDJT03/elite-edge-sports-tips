@@ -39,7 +39,7 @@ module.exports = function(deps) {
       } : { eventsTracked: 0, activeAlerts: 0 };
 
       res.json({
-        racing: { connected: !!(racingSource && process.env.RACING_API_KEY) },
+        racing: { connected: !!(racingSource && process.env.RACING_API_KEY && process.env.RACING_API_SECRET), hasKey: !!process.env.RACING_API_KEY, hasSecret: !!process.env.RACING_API_SECRET },
         football: { connected: !!(footballSource && process.env.API_FOOTBALL_KEY) },
         odds: {
           connected: !!(oddsSource && process.env.ODDS_API_KEY),
@@ -321,6 +321,19 @@ module.exports = function(deps) {
       var qs = (r.rows || []).filter(function (x) { return x.n >= 2; }).map(function (x) { return x.question; });
       res.json({ questions: qs });
     } catch (e) { res.json({ questions: [] }); }
+  });
+
+  // GET /api/admin/racing-diagnostic — verify the racecard feed (admin only).
+  router.get('/api/admin/racing-diagnostic', deps.authenticate, deps.requireAdmin, async (req, res) => {
+    try {
+      var out = { hasKey: !!process.env.RACING_API_KEY, hasSecret: !!process.env.RACING_API_SECRET, cards: 0, sample: [], error: null };
+      if (!out.hasKey || !out.hasSecret) { out.error = 'Missing RACING_API_KEY and/or RACING_API_SECRET — both are required for The Racing API.'; return res.json(out); }
+      var cards = await getTodaysRaceCards();
+      out.cards = cards.length;
+      out.sample = cards.slice(0, 8).map(function (c) { return (c.time || '') + ' ' + (c.meeting || '') + ' (' + ((c.runners && c.runners.length) || 0) + ' runners)'; });
+      if (!cards.length) out.error = 'Credentials present but the API returned no UK/IRE racecards for today — check the subscription/plan covers /racecards/standard, or there may be no qualifying cards today.';
+      res.json(out);
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   // GET /api/admin/assistant-queries — demand intel (admin only).
