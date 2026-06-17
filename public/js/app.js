@@ -8431,6 +8431,14 @@ const App = {
         lines.push('\nToday\'s cards available to the assistant:');
         d.sampleTodayUkIre.forEach(function (s) { lines.push('  ' + s); });
       }
+      if (d.richFields && typeof d.richFields === 'object') {
+        var rf = d.richFields;
+        lines.push('\nData depth per runner (sample: ' + (rf.horse || '?') + '):');
+        lines.push('  OR ' + (rf.OR || '-') + ' · RPR ' + (rf.hasRPR ? '✓' : '✗') + ' · TS ' + (rf.hasTS ? '✓' : '✗') + ' · form ' + (rf.hasForm ? '✓' : '✗'));
+        lines.push('  Racing Post Spotlight: ' + (rf.hasSpotlight ? '✓ AVAILABLE' : '✗ not in this plan'));
+        if (rf.spotlightSample) lines.push('  e.g. "' + rf.spotlightSample + '…"');
+        if (!rf.hasSpotlight && !rf.hasRPR) lines.push('  → Your plan returns OR + form but NOT Spotlight/RPR/TS (those are Pro-tier). Write-ups use what\'s available.');
+      }
       if (d.error) lines.push('\n⚠ ' + d.error);
       else if (d.todayUkIreCount > 0) lines.push('\n✅ Racecards are flowing — the assistant can read them.');
       if (out) out.textContent = lines.join('\n');

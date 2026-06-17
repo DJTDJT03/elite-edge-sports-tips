@@ -343,6 +343,17 @@ module.exports = function(deps) {
       var cards = await getTodaysRaceCards();
       out.todayUkIreCount = cards.length;
       out.sampleTodayUkIre = cards.slice(0, 8).map(function (c) { return (c.time || '') + ' ' + (c.meeting || ''); });
+      // Step 4: which RICH fields does the plan actually return per runner? (Spotlight/
+      // RPR/TS drive the unique race write-ups — they may be Pro-tier only.)
+      var sampleRunner = null;
+      for (var i = 0; i < norm.length && !sampleRunner; i++) { if (norm[i].runners && norm[i].runners.length) sampleRunner = norm[i].runners[0]; }
+      out.richFields = sampleRunner ? {
+        horse: sampleRunner.horseName, OR: sampleRunner.officialRating || null,
+        hasRPR: sampleRunner.rpr != null && sampleRunner.rpr !== '', hasTS: sampleRunner.ts != null && sampleRunner.ts !== '',
+        hasSpotlight: !!sampleRunner.spotlight, hasComment: !!sampleRunner.comment,
+        hasForm: !!sampleRunner.form, jockey: sampleRunner.jockey || null, trainer: sampleRunner.trainer || null,
+        spotlightSample: sampleRunner.spotlight ? String(sampleRunner.spotlight).slice(0, 120) : null,
+      } : 'no runners parsed';
       if (out.rawApiCount === 0) out.error = 'The Racing API returned 0 races — credentials are likely wrong/expired, or the plan does not cover /racecards/standard or /racecards/free. Check logs for "[racing-cards]".';
       else if (out.todayUkIreCount === 0) out.error = 'API returned ' + out.rawApiCount + ' races but 0 survived the today+GB/IRE filter — likely a region-code or date-format mismatch (see sampleFromApi). This is a fixable filter bug, not a credentials problem.';
       res.json(out);
