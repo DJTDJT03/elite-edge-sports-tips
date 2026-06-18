@@ -9,9 +9,11 @@
  * Flow:
  *   1. Tactician analyses (injuries, motivation, tactical, xG)
  *   2. Professor analyses (form, data, statistical patterns)
- *   3. Scout analyses (value, market inefficiency, price)
- *   4. GPT Verifier reviews all three — agrees/disagrees with reasoning
- *   5. Consensus engine picks the winning market
+ *   3. The Market analyses (sharp money & market-confirmed value — only backs
+ *      value the real price movement confirms; defers to the favourite when
+ *      there's no live market, never chasing a contrarian longshot)
+ *   4. AI arbiter panel reviews all three — agrees/disagrees with reasoning
+ *   5. Consensus engine picks the winning market (split → most probable leads)
  *   6. Confidence = base + bonus for agreement level
  *
  * Never publishes a pick that only ONE agent supports.
@@ -181,52 +183,101 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
   }
 
   // =====================================================================
-  // AGENT 3: THE SCOUT — value, price, market inefficiency
+  // AGENT 3: THE MARKET — sharp money & market-confirmed value
   // =====================================================================
-  var scout = {
-    agent: 'The Scout',
-    approach: 'Value & market inefficiency hunter',
+  // Replaces the old "Scout" value-hunter, which chased the biggest THEORETICAL
+  // price gap and therefore drifted onto longshots. The Market analyst only
+  // backs value the REAL money confirms: a genuine model edge AND the price
+  // actually steaming toward that selection. With no live market to read (e.g.
+  // provisional World Cup fixtures), it defers to the model favourite at modest
+  // confidence rather than inventing a contrarian price.
+  var marketAgent = {
+    agent: 'The Market',
+    approach: 'Sharp money & market-confirmed value',
     market: null,
     selection: null,
     confidence: 5,
     reasoning: '',
   };
 
-  // Scout looks for the biggest gap between model probability and market price
-  var markets = [
-    { market: 'Match Result', selection: home + ' Win', odds: homeOdds, modelProb: profHomeScore },
-    { market: 'Match Result', selection: away + ' Win', odds: awayOdds, modelProb: profAwayScore },
-    { market: 'Match Result', selection: 'Draw', odds: drawOdds, modelProb: 1 - profHomeScore - profAwayScore + 0.3 },
-    { market: 'Over 2.5 Goals', selection: 'Over 2.5 Goals', odds: overOdds, modelProb: profGoalsScore },
-    { market: 'Both Teams to Score', selection: 'BTTS - Yes', odds: bttsOdds, modelProb: (factors.xG || 0.5) * 0.8 + 0.1 },
+  // Per-outcome price movement attached by the caller (scheduler) when live odds
+  // history exists: { home|away|draw: { direction, percentChange, isSteamMove,
+  // isDrift, isGamble, signal } }. Null on paths without a live market.
+  var mv = scored.marketMovement || null;
+  var _moveScore = function(m) {
+    if (!m) return 0;
+    if (m.isGamble) return 1.0;        // 15%+ shortening — serious money
+    if (m.isSteamMove) return 0.7;     // 8%+ shortening — steamer
+    if (m.direction === 'shortening') return 0.35;
+    if (m.isDrift) return -0.8;        // 12%+ drift — money against
+    if (m.direction === 'drifting') return -0.3;
+    return 0;
+  };
+  // Edge uses the model's INDEPENDENT probability (Professor's form/xG score) vs
+  // the price-implied probability — a real edge, not one derived from the odds.
+  var _drawMp = Math.max(0.05, Math.min(0.60, 1 - profHomeScore - profAwayScore + 0.30));
+  var mCands = [
+    { selection: home + ' Win', odds: homeOdds, p: pHome, mp: profHomeScore, mv: mv && mv.home },
+    { selection: away + ' Win', odds: awayOdds, p: pAway, mp: profAwayScore, mv: mv && mv.away },
+    { selection: 'Draw',        odds: drawOdds, p: pDraw, mp: _drawMp,        mv: mv && mv.draw },
   ];
-
-  // Calculate edge for each market
-  markets.forEach(function(m) {
-    m.impliedProb = 1 / m.odds;
-    m.edge = m.modelProb - m.impliedProb;
+  mCands.forEach(function(c) {
+    c.implied = 1 / Math.max(1.01, c.odds);
+    c.edge = c.mp - c.implied;   // model probability above the price = value
+    c.move = _moveScore(c.mv);   // sharp-money confirmation (or opposition)
   });
 
-  // Scout picks the market with the highest value edge
-  markets.sort(function(a, b) { return b.edge - a.edge; });
-  var bestValue = markets[0];
-
-  if (bestValue.edge > 0.02) {
-    scout.market = bestValue.market;
-    scout.selection = bestValue.selection;
-    scout.confidence = Math.min(9, Math.round(5 + bestValue.edge * 50));
-    scout.reasoning = 'Best value at ' + bestValue.odds.toFixed(2) + '. Model sees ' + (bestValue.modelProb * 100).toFixed(0) + '% probability vs market\'s ' + (bestValue.impliedProb * 100).toFixed(0) + '%. Edge: ' + (bestValue.edge * 100).toFixed(1) + '%.';
+  if (mv) {
+    // Live market available: back value the money CONFIRMS — a model edge AND
+    // the price steaming toward it. Drifting selections are never backed.
+    var confirmed = mCands.filter(function(c) { return c.edge > 0.015 && c.move > 0; });
+    confirmed.sort(function(a, b) { return (b.move - a.move) || (b.edge - a.edge); });
+    if (confirmed.length) {
+      var pick = confirmed[0];
+      marketAgent.market = 'Match Result';
+      marketAgent.selection = pick.selection;
+      marketAgent.confidence = Math.max(6, Math.min(9, Math.round(5 + pick.edge * 25 + pick.move * 3)));
+      marketAgent.reasoning = 'Market-confirmed value on ' + pick.selection + ' at ' + pick.odds.toFixed(2) + ' — model ' + Math.round(pick.mp * 100) + '% vs price ' + Math.round(pick.implied * 100) + '%, and the money is ' + (pick.mv && pick.mv.signal ? pick.mv.signal : 'moving in') + ' (' + (pick.mv ? pick.mv.percentChange : 0) + '%).';
+    } else {
+      // No value the market confirms — only add a vote for a genuinely CLEAR
+      // favourite the money isn't opposing; otherwise stand aside (a discerning
+      // analyst passes on coin-flips rather than rubber-stamping every match into
+      // a falsely-unanimous, over-confident call).
+      var favL = mCands.slice().sort(function(a, b) { return b.p - a.p; })[0];
+      if (favL.p >= 0.55 && favL.move >= 0) {
+        marketAgent.market = 'Match Result';
+        marketAgent.selection = favL.selection;
+        marketAgent.confidence = Math.max(5, Math.min(7, Math.round(4 + (favL.p - 0.40) * 10)));
+        marketAgent.reasoning = 'No standout value, but the market is not opposing ' + favL.selection + ' (model favourite ' + Math.round(favL.p * 100) + '%). Siding with the probable result.';
+      } else {
+        marketAgent.market = 'No Strong Value';
+        marketAgent.selection = 'Pass';
+        marketAgent.confidence = 3;
+        marketAgent.reasoning = 'No market-confirmed value' + (favL.move < 0 ? ' and the favourite is drifting' : '') + ' — stand aside.';
+      }
+    }
   } else {
-    scout.market = 'No Strong Value';
-    scout.selection = 'Pass';
-    scout.confidence = 3;
-    scout.reasoning = 'No market offers sufficient value. The price is fair across all outcomes.';
+    // No live market data (e.g. provisional World Cup fixtures). Confirm only a
+    // genuinely CLEAR model favourite; stand aside on close matches rather than
+    // inflating agreement. Never chase a contrarian price.
+    var favN = mCands.slice().sort(function(a, b) { return b.p - a.p; })[0];
+    if (favN.p >= 0.55) {
+      marketAgent.market = 'Match Result';
+      marketAgent.selection = favN.selection;
+      marketAgent.confidence = Math.max(5, Math.min(7, Math.round(4 + (favN.p - 0.40) * 10)));
+      marketAgent.reasoning = 'No live market to read, so deferring to the model favourite ' + favN.selection + ' (' + Math.round(favN.p * 100) + '%).';
+    } else {
+      marketAgent.market = 'No Strong Value';
+      marketAgent.selection = 'Pass';
+      marketAgent.confidence = 3;
+      marketAgent.reasoning = 'No live market and no clear favourite — stand aside.';
+    }
   }
 
   // =====================================================================
   // CONSENSUS: Find the market where most agents agree
   // =====================================================================
-  var agents = [tactician, professor, scout].filter(function(a) { return a.selection !== 'Pass'; });
+  var agents = [tactician, professor, marketAgent].filter(function(a) { return a.selection !== 'Pass'; });
   var debate = [];
 
   // Probability the model assigns to a given market/selection — the anchor for
@@ -278,7 +329,7 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
   // Build debate log
   debate.push({ agent: tactician.agent, pick: tactician.selection, market: tactician.market, confidence: tactician.confidence, reasoning: tactician.reasoning });
   debate.push({ agent: professor.agent, pick: professor.selection, market: professor.market, confidence: professor.confidence, reasoning: professor.reasoning });
-  debate.push({ agent: scout.agent, pick: scout.selection, market: scout.market, confidence: scout.confidence, reasoning: scout.reasoning });
+  debate.push({ agent: marketAgent.agent, pick: marketAgent.selection, market: marketAgent.market, confidence: marketAgent.confidence, reasoning: marketAgent.reasoning });
 
   // The reasoning that actually backs the headline = the agreeing analyst with
   // the highest confidence for the winning pick (not always the Tactician).

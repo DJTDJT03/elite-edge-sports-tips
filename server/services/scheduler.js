@@ -145,6 +145,22 @@ module.exports = function startScheduler(deps) {
     }
   }
 
+  // Map analyseOddsMovement output into the per-outcome movement signal that the
+  // consensus engine's Market analyst reads (steamer/drifter flags). Returns null
+  // when there isn't enough live price history to be meaningful.
+  function _movementSignal(om) {
+    if (!om || om.bookmakerCount < 3) return null;
+    var ch = om.changePercent; // negative = shortening (money in), positive = drifting
+    return {
+      direction: om.direction,
+      percentChange: ch,
+      isSteamMove: ch <= -8,
+      isDrift: ch >= 12,
+      isGamble: ch <= -15,
+      signal: ch <= -15 ? 'GAMBLE — heavy money' : ch <= -8 ? 'STEAMER — strong support' : ch <= -5 ? 'supported' : ch >= 12 ? 'DRIFTER — avoid' : ch >= 5 ? 'drifting' : 'stable',
+    };
+  }
+
   // -------------------------------------------------------------------------
   // Helper: get current UK time
   // -------------------------------------------------------------------------
@@ -877,9 +893,20 @@ module.exports = function startScheduler(deps) {
           for (var omIdx = 0; omIdx < allScoredFixtures.length; omIdx++) {
             var omEntry = allScoredFixtures[omIdx];
             var omScored = omEntry.scored;
-            if (!omScored || !omScored.selectedSelection) continue;
+            if (!omScored) continue;
             var omFixture = omScored.fixture || {};
             var omEventKey = ((omFixture.homeTeam || '') + ' v ' + (omFixture.awayTeam || '')).toLowerCase();
+
+            // Per-outcome price movement for the consensus engine's Market analyst
+            // (sharp-money confirmation on home/away/draw). Null if no live history.
+            var _mm = {
+              home: _movementSignal(analyseOddsMovement(omEventKey, omFixture.homeTeam)),
+              away: _movementSignal(analyseOddsMovement(omEventKey, omFixture.awayTeam)),
+              draw: _movementSignal(analyseOddsMovement(omEventKey, 'Draw')),
+            };
+            omScored.marketMovement = (_mm.home || _mm.away || _mm.draw) ? _mm : null;
+
+            if (!omScored.selectedSelection) continue;
             var omMovement = analyseOddsMovement(omEventKey, omScored.selectedSelection);
             if (omMovement && omMovement.bookmakerCount >= 3) {
               if (omMovement.direction === 'shortening') {

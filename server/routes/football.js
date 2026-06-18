@@ -453,9 +453,17 @@ module.exports = function(deps) {
               } catch (e) { /* non-fatal */ }
             }
 
+            // Elite Edge Quant Model (Elo + Dixon-Coles) — the SAME model that
+            // drives the consensus "Our Take", surfaced here so the displayed
+            // model and the headline pick line up (the SportMonks panel can
+            // diverge from our engine; the quant model is what we actually back).
+            var _wcQuant = null;
+            try { if (deps.quantModel) _wcQuant = deps.quantModel.predict(smF.homeTeam || '', smF.awayTeam || '', { neutral: true }); } catch (e) { /* non-fatal */ }
+
             return res.json({
               fixtureId: parseInt(fixtureId),
               source: 'sportmonks',
+              quantModel: _wcQuant,
               match: {
                 homeTeam: smF.homeTeam, homeTeamId: smF.homeTeamId, homeTeamLogo: smF.homeTeamLogo || '',
                 awayTeam: smF.awayTeam, awayTeamId: smF.awayTeamId, awayTeamLogo: smF.awayTeamLogo || '',

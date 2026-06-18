@@ -26,6 +26,8 @@ The identities below are fixed. Only the *parameters* — weights, odds ranges, 
 
 **The Edge (Gold)** — All 6 sports. *No bias; weigh everything equally.* All weights 1.0. Sweet spot 2/1–10/1. Assigned to anything that doesn't trigger a specialist — the safety net. Standard Perplexity prompt.
 
+> **Football consensus engine (`consensusEngine.js`) — three-agent panel.** Every football fixture is debated by **The Tactician**, **The Professor**, and **The Market** (NOT the Scout). *The Market* replaced the Scout here (18 Jun 2026, at Darren's request): the Scout chased the biggest *theoretical* price gap and so headlined longshots, whereas **The Market backs value only when REAL price movement confirms it** — a genuine model edge AND the price steaming toward that selection (Betfair/exchange + bookmaker movement via `OddsMovementTracker`). With no live market (e.g. provisional World Cup fixtures) it defers to the model favourite, never a contrarian longshot. On a **SPLIT** (all three disagree) the headline goes to the most *probable* outcome, not the most confident analyst. The Scout/Edge identities above still apply to the scoring/assignment + AutoTune layer; the consensus engine's three agents use hardcoded weights independent of `analyst_state.json`.
+
 If `analyst_state.json` exists in this folder, read the current weights, odds ranges, and preferred markets from it. If it doesn't, treat the values above as the baseline and create the file on first run. Never edit weights inline in a thesis — only the AutoTune cycle is allowed to change them, and only via the rules below.
 
 ## The inviolable rules of self-training
