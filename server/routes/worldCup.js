@@ -569,6 +569,20 @@ module.exports = function(deps) {
     }
   });
 
+  // POST /api/world-cup/admin/regenerate-previews — re-run the analysis circuit
+  // for upcoming fixtures that ALREADY have a preview (force overwrite). Use this
+  // to refresh stored verdicts after a change to the consensus engine.
+  router.post('/admin/regenerate-previews', authenticate, requireAdmin, async function(req, res) {
+    try {
+      var worldCupData = deps.worldCupData;
+      if (!worldCupData || !worldCupData.generatePreviews) return res.status(503).json({ error: 'World Cup data service not available' });
+      var result = await worldCupData.generatePreviews({ force: true });
+      res.json({ ok: true, regenerated: result });
+    } catch (err) {
+      res.status(500).json({ error: 'Regenerate failed: ' + err.message });
+    }
+  });
+
   // GET /api/world-cup/admin/diagnose — verify the SportMonks World Cup feed
   router.get('/admin/diagnose', authenticate, requireAdmin, async function(req, res) {
     try {

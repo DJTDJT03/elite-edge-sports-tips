@@ -88,6 +88,17 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
     reasoning: '',
   };
 
+  // Normalised model probabilities for the three match-result outcomes, derived
+  // from the (overround-stripped) odds. These are the OBJECTIVE anchor used to
+  // resolve a split — so a contrarian longshot can never outrank the probable
+  // outcome on the headline — and to ground each analyst's written reasoning.
+  var _impH = 1 / Math.max(1.01, homeOdds), _impD = 1 / Math.max(1.01, drawOdds), _impA = 1 / Math.max(1.01, awayOdds);
+  var _impTot = _impH + _impD + _impA;
+  var pHome = _impTot ? _impH / _impTot : 0.40;
+  var pDraw = _impTot ? _impD / _impTot : 0.27;
+  var pAway = _impTot ? _impA / _impTot : 0.33;
+  var pHomePct = Math.round(pHome * 100), pDrawPct = Math.round(pDraw * 100), pAwayPct = Math.round(pAway * 100);
+
   var injuryFactor = factors.injuries || 0.5;
   var motivationFactor = factors.motivation || 0.5;
   var congestionFactor = factors.scheduleCongestion || 0.5;
@@ -102,12 +113,12 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
     tactician.market = 'Match Result';
     tactician.selection = home + ' Win';
     tactician.confidence = Math.round(tactHomeScore * 10);
-    tactician.reasoning = 'Tactical setup and contextual factors favour ' + home + '. Injury impact and motivation weigh heavily.';
+    tactician.reasoning = 'Tactical setup and context favour ' + home + ' (model ' + pHomePct + '% home / ' + pDrawPct + '% draw / ' + pAwayPct + '% away). Injury impact and motivation weigh heaviest.';
   } else if (tactAwayScore > 0.6 && awayOdds >= 1.8) {
     tactician.market = 'Match Result';
     tactician.selection = away + ' Win';
     tactician.confidence = Math.round(tactAwayScore * 10);
-    tactician.reasoning = 'Away side has tactical advantages. Schedule congestion and motivation context favour ' + away + '.';
+    tactician.reasoning = away + ' hold the tactical edge (model ' + pAwayPct + '% away / ' + pDrawPct + '% draw / ' + pHomePct + '% home). Schedule congestion and motivation context point their way.';
   } else if (tactGoalsScore > 0.55) {
     tactician.market = 'Over 2.5 Goals';
     tactician.selection = 'Over 2.5 Goals';
@@ -146,12 +157,12 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
     professor.market = 'Match Result';
     professor.selection = home + ' Win';
     professor.confidence = Math.round(profHomeScore * 10);
-    professor.reasoning = 'Form and expected goals data support ' + home + '. Statistical edge is clear.';
+    professor.reasoning = 'Form and expected-goals data back ' + home + ' — model rates them ' + pHomePct + '% (draw ' + pDrawPct + '%, ' + away + ' ' + pAwayPct + '%). Statistical edge is clear.';
   } else if (profAwayScore > 0.58 && awayOdds >= 1.5) {
     professor.market = 'Match Result';
     professor.selection = away + ' Win';
     professor.confidence = Math.round(profAwayScore * 10);
-    professor.reasoning = 'Data profile favours ' + away + '. Superior xG and recent form.';
+    professor.reasoning = 'Data profile favours ' + away + ' — model ' + pAwayPct + '% (draw ' + pDrawPct + '%, ' + home + ' ' + pHomePct + '%). Superior xG and recent form.';
   } else if (profGoalsScore > 0.6) {
     professor.market = 'Over 2.5 Goals';
     professor.selection = 'Over 2.5 Goals';
@@ -218,19 +229,47 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
   var agents = [tactician, professor, scout].filter(function(a) { return a.selection !== 'Pass'; });
   var debate = [];
 
+  // Probability the model assigns to a given market/selection — the anchor for
+  // resolving a split by likelihood rather than by an analyst's self-assigned
+  // confidence (which is what let a contrarian longshot hijack the headline).
+  // pAlign = the model's probability that this BET LANDS, on one comparable
+  // 0-1 scale across markets, so the split tie-break ranks like-for-like. Goals
+  // and BTTS use the goals-model score as their probability proxy (factors.btts
+  // is only populated on some paths, so fall back to the goals proxy, not a flat
+  // 0.5). Floored so a supported pick is never zeroed out of the ranking.
+  var _goalsP = Math.max(0, Math.min(1, profGoalsScore));
+  var _pOf = function(market, selection) {
+    var p = 0.5;
+    if (market === 'Match Result') {
+      // Check Draw and the away side before the home substring to avoid a
+      // team name that is a substring of the other skewing the match.
+      if (selection === 'Draw') p = pDraw;
+      else if (away && selection.indexOf(away) !== -1) p = pAway;
+      else if (home && selection.indexOf(home) !== -1) p = pHome;
+    } else if (market.indexOf('Over') !== -1) p = _goalsP;
+    else if (market.indexOf('Under') !== -1) p = 1 - _goalsP;
+    else if (market.indexOf('BTTS') !== -1 || market.indexOf('Both') !== -1) p = factors.btts != null ? factors.btts : _goalsP;
+    return Math.max(0.05, p);
+  };
+
   // Group by market+selection
   var votes = {};
   agents.forEach(function(a) {
     var key = a.market + '|' + a.selection;
-    if (!votes[key]) votes[key] = { market: a.market, selection: a.selection, agents: [], totalConf: 0 };
+    if (!votes[key]) votes[key] = { market: a.market, selection: a.selection, agents: [], totalConf: 0, pAlign: _pOf(a.market, a.selection) };
     votes[key].agents.push(a.agent);
     votes[key].totalConf += a.confidence;
   });
 
-  // Sort by number of agents agreeing, then by total confidence
+  // Rank: most agents agreeing wins first (genuine consensus). On a TIE — most
+  // importantly a 3-way SPLIT — break by a probability-weighted score
+  // (avg confidence × model probability of the outcome), NOT raw confidence. So
+  // the most *probable* call leads the headline; a value longshot can no longer
+  // win a split on confidence alone.
+  var _strength = function(v) { return (v.totalConf / v.agents.length) * v.pAlign; };
   var ranked = Object.values(votes).sort(function(a, b) {
     if (b.agents.length !== a.agents.length) return b.agents.length - a.agents.length;
-    return b.totalConf - a.totalConf;
+    return _strength(b) - _strength(a);
   });
 
   var consensus = ranked[0];
@@ -240,6 +279,15 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
   debate.push({ agent: tactician.agent, pick: tactician.selection, market: tactician.market, confidence: tactician.confidence, reasoning: tactician.reasoning });
   debate.push({ agent: professor.agent, pick: professor.selection, market: professor.market, confidence: professor.confidence, reasoning: professor.reasoning });
   debate.push({ agent: scout.agent, pick: scout.selection, market: scout.market, confidence: scout.confidence, reasoning: scout.reasoning });
+
+  // The reasoning that actually backs the headline = the agreeing analyst with
+  // the highest confidence for the winning pick (not always the Tactician).
+  var consensusReasoning = '';
+  if (consensus) {
+    var _backers = debate.filter(function(d) { return d.market === consensus.market && d.pick === consensus.selection; });
+    _backers.sort(function(a, b) { return b.confidence - a.confidence; });
+    consensusReasoning = _backers.length ? _backers[0].reasoning : '';
+  }
 
   // =====================================================================
   // AI ARBITER PANEL — independent reasoning models review the debate
@@ -310,6 +358,8 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
     // The consensus pick
     market: consensus ? consensus.market : 'Match Result',
     selection: consensus ? consensus.selection : home + ' Win',
+    consensusReasoning: consensusReasoning,
+    modelProbabilities: { home: pHomePct, draw: pDrawPct, away: pAwayPct },
     odds: finalOdds,
     confidence: finalConfidence,
 

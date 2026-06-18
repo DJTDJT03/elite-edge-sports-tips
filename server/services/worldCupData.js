@@ -634,7 +634,9 @@ module.exports = function(deps) {
     };
   }
 
-  async function generatePreviews() {
+  async function generatePreviews(opts) {
+    opts = opts || {};
+    var force = !!opts.force; // regenerate even fixtures that already have a preview
     if (!db.isAvailable || !db.isAvailable()) return { generated: 0 };
     var perplexityClient = deps.perplexityClient;
     var prompts = require('./perplexity/prompts');
@@ -651,9 +653,9 @@ module.exports = function(deps) {
          AND f.kickoff IS NOT NULL
          AND f.kickoff > NOW()
          AND f.kickoff <= NOW() + INTERVAL '5 days'
-         AND p.id IS NULL
+         ${force ? '' : 'AND p.id IS NULL'}
        ORDER BY f.kickoff ASC
-       LIMIT 6`
+       LIMIT ${force ? 20 : 6}`
     );
 
     if (upcoming.length === 0) {
@@ -724,6 +726,7 @@ module.exports = function(deps) {
                   market: _cres.market, selection: _cres.selection, confidence: _cres.confidence,
                   agreementLabel: _cres.agreementLabel, agreementLevel: _cres.agreementLevel,
                   debate: _cres.debate, analystName: _cres.analystName,
+                  consensusReasoning: _cres.consensusReasoning, modelProbabilities: _cres.modelProbabilities,
                 };
                 console.log('[WorldCup] Consensus (shadow) for ' + fixture.home_team + ' v ' + fixture.away_team + ': ' + signals.consensus.value);
               }
@@ -761,7 +764,9 @@ module.exports = function(deps) {
           verdictMarket = _c.market;
           verdictSelection = _c.selection;
           confidence = _c.confidence;
-          var _lead = (_c.debate && _c.debate[0]) ? _c.debate[0].reasoning : '';
+          // Use the reasoning that actually backs the winning pick (not always
+          // the Tactician's) so the explanation matches the selection.
+          var _lead = _c.consensusReasoning || ((_c.debate && _c.debate[0]) ? _c.debate[0].reasoning : '');
           verdict = _c.agreementLabel + ' analyst consensus: ' + _c.selection + ' (' + _c.market + '). ' + _lead
             + (_perplexityNarrative ? ' Live intelligence: ' + _perplexityNarrative : '');
         }
