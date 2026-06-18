@@ -69,7 +69,7 @@ module.exports = function (deps) {
           // A market-consistent insight. The predicted exact score (always a low
           // modal score like 1-1) only makes sense beside a match-result call —
           // showing it next to "Over 2.5" reads as a contradiction.
-          note = viewNote(view, pv.rows[0].predicted_scoreline);
+          note = viewNote(view, pv.rows[0].predicted_scoreline, f.home_team);
         }
       } catch (e) {}
       // No consensus verdict for this game yet → skip it (never invent a pick
@@ -102,7 +102,7 @@ module.exports = function (deps) {
 
   // A market-CONSISTENT one-line insight for the view. Only a match-result call
   // gets the predicted scoreline (anything else contradicts a low modal score).
-  function viewNote(view, scoreline) {
+  function viewNote(view, scoreline, homeTeam) {
     var v = String(view || '').toLowerCase();
     if (v.indexOf('over') !== -1) return 'goals expected — both carry a scoring threat';
     if (v.indexOf('under') !== -1) return 'a tight, low-scoring game on the cards';
@@ -111,8 +111,19 @@ module.exports = function (deps) {
     // Double Chance contains the word "draw" — must be checked BEFORE the draw case.
     if (v.indexOf('double chance') !== -1) return 'the safe play — covers the win or the draw';
     if (v === 'draw' || v.indexOf('draw') !== -1) return 'finely balanced — honours look even';
-    // Match result (a side to win): the predicted scoreline is consistent here.
-    return scoreline ? 'predicted ' + scoreline : '';
+    // Match result (a side to win): show the predicted scoreline ONLY if it's
+    // consistent with the pick (the picked side actually winning that scoreline).
+    // A "Türkiye Win — predicted 1-1" reads as a contradiction, so suppress it.
+    if (scoreline) {
+      var pr = String(scoreline).split('-');
+      var h = parseInt(pr[0], 10), a = parseInt(pr[1], 10);
+      if (!isNaN(h) && !isNaN(a)) {
+        var pickedHome = homeTeam && v.indexOf(String(homeTeam).toLowerCase()) !== -1;
+        var consistent = pickedHome ? h > a : a > h;
+        if (consistent) return 'predicted ' + scoreline;
+      }
+    }
+    return '';
   }
 
   function buildTelegram(picks, dateLabel) {
