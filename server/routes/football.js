@@ -168,6 +168,8 @@ module.exports = function(deps) {
       var injuriesList = [], predictionsObj = null;
       var homeTeamSeasonStats = null, awayTeamSeasonStats = null;
       var usedSportMonks = false;
+      var smRichData = null; // SportMonks All-In rich detail, shared by both branches
+      var smRichHomeName = '', smRichAwayName = ''; // SportMonks home/away names for orientation
 
       // Always use API-Football for deep match intelligence (form, H2H, injuries, predictions, stats).
       // If the fixture ID is from SportMonks, resolve to API-Football by searching by team+date.
@@ -184,6 +186,17 @@ module.exports = function(deps) {
           var smFixture = await sportMonks.getFixture(fixtureId);
           if (smFixture && smFixture.homeTeam && smFixture.kickoff) {
             usedSportMonks = true;
+
+            // Pull SportMonks All-In rich detail (lineups + player ratings,
+            // formations, full match stats, Pressure Index momentum) ONCE, keyed
+            // by the SportMonks id before it's reassigned to an API-Football id.
+            // Shared by both branches so this detail shows for every
+            // SportMonks-covered fixture year-round — not just the World Cup.
+            if (sportMonks.getFixtureRichData) {
+              try { smRichData = await sportMonks.getFixtureRichData(fixtureId, smFixture.homeTeamId, smFixture.awayTeamId); }
+              catch (e) { console.log('[Match Intelligence] SportMonks rich data failed:', e.message); }
+              smRichHomeName = smFixture.homeTeam || ''; smRichAwayName = smFixture.awayTeam || '';
+            }
 
             // World Cup fixtures: SportMonks All-In is the source of truth
             // (predictions, lineups, player ratings, full match stats, Pressure
@@ -325,17 +338,19 @@ module.exports = function(deps) {
             // Rich All-In match detail — lineups WITH player ratings, formations,
             // full team stat sheet, and Pressure Index momentum (one call).
             // Stats/pressure are empty pre-match and parse to null defensively.
+            // Reuse the rich detail already fetched during resolution (fall back
+            // to a fresh fetch only if we somehow arrived here without it).
             var smLineups = null, smFormations = null, smTeamStats = null, smPressure = null;
-            if (sportMonks.getFixtureRichData) {
-              try {
-                var smRich = await sportMonks.getFixtureRichData(fixtureId, smF.homeTeamId, smF.awayTeamId);
-                if (smRich) {
-                  smLineups = smRich.lineups;
-                  smFormations = smRich.formations;
-                  smTeamStats = smRich.teamStats;
-                  smPressure = smRich.pressure;
-                }
-              } catch (e) { console.log('[Match Intelligence] SportMonks rich data failed:', e.message); }
+            var smRich = smRichData;
+            if (!smRich && sportMonks.getFixtureRichData) {
+              try { smRich = await sportMonks.getFixtureRichData(fixtureId, smF.homeTeamId, smF.awayTeamId); }
+              catch (e) { console.log('[Match Intelligence] SportMonks rich data failed:', e.message); }
+            }
+            if (smRich) {
+              smLineups = smRich.lineups;
+              smFormations = smRich.formations;
+              smTeamStats = smRich.teamStats;
+              smPressure = smRich.pressure;
             }
 
             // xG from fixture statistics — defensive key match (exact shape confirmed via diagnostic)
@@ -1010,6 +1025,28 @@ module.exports = function(deps) {
         }
       }
 
+      // Orient SportMonks rich detail to API-Football's home/away. The SportMonks
+      // data is split by SportMonks' home/away; if the resolver matched a fixture
+      // with reversed sides, flip it so lineups/stats/momentum line up with the
+      // home/away the modal renders.
+      var _smRich = smRichData;
+      if (smRichData && smRichHomeName) {
+        var _afHome = (homeTeam && (homeTeam.name || homeTeam) || '').toString().toLowerCase();
+        var _smH = smRichHomeName.toLowerCase(), _smA = smRichAwayName.toLowerCase();
+        var _near = function(a, b) { return a && b && (a.indexOf(b) !== -1 || b.indexOf(a) !== -1); };
+        if (!_near(_afHome, _smH) && _near(_afHome, _smA)) {
+          var _flipRows = function(rows) { return (rows || []).map(function(r) { return { label: r.label, home: r.away, away: r.home, suffix: r.suffix }; }); };
+          var _flipTimeline = function(tl) { return (tl || []).map(function(t) { return { minute: t.minute, home: t.away, away: t.home }; }); };
+          _smRich = {
+            lineups: smRichData.lineups ? { home: smRichData.lineups.away, away: smRichData.lineups.home } : null,
+            formations: smRichData.formations ? { home: smRichData.formations.away, away: smRichData.formations.home } : null,
+            teamStats: smRichData.teamStats ? _flipRows(smRichData.teamStats) : null,
+            pressure: smRichData.pressure ? { homeShare: smRichData.pressure.awayShare, awayShare: smRichData.pressure.homeShare, timeline: _flipTimeline(smRichData.pressure.timeline) } : null,
+          };
+          console.log('[Match Intelligence] Oriented SportMonks rich data to API-Football home/away (sides were reversed).');
+        }
+      }
+
       // Elite Edge Quant Model — independent Elo + Dixon-Coles prediction (a
       // genuine in-house signal shown alongside the engine's verdict).
       var _quant = null;
@@ -1076,6 +1113,15 @@ module.exports = function(deps) {
           home: homeTeamSeasonStats || null,
           away: awayTeamSeasonStats || null,
         },
+        // SportMonks All-In rich detail (lineups + ratings, formations, match
+        // stats, Pressure Index momentum) — present for any SportMonks-covered
+        // fixture. Rendered by the same modal sections used for the World Cup.
+        // _smRich orients SportMonks' home/away to API-Football's, guarding
+        // against a fuzzy resolver that matched a fixture with reversed sides.
+        lineups: _smRich ? _smRich.lineups : null,
+        formations: _smRich ? _smRich.formations : null,
+        teamStats: _smRich ? _smRich.teamStats : null,
+        pressure: _smRich ? _smRich.pressure : null,
         verdict: {
           market: verdictMarket,
           pick: verdictPick,
