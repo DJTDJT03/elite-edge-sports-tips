@@ -287,15 +287,53 @@ var WorldCup = (function() {
     }).join('');
   }
 
+  // WC 2026 qualification: 12 groups of 4 — the top 2 of each group plus the 8
+  // best third-placed teams advance to the Round of 32. Computes, from the live
+  // standings, which 3rd-placed teams are currently in the best-8 cut.
+  function qualificationData() {
+    var thirds = [];
+    var playedGroups = {};
+    _groups.forEach(function(g) {
+      var s = g.standings || [];
+      var played = s.some(function(t) { return (t.played || 0) > 0; });
+      if (played) playedGroups[g.letter] = true;
+      // Only groups that have actually played contribute a 3rd-placed candidate —
+      // otherwise an unplayed group's 0-point team could grab a best-8 slot.
+      if (played && s.length >= 3) {
+        var t = s[2]; // standings arrive pre-sorted; index 2 = 3rd place
+        thirds.push({ key: g.letter + '|' + t.team, points: t.points || 0, gd: t.goalDifference || 0, gf: t.goalsFor || 0 });
+      }
+    });
+    thirds.sort(function(a, b) { return b.points - a.points || b.gd - a.gd || b.gf - a.gf; });
+    var best = {};
+    thirds.slice(0, 8).forEach(function(t) { best[t.key] = true; });
+    return { bestThird: best, playedGroups: playedGroups, anyPlayed: Object.keys(playedGroups).length > 0 };
+  }
+
+  // Qualification status for a team at a given group position (0-based index).
+  // Returns { color, badge, title } or null for no highlight.
+  function qualStatus(q, groupLetter, team, idx) {
+    if (idx < 2) return { color: '#22c55e', badge: 'Q', title: 'In a top-2 qualifying place' };
+    if (idx === 2 && q.playedGroups[groupLetter]) {
+      if (q.bestThird[groupLetter + '|' + team]) return { color: '#d4a843', badge: '3rd', title: 'Currently among the 8 best third-placed teams — advancing' };
+      return { color: 'rgba(212,168,67,0.4)', badge: '3rd', title: '3rd place — outside the best-8 cut for now' };
+    }
+    return null;
+  }
+
   function renderGroups() {
     if (_groups.length === 0) return '<p style="color:rgba(255,255,255,0.4);text-align:center;padding:40px 0;">Groups not yet drawn.</p>';
+    var q = qualificationData();
 
-    return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;">' +
+    var grid = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;">' +
       _groups.map(function(g) {
         var standings = g.standings || [];
-        var rows = standings.map(function(t) {
+        var rows = standings.map(function(t, idx) {
+          var st = qualStatus(q, g.letter, t.team, idx);
+          var teamStyle = st ? ' style="border-left:3px solid ' + st.color + ';padding-left:8px;"' : '';
+          var badge = st ? ' <span title="' + st.title + '" style="font-size:9px;font-weight:800;color:' + st.color + ';border:1px solid ' + st.color + ';border-radius:3px;padding:0 4px;vertical-align:middle;">' + st.badge + '</span>' : '';
           return '<tr>' +
-            '<td>' + getFlag(t.team) + ' ' + t.team + '</td>' +
+            '<td' + teamStyle + '>' + getFlag(t.team) + ' ' + t.team + badge + '</td>' +
             '<td>' + (t.played || 0) + '</td>' +
             '<td>' + (t.won || 0) + '</td>' +
             '<td>' + (t.drawn || 0) + '</td>' +
@@ -314,14 +352,21 @@ var WorldCup = (function() {
         '</div>';
       }).join('') +
     '</div>';
+
+    var legend = '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;font-size:12px;color:rgba(255,255,255,0.55);margin-bottom:14px;">' +
+      '<span><span style="display:inline-block;width:10px;height:10px;background:#22c55e;border-radius:2px;margin-right:5px;vertical-align:middle;"></span>Top 2 — qualify</span>' +
+      '<span><span style="display:inline-block;width:10px;height:10px;background:#d4a843;border-radius:2px;margin-right:5px;vertical-align:middle;"></span>Best 8 third-placed — also advance to the Round of 32</span>' +
+    '</div>';
+
+    return legend + grid;
   }
 
   function renderBracket() {
     var knockout = _fixtures.filter(function(f) { return f.stage !== 'group'; });
     if (knockout.length === 0) return '<p style="color:rgba(255,255,255,0.4);text-align:center;padding:40px 0;">Knockout stage not yet underway.</p>';
 
-    var stages = ['round-of-16', 'quarter-final', 'semi-final', 'third-place', 'final'];
-    var stageLabels = { 'round-of-16': 'Round of 16', 'quarter-final': 'Quarter-Finals', 'semi-final': 'Semi-Finals', 'third-place': '3rd Place', 'final': 'Final' };
+    var stages = ['round-of-32', 'round-of-16', 'quarter-final', 'semi-final', 'third-place', 'final'];
+    var stageLabels = { 'round-of-32': 'Round of 32', 'round-of-16': 'Round of 16', 'quarter-final': 'Quarter-Finals', 'semi-final': 'Semi-Finals', 'third-place': '3rd Place', 'final': 'Final' };
 
     return '<div class="wc-bracket">' +
       stages.map(function(stage) {
@@ -330,16 +375,18 @@ var WorldCup = (function() {
         return '<div class="wc-bracket-round">' +
           '<h4>' + stageLabels[stage] + '</h4>' +
           matches.map(function(m) {
-            var homeWin = m.result === 'home';
-            var awayWin = m.result === 'away';
+            // Derive the winner from the score when the result flag isn't set.
+            var bothGoals = m.homeGoals != null && m.awayGoals != null;
+            var homeWin = m.result === 'home' || (bothGoals && m.homeGoals > m.awayGoals);
+            var awayWin = m.result === 'away' || (bothGoals && m.awayGoals > m.homeGoals);
             return '<div class="wc-bracket-match">' +
               '<div class="wc-bracket-team' + (homeWin ? ' winner' : '') + '">' +
                 '<span>' + getFlag(m.homeTeam) + ' ' + (m.homeTeam || 'TBD') + '</span>' +
-                '<span>' + (m.homeGoals !== null ? m.homeGoals : '-') + '</span>' +
+                '<span>' + (m.homeGoals != null ? m.homeGoals : '-') + '</span>' +
               '</div>' +
               '<div class="wc-bracket-team' + (awayWin ? ' winner' : '') + '">' +
                 '<span>' + getFlag(m.awayTeam) + ' ' + (m.awayTeam || 'TBD') + '</span>' +
-                '<span>' + (m.awayGoals !== null ? m.awayGoals : '-') + '</span>' +
+                '<span>' + (m.awayGoals != null ? m.awayGoals : '-') + '</span>' +
               '</div>' +
             '</div>';
           }).join('') +
@@ -416,98 +463,55 @@ var WorldCup = (function() {
     return picker + rankings;
   }
 
+  // Projected qualifiers — driven live off the actual group standings (top 2 of
+  // each group + the 8 best third-placed teams). No hardcoded predictions.
   function renderOurPicks() {
-    var groupPicks = {
-      A: { winner: 'Mexico', runnerUp: 'South Korea', reasoning: 'Home advantage at Estadio Azteca gives Mexico the edge. Son Heung-min carries South Korea through.' },
-      B: { winner: 'Switzerland', runnerUp: 'Canada', reasoning: 'Swiss tactical discipline wins the group. Canada benefit from home soil in Toronto.' },
-      C: { winner: 'Brazil', runnerUp: 'Morocco', reasoning: 'Brazilian talent overcomes Ancelotti\'s limited prep time. Morocco are genuine — 2022 semi-finalists.' },
-      D: { winner: 'USA', runnerUp: 'Turkey', reasoning: 'Home crowd across 11 venues. Pulisic, McKennie, Reyna. Turkey are dark horses with Calhanoglu + Yildiz.' },
-      E: { winner: 'Germany', runnerUp: 'Ecuador', reasoning: 'Musiala + Wirtz make Germany genuine contenders. Ecuador\'s South American quality underrated.' },
-      F: { winner: 'Netherlands', runnerUp: 'Japan', reasoning: 'Dutch class tells. Japan are genuine dark horses — beat Germany and Spain in 2022.' },
-      G: { winner: 'Belgium', runnerUp: 'Egypt', reasoning: 'Golden generation\'s last shot. De Bruyne, Doku. Salah carries Egypt.' },
-      H: { winner: 'Spain', runnerUp: 'Uruguay', reasoning: 'Euro 2024 champions. Best squad in tournament. Rodri + Pedri + Yamal.' },
-      I: { winner: 'France', runnerUp: 'Senegal', reasoning: 'Mbapp\u00e9 era. Deepest talent pool in Europe. Senegal\'s AFCON quality.' },
-      J: { winner: 'Argentina', runnerUp: 'Austria', reasoning: 'Defending champions. Messi\'s farewell. Rangnick\'s Austria will push them.' },
-      K: { winner: 'Portugal', runnerUp: 'Colombia', reasoning: 'Ronaldo\'s farewell tournament. Squad depth beyond CR7. Colombia\'s D\u00edaz electric.' },
-      L: { winner: 'England', runnerUp: 'Croatia', reasoning: 'Most talented squad in decades. Bellingham, Saka, Foden. Modric\'s last dance for Croatia.' },
+    if (_groups.length === 0) {
+      return '<p style="color:rgba(255,255,255,0.4);text-align:center;padding:40px 0;">Projections appear once the groups and fixtures are loaded.</p>';
+    }
+    var q = qualificationData();
+
+    var header = '<div style="margin-bottom:20px;">' +
+      '<div style="display:inline-block;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);padding:6px 14px;border-radius:6px;font-size:12px;color:#22c55e;font-weight:700;margin-bottom:16px;">' +
+        (q.anyPlayed ? 'LIVE PROJECTION · FROM CURRENT STANDINGS' : 'PROJECTED QUALIFIERS') + '</div>' +
+      '<h3 style="font-size:20px;font-weight:900;color:#d4a843;margin-bottom:4px;">Road to the Round of 32</h3>' +
+      '<p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:8px;">The top 2 from each group plus the 8 best third-placed teams advance. ' +
+        (q.anyPlayed ? 'Updated live as results come in.' : 'This fills in live once the group games kick off.') + '</p>' +
+    '</div>';
+
+    if (!q.anyPlayed) {
+      return header + '<div style="text-align:center;padding:30px;background:rgba(255,255,255,0.02);border-radius:10px;color:rgba(255,255,255,0.4);font-size:13px;">No group games have been played yet — projected qualifiers will appear here as soon as the standings move.</div>';
+    }
+
+    var pickRow = function(t, color, label) {
+      if (!t) return '';
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+        '<span style="background:' + color + '22;color:' + color + ';border:1px solid ' + color + ';padding:1px 6px;border-radius:3px;font-size:9px;font-weight:800;min-width:30px;text-align:center;">' + label + '</span>' +
+        '<span style="font-size:14px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + getFlag(t.team) + ' ' + t.team + '</span>' +
+        '<span style="margin-left:auto;font-size:12px;color:rgba(255,255,255,0.4);">' + (t.points || 0) + ' pts</span>' +
+      '</div>';
     };
 
-    var knockoutPicks = [
-      { stage: 'Quarter-Finals', matches: [
-        { home: 'France', away: 'Netherlands', pick: 'France', conf: 7 },
-        { home: 'Brazil', away: 'England', pick: 'England', conf: 7 },
-        { home: 'Spain', away: 'USA', pick: 'Spain', conf: 9 },
-        { home: 'Argentina', away: 'Portugal', pick: 'Argentina', conf: 7 },
-      ]},
-      { stage: 'Semi-Finals', matches: [
-        { home: 'France', away: 'England', pick: 'England', conf: 6 },
-        { home: 'Spain', away: 'Argentina', pick: 'Spain', conf: 7 },
-      ]},
-      { stage: 'THE FINAL', matches: [
-        { home: 'Spain', away: 'England', pick: 'Spain', conf: 8, score: '2-1' },
-      ]},
-    ];
-
-    var html = '<div style="margin-bottom:24px;">' +
-      '<div style="display:inline-block;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);padding:6px 14px;border-radius:6px;font-size:12px;color:#22c55e;font-weight:700;margin-bottom:16px;">MULTI-AGENT CONSENSUS \u2014 The Tactician + The Professor + The Scout + GPT Arbiter</div>' +
-      '<h3 style="font-size:20px;font-weight:900;color:#d4a843;margin-bottom:4px;">Predicted Group Winners</h3>' +
-      '<p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:16px;">Our AI analysts predict who tops each group and qualifies for the knockouts</p>' +
-    '</div>';
-
-    // Group predictions grid
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin-bottom:28px;">';
-    for (var letter in groupPicks) {
-      var gp = groupPicks[letter];
-      html += '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px;">' +
-        '<div style="font-size:11px;font-weight:800;color:#d4a843;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;">Group ' + letter + '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
-          '<span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;">WINNER</span>' +
-          '<span style="font-size:14px;font-weight:700;color:#fff;">' + getFlag(gp.winner) + ' ' + gp.winner + '</span>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
-          '<span style="background:rgba(212,168,67,0.15);color:#d4a843;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;">QUALIFY</span>' +
-          '<span style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.7);">' + getFlag(gp.runnerUp) + ' ' + gp.runnerUp + '</span>' +
-        '</div>' +
-        '<div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.4;">' + gp.reasoning + '</div>' +
-      '</div>';
-    }
-    html += '</div>';
-
-    // Knockout predictions
-    knockoutPicks.forEach(function(round) {
-      var isFinal = round.stage === 'THE FINAL';
-      html += '<div style="margin-bottom:20px;">' +
-        '<div style="font-size:12px;font-weight:800;color:#d4a843;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(212,168,67,0.15);">' + round.stage + '</div>';
-
-      round.matches.forEach(function(m) {
-        var pickIsHome = m.pick === m.home;
-        html += '<div style="' + (isFinal ? 'background:linear-gradient(135deg,rgba(212,168,67,0.1),rgba(212,168,67,0.04));border:2px solid rgba(212,168,67,0.3);' : 'background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);') + 'border-radius:10px;padding:14px 18px;margin-bottom:8px;display:flex;align-items:center;gap:14px;">' +
-          '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
-            '<span style="font-size:15px;font-weight:' + (pickIsHome ? '900;color:#22c55e' : '600;color:rgba(255,255,255,0.5)') + ';">' + getFlag(m.home) + ' ' + m.home + '</span>' +
-            '<span style="color:rgba(255,255,255,0.2);font-size:12px;">vs</span>' +
-            '<span style="font-size:15px;font-weight:' + (!pickIsHome ? '900;color:#22c55e' : '600;color:rgba(255,255,255,0.5)') + ';">' + m.away + ' ' + getFlag(m.away) + '</span>' +
-          '</div>' +
-          (m.score ? '<div style="font-size:24px;font-weight:900;color:#d4a843;">' + m.score + '</div>' : '') +
-          '<div style="text-align:right;">' +
-            '<div style="font-size:12px;font-weight:800;color:#22c55e;background:rgba(34,197,94,0.1);padding:3px 10px;border-radius:4px;">' + m.pick + '</div>' +
-            '<div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px;">Conf: ' + m.conf + '/10</div>' +
-          '</div>' +
+    var grid = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin-bottom:24px;">' +
+      _groups.map(function(g) {
+        var s = g.standings || [];
+        var t3 = s[2];
+        var thirdIn = t3 && q.bestThird[g.letter + '|' + t3.team];
+        return '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px;">' +
+          '<div style="font-size:11px;font-weight:800;color:#d4a843;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;">Group ' + g.letter + '</div>' +
+          pickRow(s[0], '#22c55e', '1st') +
+          pickRow(s[1], '#22c55e', '2nd') +
+          (t3 ? pickRow(t3, thirdIn ? '#d4a843' : 'rgba(212,168,67,0.45)', thirdIn ? '3rd ✓' : '3rd') : '') +
         '</div>';
-      });
-
-      if (isFinal) {
-        html += '<div style="text-align:center;margin-top:12px;font-size:16px;font-weight:900;color:#d4a843;">SPAIN \u2014 WORLD CHAMPIONS 2026</div>' +
-          '<div style="text-align:center;font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px;">Yamal 23\' | Bellingham 58\' | Pedri 76\'</div>';
-      }
-      html += '</div>';
-    });
-
-    html += '<div style="text-align:center;padding:16px;background:rgba(255,255,255,0.02);border-radius:10px;margin-top:12px;">' +
-      '<div style="font-size:13px;color:rgba(255,255,255,0.4);font-style:italic;">Emotion says France or England. Data says Spain.</div>' +
-      '<div style="font-size:11px;color:rgba(255,255,255,0.25);margin-top:4px;">Full analysis: eliteedgesports.co.uk | 18+ | BeGambleAware.org</div>' +
+      }).join('') +
     '</div>';
 
-    return html;
+    var note = '<div style="text-align:center;padding:16px;background:rgba(255,255,255,0.02);border-radius:10px;">' +
+      '<div style="font-size:12px;color:rgba(255,255,255,0.4);">The knockout bracket fills in as the group stage concludes — see the <strong style="color:#d4a843;">Bracket</strong> tab. Our per-match calls live under <strong style="color:#d4a843;">Fixtures → Full Analysis</strong>.</div>' +
+      '<div style="font-size:11px;color:rgba(255,255,255,0.25);margin-top:6px;">eliteedgesports.co.uk | 18+ | BeGambleAware.org</div>' +
+    '</div>';
+
+    return header + grid + note;
   }
 
   function renderValueFinder() {
