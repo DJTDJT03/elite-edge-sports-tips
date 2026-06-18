@@ -229,6 +229,34 @@ SportMonks.prototype.getFixtureRaw = function(fixtureId, includes) {
 };
 
 // =========================================================================
+// PROBE INCLUDE — test whether a single SportMonks include is supported on
+// this plan and return what (if anything) it yields for a fixture. Used by the
+// fixture-data diagnostic to confirm the exact include name + key shapes for
+// rich All-In data (Pressure Index, live xG, per-player stats) before wiring
+// UI against it. Never throws — reports the error string instead.
+// =========================================================================
+SportMonks.prototype.probeInclude = function(fixtureId, include) {
+  return this._request('/fixtures/' + fixtureId, { include: include })
+    .then(function(data) {
+      var fx = data.data || {};
+      // The include name maps to a top-level key on the fixture (last segment,
+      // camelCase). Report the raw value so we can read its real shape.
+      var key = include.split('.')[0];
+      var val = fx[key];
+      return {
+        include: include,
+        ok: true,
+        present: val !== undefined && val !== null,
+        count: Array.isArray(val) ? val.length : (val ? 1 : 0),
+        sample: Array.isArray(val) ? val.slice(0, 2) : val,
+      };
+    })
+    .catch(function(e) {
+      return { include: include, ok: false, error: e.message };
+    });
+};
+
+// =========================================================================
 // TEAM RECENT FIXTURES — a team's matches in a date range (for form + stats)
 // =========================================================================
 SportMonks.prototype.getTeamRecentFixtures = function(teamId, fromDate, toDate) {

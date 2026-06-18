@@ -495,16 +495,58 @@ module.exports = function(deps) {
 
       var summary = {
         fixtureId: fixtureId,
-        teams: raw && raw.participants ? raw.participants.map(function(p) { return (p.meta ? p.meta.location : '') + ':' + p.name; }) : [],
+        state: raw && raw.state ? { id: raw.state.id, name: raw.state.developer_name || raw.state.state } : (raw ? { state_id: raw.state_id } : null),
+        teams: raw && raw.participants ? raw.participants.map(function(p) { return (p.meta ? p.meta.location : '') + ':' + p.name + '#' + p.id; }) : [],
+        // Full statistics WITH values + location — reveals live xG / shot data /
+        // possession shapes (empty pre-match; populated live/post-match).
+        statistics: raw && raw.statistics ? raw.statistics.map(function(s) {
+          return {
+            type: (s.type && (s.type.developer_name || s.type.name)) || s.type_id,
+            location: s.location,
+            value: s.data && s.data.value !== undefined ? s.data.value : s.value,
+          };
+        }) : 'none',
         statisticsTypes: raw && raw.statistics ? raw.statistics.map(function(s) { return (s.type && (s.type.developer_name || s.type.name)) || s.type_id; }).filter(function(v, i, a) { return a.indexOf(v) === i; }) : 'none',
         lineupsCount: raw && raw.lineups ? raw.lineups.length : 0,
-        lineupSample: raw && raw.lineups && raw.lineups[0] ? Object.keys(raw.lineups[0]) : [],
+        lineupKeys: raw && raw.lineups && raw.lineups[0] ? Object.keys(raw.lineups[0]) : [],
+        // Full first lineup object — shows whether per-player match stats (details)
+        // are attached and under which keys.
+        lineupSample: raw && raw.lineups && raw.lineups[0] ? raw.lineups[0] : null,
         predictionsCount: (predictions || []).length,
         predictionTypes: (predictions || []).map(function(p) { return (p.type && (p.type.developer_name || p.type.name)) || p.type_id; }),
         predictionSample: (predictions || []).slice(0, 6).map(function(p) { return { type: (p.type && p.type.developer_name) || p.type_id, predictions: p.predictions }; }),
         topLevelKeys: raw ? Object.keys(raw) : [],
         round: raw && raw.round ? { id: raw.round.id, name: raw.round.name } : (raw ? { round_id: raw.round_id } : null),
       };
+
+      // PROBE the rich All-In includes one at a time (an unknown include fails
+      // the whole request, so we can't bundle unverified ones). This confirms
+      // the exact include name + key shape for Pressure Index, live xG and
+      // per-player match stats BEFORE we wire UI against them. Run this on a
+      // LIVE or finished WC fixture — pre-match returns empty stat/pressure data.
+      var candidateIncludes = [
+        'pressure',
+        'xGFixture',
+        'xgfixture',
+        'expectedGoals',
+        'statistics.type',
+        'lineups.details.type',
+        'lineups.player',
+        'events.type',
+        'weatherReport',
+        'metadata',
+        'formations',
+        'sidelined.player',
+        'coaches',
+        'referees',
+      ];
+      summary.includeProbe = [];
+      if (sm.probeInclude) {
+        for (var ci = 0; ci < candidateIncludes.length; ci++) {
+          // sequential to stay polite to the API and avoid rate spikes
+          summary.includeProbe.push(await sm.probeInclude(fixtureId, candidateIncludes[ci]));
+        }
+      }
       // Group-stage matchday tagging as stored in our DB (to verify grouping)
       try {
         if (deps.db && deps.db.isAvailable && deps.db.isAvailable()) {
