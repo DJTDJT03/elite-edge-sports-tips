@@ -184,6 +184,27 @@ module.exports = function(deps) {
           var smFixture = await sportMonks.getFixture(fixtureId);
           if (smFixture && smFixture.homeTeam && smFixture.kickoff) {
             usedSportMonks = true;
+
+            // World Cup fixtures: SportMonks All-In is the source of truth
+            // (predictions, lineups, player ratings, full match stats, Pressure
+            // Index). Resolving these to API-Football drops all of that rich data
+            // and its WC coverage is sparse — so force the SportMonks branch by
+            // leaving fixtureData empty. Detect via SportMonks league id, falling
+            // back to our world_cup_fixtures table.
+            var _isWorldCup = false;
+            var _wcLeagueId = parseInt(process.env.SPORTMONKS_WC_LEAGUE_ID || '732', 10);
+            if (smFixture.leagueId === _wcLeagueId) _isWorldCup = true;
+            if (!_isWorldCup && db && db.isAvailable && db.isAvailable()) {
+              try {
+                var _wcChk = await db.query("SELECT 1 FROM world_cup_fixtures WHERE external_fixture_id::text = $1 LIMIT 1", [String(fixtureId)]);
+                if (_wcChk.rows && _wcChk.rows.length) _isWorldCup = true;
+              } catch (e) { /* table may not exist on non-WC deploys */ }
+            }
+            if (_isWorldCup) {
+              console.log('[Match Intelligence] World Cup fixture ' + fixtureId + ' — using SportMonks All-In directly (skipping API-Football resolution).');
+              throw { _wcSkip: true }; // jump to the SportMonks branch below
+            }
+
             var smDate = smFixture.kickoff.toString().split('T')[0].split(' ')[0].substring(0, 10);
             var smHome = smFixture.homeTeam.toLowerCase().replace(/\s*(fc|afc|sc|cf)$/i, '').trim();
             var smAway = smFixture.awayTeam.toLowerCase().replace(/\s*(fc|afc|sc|cf)$/i, '').trim();
@@ -218,7 +239,11 @@ module.exports = function(deps) {
             console.log('[Match Intelligence] SportMonks returned no team data for fixture ' + fixtureId);
           }
         } catch(smErr) {
-          console.log('[Match Intelligence] SportMonks resolve failed:', smErr.message);
+          // _wcSkip is an intentional jump (World Cup fixture) — fall through to
+          // the SportMonks branch below, not an error.
+          if (!(smErr && smErr._wcSkip)) {
+            console.log('[Match Intelligence] SportMonks resolve failed:', smErr.message);
+          }
         }
       }
 
