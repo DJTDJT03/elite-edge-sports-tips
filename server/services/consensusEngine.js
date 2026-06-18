@@ -121,11 +121,11 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
     tactician.selection = away + ' Win';
     tactician.confidence = Math.round(tactAwayScore * 10);
     tactician.reasoning = away + ' hold the tactical edge (model ' + pAwayPct + '% away / ' + pDrawPct + '% draw / ' + pHomePct + '% home). Schedule congestion and motivation context point their way.';
-  } else if (tactGoalsScore > 0.55) {
+  } else if (tactGoalsScore > 0.55 && (factors.overProb == null || factors.overProb >= 0.52)) {
     tactician.market = 'Over 2.5 Goals';
     tactician.selection = 'Over 2.5 Goals';
-    tactician.confidence = Math.round(tactGoalsScore * 10);
-    tactician.reasoning = 'xG trends and attacking metrics point to goals. Both sides creating chances.';
+    tactician.confidence = Math.round((factors.overProb != null ? factors.overProb : tactGoalsScore) * 10);
+    tactician.reasoning = 'xG trends and attacking metrics point to goals' + (factors.overProb != null ? ' — model makes Over 2.5 ' + Math.round(factors.overProb * 100) + '%' : '') + '. Both sides creating chances.';
   } else {
     tactician.market = 'Both Teams to Score';
     tactician.selection = 'BTTS - Yes';
@@ -165,11 +165,11 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
     professor.selection = away + ' Win';
     professor.confidence = Math.round(profAwayScore * 10);
     professor.reasoning = 'Data profile favours ' + away + ' — model ' + pAwayPct + '% (draw ' + pDrawPct + '%, ' + home + ' ' + pHomePct + '%). Superior xG and recent form.';
-  } else if (profGoalsScore > 0.6) {
+  } else if (profGoalsScore > 0.6 && (factors.overProb == null || factors.overProb >= 0.52)) {
     professor.market = 'Over 2.5 Goals';
     professor.selection = 'Over 2.5 Goals';
-    professor.confidence = Math.round(profGoalsScore * 10);
-    professor.reasoning = 'High xG and shot volume from both sides. Data expects goals.';
+    professor.confidence = Math.round((factors.overProb != null ? factors.overProb : profGoalsScore) * 10);
+    professor.reasoning = 'High xG and shot volume from both sides' + (factors.overProb != null ? ' — model Over 2.5 ' + Math.round(factors.overProb * 100) + '%' : '') + '. Data expects goals.';
   } else if (profGoalsScore < 0.4) {
     professor.market = 'Under 2.5 Goals';
     professor.selection = 'Under 2.5 Goals';
@@ -297,8 +297,8 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
       if (selection === 'Draw') p = pDraw;
       else if (away && selection.indexOf(away) !== -1) p = pAway;
       else if (home && selection.indexOf(home) !== -1) p = pHome;
-    } else if (market.indexOf('Over') !== -1) p = _goalsP;
-    else if (market.indexOf('Under') !== -1) p = 1 - _goalsP;
+    } else if (market.indexOf('Over') !== -1) p = factors.overProb != null ? factors.overProb : _goalsP;
+    else if (market.indexOf('Under') !== -1) p = 1 - (factors.overProb != null ? factors.overProb : _goalsP);
     else if (market.indexOf('BTTS') !== -1 || market.indexOf('Both') !== -1) p = factors.btts != null ? factors.btts : _goalsP;
     return Math.max(0.05, p);
   };

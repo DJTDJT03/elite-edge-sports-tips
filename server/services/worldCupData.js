@@ -624,9 +624,13 @@ module.exports = function(deps) {
     if (!quant && model && model.score) { var pr = String(model.score).split('-'); if (pr.length === 2) totalGoals = (parseInt(pr[0]) || 0) + (parseInt(pr[1]) || 0); }
     var xG = Math.max(0, Math.min(1, totalGoals / 4));
     var bttsPct = quant ? quant.btts : (model && model.btts != null ? model.btts : 50);
+    // Real P(Over 2.5) from the quant model so the consensus judges goals on a
+    // calibrated probability rather than an inflated proxy (which made it lazily
+    // default to Over 2.5 on almost every game).
+    var overProb = (quant && quant.over25 != null) ? Math.max(0, Math.min(1, quant.over25 / 100)) : null;
     return {
       fixture: { homeTeam: fixture.home_team, awayTeam: fixture.away_team, league: 'FIFA World Cup 2026', kickoff: fixture.kickoff },
-      factors: { homeAway: homeAway, form: form, xG: xG, shots: 0.5, injuries: 0.5, motivation: 0.5, scheduleCongestion: 0.5, btts: bttsPct / 100 },
+      factors: { homeAway: homeAway, form: form, xG: xG, shots: 0.5, injuries: 0.5, motivation: 0.5, scheduleCongestion: 0.5, btts: bttsPct / 100, overProb: overProb },
       homeOdds: 100 / Math.max(1, homeP), drawOdds: 100 / Math.max(1, drawP), awayOdds: 100 / Math.max(1, awayP),
       overOdds: (quant ? quant.over25 : (model && model.btts)) > 55 ? 1.8 : 2.05,
       bttsOdds: bttsPct ? Math.max(1.4, 100 / bttsPct) : 1.8,

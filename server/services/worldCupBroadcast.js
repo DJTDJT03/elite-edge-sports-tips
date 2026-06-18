@@ -66,7 +66,10 @@ module.exports = function (deps) {
           // show a different pick from the app.
           view = pv.rows[0].verdict_selection;
           conf = pv.rows[0].confidence || null;
-          if (pv.rows[0].predicted_scoreline) note = 'Predicted ' + pv.rows[0].predicted_scoreline;
+          // A market-consistent insight. The predicted exact score (always a low
+          // modal score like 1-1) only makes sense beside a match-result call —
+          // showing it next to "Over 2.5" reads as a contradiction.
+          note = viewNote(view, pv.rows[0].predicted_scoreline);
         }
       } catch (e) {}
       // No consensus verdict for this game yet → skip it (never invent a pick
@@ -96,6 +99,18 @@ module.exports = function (deps) {
   }
   // A short, human label for our confidence so it's never mistaken for odds.
   function confWord(c) { return c >= 8 ? 'high confidence' : c >= 6 ? 'solid' : 'lean'; }
+
+  // A market-CONSISTENT one-line insight for the view. Only a match-result call
+  // gets the predicted scoreline (anything else contradicts a low modal score).
+  function viewNote(view, scoreline) {
+    var v = String(view || '').toLowerCase();
+    if (v.indexOf('over') !== -1) return 'goals expected — both carry a scoring threat';
+    if (v.indexOf('under') !== -1) return 'a tight, low-scoring game on the cards';
+    if (v.indexOf('btts') !== -1 || v.indexOf('both teams') !== -1) return 'both teams have the firepower to score';
+    if (v === 'draw' || v.indexOf('draw') !== -1) return 'finely balanced — honours look even';
+    // Match result (a side to win): the predicted scoreline is consistent here.
+    return scoreline ? 'predicted ' + scoreline : '';
+  }
 
   function buildTelegram(picks, dateLabel) {
     var t = '⚽ <b>Elite Edge — World Cup View</b>\n' + dateLabel + '\n\n';
