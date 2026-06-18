@@ -769,9 +769,14 @@ module.exports = function(deps) {
           verdictSelection = _c.selection;
           confidence = _c.confidence;
           // Use the reasoning that actually backs the winning pick (not always
-          // the Tactician's) so the explanation matches the selection.
+          // the Tactician's) so the explanation matches the selection. Lead with
+          // an authoritative, honest framing of the analyst agreement ("SPLIT
+          // consensus" is contradictory and reads weak).
           var _lead = _c.consensusReasoning || ((_c.debate && _c.debate[0]) ? _c.debate[0].reasoning : '');
-          verdict = _c.agreementLabel + ' analyst consensus: ' + _c.selection + ' (' + _c.market + '). ' + _lead
+          var _agreeLead = _c.agreementLabel === 'UNANIMOUS' ? 'Unanimous analyst call'
+            : _c.agreementLabel === 'MAJORITY' ? 'Majority analyst call'
+            : 'Our strongest read (a finely-balanced game)';
+          verdict = _agreeLead + ': ' + _c.selection + ' (' + _c.market + '). ' + _lead
             + (_perplexityNarrative ? ' Live intelligence: ' + _perplexityNarrative : '');
         }
 

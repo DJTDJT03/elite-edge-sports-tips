@@ -6430,6 +6430,29 @@ const App = {
     // --- Elite Edge Quant Model (in-house Elo + Dixon-Coles) ---
     if (data.quantModel && data.quantModel.winProb) {
       var q = data.quantModel;
+      // A projected scoreline CONSISTENT with Our Take, drawn from the model's
+      // scoreline distribution — so the score we show never contradicts the pick
+      // (no "BTTS-Yes" beside a 1-0, no team-win beside a draw).
+      var _consistentScore = function(top, verdict, homeTeam) {
+        if (!top || !top.length) return null;
+        var pk = (verdict && verdict.pick || '').toLowerCase();
+        var mk = (verdict && verdict.market || '').toLowerCase();
+        var P = function(s) { var x = String(s.score || '').split('-'); return { h: parseInt(x[0]) || 0, a: parseInt(x[1]) || 0 }; };
+        var f = top;
+        if (mk.indexOf('both teams') !== -1 || pk.indexOf('btts') !== -1) {
+          f = pk.indexOf('no') !== -1 ? top.filter(function(s) { var x = P(s); return x.h === 0 || x.a === 0; }) : top.filter(function(s) { var x = P(s); return x.h >= 1 && x.a >= 1; });
+        } else if (mk.indexOf('total') !== -1 || pk.indexOf('over') !== -1 || pk.indexOf('under') !== -1) {
+          f = pk.indexOf('over') !== -1 ? top.filter(function(s) { var x = P(s); return (x.h + x.a) >= 3; }) : top.filter(function(s) { var x = P(s); return (x.h + x.a) <= 2; });
+        } else if (pk.indexOf('draw') !== -1) {
+          f = top.filter(function(s) { var x = P(s); return x.h === x.a; });
+        } else if (homeTeam && pk.indexOf(String(homeTeam).toLowerCase()) !== -1) {
+          f = top.filter(function(s) { var x = P(s); return x.h > x.a; });
+        } else if (pk) {
+          f = top.filter(function(s) { var x = P(s); return x.a > x.h; });
+        }
+        return (f[0] || top[0]).score;
+      };
+      var _projScore = q.topScorelines ? _consistentScore(q.topScorelines, v, m.homeTeam) : q.mostLikelyScore;
       var qbar = function (label, pct, color) {
         return '<div style="display:flex;align-items:center;gap:8px;margin:4px 0;">' +
           '<span style="font-size:12px;color:var(--text-secondary);width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + App.escapeHtml(label) + '</span>' +
@@ -6448,16 +6471,19 @@ const App = {
           '<div style="text-align:center;min-width:120px;">' +
             '<div style="font-size:11px;color:var(--text-muted);">Expected goals</div>' +
             '<div style="font-size:20px;font-weight:900;color:#fff;">' + q.expectedGoals.home + ' – ' + q.expectedGoals.away + '</div>' +
-            '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Most likely</div>' +
-            '<div style="font-size:16px;font-weight:800;color:#d4a843;">' + (q.mostLikelyScore || '-') + '</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Projected</div>' +
+            '<div style="font-size:16px;font-weight:800;color:#d4a843;">' + (_projScore || q.mostLikelyScore || '-') + '</div>' +
           '</div>' +
         '</div>' +
-        '<div style="font-size:12px;color:var(--text-secondary);margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">Model lean: <strong style="color:#d4a843;">' + App.escapeHtml(q.pick.selection) + '</strong> &nbsp;·&nbsp; Over 2.5: <strong>' + q.over25 + '%</strong> &nbsp;·&nbsp; BTTS: <strong>' + q.btts + '%</strong> &nbsp;·&nbsp; Power rating ' + q.ratings.home + ' v ' + q.ratings.away + '</div>' +
+        '<div style="font-size:12px;color:var(--text-secondary);margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">Over 2.5: <strong>' + q.over25 + '%</strong> &nbsp;·&nbsp; BTTS: <strong>' + q.btts + '%</strong> &nbsp;·&nbsp; Power rating ' + q.ratings.home + ' v ' + q.ratings.away + '</div>' +
       '</div>';
     }
 
     // --- Model Prediction (SportMonks All-In) ---
-    if (data.winProbability || data.predictedScore || data.bttsPercent != null) {
+    // Only shown when our own Elite Edge (quant) model ISN'T available — one
+    // source of truth. Two competing models on screen (with different win %,
+    // scoreline and BTTS) is what made "Our Take" look inconsistent.
+    if (!(data.quantModel && data.quantModel.winProb) && (data.winProbability || data.predictedScore || data.bttsPercent != null)) {
       var wp = data.winProbability;
       var probBar = function(label, pct, color) {
         return '<div style="margin-bottom:8px;">' +
