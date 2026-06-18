@@ -8404,6 +8404,7 @@ const App = {
         '<button class="btn btn-gold btn-sm" onclick="App.lmsSyncWc()">Sync fixtures now</button> ' +
         '<button class="btn btn-outline btn-sm" onclick="App.lmsInspectFixture()">Inspect rich data (xG/lineups/predictions)</button> ' +
         '<button class="btn btn-gold btn-sm" onclick="App.lmsGenerateWcPreviews()">Run consensus picks (Our Take)</button> ' +
+        '<button class="btn btn-outline btn-sm" onclick="App.lmsRegenerateWcPreviews()" title="Overwrite existing Our Take picks with the latest engine logic">Refresh existing picks</button> ' +
         '<button class="btn btn-outline btn-sm" onclick="App.wcBroadcastPreview()">Preview WC view content</button> ' +
         '<button class="btn btn-gold btn-sm" onclick="App.wcBroadcastSend()">Send WC view (Telegram + subscribers)</button> ' +
         '<button class="btn btn-outline btn-sm" onclick="App.wcBroadcastTelegram()">Resend to Telegram only</button>' +
@@ -8507,6 +8508,18 @@ const App = {
       this.showToast('Consensus picks generated: ' + (r.generated || 0) + ' fixtures', 'success');
     } catch (e) {
       if (out) out.textContent = 'Preview generation failed: ' + (e.message || e) + '\n\n(Needs a Perplexity key + upcoming scheduled fixtures within 5 days.)';
+    }
+  },
+
+  async lmsRegenerateWcPreviews() {
+    var out = document.getElementById('lms-wc-feed-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Re-running the consensus engine over ALL upcoming fixtures and overwriting their Our Take picks with the latest logic… (this can take a minute)'; }
+    try {
+      var r = await this.api('/world-cup/admin/regenerate-previews', { method: 'POST' });
+      if (out) out.textContent = 'Refreshed Our Take for ' + ((r.regenerated && r.regenerated.generated) || 0) + ' fixture(s).\nOpen any upcoming game — the headline now reflects the probability-led consensus.';
+      this.showToast('Refreshed picks: ' + ((r.regenerated && r.regenerated.generated) || 0) + ' fixtures', 'success');
+    } catch (e) {
+      if (out) out.textContent = 'Refresh failed: ' + (e.message || e);
     }
   },
 
