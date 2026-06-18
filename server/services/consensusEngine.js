@@ -106,6 +106,26 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
   var congestionFactor = factors.scheduleCongestion || 0.5;
   var homeFactor = factors.homeAway || 0.6;
 
+  // For a game with no clear winner, pick the market with the genuinely
+  // STRONGEST signal for THIS fixture — not a hardcoded fallback. This is what
+  // gives real variety (Over / Under / BTTS-Yes / BTTS-No / Double Chance / Draw)
+  // instead of every tight game collapsing onto one blanket market.
+  var _tightCall = function() {
+    var over = factors.overProb != null ? factors.overProb : 0.50;
+    var btts = factors.btts != null ? factors.btts : 0.50;
+    var favHome = pHome >= pAway;
+    var favP = favHome ? pHome : pAway;
+    var favName = favHome ? home : away;
+    var dcP = Math.min(0.92, favP + pDraw);
+    var cf = function(p, lo, hi) { return Math.max(lo, Math.min(hi, Math.round(p * 10))); };
+    if (over >= 0.58) return { market: 'Total Goals', selection: 'Over 2.5 Goals', confidence: cf(over, 6, 8), reasoning: 'Goals expected — the model makes Over 2.5 ' + Math.round(over * 100) + '%, both sides carrying an attacking threat.' };
+    if (over <= 0.42) return { market: 'Total Goals', selection: 'Under 2.5 Goals', confidence: cf(1 - over, 6, 8), reasoning: 'A cagey, low-scoring profile — the model makes Under 2.5 ' + Math.round((1 - over) * 100) + '%.' };
+    if (btts >= 0.57) return { market: 'Both Teams to Score', selection: 'BTTS - Yes', confidence: cf(btts, 6, 8), reasoning: 'Both teams carry a real scoring threat (BTTS ' + Math.round(btts * 100) + '%) — neither defence convincing.' };
+    if (btts <= 0.43) return { market: 'Both Teams to Score', selection: 'BTTS - No', confidence: cf(1 - btts, 6, 8), reasoning: 'One side looks likely to keep it tight — BTTS lands just ' + Math.round(btts * 100) + '%.' };
+    if (favP >= 0.40) return { market: 'Double Chance', selection: 'Double Chance - ' + favName + ' or Draw', confidence: cf(dcP, 6, 8), reasoning: favName + ' the marginal call — Double Chance banks the win or the draw (' + Math.round(dcP * 100) + '%).' };
+    return { market: 'Match Result', selection: 'Draw', confidence: Math.max(6, Math.min(7, Math.round(pDraw * 14))), reasoning: 'Genuinely even — the model\'s single most likely result is the draw (' + Math.round(pDraw * 100) + '%).' };
+  };
+
   // Tactician weights: injuries 1.5, motivation 1.5, congestion 1.4, xG 1.4
   var tactHomeScore = (homeFactor * 1.3 + injuryFactor * 1.5 + motivationFactor * 1.5 + (factors.form || 0.5) * 1.1) / 5.4;
   var tactAwayScore = ((1 - homeFactor) * 1.3 + (1 - injuryFactor) * 1.5 + motivationFactor * 1.5 + (factors.form || 0.5) * 1.1) / 5.4;
@@ -127,10 +147,11 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
     tactician.confidence = Math.round((factors.overProb != null ? factors.overProb : tactGoalsScore) * 10);
     tactician.reasoning = 'xG trends and attacking metrics point to goals' + (factors.overProb != null ? ' — model makes Over 2.5 ' + Math.round(factors.overProb * 100) + '%' : '') + '. Both sides creating chances.';
   } else {
-    tactician.market = 'Both Teams to Score';
-    tactician.selection = 'BTTS - Yes';
-    tactician.confidence = Math.round(((factors.xG || 0.5) + (1 - (factors.injuries || 0.5))) / 2 * 10);
-    tactician.reasoning = 'Tight match tactically. Both sides capable of scoring but neither dominant.';
+    var _tcT = _tightCall();
+    tactician.market = _tcT.market;
+    tactician.selection = _tcT.selection;
+    tactician.confidence = _tcT.confidence;
+    tactician.reasoning = _tcT.reasoning;
   }
 
   // =====================================================================
@@ -176,10 +197,11 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
     professor.confidence = Math.round((1 - profGoalsScore) * 10);
     professor.reasoning = 'Low expected goals. Both sides conservative. Data points to a tight game.';
   } else {
-    professor.market = 'Match Result';
-    professor.selection = 'Draw';
-    professor.confidence = Math.round((1 - Math.abs(profHomeScore - profAwayScore)) * 8);
-    professor.reasoning = 'Statistically inseparable. Form, xG, and H2H all point to a tight contest.';
+    var _tcP = _tightCall();
+    professor.market = _tcP.market;
+    professor.selection = _tcP.selection;
+    professor.confidence = _tcP.confidence;
+    professor.reasoning = _tcP.reasoning;
   }
 
   // =====================================================================
@@ -299,7 +321,16 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
       else if (home && selection.indexOf(home) !== -1) p = pHome;
     } else if (market.indexOf('Over') !== -1) p = factors.overProb != null ? factors.overProb : _goalsP;
     else if (market.indexOf('Under') !== -1) p = 1 - (factors.overProb != null ? factors.overProb : _goalsP);
-    else if (market.indexOf('BTTS') !== -1 || market.indexOf('Both') !== -1) p = factors.btts != null ? factors.btts : _goalsP;
+    else if (market.indexOf('BTTS') !== -1 || market.indexOf('Both') !== -1) {
+      var _bp = factors.btts != null ? factors.btts : _goalsP;
+      p = selection.indexOf('No') !== -1 ? 1 - _bp : _bp;
+    } else if (market.indexOf('Double Chance') !== -1) {
+      // away before home — consistent with the Match-Result branch, so a team
+      // name that's a substring of the other can't skew the side.
+      if (away && selection.indexOf(away) !== -1) p = Math.min(0.95, pAway + pDraw);
+      else if (home && selection.indexOf(home) !== -1) p = Math.min(0.95, pHome + pDraw);
+      else p = Math.min(0.95, Math.max(pHome, pAway) + pDraw);
+    }
     return Math.max(0.05, p);
   };
 
@@ -394,12 +425,20 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
   // Final edge: average of agreeing agents' model probabilities vs market
   var finalOdds = 2.0;
   if (consensus) {
-    if (consensus.selection.indexOf(home) !== -1 && consensus.market === 'Match Result') finalOdds = homeOdds;
+    if (consensus.market.indexOf('Double Chance') !== -1) {
+      var _dcp = (away && consensus.selection.indexOf(away) !== -1) ? (pAway + pDraw) : (pHome + pDraw);
+      finalOdds = 1 / Math.max(0.1, Math.min(0.92, _dcp));
+    }
+    else if (consensus.selection.indexOf(home) !== -1 && consensus.market === 'Match Result') finalOdds = homeOdds;
     else if (consensus.selection.indexOf(away) !== -1 && consensus.market === 'Match Result') finalOdds = awayOdds;
     else if (consensus.selection === 'Draw') finalOdds = drawOdds;
     else if (consensus.market.indexOf('Over') !== -1) finalOdds = overOdds;
     else if (consensus.market.indexOf('Under') !== -1) finalOdds = overOdds; // approximate
-    else if (consensus.market.indexOf('BTTS') !== -1 || consensus.market.indexOf('Both') !== -1) finalOdds = bttsOdds;
+    else if (consensus.market.indexOf('BTTS') !== -1 || consensus.market.indexOf('Both') !== -1) {
+      // BTTS-No is priced from the complement of the Yes price, not the Yes odds.
+      if (consensus.selection.indexOf('No') !== -1) { var _iy = 1 / Math.max(1.01, bttsOdds); finalOdds = 1 / Math.max(0.1, 1 - _iy); }
+      else finalOdds = bttsOdds;
+    }
   }
 
   return {

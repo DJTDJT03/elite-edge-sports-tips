@@ -106,7 +106,10 @@ module.exports = function (deps) {
     var v = String(view || '').toLowerCase();
     if (v.indexOf('over') !== -1) return 'goals expected — both carry a scoring threat';
     if (v.indexOf('under') !== -1) return 'a tight, low-scoring game on the cards';
+    if (v.indexOf('btts') !== -1 && v.indexOf('no') !== -1) return 'one side looks likely to keep it tight at the back';
     if (v.indexOf('btts') !== -1 || v.indexOf('both teams') !== -1) return 'both teams have the firepower to score';
+    // Double Chance contains the word "draw" — must be checked BEFORE the draw case.
+    if (v.indexOf('double chance') !== -1) return 'the safe play — covers the win or the draw';
     if (v === 'draw' || v.indexOf('draw') !== -1) return 'finely balanced — honours look even';
     // Match result (a side to win): the predicted scoreline is consistent here.
     return scoreline ? 'predicted ' + scoreline : '';

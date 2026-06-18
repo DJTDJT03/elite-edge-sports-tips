@@ -6443,6 +6443,10 @@ const App = {
           f = pk.indexOf('no') !== -1 ? top.filter(function(s) { var x = P(s); return x.h === 0 || x.a === 0; }) : top.filter(function(s) { var x = P(s); return x.h >= 1 && x.a >= 1; });
         } else if (mk.indexOf('total') !== -1 || pk.indexOf('over') !== -1 || pk.indexOf('under') !== -1) {
           f = pk.indexOf('over') !== -1 ? top.filter(function(s) { var x = P(s); return (x.h + x.a) >= 3; }) : top.filter(function(s) { var x = P(s); return (x.h + x.a) <= 2; });
+        } else if (mk.indexOf('double chance') !== -1) {
+          f = (homeTeam && pk.indexOf(String(homeTeam).toLowerCase()) !== -1)
+            ? top.filter(function(s) { var x = P(s); return x.h >= x.a; })   // home win or draw
+            : top.filter(function(s) { var x = P(s); return x.a >= x.h; });  // away win or draw
         } else if (pk.indexOf('draw') !== -1) {
           f = top.filter(function(s) { var x = P(s); return x.h === x.a; });
         } else if (homeTeam && pk.indexOf(String(homeTeam).toLowerCase()) !== -1) {
