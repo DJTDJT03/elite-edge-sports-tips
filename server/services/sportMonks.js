@@ -229,6 +229,158 @@ SportMonks.prototype.getFixtureRaw = function(fixtureId, includes) {
 };
 
 // =========================================================================
+// RICH FIXTURE DATA — one call that returns the All-In match detail we display:
+// probable/confirmed lineups WITH player ratings, formations, the full team
+// stat sheet, and the per-minute Pressure Index momentum. Every field is
+// defensively parsed and returns null when absent (e.g. stats/pressure are
+// empty pre-match). Include names confirmed live (18 Jun 2026) — see
+// project_worldcup_data memory. xG is intentionally NOT requested: the WC feed
+// does not populate it.
+// =========================================================================
+SportMonks.prototype.getFixtureRichData = function(fixtureId, homeTeamId, awayTeamId) {
+  return this._request('/fixtures/' + fixtureId, {
+    include: 'participants;statistics.type;lineups.details.type;formations;pressure;state',
+  }).then(function(data) {
+    var raw = data.data;
+    if (!raw) return null;
+    var hId = homeTeamId, aId = awayTeamId;
+    if (!hId || !aId) {
+      (raw.participants || []).forEach(function(p) {
+        if (p.meta && p.meta.location === 'home') hId = p.id;
+        else if (p.meta && p.meta.location === 'away') aId = p.id;
+      });
+    }
+    return {
+      lineups: parseLineups(raw, hId, aId),
+      formations: parseFormations(raw, hId, aId),
+      teamStats: parseTeamStats(raw, hId, aId),
+      pressure: parsePressure(raw, hId, aId),
+    };
+  });
+};
+
+// Lineups with per-player rating + key stats. SportMonks: type_id 11 = starting
+// XI, 12 = bench; only starters carry a details[] of player match stats.
+function parseLineups(raw, homeId, awayId) {
+  if (!raw.lineups || !raw.lineups.length) return null;
+  var home = [], away = [];
+  raw.lineups.forEach(function(l) {
+    var rating = null;
+    if (Array.isArray(l.details)) {
+      l.details.forEach(function(d) {
+        var dn = d.type && d.type.developer_name;
+        if (dn === 'RATING' && d.data && d.data.value != null) rating = d.data.value;
+      });
+    }
+    var entry = {
+      name: l.player_name || '',
+      number: l.jersey_number != null ? l.jersey_number : null,
+      starter: l.type_id === 11,
+      rating: rating != null ? Number(rating) : null,
+    };
+    if (l.team_id === homeId) home.push(entry);
+    else if (l.team_id === awayId) away.push(entry);
+  });
+  // Starters first (by shirt number), then bench.
+  var order = function(a, b) {
+    if (a.starter !== b.starter) return a.starter ? -1 : 1;
+    return (a.number || 99) - (b.number || 99);
+  };
+  home.sort(order); away.sort(order);
+  if (!home.length && !away.length) return null;
+  return { home: home, away: away };
+}
+
+function parseFormations(raw, homeId, awayId) {
+  if (!raw.formations || !raw.formations.length) return null;
+  var out = { home: null, away: null };
+  raw.formations.forEach(function(f) {
+    if (f.participant_id === homeId || f.location === 'home') out.home = f.formation || out.home;
+    else if (f.participant_id === awayId || f.location === 'away') out.away = f.formation || out.away;
+  });
+  return (out.home || out.away) ? out : null;
+}
+
+// Curated team stat sheet (only the rows worth showing), in display order.
+// Returns null pre-match when statistics are empty.
+var TEAM_STAT_ROWS = [
+  { key: 'BALL_POSSESSION', label: 'Possession', suffix: '%' },
+  { key: 'SHOTS_TOTAL', label: 'Shots' },
+  { key: 'SHOTS_ON_TARGET', label: 'Shots on Target' },
+  { key: 'BIG_CHANCES_CREATED', label: 'Big Chances' },
+  { key: 'DANGEROUS_ATTACKS', label: 'Dangerous Attacks' },
+  { key: 'CORNERS', label: 'Corners' },
+  { key: 'KEY_PASSES', label: 'Key Passes' },
+  { key: 'SUCCESSFUL_PASSES_PERCENTAGE', label: 'Pass Accuracy', suffix: '%' },
+  { key: 'FOULS', label: 'Fouls' },
+  { key: 'YELLOWCARDS', label: 'Yellow Cards' },
+  { key: 'REDCARDS', label: 'Red Cards' },
+];
+function parseTeamStats(raw, homeId, awayId) {
+  if (!raw.statistics || !raw.statistics.length) return null;
+  var map = { home: {}, away: {} };
+  raw.statistics.forEach(function(s) {
+    var dn = (s.type && s.type.developer_name) || s.type_id;
+    var val = s.data && s.data.value !== undefined ? s.data.value : s.value;
+    var loc = s.location || (s.participant_id === homeId ? 'home' : s.participant_id === awayId ? 'away' : null);
+    if (loc === 'home') map.home[dn] = val;
+    else if (loc === 'away') map.away[dn] = val;
+  });
+  var rows = TEAM_STAT_ROWS.map(function(r) {
+    // Need BOTH sides present + numeric to show a fair comparison — a one-sided
+    // value would render as "53% vs 0%", which reads as a real zero, not "no data".
+    var h = Number(map.home[r.key]), a = Number(map.away[r.key]);
+    if (map.home[r.key] == null || map.away[r.key] == null || isNaN(h) || isNaN(a)) return null;
+    return { label: r.label, home: h, away: a, suffix: r.suffix || '' };
+  }).filter(Boolean);
+  return rows.length ? rows : null;
+}
+
+// Per-minute Pressure Index → momentum share + a downsampled timeline for a
+// sparkline. pressure is 0-100 per team per minute.
+function parsePressure(raw, homeId, awayId) {
+  if (!raw.pressure || !raw.pressure.length) return null;
+  var byMin = {};
+  var homeSum = 0, awaySum = 0, homeN = 0, awayN = 0;
+  raw.pressure.forEach(function(p) {
+    var min = p.minute;
+    if (min == null) return;
+    if (!byMin[min]) byMin[min] = { minute: min, home: null, away: null };
+    if (p.participant_id === homeId) { byMin[min].home = p.pressure; homeSum += p.pressure || 0; homeN++; }
+    else if (p.participant_id === awayId) { byMin[min].away = p.pressure; awaySum += p.pressure || 0; awayN++; }
+  });
+  var minutes = Object.keys(byMin).map(Number).sort(function(a, b) { return a - b; });
+  if (!minutes.length) return null;
+  // Downsample into ~24 buckets so the timeline payload stays small.
+  var bucketSize = Math.max(1, Math.ceil(minutes.length / 24));
+  var timeline = [];
+  for (var i = 0; i < minutes.length; i += bucketSize) {
+    var slice = minutes.slice(i, i + bucketSize);
+    var hAcc = 0, aAcc = 0, hC = 0, aC = 0;
+    slice.forEach(function(mn) {
+      var rec = byMin[mn];
+      if (rec.home != null) { hAcc += rec.home; hC++; }
+      if (rec.away != null) { aAcc += rec.away; aC++; }
+    });
+    timeline.push({
+      minute: slice[slice.length - 1],
+      home: hC ? Math.round(hAcc / hC) : 0,
+      away: aC ? Math.round(aAcc / aC) : 0,
+    });
+  }
+  var homeAvg = homeN ? homeSum / homeN : 0;
+  var awayAvg = awayN ? awaySum / awayN : 0;
+  var total = homeAvg + awayAvg;
+  if (!total) return null; // all-zero pressure → no momentum to show, hide the section
+  var homeShare = Math.round((homeAvg / total) * 100);
+  return {
+    homeShare: homeShare,
+    awayShare: 100 - homeShare, // derived so the two always sum to 100
+    timeline: timeline,
+  };
+}
+
+// =========================================================================
 // PROBE INCLUDE — test whether a single SportMonks include is supported on
 // this plan and return what (if anything) it yields for a fixture. Used by the
 // fixture-data diagnostic to confirm the exact include name + key shapes for

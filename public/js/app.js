@@ -6508,21 +6508,81 @@ const App = {
       '</div>' +
     '</div>';
 
-    // --- Probable Lineups (SportMonks All-In) ---
+    // --- Match Momentum (SportMonks Pressure Index) ---
+    if (data.pressure && data.pressure.timeline && data.pressure.timeline.length) {
+      var pr = data.pressure;
+      var spark = pr.timeline.map(function(t) {
+        var h = t.home || 0, a = t.away || 0, tot = h + a;
+        var hPct = tot ? Math.round((h / tot) * 100) : 50;
+        // Each column: top = home share (gold), bottom = away share (blue).
+        return '<div title="' + (t.minute != null ? t.minute + "'" : '') + '" style="flex:1;display:flex;flex-direction:column;height:46px;border-radius:2px;overflow:hidden;background:var(--bg-elevated);">' +
+          '<div style="height:' + hPct + '%;background:#d4a843;"></div>' +
+          '<div style="height:' + (100 - hPct) + '%;background:#3b82f6;"></div>' +
+        '</div>';
+      }).join('');
+      html += '<div class="match-intel-section' + lockedClass + '">' +
+        '<h3 class="match-intel-section-title">Match Momentum <span style="font-size:11px;color:var(--text-muted);font-weight:500;">· Pressure Index</span></h3>' +
+        '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;">' +
+          '<span style="color:#d4a843;font-weight:700;">' + this.escapeHtml(m.homeTeam) + ' ' + pr.homeShare + '%</span>' +
+          '<span style="color:#3b82f6;font-weight:700;">' + pr.awayShare + '% ' + this.escapeHtml(m.awayTeam) + '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:2px;align-items:stretch;">' + spark + '</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Share of attacking pressure across the match.</div>' +
+      '</div>';
+    }
+
+    // --- Match Stats (SportMonks live/full-time stat sheet) ---
+    if (data.teamStats && data.teamStats.length) {
+      var statRow = function(r) {
+        var h = Number(r.home) || 0, a = Number(r.away) || 0, tot = h + a;
+        var hPct = tot ? Math.round((h / tot) * 100) : 50;
+        return '<div style="margin-bottom:10px;">' +
+          '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px;">' +
+            '<strong style="color:var(--text-primary);">' + r.home + (r.suffix || '') + '</strong>' +
+            '<span style="color:var(--text-secondary);">' + r.label + '</span>' +
+            '<strong style="color:var(--text-primary);">' + r.away + (r.suffix || '') + '</strong>' +
+          '</div>' +
+          '<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--bg-elevated);">' +
+            '<div style="width:' + hPct + '%;background:#d4a843;"></div>' +
+            '<div style="width:' + (100 - hPct) + '%;background:#3b82f6;"></div>' +
+          '</div>' +
+        '</div>';
+      };
+      html += '<div class="match-intel-section' + lockedClass + '">' +
+        '<h3 class="match-intel-section-title">Match Stats <span style="font-size:11px;color:var(--text-muted);font-weight:500;">· ' + this.escapeHtml(m.homeTeam) + ' v ' + this.escapeHtml(m.awayTeam) + '</span></h3>' +
+        data.teamStats.map(statRow).join('') +
+      '</div>';
+    }
+
+    // --- Probable Lineups (SportMonks All-In) — with formations + player ratings ---
     if (data.lineups && ((data.lineups.home && data.lineups.home.length) || (data.lineups.away && data.lineups.away.length))) {
+      var ratingChip = function(rating) {
+        if (rating == null) return '';
+        var col = rating >= 7.5 ? '#22c55e' : rating >= 6.5 ? '#d4a843' : '#ef4444';
+        return '<span style="margin-left:auto;font-size:11px;font-weight:800;color:#fff;background:' + col + ';border-radius:4px;padding:1px 6px;min-width:34px;text-align:center;">' + rating.toFixed(1) + '</span>';
+      };
       var lineupCol = function(players) {
         return (players || []).map(function(p) {
-          return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;">' +
+          return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;' + (p.starter === false ? 'opacity:0.6;' : '') + '">' +
             '<span style="display:inline-block;min-width:22px;text-align:center;color:var(--gold);font-weight:700;font-size:12px;">' + (p.number != null ? p.number : '') + '</span>' +
-            '<span style="color:var(--text-primary);">' + App.escapeHtml(p.name || '') + '</span>' +
+            '<span style="color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + App.escapeHtml(p.name || '') + '</span>' +
+            ratingChip(p.rating) +
           '</div>';
         }).join('');
       };
+      var fmt = data.formations || {};
+      var teamHead = function(name, formation) {
+        return '<div style="display:flex;justify-content:space-between;align-items:baseline;font-weight:700;color:var(--text-primary);margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:4px;">' +
+          '<span>' + App.escapeHtml(name) + '</span>' +
+          (formation ? '<span style="font-size:11px;color:var(--text-muted);font-weight:600;">' + App.escapeHtml(formation) + '</span>' : '') +
+        '</div>';
+      };
+      var hasRatings = (data.lineups.home || []).some(function(p) { return p.rating != null; }) || (data.lineups.away || []).some(function(p) { return p.rating != null; });
       html += '<div class="match-intel-section' + lockedClass + '">' +
-        '<h3 class="match-intel-section-title">Probable Lineups</h3>' +
+        '<h3 class="match-intel-section-title">' + (hasRatings ? 'Lineups & Player Ratings' : 'Probable Lineups') + '</h3>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">' +
-          '<div><div style="font-weight:700;color:var(--text-primary);margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:4px;">' + m.homeTeam + '</div>' + lineupCol(data.lineups.home) + '</div>' +
-          '<div><div style="font-weight:700;color:var(--text-primary);margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:4px;">' + m.awayTeam + '</div>' + lineupCol(data.lineups.away) + '</div>' +
+          '<div>' + teamHead(m.homeTeam, fmt.home) + lineupCol(data.lineups.home) + '</div>' +
+          '<div>' + teamHead(m.awayTeam, fmt.away) + lineupCol(data.lineups.away) + '</div>' +
         '</div>' +
       '</div>';
     }

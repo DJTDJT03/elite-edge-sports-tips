@@ -297,23 +297,20 @@ module.exports = function(deps) {
               } catch (e) { console.log('[Match Intelligence] SportMonks predictions failed:', e.message); }
             }
 
-            // Probable lineups (All-In) — 11 per side with names, numbers, positions
-            var smLineups = null;
-            if (sportMonks.getFixtureRaw) {
+            // Rich All-In match detail — lineups WITH player ratings, formations,
+            // full team stat sheet, and Pressure Index momentum (one call).
+            // Stats/pressure are empty pre-match and parse to null defensively.
+            var smLineups = null, smFormations = null, smTeamStats = null, smPressure = null;
+            if (sportMonks.getFixtureRichData) {
               try {
-                var smRaw = await sportMonks.getFixtureRaw(fixtureId);
-                if (smRaw && smRaw.lineups && smRaw.lineups.length) {
-                  var _lhome = [], _laway = [];
-                  smRaw.lineups.forEach(function(l) {
-                    var entry = { name: l.player_name || '', number: l.jersey_number || null, pos: l.formation_position || null };
-                    if (l.team_id === smF.homeTeamId) _lhome.push(entry);
-                    else if (l.team_id === smF.awayTeamId) _laway.push(entry);
-                  });
-                  var _byNum = function(a, b) { return (a.number || 99) - (b.number || 99); };
-                  _lhome.sort(_byNum); _laway.sort(_byNum);
-                  if (_lhome.length || _laway.length) smLineups = { home: _lhome, away: _laway };
+                var smRich = await sportMonks.getFixtureRichData(fixtureId, smF.homeTeamId, smF.awayTeamId);
+                if (smRich) {
+                  smLineups = smRich.lineups;
+                  smFormations = smRich.formations;
+                  smTeamStats = smRich.teamStats;
+                  smPressure = smRich.pressure;
                 }
-              } catch (e) { console.log('[Match Intelligence] SportMonks lineups failed:', e.message); }
+              } catch (e) { console.log('[Match Intelligence] SportMonks rich data failed:', e.message); }
             }
 
             // xG from fixture statistics — defensive key match (exact shape confirmed via diagnostic)
@@ -441,6 +438,9 @@ module.exports = function(deps) {
               predictedScore: smScore || null,
               bttsPercent: smBtts != null ? smBtts : null,
               lineups: smLineups || null,
+              formations: smFormations || null,
+              teamStats: smTeamStats || null,
+              pressure: smPressure || null,
               xg: (smHomeXg != null && smAwayXg != null) ? { home: smHomeXg, away: smAwayXg } : null,
               analysis: {
                 overview: smF.homeTeam + ' host ' + smF.awayTeam + ' at ' + (smF.venue || 'their home ground') + ' in the ' + smF.league + '.'
