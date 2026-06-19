@@ -456,7 +456,11 @@ module.exports = function(deps) {
       // RACING questions must be answered ONLY from our verified Racing API card —
       // never from a web search (which hallucinates runners that aren't even in the
       // race). So we do NOT web-ground racing questions.
-      var racingQ = /\brace\b|racing|racecard|\brunner|\bnap\b|each.?way|favourite|favorite|\bgoing\b|\bdraw\b|\b\d{1,2}[.:]\d{2}\b|kempton|ascot|newmarket|york|goodwood|doncaster|sandown|haydock|aintree|cheltenham|epsom|newbury|chester|ayr|chepstow|leopardstown|curragh|punchestown/.test(msgL0);
+      var racingQ = /\brace\b|racing|racecard|\brunner|\bhorses?\b|\bnags?\b|\bnap\b|each.?way|favourite|favorite|\bgoing\b|\bdraw\b|\b\d{1,2}[.:]\d{2}\b|kempton|ascot|newmarket|york|goodwood|doncaster|sandown|haydock|aintree|cheltenham|epsom|newbury|chester|ayr|chepstow|leopardstown|curragh|punchestown/.test(msgL0);
+      // Did they ask about a SPECIFIC race (a course or a time)? A general "best
+      // horses today" question is NOT specific — we can still answer it from our
+      // per-race picks, so it must not trigger the hard "no card" refusal.
+      var specificRaceAsked = /\b\d{1,2}[.:]\d{2}\b|kempton|ascot|newmarket|york|goodwood|doncaster|sandown|haydock|aintree|cheltenham|epsom|newbury|chester|ayr|chepstow|leopardstown|curragh|punchestown|wolverhampton|lingfield|southwell|newcastle|nottingham|leicester|bath|brighton|carlisle|catterick|fakenham|ffos|hamilton|hexham|musselburgh|perth|redcar|ripon|salisbury|stratford|thirsk|uttoxeter|wetherby|windsor|worcester|yarmouth/.test(msgL0);
       var haveRaceCardDetail = false;
       var webPromise = (!serviceQ && !racingQ && message.trim().length > 6) ? askPerplexitySonar(message) : Promise.resolve(null);
       var webCitations = [];
@@ -548,7 +552,7 @@ module.exports = function(deps) {
         // edge over generic chatbots, which can't see today's runners/odds)
         try {
           var msgLower = message.toLowerCase();
-          var racingIntent = /\brace|racing|runner|winner|nap|each.?way|favourite|favorite|top ?3|top three|tip|\b\d{1,2}[.:]\d{2}\b/.test(msgLower);
+          var racingIntent = /\brace|racing|runner|\bhorses?\b|\bnags?\b|winner|nap|each.?way|favourite|favorite|top ?3|top three|tip|fancy|selection|best bet|\b\d{1,2}[.:]\d{2}\b/.test(msgLower);
           var cards = (racingSource && process.env.RACING_API_KEY && racingIntent) ? await getTodaysRaceCards() : [];
           if (!cards.length && racingSource && process.env.RACING_API_KEY) {
             // course name in the message? fetch anyway
@@ -605,10 +609,15 @@ module.exports = function(deps) {
         // Non-fatal — chatbot works without live context
       }
 
-      // RACING INTEGRITY GUARD — if this is a race question but we could NOT load
-      // the verified racecard for it, the assistant must NOT invent runners.
-      if (racingQ && !haveRaceCardDetail) {
-        liveContext += "\n\nRACING DATA STATUS: We do NOT have a verified racecard for the race asked about right now. You MUST NOT name any horses, give a selection, or list a top-3 — there is no card to read and guessing/using web info for runners is forbidden. Reply briefly that you can't pull the live card for that race at the moment and point them to the Racing page / to try again shortly. Do not invent runners under any circumstances.\n";
+      // RACING INTEGRITY GUARD. Two cases:
+      // 1) A SPECIFIC race (course/time) we couldn't load → never invent runners.
+      // 2) A GENERAL racing question ("best horses today") → DO answer, but only
+      //    from our own verified data above (Race Predictions / loaded cards),
+      //    never from web horse names.
+      if (racingQ && !haveRaceCardDetail && specificRaceAsked) {
+        liveContext += "\n\nRACING DATA STATUS: We do NOT have a verified racecard for the SPECIFIC race asked about right now. You MUST NOT name any horses, give a selection, or list a top-3 for that race — there is no card to read and guessing/using web info for runners is forbidden. Reply briefly that you can't pull that exact card at the moment and point them to the Racing page / to try again shortly. Do not invent runners under any circumstances.\n";
+      } else if (racingQ && !haveRaceCardDetail) {
+        liveContext += "\n\nRACING ANSWER GUIDANCE: This is a GENERAL racing question. Answer it from OUR OWN data above — 'TODAY'S RACE PREDICTIONS (Our Pick on every race)' and 'TODAY'S LIVE RACECARDS' — naming our standout picks with the reasoning we provide. If we have no race predictions or cards loaded for today, say so plainly and point them to the Racing page. NEVER name horses from web intel/third-party sites — only our verified card/prediction data.\n";
       }
 
       // ELITE EDGE QUANT MODEL — attach OUR engine's live probabilities for the
