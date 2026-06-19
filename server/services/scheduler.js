@@ -2291,9 +2291,13 @@ module.exports = function startScheduler(deps) {
                   continue;
                 }
 
-                // Capture closing price (SP) from results API
+                // Capture closing price: prefer the official SP, else the last
+                // tracked market price (tip_price_history captured up to kickoff).
                 var tipRunner = match.runners.find(function(rn) { return normHorse(rn.horse) === tipName; });
                 var closingPrice = tipRunner && tipRunner.sp ? parseFloat(tipRunner.sp) : null;
+                if (!closingPrice || !(closingPrice > 1)) {
+                  try { var rHist = await db.getPriceHistory(tip.id); if (rHist && rHist.length) closingPrice = rHist[rHist.length - 1].priceDecimal; } catch (e) {}
+                }
                 var advisedPrice = tip.advisedPriceDecimal || tip.odds;
                 var clvPct = null;
                 if (closingPrice && closingPrice > 1 && advisedPrice && advisedPrice > 1) {
@@ -2538,9 +2542,13 @@ module.exports = function startScheduler(deps) {
                 continue;
               }
 
-              // Capture closing price from last known odds (bookmakerOdds on the tip)
+              // Capture the genuine closing price from the last tracked market
+              // price (tip_price_history is snapshotted every 5 mins up to KO).
+              // Football tips are created with empty bookmakerOdds, so the price
+              // history — not the tip object — is the real closing line.
               var fClosingPrice = null;
-              if (ftip.bookmakerOdds && Object.keys(ftip.bookmakerOdds).length > 0) {
+              try { var fHist = await db.getPriceHistory(ftip.id); if (fHist && fHist.length) fClosingPrice = fHist[fHist.length - 1].priceDecimal; } catch (e) {}
+              if (!fClosingPrice && ftip.bookmakerOdds && Object.keys(ftip.bookmakerOdds).length > 0) {
                 var bkValues = Object.values(ftip.bookmakerOdds).filter(function(v) { return v > 0; });
                 if (bkValues.length > 0) {
                   fClosingPrice = bkValues.reduce(function(sum, v) { return sum + v; }, 0) / bkValues.length;

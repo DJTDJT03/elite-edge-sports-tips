@@ -150,6 +150,35 @@ module.exports = function(deps) {
   });
 
   // -------------------------------------------------------------------------
+  // POST /api/analytics/clv/backfill — compute CLV for already-settled tips that
+  // have tracked price history but no CLV yet (settlement used to ignore it).
+  // Grows the Proof-of-Edge sample from data we already captured. Idempotent.
+  // -------------------------------------------------------------------------
+  router.post('/analytics/clv/backfill', authenticate, requireAdmin, async (req, res) => {
+    try {
+      const tips = await db.getTips({ status: 'settled' });
+      const todo = tips.filter(function (t) { return (t.clvPercent === null || t.clvPercent === undefined) && (t.advisedPriceDecimal || t.odds); });
+      var updated = 0, noHistory = 0;
+      for (var i = 0; i < todo.length; i++) {
+        var t = todo[i];
+        var hist = await db.getPriceHistory(t.id);
+        if (!hist || !hist.length) { noHistory++; continue; }
+        var closing = hist[hist.length - 1].priceDecimal;
+        var advised = t.advisedPriceDecimal || t.odds;
+        if (closing > 1 && advised > 1) {
+          var clv = ((1 / closing - 1 / advised) / (1 / advised)) * 100;
+          await db.updateTip(t.id, { closingPriceDecimal: Math.round(closing * 100) / 100, clvPercent: Math.round(clv * 100) / 100 });
+          updated++;
+        }
+      }
+      res.json({ ok: true, candidates: todo.length, updated: updated, noPriceHistory: noHistory });
+    } catch (err) {
+      console.error('[Analytics] CLV backfill error:', err.message);
+      res.status(500).json({ error: 'CLV backfill failed: ' + err.message });
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // GET /api/analytics/calibration — Brier score, reliability curve, confidence
   // ordering and a backtest by odds band. Pure measurement (admin only).
   // -------------------------------------------------------------------------
