@@ -286,10 +286,14 @@ module.exports = function(deps) {
       if (!fixtureData.response || !fixtureData.response.length) {
         if (usedSportMonks) {
           // We have SportMonks data — build a clean analysis from it
-          var smF = await sportMonks.getFixture(fixtureId);
+          // Reuse the fixture already fetched during resolution (don't fetch it twice).
+          var smF = smFixture || await sportMonks.getFixture(fixtureId);
           if (smF && smF.homeTeam) {
+            // Kick off H2H + predictions NOW so they run concurrently with the
+            // form fetch below, instead of one slow call after another.
+            var _h2hP = sportMonks.getH2H ? sportMonks.getH2H(smF.homeTeamId, smF.awayTeamId).catch(function(){return [];}) : Promise.resolve([]);
+            var _predsP = sportMonks.getPredictions ? sportMonks.getPredictions(fixtureId).catch(function(){return [];}) : Promise.resolve([]);
             var smH2H = [];
-            try { smH2H = await sportMonks.getH2H(smF.homeTeamId, smF.awayTeamId) || []; } catch(e) {}
 
             // Recent form + key stats for each team from SportMonks (last ~6 months)
             function _smDateStr(daysAgo) { var d = new Date(); d.setDate(d.getDate() - daysAgo); return d.toISOString().split('T')[0]; }
@@ -326,13 +330,15 @@ module.exports = function(deps) {
                 smAwayForm = _computeTeamForm(_recent[1], smF.awayTeamId);
               } catch (e) { console.log('[Match Intelligence] SportMonks form fetch failed:', e.message); }
             }
+            // H2H was fetched concurrently above — collect it now.
+            try { smH2H = (await _h2hP) || []; } catch (e) { smH2H = []; }
 
             // Pre-match predictions (All-In) — mapped by SportMonks type_id
             // 237 = Fulltime Result (1X2), 240 = Correct Score, 231 = BTTS
             var smProb = null, smScore = null, smBtts = null;
             if (sportMonks.getPredictions) {
               try {
-                var _preds = await sportMonks.getPredictions(fixtureId);
+                var _preds = (await _predsP) || []; // fetched concurrently above
                 (_preds || []).forEach(function(p) {
                   var pv = p.predictions || {};
                   if (p.type_id === 237 && pv.home != null) {
