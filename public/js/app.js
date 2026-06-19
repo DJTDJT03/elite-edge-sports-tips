@@ -8232,8 +8232,10 @@ const App = {
             <button class="btn btn-outline btn-sm" onclick="App.adminCheckStripe()">Check Stripe</button>
             <button class="btn btn-outline btn-sm" onclick="App.adminGenerateBlog(this)">Generate Blog Now</button>
             <button class="btn btn-outline btn-sm" onclick="App.adminShowCalibration()">Model Calibration</button>
+            <button class="btn btn-outline btn-sm" onclick="App.adminBackfillClv(this)" title="Compute Closing Line Value for settled tips that have price history but no CLV">Backfill CLV</button>
           </div>
           <div id="admin-calibration-out" style="display:none;margin-bottom:16px;"></div>
+          <div id="admin-clv-out" style="display:none;margin-bottom:16px;"></div>
           <div id="admin-stripe-health" style="display:none;margin-bottom:16px;padding:12px 14px;border-radius:8px;font-size:13px;"></div>
           <div id="admin-live-racing" class="mb-16"><div class="inline-spinner">Loading live racing data...</div></div>
           <div id="admin-live-football"><div class="inline-spinner">Loading live football data...</div></div>
@@ -8808,6 +8810,31 @@ const App = {
       this.showToast('Blog generation failed: ' + (e.message || e), 'error');
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Generate Blog Now'; }
+    }
+  },
+
+  async adminBackfillClv(btn) {
+    var box = document.getElementById('admin-clv-out');
+    if (!box) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Backfilling…'; }
+    box.style.display = 'block';
+    box.innerHTML = '<div class="inline-spinner">Computing Closing Line Value from captured price history…</div>';
+    try {
+      var r = await this.api('/analytics/clv/backfill', { method: 'POST' });
+      var pub = null; try { pub = await this.api('/analytics/clv-public'); } catch (e) {}
+      var status = pub && pub.ready
+        ? '<span style="color:#22c55e;font-weight:800;">Proof of Edge is LIVE</span> — ' + pub.beatRate + '% beat the close, avg ' + (pub.avgClv >= 0 ? '+' : '') + pub.avgClv + '% CLV over ' + pub.sample + ' tips.'
+        : '<span style="color:#d4a843;font-weight:700;">Not live yet</span> — ' + (pub ? pub.sample : '?') + '/' + (pub ? pub.minSample : 15) + ' tips with CLV. Builds as more tips settle.';
+      box.innerHTML = '<div class="card" style="padding:14px;font-size:13px;">' +
+        '<strong>CLV backfill complete.</strong><br>' +
+        'Updated ' + (r.updated || 0) + ' of ' + (r.candidates || 0) + ' settled tips (' + (r.noPriceHistory || 0) + ' had no captured price history).<br>' +
+        '<div style="margin-top:8px;">' + status + '</div>' +
+      '</div>';
+      this.showToast('CLV backfill: ' + (r.updated || 0) + ' tips updated', 'success');
+    } catch (e) {
+      box.innerHTML = '<div class="card" style="padding:14px;color:#ef4444;">CLV backfill failed: ' + (e.message || e) + '</div>';
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Backfill CLV'; }
     }
   },
 

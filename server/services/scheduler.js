@@ -161,6 +161,43 @@ module.exports = function startScheduler(deps) {
     };
   }
 
+  // Map a match-prediction pick to a 1X2 odds-feed selection name so we can read
+  // its closing price. Only match-result / draw picks map cleanly — goals/BTTS/
+  // Double Chance aren't in the 1X2 feed, so they're skipped (no false CLV).
+  function _pickOddsSelection(pick, home, away) {
+    var p = (pick || '').toLowerCase();
+    if (p.indexOf('double') !== -1 || p.indexOf('over') !== -1 || p.indexOf('under') !== -1 || p.indexOf('btts') !== -1 || p.indexOf('both teams') !== -1) return null;
+    if (p.indexOf('draw') !== -1) return 'draw';
+    if (home && p.indexOf(String(home).toLowerCase()) !== -1) return home;
+    if (away && p.indexOf(String(away).toLowerCase()) !== -1) return away;
+    return null;
+  }
+
+  // Capture the CLOSING market price for "Our Take" consensus picks
+  // (match_predictions) approaching kick-off, so the headline picks carry the
+  // same Closing Line Value proof as published tips. CLV is computed in the DB.
+  async function captureMatchPredictionClosing() {
+    if (!db.query) return;
+    try {
+      var res = await db.query(
+        "SELECT id, home_team, away_team, pick FROM match_predictions " +
+        "WHERE result IS NULL AND closing_price IS NULL AND advised_price IS NOT NULL AND kickoff IS NOT NULL " +
+        "AND kickoff <= NOW() + INTERVAL '30 minutes' AND kickoff >= NOW() - INTERVAL '3 hours' LIMIT 80"
+      );
+      var rows = res.rows || [];
+      var captured = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var sel = _pickOddsSelection(r.pick, r.home_team, r.away_team);
+        if (!sel) continue;
+        var eventKey = ((r.home_team || '') + ' v ' + (r.away_team || '')).toLowerCase();
+        var mv = analyseOddsMovement(eventKey, sel);
+        if (mv && mv.currentAvg > 1) { await db.setMatchPredictionClosing(r.id, mv.currentAvg); captured++; }
+      }
+      if (captured > 0) console.log('[MP-Closing] Captured closing price for ' + captured + ' Our Take pick(s)');
+    } catch (e) { console.warn('[MP-Closing] ' + e.message); }
+  }
+
   // -------------------------------------------------------------------------
   // Helper: get current UK time
   // -------------------------------------------------------------------------
@@ -883,6 +920,7 @@ module.exports = function startScheduler(deps) {
                 confidence: scored.confidence || 5,
                 reason: 'Model edge: ' + ((scored.edge || 0) * 100).toFixed(1) + '%',
                 date: today,
+                advisedPrice: scored.selectedOdds || scored.odds || null, // price at the time we called it (for CLV)
               }).catch(function() {}); // non-fatal, skip duplicates
             } catch(e) {}
           }
@@ -5009,6 +5047,8 @@ module.exports = function startScheduler(deps) {
 
   // Price history: every 5 minutes, 3 mins after startup
   setInterval(safeRun('PriceHistory', logPriceHistory), 5 * 60 * 1000);
+  // Capture closing prices for "Our Take" picks near kick-off (CLV on the headline picks)
+  setInterval(safeRun('MP-Closing', captureMatchPredictionClosing), 10 * 60 * 1000);
   setTimeout(safeRun('PriceHistory', logPriceHistory), 3 * 60 * 1000);
 
   // =========================================================================

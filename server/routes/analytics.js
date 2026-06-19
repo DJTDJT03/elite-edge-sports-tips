@@ -118,20 +118,33 @@ module.exports = function(deps) {
   router.get('/analytics/clv-public', async (req, res) => {
     try {
       const tips = await db.getTips({ status: 'settled' });
-      const withClv = tips.filter(function (t) { return t.clvPercent !== null && t.clvPercent !== undefined; });
+      // Combine published tips with our per-fixture model calls (match_predictions)
+      // so the proof draws on the full body of calls, not just published tips.
+      var records = tips
+        .filter(function (t) { return t.clvPercent !== null && t.clvPercent !== undefined; })
+        .map(function (t) { return { clv: t.clvPercent, sport: t.sport || 'other' }; });
+      try {
+        var mps = db.getMatchPredictions ? await db.getMatchPredictions() : [];
+        mps.forEach(function (m) {
+          var c = (m.clv_percent !== null && m.clv_percent !== undefined) ? parseFloat(m.clv_percent) : null;
+          if (c !== null && !isNaN(c)) records.push({ clv: c, sport: 'football' });
+        });
+      } catch (e) { /* match_predictions CLV optional */ }
+
+      const withClv = records;
       const n = withClv.length;
       const MIN_SAMPLE = 15; // don't publish numbers off a tiny sample
       if (n < MIN_SAMPLE) {
         return res.json({ ready: false, sample: n, minSample: MIN_SAMPLE });
       }
-      const avgClv = withClv.reduce(function (s, t) { return s + t.clvPercent; }, 0) / n;
-      const positive = withClv.filter(function (t) { return t.clvPercent > 0; }).length;
+      const avgClv = withClv.reduce(function (s, t) { return s + t.clv; }, 0) / n;
+      const positive = withClv.filter(function (t) { return t.clv > 0; }).length;
       // Per-sport beat rate (only sports with a decent sample)
       const bySport = {};
       withClv.forEach(function (t) {
         if (!bySport[t.sport]) bySport[t.sport] = { n: 0, pos: 0, total: 0 };
-        bySport[t.sport].n++; bySport[t.sport].total += t.clvPercent;
-        if (t.clvPercent > 0) bySport[t.sport].pos++;
+        bySport[t.sport].n++; bySport[t.sport].total += t.clv;
+        if (t.clv > 0) bySport[t.sport].pos++;
       });
       const sports = Object.keys(bySport).filter(function (s) { return bySport[s].n >= 8; }).map(function (s) {
         return { sport: s, sample: bySport[s].n, beatRate: Math.round((bySport[s].pos / bySport[s].n) * 100), avgClv: Math.round((bySport[s].total / bySport[s].n) * 100) / 100 };

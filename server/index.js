@@ -311,6 +311,10 @@ app.use('/', require('./routes/public')(deps));
         'ALTER TABLE tips ADD COLUMN IF NOT EXISTS fair_odds_decimal NUMERIC(8,2)',
         'ALTER TABLE tips ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ',
         'ALTER TABLE tips ADD COLUMN IF NOT EXISTS settlement_source TEXT',
+        // CLV on the flagship "Our Take" consensus picks (match_predictions)
+        'ALTER TABLE match_predictions ADD COLUMN IF NOT EXISTS advised_price NUMERIC(8,2)',
+        'ALTER TABLE match_predictions ADD COLUMN IF NOT EXISTS closing_price NUMERIC(8,2)',
+        'ALTER TABLE match_predictions ADD COLUMN IF NOT EXISTS clv_percent NUMERIC(8,4)',
         // Phase 1: New tables
         "CREATE TABLE IF NOT EXISTS tip_price_history (id SERIAL PRIMARY KEY, tip_id TEXT NOT NULL REFERENCES tips(id) ON DELETE CASCADE, price_decimal NUMERIC(8,2) NOT NULL, bookmaker TEXT, source TEXT DEFAULT 'odds-api', recorded_at TIMESTAMPTZ DEFAULT NOW())",
         'CREATE INDEX IF NOT EXISTS idx_tph_tip_id ON tip_price_history(tip_id)',

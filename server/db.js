@@ -1242,7 +1242,7 @@ module.exports = {
   // User Bets (Personal ROI)
   backTip, unbackTip, getUserBets, settleUserBets, getUserROI,
   // Match Predictions (Our Take) + Race Predictions (Our Pick)
-  saveMatchPrediction, getMatchPredictions, settleMatchPredictions, getMatchPredictionStats,
+  saveMatchPrediction, getMatchPredictions, settleMatchPredictions, getMatchPredictionStats, setMatchPredictionClosing,
   saveRacePrediction, getRacePredictions, settleRacePredictions,
   // Loss Analysis
   saveLossAnalysis, getLossAnalysis, getLossPatterns,
@@ -1256,13 +1256,30 @@ module.exports = {
 async function saveMatchPrediction(data) {
   if (!pool) return null;
   var { rows } = await query(
-    `INSERT INTO match_predictions (fixture_id, home_team, away_team, league, kickoff, market, pick, confidence, reason, date)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    `INSERT INTO match_predictions (fixture_id, home_team, away_team, league, kickoff, market, pick, confidence, reason, date, advised_price)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      ON CONFLICT (fixture_id, date) DO NOTHING RETURNING id`,
     [data.fixtureId, data.homeTeam, data.awayTeam, data.league, data.kickoff,
-     data.market, data.pick, data.confidence, data.reason, data.date || new Date().toISOString().split('T')[0]]
+     data.market, data.pick, data.confidence, data.reason, data.date || new Date().toISOString().split('T')[0],
+     data.advisedPrice || null]
   );
   return rows.length > 0 ? rows[0].id : null;
+}
+
+// Record the closing price for a match prediction (captured near kick-off) and
+// compute CLV vs the advised price. Positive CLV = the price shortened after we
+// called it (the market moved our way) = genuine edge on the headline pick.
+async function setMatchPredictionClosing(id, closingPrice) {
+  if (!pool || !closingPrice || closingPrice <= 1) return;
+  await query(
+    `UPDATE match_predictions
+       SET closing_price = $2,
+           clv_percent = CASE WHEN advised_price > 1
+             THEN ROUND(((1.0/$2 - 1.0/advised_price) / (1.0/advised_price) * 100)::numeric, 4)
+             ELSE clv_percent END
+     WHERE id = $1 AND closing_price IS NULL`,
+    [id, Math.round(closingPrice * 100) / 100]
+  );
 }
 
 async function getMatchPredictions(filters) {
