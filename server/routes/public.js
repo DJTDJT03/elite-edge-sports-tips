@@ -591,6 +591,20 @@ module.exports = function(deps) {
               return cOk || tOk;
             }).slice(0, 3);
             if (detail.length) haveRaceCardDetail = true;
+            // GENERAL "best today / NAP" question with no specific race: load the
+            // full card for the races our highest-confidence Race Predictions are
+            // in, so we can name the best of the day WITH real card reasoning.
+            if (!detail.length && !specificRaceAsked && typeof racePreds !== 'undefined' && racePreds && racePreds.length) {
+              var _norm = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+              var _topPreds = racePreds.slice().sort(function (a, b) { return (b.confidence || 0) - (a.confidence || 0); }).slice(0, 5);
+              detail = cards.filter(function (r) {
+                return _topPreds.some(function (p) {
+                  var sameMeeting = p.meeting && r.meeting && _norm(r.meeting).indexOf(_norm(String(p.meeting).split(' ')[0])) !== -1;
+                  var sameTime = p.race_time && r.time && String(p.race_time).replace('.', ':') === String(r.time).replace('.', ':');
+                  return sameMeeting && sameTime;
+                });
+              }).slice(0, 5);
+            }
             detail.forEach(function (r) {
               liveContext += '\nRUNNERS — ' + (r.time || '') + ' ' + (r.meeting || '') + (r.raceName ? ' ' + r.raceName : '') + (r.raceClass ? ' (Class ' + r.raceClass + ')' : '') + (r.going ? ' [going: ' + r.going + ']' : '') + (r.distance ? ', ' + r.distance : '') + ':\n';
               (r.runners || []).slice(0, 20).forEach(function (rn) {
@@ -662,7 +676,7 @@ module.exports = function(deps) {
         '- Sound like a real person who knows their sport, not a chatbot. Banned: "I appreciate the question", "Here\'s what I can help with", "I need to be straight with you", "dual AI system", corporate waffle, and long bulleted sales pitches. No rule-of-three lists. No emoji spam.\n' +
         '- Do NOT pitch the free trial, pricing, or features unless they specifically ask about access or signing up.\n\n' +
         'ANSWERING QUESTIONS — always from OUR data below, never invent a pick or score:\n' +
-        '- RACING INTEGRITY (CRITICAL): you may ONLY name a horse that explicitly appears in a "RUNNERS —" list we provide below. NEVER name a runner from memory, training data, or web info — those will be wrong/non-existent horses and that is unacceptable. If there is no "RUNNERS —" list for the race asked about (or a RACING DATA STATUS note says we lack the card), do NOT name any horse or give a selection — say plainly you can\'t pull the live card for that race right now and point them to the Racing page. Better to say "I can\'t confirm the card" than to give a single wrong runner.\n' +
+        '- RACING INTEGRITY (CRITICAL): you may ONLY name a horse that explicitly appears below in a "RUNNERS —" list OR in "TODAY\'S RACE PREDICTIONS (Our Pick on every race)". NEVER name a runner from memory, training data, or web info — those will be wrong/non-existent horses and that is unacceptable. Only when BOTH are absent for the race asked about (or a RACING DATA STATUS note says we lack the card) do you decline — say plainly you can\'t pull that live card right now. Better to say "I can\'t confirm the card" than to give a single wrong runner.\n' +
         '- "Who/what wins the [time] at [course]?" → this is a PRE-RACE PREDICTION for an UPCOMING race. NEVER report a past/historical result as the answer (e.g. do not say "X won" — the race has not run). Predict it ONLY from the provided RUNNERS list / RACE PREDICTIONS. This is our edge over ChatGPT — we can see the actual declared field.\n' +
         '- JUSTIFY every selection with concrete card data — that reasoning is the whole point. For each pick cite the specifics that make it: official rating (OR), RPR, Topspeed (TS), recent form figures, days since last run, headgear, draw, going suitability, trainer & jockey 14-day strike rates, and the Racing Post "Spotlight" note where it adds something. Don\'t just name a horse — explain WHY from these numbers.\n' +
         '- Lead with the verdict, then a top-3. e.g. "**1.** Horse @ price — OR 98, RPR top of field, 2 wins from last 3, strong draw, trainer 24% last 14d." Be decisive like a tipster. If odds aren\'t in the card show "SP".\n' +
@@ -671,7 +685,7 @@ module.exports = function(deps) {
         '- World Cup: we HAVE the full fixture schedule synced (see below) — so you always know who plays who and when, including the opener. If our detailed prediction for that game has not generated yet, tell them the fixture and that the full breakdown lands closer to kickoff — do not claim we lack the fixtures.\n' +
         '- LIVE WEB INTEL (if present below) is current real-time info — use it for facts, news, fitness, line-ups, going changes, non-runners and the current market. Weave it in naturally; never say "according to my search". The actual pick comes from OUR card/engine. CRUCIAL: when asked who wins an UPCOMING race, do NOT let web intel make you report a finished result — predict from the card instead.\n' +
         '- If something genuinely is not in our data AND there is no web intel, say so plainly in one line and point them to the right page.\n' +
-        '- IMPORTANT (conversion): you may answer a question about a SPECIFIC race/match in full. But if asked to list ALL of today\'s tips/picks/NAPs at once, give just ONE taster pick and invite them to see the full card on the Tips page / with a subscription — never dump the entire day\'s premium selections in one reply.\n\n' +
+        '- ANSWER GENERAL QUESTIONS DIRECTLY (this is what users want): for "best horses today", "your NAP", "best bets", "who do you fancy" — GIVE THE ACTUAL ANSWER right here in the chat. Name our standout pick(s) from RACE PREDICTIONS / MATCH PREDICTIONS / RUNNERS above, with confidence and the reasoning we have. For a NAP, name the single highest-confidence racing pick. Lead with a clear top-3 (or top selections), each with a one-line why. Do NOT fob them off to the Racing page — answer it like a sharp tipster would. You MAY add ONE short line at the end like "full card with complete breakdowns is on the Racing/Tips page" — but only AFTER you have given a genuine, useful answer first. Never reply with only a deferral.\n\n' +
         'FORMAT — make answers feel ELITE and easy to read:\n' +
         '- Open with a one-line verdict in **bold** (the answer to their actual question).\n' +
         '- For a specific race: give the verdict, then a short top-3 as a list — "**1.** Horse @ odds — one-line why (form/going/draw/rating)", then a line on the key danger or pace/going angle.\n' +
