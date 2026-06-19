@@ -3,6 +3,11 @@ module.exports = function(deps) {
   const { footballSource, oddsSource, betfairSource, scoringModel, authenticate, db, aiReports, footballData, understatService, sportMonks } = deps;
   const { storeOddsSnapshot, analyseOddsMovement } = deps.oddsHelpers;
 
+  // Short-lived server-side cache for match-intelligence responses. The modal
+  // fires a dozen external + LLM calls per open; re-opening the same fixture (or
+  // many users opening the same WC game) should be instant, not a full recompute.
+  var _miCache = {};
+
   // ---------------------------------------------------------------------------
   // VERDICT LOCK — integrity guard for the World Cup "Our Take".
   // The first time a verdict is generated for a WC fixture (always pre-kick-off),
@@ -160,6 +165,23 @@ module.exports = function(deps) {
       }
 
       var fixtureId = req.params.fixtureId;
+
+      // Serve a recent computed response if we have one (credits already handled
+      // above). Keyed by the original id; 3-min TTL. Errors are never cached.
+      var _miKey = String(req.params.fixtureId);
+      if (_miCache[_miKey] && _miCache[_miKey].expires > Date.now()) {
+        return res.json(_miCache[_miKey].payload);
+      }
+      var _miOrigJson = res.json.bind(res);
+      res.json = function(_p) {
+        try {
+          if (_p && !_p.error) {
+            _miCache[_miKey] = { payload: _p, expires: Date.now() + 180000 };
+            if (Object.keys(_miCache).length > 400) _miCache = {}; // simple cap
+          }
+        } catch (e) {}
+        return _miOrigJson(_p);
+      };
 
       // Try SportMonks first for fixture detail (handles SportMonks IDs)
       var fixture, homeTeam, awayTeam, league, venue, kickoff, status;

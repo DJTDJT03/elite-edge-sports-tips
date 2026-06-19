@@ -44,6 +44,9 @@ const oddsHelpers = require('./utils/oddsHelpers');
 
 // App setup
 const app = express();
+// Gzip/deflate every response — the ~870KB app.js compresses to ~180KB, the
+// single biggest page-load win. Must come before static + routes.
+app.use(require('compression')());
 app.set('trust proxy', 1); // Railway runs behind a proxy — trust first hop for correct IP
 const PORT = process.env.PORT || 3000;
 // SECURITY: Require critical env vars in production
