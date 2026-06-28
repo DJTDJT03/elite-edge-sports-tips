@@ -379,54 +379,43 @@ async function getUpcomingWcFixtures(days) {
 async function getWcRoundFixtures(round) {
   if (!available()) return [];
   if (round <= 3) {
-    // PREFER SportMonks' own matchday tagging (round_name). Take the distinct
-    // group rounds ordered by earliest kickoff; round N = the Nth of them.
-    try {
-      const rn = await db.query(
-        `SELECT round_name, MIN(kickoff) AS first_ko FROM world_cup_fixtures
-         WHERE stage = 'group' AND round_name IS NOT NULL
-           AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
-         GROUP BY round_name ORDER BY first_ko ASC`
-      );
-      if (rn.rows.length >= 3 && rn.rows[round - 1]) {
-        const target = rn.rows[round - 1].round_name;
-        const { rows } = await db.query(
-          `SELECT id, home_team, away_team, kickoff, group_letter, status FROM (
-             SELECT DISTINCT ON (LEAST(home_team, away_team), GREATEST(home_team, away_team))
-               id, home_team, away_team, kickoff, group_letter, status
-             FROM world_cup_fixtures
-             WHERE stage = 'group' AND round_name = $1
-               AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
-               AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'
-             ORDER BY LEAST(home_team, away_team), GREATEST(home_team, away_team), kickoff ASC
-           ) d ORDER BY d.kickoff ASC`,
-          [target]
-        );
-        return rows;
-      }
-    } catch (e) { /* fall through to kickoff-based derivation */ }
-
-    // Fallback (no round_name yet): matchday = the home team's Nth group game
-    // by kickoff, on a deduped set. Matches settlement.
-    const { rows } = await db.query(
-      `WITH g AS (
-         SELECT DISTINCT ON (LEAST(home_team, away_team), GREATEST(home_team, away_team))
-           id, home_team, away_team, kickoff, group_letter, status
-         FROM world_cup_fixtures
-         WHERE stage = 'group'
-           AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
-           AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'
-         ORDER BY LEAST(home_team, away_team), GREATEST(home_team, away_team), kickoff ASC
-       )
-       SELECT id, home_team, away_team, kickoff, group_letter, status FROM (
-         SELECT g.*, (SELECT COUNT(*) FROM g g2
-             WHERE (g2.home_team = g.home_team OR g2.away_team = g.home_team)
-               AND g2.kickoff <= g.kickoff) AS md
-         FROM g
-       ) x WHERE md = $1 ORDER BY kickoff ASC`,
-      [round]
-    );
-    return rows;
+    // The table can hold TWO rows for the same game: a seeded one (canonical
+    // schedule — no external id, no result, sometimes a name variant like
+    // "South Korea") AND a SportMonks-synced one (real id + FT result, "Korea
+    // Republic"). Raw-name dedup can't collapse those and may keep the resultless
+    // seeded row, so the round looks "missing results" forever.
+    // Fix: fetch all real group fixtures, dedupe by NORMALISED matchup preferring
+    // the finished/synced row, then derive matchday N by kickoff order (the home
+    // team's Nth game) — which doesn't depend on the inconsistent round_name tag.
+    const sched = require('../services/wc2026Schedule');
+    const nrm = sched.norm || function (s) { return String(s || '').toLowerCase().trim(); };
+    const nameFilter =
+      `AND home_team NOT ILIKE '%group%' AND home_team !~ '^[0-9]'
+       AND away_team NOT ILIKE '%group%' AND away_team !~ '^[0-9]'`;
+    const cols = 'id, home_team, away_team, kickoff, group_letter, status, external_fixture_id';
+    // Prefer the REAL SportMonks-synced rows (have an external id, reflect the
+    // actual draw — no phantom pairings). Fall back to all rows only before any
+    // sync has run (so pre-tournament picks still work).
+    let qres = await db.query(`SELECT ${cols} FROM world_cup_fixtures WHERE stage = 'group' AND external_fixture_id IS NOT NULL ${nameFilter}`);
+    if (!qres.rows.length) qres = await db.query(`SELECT ${cols} FROM world_cup_fixtures WHERE stage = 'group' ${nameFilter}`);
+    const rows = qres.rows;
+    const byPair = {};
+    const fitness = function (x) { return (x.status === 'finished' ? 4 : 0) + (x.external_fixture_id ? 2 : 0) + (x.kickoff ? 1 : 0); };
+    (rows || []).forEach(function (r) {
+      const a = nrm(r.home_team), b = nrm(r.away_team);
+      const key = a < b ? a + '|' + b : b + '|' + a;
+      if (!byPair[key] || fitness(r) > fitness(byPair[key])) byPair[key] = r;
+    });
+    const deduped = Object.keys(byPair).map(function (k) { return byPair[k]; });
+    const matchdayOf = function (fx) {
+      const hn = nrm(fx.home_team);
+      return deduped.filter(function (g) {
+        return (nrm(g.home_team) === hn || nrm(g.away_team) === hn) && g.kickoff && fx.kickoff && new Date(g.kickoff) <= new Date(fx.kickoff);
+      }).length;
+    };
+    return deduped
+      .filter(function (fx) { return matchdayOf(fx) === round; })
+      .sort(function (a, b) { return new Date(a.kickoff || 0) - new Date(b.kickoff || 0); });
   }
   var stageMap = { 4: 'round-of-32', 5: 'round-of-16', 6: 'quarter-final', 7: 'semi-final', 8: 'final' };
   var stage = stageMap[round];
