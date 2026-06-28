@@ -440,16 +440,36 @@ module.exports = function (deps) {
       if (!c) return res.status(404).json({ error: 'Competition not found' });
       const round = c.currentRound;
       const finished = await lmsStore.getFinishedWcResults();
-      const fixtures = (c.phase === 'world_cup' ? (schedule.roundFixtures(round) || []) : []);
-      const fxStatus = fixtures.map(function (fx) {
-        const placeholder = schedule.isPlaceholder(fx.home) || schedule.isPlaceholder(fx.away);
-        const r = placeholder ? null : (finished || []).find(function (x) {
-          return (schedule.teamsMatch(x.home_team, fx.home) && schedule.teamsMatch(x.away_team, fx.away)) ||
-                 (schedule.teamsMatch(x.home_team, fx.away) && schedule.teamsMatch(x.away_team, fx.home));
+      let fxStatus;
+      if (c.phase === 'world_cup' && lmsStore.getWcRoundFixtures) {
+        // Use the actually-synced matchday fixtures (deduped by round_name) — same
+        // source settlement uses — so phantom/double-booked fixtures don't show.
+        const dbFx = await lmsStore.getWcRoundFixtures(round);
+        fxStatus = (dbFx || []).map(function (fx) {
+          const placeholder = schedule.isPlaceholder(fx.home_team) || schedule.isPlaceholder(fx.away_team);
+          const hasResult = fx.status === 'finished';
+          let score = null;
+          if (hasResult) {
+            const r = (finished || []).find(function (x) {
+              return (schedule.teamsMatch(x.home_team, fx.home_team) && schedule.teamsMatch(x.away_team, fx.away_team)) ||
+                     (schedule.teamsMatch(x.home_team, fx.away_team) && schedule.teamsMatch(x.away_team, fx.home_team));
+            });
+            if (r && r.home_goals !== null && r.away_goals !== null) score = r.home_goals + '-' + r.away_goals;
+          }
+          return { fixture: fx.home_team + ' v ' + fx.away_team, placeholder: placeholder, hasResult: hasResult, score: score };
         });
-        const hasResult = !!(r && r.home_goals !== null && r.away_goals !== null);
-        return { fixture: fx.home + ' v ' + fx.away, placeholder: placeholder, hasResult: hasResult, score: hasResult ? (r.home_goals + '-' + r.away_goals) : null };
-      });
+      } else {
+        const fixtures = (c.phase === 'world_cup' ? (schedule.roundFixtures(round) || []) : []);
+        fxStatus = fixtures.map(function (fx) {
+          const placeholder = schedule.isPlaceholder(fx.home) || schedule.isPlaceholder(fx.away);
+          const r = placeholder ? null : (finished || []).find(function (x) {
+            return (schedule.teamsMatch(x.home_team, fx.home) && schedule.teamsMatch(x.away_team, fx.away)) ||
+                   (schedule.teamsMatch(x.home_team, fx.away) && schedule.teamsMatch(x.away_team, fx.home));
+          });
+          const hasResult = !!(r && r.home_goals !== null && r.away_goals !== null);
+          return { fixture: fx.home + ' v ' + fx.away, placeholder: placeholder, hasResult: hasResult, score: hasResult ? (r.home_goals + '-' + r.away_goals) : null };
+        });
+      }
       const alive = await lmsStore.getEntriesForCompetition(c.id, 'alive');
       const users = await db.getUsers(); const byId = {}; users.forEach(function (u) { byId[u.id] = u; });
       const picks = [];
