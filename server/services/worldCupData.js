@@ -322,6 +322,10 @@ module.exports = function(deps) {
     var synced = { fixtures: 0, groups: 0, league: wc.leagueName, leagueId: wc.leagueId, seasonId: wc.seasonId };
 
     var raw = await sportMonks.getFixturesBetween(SM_WC_START, SM_WC_END, wc.leagueId);
+    // Pre-seeded rows (canonical schedule, no external id) we can reconcile by
+    // name so we UPDATE them instead of inserting a duplicate alongside.
+    var _sched = require('./wc2026Schedule');
+    var seededRows = (await db.query("SELECT id, home_team, away_team FROM world_cup_fixtures WHERE external_fixture_id IS NULL")).rows || [];
     for (var i = 0; i < (raw || []).length; i++) {
       var rf = raw[i];
       var nf = SportMonks.normaliseFixture(rf) || {};
@@ -353,12 +357,30 @@ module.exports = function(deps) {
            nf.venue || null, nf.homeGoals, nf.awayGoals, result, st, rf.id, roundName]
         );
       } else {
-        await db.query(
-          `INSERT INTO world_cup_fixtures (tournament_id, stage, group_letter, home_team, away_team, kickoff, venue, home_goals, away_goals, result, status, external_fixture_id, round_name)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-          [tournamentId, sg.stage, sg.groupLetter, nf.homeTeam, nf.awayTeam, nf.kickoff,
-           nf.venue || null, nf.homeGoals, nf.awayGoals, result, st, rf.id, roundName]
-        );
+        // No external-id match. Reconcile a pre-seeded row for the SAME game
+        // (matched by name) by adopting it — UPDATE it with the SportMonks id +
+        // result — rather than inserting a second row for the same fixture.
+        var seededIdx = seededRows.findIndex(function (s) {
+          return (_sched.teamsMatch(s.home_team, nf.homeTeam) && _sched.teamsMatch(s.away_team, nf.awayTeam)) ||
+                 (_sched.teamsMatch(s.home_team, nf.awayTeam) && _sched.teamsMatch(s.away_team, nf.homeTeam));
+        });
+        if (seededIdx !== -1) {
+          var seededId = seededRows[seededIdx].id;
+          seededRows.splice(seededIdx, 1); // each seeded row adopted at most once
+          await db.query(
+            `UPDATE world_cup_fixtures SET tournament_id=$1, stage=$2, group_letter=$3, home_team=$4, away_team=$5,
+             kickoff=$6, venue=$7, home_goals=$8, away_goals=$9, result=$10, status=$11, external_fixture_id=$12, round_name=$13 WHERE id=$14`,
+            [tournamentId, sg.stage, sg.groupLetter, nf.homeTeam, nf.awayTeam, nf.kickoff,
+             nf.venue || null, nf.homeGoals, nf.awayGoals, result, st, rf.id, roundName, seededId]
+          );
+        } else {
+          await db.query(
+            `INSERT INTO world_cup_fixtures (tournament_id, stage, group_letter, home_team, away_team, kickoff, venue, home_goals, away_goals, result, status, external_fixture_id, round_name)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+            [tournamentId, sg.stage, sg.groupLetter, nf.homeTeam, nf.awayTeam, nf.kickoff,
+             nf.venue || null, nf.homeGoals, nf.awayGoals, result, st, rf.id, roundName]
+          );
+        }
       }
       synced.fixtures++;
     }
@@ -960,10 +982,88 @@ module.exports = function(deps) {
     return out;
   }
 
+  // Remove DUPLICATE fixture rows: the same game can exist as a seeded canonical
+  // row (no external_fixture_id, name variants, no result) AND a SportMonks-
+  // synced row (real id + result). Keep the synced/finished row, re-point any
+  // dependent rows (user predictions, previews, LMS picks) to it, then delete the
+  // duplicate. Dry-run by default — pass { execute:true } to actually apply.
+  async function dedupeFixtures(opts) {
+    opts = opts || {};
+    var execute = opts.execute === true;
+    if (!db.query) return { error: 'DB not available' };
+    var schedule = require('./wc2026Schedule');
+    // GROUP STAGE only, real teams only — the seeded/synced duplication is a
+    // group-stage issue. Never touch knockout rows (placeholder names like
+    // "Winner Group A" could collide and aren't true duplicates).
+    var all = (await db.query("SELECT id, home_team, away_team, stage, external_fixture_id, status FROM world_cup_fixtures WHERE stage = 'group'")).rows || [];
+    var groups = {};
+    all.forEach(function (r) {
+      if (schedule.isPlaceholder(r.home_team) || schedule.isPlaceholder(r.away_team)) return;
+      var a = schedule.norm(r.home_team), b = schedule.norm(r.away_team);
+      var key = a < b ? a + '~' + b : b + '~' + a;
+      (groups[key] = groups[key] || []).push(r);
+    });
+    var toDelete = [], keepOf = {};
+    Object.keys(groups).forEach(function (k) {
+      var rows = groups[k];
+      if (rows.length < 2) return;
+      // SAFETY: only ever delete a SEEDED row (no external id) that has a real
+      // SYNCED counterpart to keep. We NEVER delete a synced row — so even if two
+      // genuine games somehow shared a normalised pairing, no real match is lost.
+      var synced = rows.filter(function (r) { return r.external_fixture_id; });
+      if (!synced.length) return; // nothing real to keep against → leave as-is
+      var keeper = synced.slice().sort(function (x, y) {
+        return ((y.status === 'finished' ? 1 : 0) - (x.status === 'finished' ? 1 : 0)) || (x.id - y.id);
+      })[0];
+      rows.forEach(function (d) {
+        if (!d.external_fixture_id) { toDelete.push(d); keepOf[d.id] = keeper.id; }
+      });
+    });
+    var delIds = toDelete.map(function (d) { return d.id; });
+    var depPrev = 0, depPred = 0;
+    if (delIds.length) {
+      depPrev = parseInt((await db.query('SELECT COUNT(*) c FROM world_cup_previews WHERE fixture_id = ANY($1)', [delIds])).rows[0].c, 10);
+      depPred = parseInt((await db.query('SELECT COUNT(*) c FROM world_cup_predictions WHERE fixture_id = ANY($1)', [delIds])).rows[0].c, 10);
+    }
+    if (!execute) {
+      return {
+        dryRun: true, duplicatesToRemove: toDelete.length, dependentPreviews: depPrev, dependentPredictions: depPred,
+        sample: toDelete.slice(0, 15).map(function (d) {
+          return { remove: d.home_team + ' v ' + d.away_team + ' (id ' + d.id + ', ' + (d.external_fixture_id ? 'synced' : 'seeded') + ', ' + d.status + ')', keepId: keepOf[d.id] };
+        }),
+      };
+    }
+    var deleted = 0, movedPrev = 0, movedPred = 0;
+    try {
+      await db.withTransaction(async function (client) {
+        for (var i = 0; i < toDelete.length; i++) {
+          var d = toDelete[i], keep = keepOf[d.id];
+          // Previews: UNIQUE(fixture_id) — move to keeper, or drop if keeper has one.
+          if ((await client.query('SELECT 1 FROM world_cup_previews WHERE fixture_id = $1', [keep])).rows.length) {
+            await client.query('DELETE FROM world_cup_previews WHERE fixture_id = $1', [d.id]);
+          } else {
+            movedPrev += (await client.query('UPDATE world_cup_previews SET fixture_id = $1 WHERE fixture_id = $2', [keep, d.id])).rowCount || 0;
+          }
+          // Predictions: UNIQUE(user_id, fixture_id) — drop conflicts, move the rest.
+          await client.query('DELETE FROM world_cup_predictions WHERE fixture_id = $1 AND user_id IN (SELECT user_id FROM world_cup_predictions WHERE fixture_id = $2)', [d.id, keep]);
+          movedPred += (await client.query('UPDATE world_cup_predictions SET fixture_id = $1 WHERE fixture_id = $2', [keep, d.id])).rowCount || 0;
+          // LMS picks reference a fixture id (no FK) — re-point too.
+          await client.query('UPDATE lms_picks SET fixture_id = $1 WHERE fixture_id = $2', [keep, d.id]);
+          await client.query('DELETE FROM world_cup_fixtures WHERE id = $1', [d.id]);
+          deleted++;
+        }
+      });
+    } catch (e) {
+      return { error: 'Dedupe failed (rolled back, nothing changed): ' + e.message };
+    }
+    return { executed: true, deleted: deleted, previewsMoved: movedPrev, predictionsMoved: movedPred };
+  }
+
   return {
     syncFixtures: syncFixtures,
     computeGroupStandings: computeGroupStandings,
     syncFromSportMonks: syncFromSportMonks,
+    dedupeFixtures: dedupeFixtures,
     syncFromApiFootball: syncFromApiFootball,
     diagnose: diagnose,
     scorePredictions: scorePredictions,

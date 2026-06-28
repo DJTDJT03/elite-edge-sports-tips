@@ -583,6 +583,21 @@ module.exports = function(deps) {
     }
   });
 
+  // POST /api/world-cup/admin/dedupe-fixtures — remove duplicate fixture rows
+  // (seeded canonical + SportMonks-synced for the same game). Dry-run by default;
+  // ?execute=true actually applies it (re-points dependents, then deletes).
+  router.post('/admin/dedupe-fixtures', authenticate, requireAdmin, async function(req, res) {
+    try {
+      var worldCupData = deps.worldCupData;
+      if (!worldCupData || !worldCupData.dedupeFixtures) return res.status(503).json({ error: 'World Cup data service not available' });
+      var execute = req.query.execute === 'true' || (req.body && req.body.execute === true);
+      var result = await worldCupData.dedupeFixtures({ execute: execute });
+      res.json({ ok: true, result: result });
+    } catch (err) {
+      res.status(500).json({ error: 'Dedupe failed: ' + err.message });
+    }
+  });
+
   // GET /api/world-cup/admin/diagnose — verify the SportMonks World Cup feed
   router.get('/admin/diagnose', authenticate, requireAdmin, async function(req, res) {
     try {

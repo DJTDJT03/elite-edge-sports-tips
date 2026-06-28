@@ -8437,6 +8437,7 @@ const App = {
         '<button class="btn btn-outline btn-sm" onclick="App.lmsInspectFixture()">Inspect rich data (xG/lineups/predictions)</button> ' +
         '<button class="btn btn-gold btn-sm" onclick="App.lmsGenerateWcPreviews()">Run consensus picks (Our Take)</button> ' +
         '<button class="btn btn-outline btn-sm" onclick="App.lmsRegenerateWcPreviews()" title="Overwrite existing Our Take picks with the latest engine logic">Refresh existing picks</button> ' +
+        '<button class="btn btn-outline btn-sm" onclick="App.lmsDedupeWcFixtures()" title="Remove duplicate fixture rows (seeded + synced). Shows a count first, then asks to confirm.">Clean up duplicate fixtures</button> ' +
         '<button class="btn btn-outline btn-sm" onclick="App.wcBroadcastPreview()">Preview WC view content</button> ' +
         '<button class="btn btn-gold btn-sm" onclick="App.wcBroadcastSend()">Send WC view (Telegram + subscribers)</button> ' +
         '<button class="btn btn-outline btn-sm" onclick="App.wcBroadcastTelegram()">Resend to Telegram only</button>' +
@@ -8540,6 +8541,38 @@ const App = {
       this.showToast('Consensus picks generated: ' + (r.generated || 0) + ' fixtures', 'success');
     } catch (e) {
       if (out) out.textContent = 'Preview generation failed: ' + (e.message || e) + '\n\n(Needs a Perplexity key + upcoming scheduled fixtures within 5 days.)';
+    }
+  },
+
+  async lmsDedupeWcFixtures() {
+    var out = document.getElementById('lms-wc-feed-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Scanning for duplicate fixture rows…'; }
+    try {
+      // 1) Dry run — count duplicates without touching anything.
+      var dry = await this.api('/world-cup/admin/dedupe-fixtures', { method: 'POST' });
+      var d = dry.result || {};
+      if (!d.duplicatesToRemove) {
+        if (out) out.textContent = 'No duplicate fixtures found — the table is clean. ✅';
+        this.showToast('No duplicate fixtures', 'success');
+        return;
+      }
+      var sample = (d.sample || []).map(function (s) { return '  • ' + s.remove + ' → keep id ' + s.keepId; }).join('\n');
+      var ok = window.confirm(
+        'Found ' + d.duplicatesToRemove + ' duplicate fixture row(s) to remove.\n' +
+        d.dependentPreviews + ' preview(s) and ' + d.dependentPredictions + ' user prediction(s) will be re-pointed to the kept row first.\n\n' +
+        'This runs in a transaction (rolls back on any error). Proceed?'
+      );
+      if (out) out.textContent = 'Found ' + d.duplicatesToRemove + ' duplicate(s):\n' + sample + (d.sample && d.sample.length < d.duplicatesToRemove ? '\n  …' : '');
+      if (!ok) { if (out) out.textContent += '\n\nCancelled — nothing changed.'; return; }
+      // 2) Execute.
+      if (out) out.textContent += '\n\nRemoving duplicates…';
+      var run = await this.api('/world-cup/admin/dedupe-fixtures?execute=true', { method: 'POST' });
+      var r = run.result || {};
+      if (r.error) { if (out) out.textContent += '\n' + r.error; return; }
+      if (out) out.textContent += '\nDone — removed ' + (r.deleted || 0) + ' duplicate(s), moved ' + (r.previewsMoved || 0) + ' preview(s) + ' + (r.predictionsMoved || 0) + ' prediction(s).';
+      this.showToast('Removed ' + (r.deleted || 0) + ' duplicate fixtures', 'success');
+    } catch (e) {
+      if (out) out.textContent = 'Dedupe failed: ' + (e.message || e);
     }
   },
 

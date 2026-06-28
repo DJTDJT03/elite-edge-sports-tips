@@ -46,6 +46,25 @@ async function query(text, params) {
   return pool.query(text, params);
 }
 
+// Run fn inside a single transaction on a dedicated client (pool.query alone is
+// NOT transactional — each call can use a different connection). fn receives a
+// client with .query(); throws roll the whole thing back.
+async function withTransaction(fn) {
+  if (!pool) throw new Error('Database not configured');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (rbErr) { /* ignore */ }
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 function isAvailable() {
   return !!pool;
 }
@@ -1202,6 +1221,7 @@ function _mapQualityRow(r) {
 // EXPORTS
 // ---------------------------------------------------------------------------
 module.exports = {
+  withTransaction,
   pool,
   query,
   isAvailable,
