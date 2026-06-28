@@ -253,15 +253,28 @@ async function settleRound(competition, opts) {
   // placeholders (opponent undecided) mean the round isn't ready.
   var roundComplete = opts.force === true;
   if (!roundComplete) {
-    var roundFx = wcSchedule.roundFixtures(round) || [];
-    roundComplete = roundFx.length > 0 && roundFx.every(function (fx) {
-      if (wcSchedule.isPlaceholder(fx.home) || wcSchedule.isPlaceholder(fx.away)) return false;
-      var r = (finishedResults || []).find(function (x) {
-        return (wcSchedule.teamsMatch(x.home_team, fx.home) && wcSchedule.teamsMatch(x.away_team, fx.away)) ||
-               (wcSchedule.teamsMatch(x.home_team, fx.away) && wcSchedule.teamsMatch(x.away_team, fx.home));
+    if (competition.phase === 'world_cup' && lmsStore.getWcRoundFixtures) {
+      // Use the ACTUALLY-SYNCED matchday fixtures (deduplicated by SportMonks
+      // round_name), NOT the hardcoded schedule. The hardcoded MATCHDAY list had
+      // double-booked teams (a side appearing in two matchday-2 fixtures), which
+      // could never match a real result — so the round-complete check could
+      // never pass and the round froze indefinitely.
+      var dbFx = await lmsStore.getWcRoundFixtures(round);
+      var realFx = (dbFx || []).filter(function (fx) {
+        return !wcSchedule.isPlaceholder(fx.home_team) && !wcSchedule.isPlaceholder(fx.away_team);
       });
-      return r && r.home_goals !== null && r.away_goals !== null;
-    });
+      roundComplete = realFx.length > 0 && realFx.every(function (fx) { return fx.status === 'finished'; });
+    } else {
+      var roundFx = wcSchedule.roundFixtures(round) || [];
+      roundComplete = roundFx.length > 0 && roundFx.every(function (fx) {
+        if (wcSchedule.isPlaceholder(fx.home) || wcSchedule.isPlaceholder(fx.away)) return false;
+        var r = (finishedResults || []).find(function (x) {
+          return (wcSchedule.teamsMatch(x.home_team, fx.home) && wcSchedule.teamsMatch(x.away_team, fx.away)) ||
+                 (wcSchedule.teamsMatch(x.home_team, fx.away) && wcSchedule.teamsMatch(x.away_team, fx.home));
+        });
+        return r && r.home_goals !== null && r.away_goals !== null;
+      });
+    }
   }
 
   if (!roundComplete) {
