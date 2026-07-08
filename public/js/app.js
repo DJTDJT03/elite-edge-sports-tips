@@ -30,6 +30,27 @@ function trackEvent(category, action, label) {
 }
 
 const App = {
+  // Cosmo Bet — our official sportsbook partner. This is the affiliate tracking
+  // link (Cellxpert): a click drops the cookie so any resulting sign-up/deposit
+  // is attributed to us (CPA). `sub` appends a subId so we can see which surface
+  // converts. Not a secret — it's a public affiliate link.
+  COSMO_BET_URL: 'https://track.cosmobetpartners.com/visit/?bta=42583&nci=6102',
+  cosmoLink(sub) {
+    var u = this.COSMO_BET_URL;
+    return sub ? u + '&subid=' + encodeURIComponent(sub) : u;
+  },
+  // A branded, compliant "Bet with Cosmo Bet" CTA. `label` overrides the text.
+  renderCosmoCta(sub, label) {
+    return '<a href="' + this.cosmoLink(sub) + '" target="_blank" rel="noopener sponsored" ' +
+      'onclick="event.stopPropagation();" class="cosmo-cta" ' +
+      'style="display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;box-sizing:border-box;' +
+      'background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-weight:800;font-size:14px;' +
+      'padding:11px 16px;border-radius:8px;text-decoration:none;margin-top:12px;">' +
+      '⚡ ' + (label || 'Bet with Cosmo Bet') + ' →' +
+      '</a>' +
+      '<div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:6px;">' +
+      'Official partner · 18+ · <a href="https://www.begambleaware.org" target="_blank" rel="noopener" style="color:var(--text-muted);">BeGambleAware.org</a></div>';
+  },
   token: localStorage.getItem('ee_token'),
   user: JSON.parse(localStorage.getItem('ee_user') || 'null'),
   currentPage: 'dashboard',
@@ -6425,6 +6446,9 @@ const App = {
           '</div>' +
         '</div>' +
       '</div>' +
+      // Official-partner CTA — only under the UNLOCKED verdict (premium users),
+      // right where intent is highest. subId tags the source for reporting.
+      (isPremium ? this.renderCosmoCta('match-intel', 'Back this with Cosmo Bet') : '') +
     '</div>';
 
     // --- Elite Edge Quant Model (in-house Elo + Dixon-Coles) ---
