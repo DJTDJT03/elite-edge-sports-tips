@@ -30,6 +30,8 @@ const stripeService = require('./services/stripeService');
 const footballData = require('./services/footballData');
 const SportMonks = require('./services/sportMonks');
 const sportMonks = new SportMonks();
+const CosmoBet = require('./services/cosmoBet');
+const cosmoBet = new CosmoBet();
 const understatService = require('./services/understatService');
 const basketballData = require('./services/basketballData');
 const rugbyData = require('./services/rugbyData');
@@ -158,6 +160,7 @@ const deps = {
   stripeService,
   footballData,
   sportMonks,
+  cosmoBet,
   understatService,
   basketballData,
   rugbyData,

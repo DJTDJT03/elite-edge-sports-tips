@@ -1,7 +1,34 @@
 module.exports = function(deps) {
   const router = require('express').Router();
-  const { footballSource, oddsSource, betfairSource, scoringModel, authenticate, db, aiReports, footballData, understatService, sportMonks } = deps;
+  const { footballSource, oddsSource, betfairSource, scoringModel, authenticate, db, aiReports, footballData, understatService, sportMonks, cosmoBet } = deps;
   const { storeOddsSnapshot, analyseOddsMovement } = deps.oddsHelpers;
+
+  // GET /api/football/cosmo-odds — Cosmo Bet's live price for one of our picks +
+  // a tracked "add to betslip" link. Scaffolding: returns { ready:false, ... }
+  // until Cosmo supply the team map + betslip template (then it returns odds +
+  // a pre-filled betslip link). Always includes a plain tracked link so the CTA
+  // works regardless.
+  router.get('/football/cosmo-odds', async function(req, res) {
+    try {
+      if (!cosmoBet) return res.json({ ready: false, reason: 'not configured' });
+      var home = req.query.home, away = req.query.away, date = req.query.date;
+      var market = req.query.market, selection = req.query.selection;
+      var trackedLink = cosmoBet.trackedLink('cosmo-odds');
+      if (!cosmoBet.isBetslipReady()) {
+        return res.json({ ready: false, status: cosmoBet.getStatus(), trackedLink: trackedLink });
+      }
+      var game = await cosmoBet.matchFixture(home, away, date);
+      if (!game) return res.json({ ready: true, matched: false, trackedLink: trackedLink });
+      var odds = await cosmoBet.getGameOdds(game.gameId);
+      var sel = cosmoBet.pickToSelection(market, selection, game.home, game.away);
+      var betslipLink = sel
+        ? cosmoBet.betslipLink({ gameId: game.gameId, marketId: sel.marketId, positionId: sel.positionId, subId: 'betslip' })
+        : trackedLink;
+      res.json({ ready: true, matched: true, game: { home: game.home, away: game.away }, odds: odds, betslipLink: betslipLink });
+    } catch (err) {
+      res.json({ ready: false, error: err.message });
+    }
+  });
 
   // Short-lived server-side cache for match-intelligence responses. The modal
   // fires a dozen external + LLM calls per open; re-opening the same fixture (or
