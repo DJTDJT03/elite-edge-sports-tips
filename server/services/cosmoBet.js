@@ -243,6 +243,85 @@ CosmoBet.prototype.matchFixture = async function(homeName, awayName, dateISO) {
   return hit || null;
 };
 
+// ---- self-service team-map bootstrap --------------------------------------
+
+// Learn Cosmo team-id -> name from OUR fixtures using the one signal both feeds
+// share: exact kickoff. Only learns from UNAMBIGUOUS slots — a kickoff minute
+// with exactly ONE Cosmo game and exactly ONE of our fixtures — so we never
+// guess on a busy slot. Assumes Cosmo t1=home, t2=away. Grows the map each run;
+// merged into any official map. Returns { learned, total, sample }.
+CosmoBet.prototype.learnTeamMapFromFixtures = async function(ourFixtures) {
+  var games = await this.getSoccerGames();
+  var minute = function(iso) { return iso ? String(iso).slice(0, 16) : null; }; // to the minute
+  var cosmoByKo = {}, oursByKo = {};
+  games.forEach(function(g) { var k = minute(g.start); if (k) (cosmoByKo[k] = cosmoByKo[k] || []).push(g); });
+  (ourFixtures || []).forEach(function(f) { var k = minute(f.kickoff); if (k) (oursByKo[k] = oursByKo[k] || []).push(f); });
+  var map = this._teamMap || {};
+  var learned = 0, sample = [];
+  Object.keys(cosmoByKo).forEach(function(k) {
+    var cg = cosmoByKo[k], of = oursByKo[k];
+    if (cg.length === 1 && of && of.length === 1) { // unambiguous: one game each side
+      var g = cg[0], f = of[0];
+      if (g.homeId && f.home && !map[String(g.homeId)]) { map[String(g.homeId)] = f.home; learned++; }
+      if (g.awayId && f.away && !map[String(g.awayId)]) { map[String(g.awayId)] = f.away; learned++; }
+      if (sample.length < 12) sample.push({ ko: k, cosmoGame: g.gameId, learnedHome: f.home, learnedAway: f.away });
+    }
+  });
+  this._teamMap = map;
+  this._headerCache = null; // force re-decorate games with the new names
+  return { learned: learned, total: Object.keys(map).length, sample: sample };
+};
+
+// ---- value agent -----------------------------------------------------------
+
+// Compare OUR model's probability against Cosmo's live price and flag value —
+// selections we rate MORE likely than Cosmo's (de-vigged) price implies. Only
+// returns bets we can (a) confidently match to a Cosmo game and (b) map the
+// selection to a Cosmo market. Each carries the tracked add-to-betslip link.
+// fixtures: [{home, away, kickoff}]. quantModel: our Elo+Dixon-Coles engine.
+CosmoBet.prototype.scanValue = async function(fixtures, quantModel, opts) {
+  opts = opts || {};
+  var minEdge = opts.minEdge != null ? opts.minEdge : 3; // percentage points
+  if (!quantModel || !quantModel.predict) return { ready: false, reason: 'quant model unavailable' };
+  var out = [];
+  for (var i = 0; i < (fixtures || []).length; i++) {
+    var f = fixtures[i];
+    var game = await this.matchFixture(f.home, f.away, f.kickoff);
+    if (!game) continue;
+    var odds = await this.getGameOdds(game.gameId);
+    if (!odds || !odds.matchResult) continue;
+    var pred;
+    try { pred = quantModel.predict(f.home, f.away, { neutral: !!opts.neutral }); } catch (e) { continue; }
+    if (!pred || !pred.winProb) continue;
+    // De-vig the 1X2 price so we compare like-for-like (fair probability).
+    var mr = odds.matchResult;
+    var imp = { home: mr.home ? 1 / mr.home : 0, draw: mr.draw ? 1 / mr.draw : 0, away: mr.away ? 1 / mr.away : 0 };
+    var vig = imp.home + imp.draw + imp.away;
+    if (vig <= 0) continue;
+    var fair = { home: imp.home / vig, draw: imp.draw / vig, away: imp.away / vig };
+    var legs = [
+      { sel: f.home + ' Win', selName: f.home, model: pred.winProb.home / 100, price: mr.home, fair: fair.home },
+      { sel: 'Draw', selName: 'draw', model: pred.winProb.draw / 100, price: mr.draw, fair: fair.draw },
+      { sel: f.away + ' Win', selName: f.away, model: pred.winProb.away / 100, price: mr.away, fair: fair.away },
+    ];
+    legs.forEach(function(l) {
+      if (!l.price) return;
+      var edge = (l.model - l.fair) * 100;
+      if (edge < minEdge) return;
+      var pick = { marketId: SOCCER_MARKETS.matchResult.marketId, positionId: SOCCER_MARKETS.matchResult.pos[l.selName === 'draw' ? 'draw' : (l.selName === f.home ? 'home' : 'away')] };
+      out.push({
+        fixture: f.home + ' v ' + f.away, kickoff: f.kickoff,
+        selection: l.sel, cosmoOdds: l.price,
+        modelProb: Math.round(l.model * 100), marketProb: Math.round(l.fair * 100),
+        edge: Math.round(edge * 10) / 10,
+        betslipLink: this.betslipLink({ gameId: game.gameId, marketId: pick.marketId, positionId: pick.positionId, subId: 'value' }),
+      });
+    }, this);
+  }
+  out.sort(function(a, b) { return b.edge - a.edge; });
+  return { ready: true, count: out.length, valueBets: out };
+};
+
 CosmoBet.prototype.getStatus = function() {
   return {
     company: COMPANY,

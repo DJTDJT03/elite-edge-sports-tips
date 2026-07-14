@@ -30,6 +30,31 @@ module.exports = function(deps) {
     }
   });
 
+  // GET /api/football/admin/cosmo-value — SHADOW value scan for review. Bootstraps
+  // the Cosmo team map from our upcoming fixtures (unambiguous kickoff slots),
+  // then flags selections our model rates above Cosmo's price. Admin-only so we
+  // can verify match accuracy before exposing anything to users.
+  router.get('/football/admin/cosmo-value', deps.authenticate, deps.requireAdmin, async function(req, res) {
+    try {
+      if (!cosmoBet || !deps.quantModel) return res.status(503).json({ error: 'Cosmo/quant not available' });
+      // Our upcoming fixtures with kickoff + names, from match_predictions.
+      var rows = [];
+      if (db.query) {
+        var r = await db.query(
+          "SELECT DISTINCT home_team, away_team, kickoff FROM match_predictions " +
+          "WHERE kickoff IS NOT NULL AND kickoff >= NOW() - INTERVAL '2 hours' AND kickoff <= NOW() + INTERVAL '5 days' ORDER BY kickoff ASC LIMIT 200"
+        );
+        rows = (r.rows || []).map(function(x) { return { home: x.home_team, away: x.away_team, kickoff: x.kickoff }; });
+      }
+      var learn = await cosmoBet.learnTeamMapFromFixtures(rows);
+      var minEdge = req.query.minEdge ? parseFloat(req.query.minEdge) : 3;
+      var scan = await cosmoBet.scanValue(rows, deps.quantModel, { minEdge: minEdge });
+      res.json({ ok: true, ourFixtures: rows.length, mapLearned: learn, valueScan: scan, status: cosmoBet.getStatus() });
+    } catch (err) {
+      res.status(500).json({ error: 'Cosmo value scan failed: ' + err.message });
+    }
+  });
+
   // Short-lived server-side cache for match-intelligence responses. The modal
   // fires a dozen external + LLM calls per open; re-opening the same fixture (or
   // many users opening the same WC game) should be instant, not a full recompute.
