@@ -702,6 +702,7 @@ var WorldCup = (function() {
           '<div style="font-size:11px;color:rgba(255,255,255,0.5);">Model ' + v.modelProb + '% vs Market ' + v.marketProb + '%</div></div>' +
           '<div style="text-align:right;min-width:84px;"><div style="font-size:18px;font-weight:900;color:' + edgeCol + ';">+' + v.edge + '%</div>' +
           '<div style="font-size:11px;color:rgba(255,255,255,0.4);">edge · @ ' + v.odds + '</div></div>' +
+          (v.cosmoBetslip ? '<a href="' + encodeURI(v.cosmoBetslip) + '" target="_blank" rel="noopener sponsored" onclick="event.stopPropagation();" style="flex-basis:100%;text-align:center;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-weight:800;font-size:13px;padding:8px 12px;border-radius:7px;text-decoration:none;margin-top:4px;">⚡ Back ' + App.escapeHtml(v.selection) + ' with Cosmo Bet' + (v.cosmoOdds ? ' @ ' + App.escapeHtml(String(v.cosmoOdds)) : '') + ' →</a>' : '') +
         '</div>';
       }).join('') +
         '<p style="font-size:11px;color:rgba(255,255,255,0.25);margin-top:12px;text-align:center;">Elite Edge quant model vs de-vigged market odds. 18+ | Analysis, not betting advice | BeGambleAware.org</p>';

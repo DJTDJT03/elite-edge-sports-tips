@@ -261,14 +261,42 @@ CosmoBet.prototype.matchFixture = async function(homeName, awayName, dateISO) {
   var games = await this.getSoccerGames();
   var norm = function(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
   var h = norm(homeName), a = norm(awayName);
+  if (!h || !a) return null;
   var day = dateISO ? String(dateISO).slice(0, 10) : null;
-  var hit = games.find(function(g) {
+  var cands = games.filter(function(g) {
     var gh = norm(g.home), ga = norm(g.away);
     var teamsOk = (gh && ga) && ((gh.indexOf(h) !== -1 || h.indexOf(gh) !== -1) && (ga.indexOf(a) !== -1 || a.indexOf(ga) !== -1));
     var dayOk = !day || (g.start && String(g.start).slice(0, 10) === day);
     return teamsOk && dayOk;
   });
-  return hit || null;
+  // Only accept an UNAMBIGUOUS match. If a loose name matched >1 game on the day
+  // (e.g. "Korea" vs North/South Korea), return null rather than risk a wrong
+  // price/betslip reaching a user. A team plays once/day, so a unique both-team
+  // match is safe.
+  return cands.length === 1 ? cands[0] : null;
+};
+
+// Map a pick's selection to the matched game's outcome id + price, orientation-
+// safe: the selection must match EXACTLY ONE of home/away (not both, not
+// neither), else return null so we never show a wrong-side price/betslip.
+CosmoBet.prototype.selectionOutcome = function(odds, selection, gameHome, gameAway) {
+  if (!odds || !odds.matchResult) return null;
+  var mr = odds.matchResult;
+  var s = String(selection || '').toLowerCase();
+  if (s.indexOf('draw') !== -1) return { outcomeId: mr.drawId, price: mr.draw };
+  var norm = function(x) { return String(x || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+  var sn = norm(s.replace(/win/g, '')), hn = norm(gameHome), an = norm(gameAway);
+  var homeMatch = hn && (sn.indexOf(hn) !== -1 || hn.indexOf(sn) !== -1);
+  var awayMatch = an && (sn.indexOf(an) !== -1 || an.indexOf(sn) !== -1);
+  if (homeMatch && !awayMatch) return { outcomeId: mr.homeId, price: mr.home };
+  if (awayMatch && !homeMatch) return { outcomeId: mr.awayId, price: mr.away };
+  return null;
+};
+
+// Whether the "add to betslip" deep-link is genuinely wired (Cosmo have confirmed
+// attribution). Until then the CTA must not promise a pre-filled slip.
+CosmoBet.prototype.isDeepLinkReady = function() {
+  return !!(process.env.COSMO_TRACK_DEST_PARAM || process.env.COSMO_BETSLIP_ATTRIB);
 };
 
 // ---- self-service team-map bootstrap --------------------------------------

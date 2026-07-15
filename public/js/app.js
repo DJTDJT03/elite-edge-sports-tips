@@ -6446,9 +6446,10 @@ const App = {
           '</div>' +
         '</div>' +
       '</div>' +
-      // Official-partner CTA — only under the UNLOCKED verdict (premium users),
-      // right where intent is highest. subId tags the source for reporting.
-      (isPremium ? this.renderCosmoCta('match-intel', 'Back this with Cosmo Bet') : '') +
+      // Official-partner CTA — only under the UNLOCKED verdict (premium users).
+      // Rendered as a slot: the tracked CTA shows immediately, then a loader
+      // upgrades it to Cosmo's live price + "add to betslip" for this exact pick.
+      (isPremium ? '<div id="cosmo-cta-slot">' + this.renderCosmoCta('match-intel', 'Back this with Cosmo Bet') + '</div>' : '') +
     '</div>';
 
     // --- Elite Edge Quant Model (in-house Elo + Dixon-Coles) ---
@@ -6668,6 +6669,41 @@ const App = {
     '</div>';
 
     container.innerHTML = html;
+
+    // Upgrade the partner CTA with Cosmo's live price + add-to-betslip for THIS
+    // pick (async; the tracked CTA already shows, so this only enriches it).
+    if (isPremium && v && v.pick) this.loadCosmoOdds(m, v);
+  },
+
+  // Fetch Cosmo Bet's live price for the verdict pick and, if matched, swap the
+  // generic CTA for "Our pick @ <odds> · Add to betslip". Silent on no match.
+  async loadCosmoOdds(m, v) {
+    var slot = document.getElementById('cosmo-cta-slot');
+    if (!slot) return;
+    try {
+      var date = m.kickoff ? String(m.kickoff).slice(0, 10) : '';
+      var qs = '?home=' + encodeURIComponent(m.homeTeam) + '&away=' + encodeURIComponent(m.awayTeam) +
+        '&date=' + encodeURIComponent(date) + '&market=' + encodeURIComponent(v.market || '') +
+        '&selection=' + encodeURIComponent(v.pick || '');
+      var d = await this.api('/football/cosmo-odds' + qs);
+      slot = document.getElementById('cosmo-cta-slot');
+      if (!slot) return;
+      if (d && d.matched && d.betslipLink) {
+        // Only promise "Add to Betslip" when the deep-link is genuinely wired;
+        // otherwise it's the tracked link to Cosmo (honest label).
+        var label = d.deepLink ? 'Add to Betslip' : 'Back this with Cosmo Bet';
+        slot.innerHTML =
+          '<div style="margin-top:12px;background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.25);border-radius:10px;padding:12px 14px;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;">' +
+              '<span style="font-size:12px;color:var(--text-secondary);">Cosmo Bet price · ' + this.escapeHtml(v.pick) + '</span>' +
+              (d.cosmoOdds ? '<span style="font-size:20px;font-weight:900;color:var(--gold);">' + this.formatOdds(d.cosmoOdds) + '</span>' : '') +
+            '</div>' +
+            '<a href="' + encodeURI(d.betslipLink) + '" target="_blank" rel="noopener sponsored" onclick="event.stopPropagation();" ' +
+            'style="display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-weight:800;font-size:14px;padding:11px 16px;border-radius:8px;text-decoration:none;">⚡ ' + label + ' →</a>' +
+            '<div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:6px;">Official partner · 18+ · <a href="https://www.begambleaware.org" target="_blank" rel="noopener" style="color:var(--text-muted);">BeGambleAware.org</a></div>' +
+          '</div>';
+      }
+    } catch (e) { /* keep the default tracked CTA */ }
   },
 
   _aiPreviewCache: {},
@@ -8462,6 +8498,7 @@ const App = {
         '<button class="btn btn-gold btn-sm" onclick="App.lmsGenerateWcPreviews()">Run consensus picks (Our Take)</button> ' +
         '<button class="btn btn-outline btn-sm" onclick="App.lmsRegenerateWcPreviews()" title="Overwrite existing Our Take picks with the latest engine logic">Refresh existing picks</button> ' +
         '<button class="btn btn-outline btn-sm" onclick="App.lmsDedupeWcFixtures()" title="Remove duplicate fixture rows (seeded + synced). Shows a count first, then asks to confirm.">Clean up duplicate fixtures</button> ' +
+        '<button class="btn btn-outline btn-sm" onclick="App.cosmoValueScan()" title="Shadow scan: where our model beats Cosmo Bet\'s price. Verify match accuracy before it goes public.">Cosmo value scan</button> ' +
         '<button class="btn btn-outline btn-sm" onclick="App.wcBroadcastPreview()">Preview WC view content</button> ' +
         '<button class="btn btn-gold btn-sm" onclick="App.wcBroadcastSend()">Send WC view (Telegram + subscribers)</button> ' +
         '<button class="btn btn-outline btn-sm" onclick="App.wcBroadcastTelegram()">Resend to Telegram only</button>' +
@@ -8597,6 +8634,28 @@ const App = {
       this.showToast('Removed ' + (r.deleted || 0) + ' duplicate fixtures', 'success');
     } catch (e) {
       if (out) out.textContent = 'Dedupe failed: ' + (e.message || e);
+    }
+  },
+
+  async cosmoValueScan() {
+    var out = document.getElementById('lms-wc-feed-out');
+    if (out) { out.style.display = 'block'; out.textContent = 'Matching our fixtures to Cosmo Bet + scanning for value…'; }
+    try {
+      var r = await this.api('/football/admin/cosmo-value');
+      var scan = r.valueScan || {};
+      var bets = scan.valueBets || [];
+      var head = 'Cosmo status: ' + JSON.stringify(r.status) + '\nOur fixtures scanned: ' + (r.ourFixtures || 0) + ' · team map: ' + ((r.mapLearned && r.mapLearned.total) || 0) + ' teams\n\n';
+      if (!bets.length) {
+        if (out) out.textContent = head + 'No value bets right now (model and Cosmo in line, or no fixtures matched).';
+        return;
+      }
+      var lines = bets.map(function (b) {
+        return '• ' + b.fixture + ' — ' + b.selection + ' @ ' + b.cosmoOdds + '  (we ' + b.modelProb + '% vs market ' + b.marketProb + '%, +' + b.edge + '%)';
+      }).join('\n');
+      if (out) out.textContent = head + bets.length + ' value bet(s) — VERIFY the fixtures matched correctly:\n' + lines;
+      this.showToast('Cosmo value scan: ' + bets.length + ' bets', 'success');
+    } catch (e) {
+      if (out) out.textContent = 'Cosmo value scan failed: ' + (e.message || e);
     }
   },
 

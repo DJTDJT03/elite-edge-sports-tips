@@ -290,7 +290,29 @@ module.exports = function(deps) {
       if (!deps.valueScanner) return res.json({ ready: false, flags: [] });
       res.set('Cache-Control', 'no-store');
       var minEdge = req.query.minEdge ? parseFloat(req.query.minEdge) : 5;
-      res.json(await deps.valueScanner.scan({ minEdge: minEdge }));
+      var result = await deps.valueScanner.scan({ minEdge: minEdge });
+      // Attach Cosmo Bet's live price + a tracked add-to-betslip link where we can
+      // match the fixture (Match Result only until Cosmo confirm other market ids).
+      if (deps.cosmoBet && result && result.flags && result.flags.length) {
+        for (var i = 0; i < result.flags.length; i++) {
+          var flag = result.flags[i];
+          if (flag.cosmoChecked || flag.market !== 'Match Result') continue;
+          flag.cosmoChecked = true;
+          try {
+            var parts = String(flag.fixture).split(' v ');
+            var game = await deps.cosmoBet.matchFixture(parts[0], parts[1], flag.kickoff);
+            if (!game) continue;
+            var odds = await deps.cosmoBet.getGameOdds(game.gameId);
+            var so = deps.cosmoBet.selectionOutcome(odds, flag.selection, game.home, game.away);
+            if (so && so.outcomeId) {
+              flag.cosmoOdds = so.price;
+              flag.cosmoBetslip = deps.cosmoBet.betslipLink({ outcomeId: so.outcomeId, subId: 'value' });
+              flag.cosmoDeepLink = deps.cosmoBet.isDeepLinkReady();
+            }
+          } catch (e) { /* skip this flag's Cosmo lookup */ }
+        }
+      }
+      res.json(result);
     } catch (err) { res.status(500).json({ error: 'Value scan failed: ' + err.message }); }
   });
 

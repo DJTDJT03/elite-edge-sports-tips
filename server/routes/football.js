@@ -17,17 +17,16 @@ module.exports = function(deps) {
       var game = await cosmoBet.matchFixture(home, away, date);
       if (!game) return res.json({ ready: true, matched: false, trackedLink: trackedLink });
       var odds = await cosmoBet.getGameOdds(game.gameId);
-      // Map the pick to the matched outcome's id + price for a pre-filled slip.
-      var outcomeId = null, price = null;
-      if (odds && odds.matchResult) {
-        var s = (selection || '').toLowerCase(), mr = odds.matchResult;
-        var nm = function(a, b) { return a && b && (String(a).toLowerCase().indexOf(String(b).toLowerCase()) !== -1 || String(b).toLowerCase().indexOf(String(a).toLowerCase()) !== -1); };
-        if (s.indexOf('draw') !== -1) { outcomeId = mr.drawId; price = mr.draw; }
-        else if (nm(s, game.home)) { outcomeId = mr.homeId; price = mr.home; }
-        else if (nm(s, game.away)) { outcomeId = mr.awayId; price = mr.away; }
-      }
-      var betslipLink = outcomeId ? cosmoBet.betslipLink({ outcomeId: outcomeId, subId: 'betslip' }) : trackedLink;
-      res.json({ ready: true, matched: true, game: { home: game.home, away: game.away }, odds: odds, cosmoOdds: price, betslipLink: betslipLink });
+      // Orientation-safe selection -> outcome mapping (never a wrong-side price).
+      var so = cosmoBet.selectionOutcome(odds, selection, game.home, game.away);
+      var betslipLink = (so && so.outcomeId) ? cosmoBet.betslipLink({ outcomeId: so.outcomeId, subId: 'betslip' }) : trackedLink;
+      res.json({
+        ready: true, matched: !!(so && so.outcomeId),
+        game: { home: game.home, away: game.away },
+        cosmoOdds: so ? so.price : null,
+        betslipLink: betslipLink,
+        deepLink: cosmoBet.isDeepLinkReady(),
+      });
     } catch (err) {
       res.json({ ready: false, error: err.message });
     }
