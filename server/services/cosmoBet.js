@@ -245,9 +245,15 @@ CosmoBet.prototype.betslipLink = function(opts) {
   var slip = this.betslipUrl(opts.outcomeId);
   var destParam = process.env.COSMO_TRACK_DEST_PARAM;
   var attrib = process.env.COSMO_BETSLIP_ATTRIB;
+  // COSMO_BETSLIP_DIRECT=true → send users straight to the pre-filled slip and
+  // rely on Cosmo's cookie attribution (Ivan confirmed 15 Jul it "should pick
+  // up"; the proper deep-link-with-tracking is coming from their dev team). Flip
+  // this on Railway when ready; revert anytime to go back to the tracked link.
+  var directMode = String(process.env.COSMO_BETSLIP_DIRECT || '').toLowerCase() === 'true';
   if (destParam) return this.trackedLink(opts.subId) + '&' + destParam + '=' + encodeURIComponent(slip);
   if (attrib) return slip + (slip.indexOf('?') !== -1 ? '&' : '?') + attrib;
-  return this.trackedLink(opts.subId); // CPA-safe default until Cosmo confirm deep-link attribution
+  if (directMode) return slip; // cookie-based attribution
+  return this.trackedLink(opts.subId); // CPA-safe default (tracked link → registration)
 };
 
 // ---- matching --------------------------------------------------------------
@@ -296,7 +302,8 @@ CosmoBet.prototype.selectionOutcome = function(odds, selection, gameHome, gameAw
 // Whether the "add to betslip" deep-link is genuinely wired (Cosmo have confirmed
 // attribution). Until then the CTA must not promise a pre-filled slip.
 CosmoBet.prototype.isDeepLinkReady = function() {
-  return !!(process.env.COSMO_TRACK_DEST_PARAM || process.env.COSMO_BETSLIP_ATTRIB);
+  return !!(process.env.COSMO_TRACK_DEST_PARAM || process.env.COSMO_BETSLIP_ATTRIB ||
+    String(process.env.COSMO_BETSLIP_DIRECT || '').toLowerCase() === 'true');
 };
 
 // ---- self-service team-map bootstrap --------------------------------------
