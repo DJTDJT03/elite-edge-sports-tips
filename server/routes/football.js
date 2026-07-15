@@ -14,17 +14,20 @@ module.exports = function(deps) {
       var home = req.query.home, away = req.query.away, date = req.query.date;
       var market = req.query.market, selection = req.query.selection;
       var trackedLink = cosmoBet.trackedLink('cosmo-odds');
-      if (!cosmoBet.isBetslipReady()) {
-        return res.json({ ready: false, status: cosmoBet.getStatus(), trackedLink: trackedLink });
-      }
       var game = await cosmoBet.matchFixture(home, away, date);
       if (!game) return res.json({ ready: true, matched: false, trackedLink: trackedLink });
       var odds = await cosmoBet.getGameOdds(game.gameId);
-      var sel = cosmoBet.pickToSelection(market, selection, game.home, game.away);
-      var betslipLink = sel
-        ? cosmoBet.betslipLink({ gameId: game.gameId, marketId: sel.marketId, positionId: sel.positionId, subId: 'betslip' })
-        : trackedLink;
-      res.json({ ready: true, matched: true, game: { home: game.home, away: game.away }, odds: odds, betslipLink: betslipLink });
+      // Map the pick to the matched outcome's id + price for a pre-filled slip.
+      var outcomeId = null, price = null;
+      if (odds && odds.matchResult) {
+        var s = (selection || '').toLowerCase(), mr = odds.matchResult;
+        var nm = function(a, b) { return a && b && (String(a).toLowerCase().indexOf(String(b).toLowerCase()) !== -1 || String(b).toLowerCase().indexOf(String(a).toLowerCase()) !== -1); };
+        if (s.indexOf('draw') !== -1) { outcomeId = mr.drawId; price = mr.draw; }
+        else if (nm(s, game.home)) { outcomeId = mr.homeId; price = mr.home; }
+        else if (nm(s, game.away)) { outcomeId = mr.awayId; price = mr.away; }
+      }
+      var betslipLink = outcomeId ? cosmoBet.betslipLink({ outcomeId: outcomeId, subId: 'betslip' }) : trackedLink;
+      res.json({ ready: true, matched: true, game: { home: game.home, away: game.away }, odds: odds, cosmoOdds: price, betslipLink: betslipLink });
     } catch (err) {
       res.json({ ready: false, error: err.message });
     }

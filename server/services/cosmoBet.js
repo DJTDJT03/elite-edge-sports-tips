@@ -26,11 +26,17 @@ var https = require('https');
 var fs = require('fs');
 
 var BASE = 'sportservice.inplaynet.tech';
+var TEAMS_HOST = 'analytics-sp.googleserv.tech'; // team-id -> name map (Ivan, 15 Jul 2026)
 var COMPANY = process.env.COSMO_COMPANY_ID || '217';
 var SOCCER_SPORT_ID = 1;
 
-// Affiliate tracking link — a click drops the CPA cookie. Public, not a secret.
+// Affiliate tracking link — a click drops the CPA cookie (lands new users on
+// registration, which is where the CPA converts). Public, not a secret.
 var TRACK_URL = process.env.COSMO_TRACK_URL || 'https://track.cosmobetpartners.com/visit/?bta=42583&nci=6102';
+
+// Pre-filled betslip URL. Format confirmed by Ivan: selectedOdds=<index>_<outcomeId>
+// (the outcome's unique `id`). A single-selection slip is index 0.
+var BETSLIP_BASE = process.env.COSMO_BETSLIP_BASE || 'https://cosmobet.com/en/sportsbook/prematch?selectedOdds=0_';
 
 // Soccer market map (decoded live from the feed). marketId -> how its positions
 // map to our pick markets/selections. pos 1/2/3 on market 448 = home/draw/away.
@@ -59,17 +65,32 @@ CosmoBet.prototype._loadTeamMap = function() {
 CosmoBet.prototype.setTeamMap = function(map) { this._teamMap = map || null; };
 CosmoBet.prototype.hasTeamMap = function() { return !!(this._teamMap && Object.keys(this._teamMap).length); };
 
-// Fully configured only once Cosmo have supplied the betslip template + the
-// team map. Until then we still serve the plain tracked CTA (attribution works).
-CosmoBet.prototype.isBetslipReady = function() {
-  return !!(process.env.COSMO_BETSLIP_TEMPLATE && this.hasTeamMap());
+// Fetch the official Cosmo team-id -> name map (soccer only), cached 6h. This is
+// the reliable source — no more kickoff-heuristic matching needed.
+CosmoBet.prototype.ensureTeamMap = async function() {
+  var now = Date.now();
+  if (this.hasTeamMap() && (now - (this._teamMapAt || 0)) < 21600000) return this._teamMap;
+  try {
+    var list = await this._get('/api/sport/getheader/teams/en', TEAMS_HOST);
+    if (typeof list === 'string') list = JSON.parse(list);
+    var map = {};
+    (list || []).forEach(function(t) { if (t && t.Sport === SOCCER_SPORT_ID && t.ID != null) map[String(t.ID)] = t.Name; });
+    if (Object.keys(map).length) { this._teamMap = map; this._teamMapAt = now; this._headerCache = null; }
+  } catch (e) { /* keep any existing map */ }
+  return this._teamMap;
 };
+
+// We can match fixtures + build pre-filled betslips once the team map is loaded
+// (betslip format is known). Deep-link ATTRIBUTION (tracked slip) is a separate
+// config step pending Cosmo's method — until then betslipLink is CPA-safe.
+CosmoBet.prototype.isReady = function() { return this.hasTeamMap(); };
+CosmoBet.prototype.isBetslipReady = CosmoBet.prototype.isReady;
 
 // ---- HTTP ------------------------------------------------------------------
 
-CosmoBet.prototype._get = function(path) {
+CosmoBet.prototype._get = function(path, host) {
   return new Promise(function(resolve, reject) {
-    var req = https.request({ hostname: BASE, path: path, method: 'GET', headers: { 'Accept': 'application/json' } }, function(res) {
+    var req = https.request({ hostname: host || BASE, path: path, method: 'GET', headers: { 'Accept': 'application/json' } }, function(res) {
       var body = '';
       res.on('data', function(c) { body += c; });
       res.on('end', function() {
@@ -94,6 +115,7 @@ CosmoBet.prototype._get = function(path) {
 CosmoBet.prototype.getSoccerGames = async function() {
   var now = Date.now();
   if (this._headerCache && (now - this._headerAt) < 300000) return this._headerCache;
+  await this.ensureTeamMap(); // load official names so games are decorated
   var data = await this._get('/api/sport/getheader/en');
   var en = data.EN || data;
   var soccer = (en.Sports || {})[String(SOCCER_SPORT_ID)] || {};
@@ -137,17 +159,19 @@ CosmoBet.prototype.getGameOdds = async function(gameId) {
   var byPos = function(marketId) {
     var m = ev[String(marketId)] || {};
     var map = {};
-    Object.values(m).forEach(function(o) { map[o.pos] = o; });
+    // Outcomes are keyed BY their id on the prematch endpoint (not repeated
+    // inside the object), so carry the key through as the outcome id.
+    Object.keys(m).forEach(function(oid) { var o = m[oid]; map[o.pos] = { id: o.id || oid, coef: o.coef, h: o.h, pos: o.pos }; });
     return map;
   };
   var out = { gameId: g.id };
-  // Match result 1X2
+  // Match result 1X2 — keep each outcome's `id` (needed to build the betslip).
   var mr = byPos(SOCCER_MARKETS.matchResult.marketId), P = SOCCER_MARKETS.matchResult.pos;
   if (mr[P.home] || mr[P.away]) {
     out.matchResult = {
-      home: mr[P.home] ? mr[P.home].coef : null,
-      draw: mr[P.draw] ? mr[P.draw].coef : null,
-      away: mr[P.away] ? mr[P.away].coef : null,
+      home: mr[P.home] ? mr[P.home].coef : null, homeId: mr[P.home] ? mr[P.home].id : null,
+      draw: mr[P.draw] ? mr[P.draw].coef : null, drawId: mr[P.draw] ? mr[P.draw].id : null,
+      away: mr[P.away] ? mr[P.away].coef : null, awayId: mr[P.away] ? mr[P.away].id : null,
     };
   }
   // Double chance
@@ -202,25 +226,28 @@ CosmoBet.prototype.trackedLink = function(subId) {
   return TRACK_URL + (subId ? '&subid=' + encodeURIComponent(subId) : '');
 };
 
-// Tracked "add to betslip" deep-link. Builds the operator betslip URL from the
-// configured template, then wraps it in the tracking link's destination param so
-// the click is attributed AND lands on the pre-filled slip. Falls back to the
-// plain tracked link until Cosmo supply the template + destination param.
+// Pre-filled betslip URL for a single outcome id (Ivan's confirmed format).
+CosmoBet.prototype.betslipUrl = function(outcomeId) {
+  return BETSLIP_BASE + outcomeId;
+};
+
+// The link the "add to betslip" button uses. We want BOTH: land on the pre-filled
+// slip AND attribute the player to us. How to combine them depends on Cosmo's
+// deep-link method (their tracking link's common redirect params bounce to
+// registration), so it's config-driven:
+//   COSMO_TRACK_DEST_PARAM set  -> wrap the betslip in the tracking link
+//   COSMO_BETSLIP_ATTRIB set     -> append this to the betslip URL (e.g. "btag=42583")
+//   neither (default now)        -> use the plain tracked link (guaranteed CPA;
+//                                   we never send an UNtracked player to Cosmo)
 CosmoBet.prototype.betslipLink = function(opts) {
   opts = opts || {};
-  var tmpl = process.env.COSMO_BETSLIP_TEMPLATE;
+  if (opts.outcomeId == null) return this.trackedLink(opts.subId);
+  var slip = this.betslipUrl(opts.outcomeId);
   var destParam = process.env.COSMO_TRACK_DEST_PARAM;
-  if (!tmpl || opts.gameId == null || opts.marketId == null || opts.positionId == null) {
-    return this.trackedLink(opts.subId);
-  }
-  var deep = tmpl
-    .replace('{gameId}', opts.gameId)
-    .replace('{marketId}', opts.marketId)
-    .replace('{positionId}', opts.positionId);
-  if (destParam) {
-    return this.trackedLink(opts.subId) + '&' + destParam + '=' + encodeURIComponent(deep);
-  }
-  return deep; // template given but no wrap param — use the deep-link directly
+  var attrib = process.env.COSMO_BETSLIP_ATTRIB;
+  if (destParam) return this.trackedLink(opts.subId) + '&' + destParam + '=' + encodeURIComponent(slip);
+  if (attrib) return slip + (slip.indexOf('?') !== -1 ? '&' : '?') + attrib;
+  return this.trackedLink(opts.subId); // CPA-safe default until Cosmo confirm deep-link attribution
 };
 
 // ---- matching --------------------------------------------------------------
@@ -229,6 +256,7 @@ CosmoBet.prototype.betslipLink = function(opts) {
 // team map (else names are null and we can't match). Returns { gameId, home,
 // away } or null.
 CosmoBet.prototype.matchFixture = async function(homeName, awayName, dateISO) {
+  await this.ensureTeamMap();
   if (!this.hasTeamMap()) return null;
   var games = await this.getSoccerGames();
   var norm = function(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
@@ -300,21 +328,20 @@ CosmoBet.prototype.scanValue = async function(fixtures, quantModel, opts) {
     if (vig <= 0) continue;
     var fair = { home: imp.home / vig, draw: imp.draw / vig, away: imp.away / vig };
     var legs = [
-      { sel: f.home + ' Win', selName: f.home, model: pred.winProb.home / 100, price: mr.home, fair: fair.home },
-      { sel: 'Draw', selName: 'draw', model: pred.winProb.draw / 100, price: mr.draw, fair: fair.draw },
-      { sel: f.away + ' Win', selName: f.away, model: pred.winProb.away / 100, price: mr.away, fair: fair.away },
+      { sel: f.home + ' Win', model: pred.winProb.home / 100, price: mr.home, fair: fair.home, outcomeId: mr.homeId },
+      { sel: 'Draw', model: pred.winProb.draw / 100, price: mr.draw, fair: fair.draw, outcomeId: mr.drawId },
+      { sel: f.away + ' Win', model: pred.winProb.away / 100, price: mr.away, fair: fair.away, outcomeId: mr.awayId },
     ];
     legs.forEach(function(l) {
       if (!l.price) return;
       var edge = (l.model - l.fair) * 100;
       if (edge < minEdge) return;
-      var pick = { marketId: SOCCER_MARKETS.matchResult.marketId, positionId: SOCCER_MARKETS.matchResult.pos[l.selName === 'draw' ? 'draw' : (l.selName === f.home ? 'home' : 'away')] };
       out.push({
         fixture: f.home + ' v ' + f.away, kickoff: f.kickoff,
         selection: l.sel, cosmoOdds: l.price,
         modelProb: Math.round(l.model * 100), marketProb: Math.round(l.fair * 100),
         edge: Math.round(edge * 10) / 10,
-        betslipLink: this.betslipLink({ gameId: game.gameId, marketId: pick.marketId, positionId: pick.positionId, subId: 'value' }),
+        betslipLink: this.betslipLink({ outcomeId: l.outcomeId, subId: 'value' }),
       });
     }, this);
   }
