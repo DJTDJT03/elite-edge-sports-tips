@@ -8293,6 +8293,7 @@ const App = {
             <button class="btn btn-outline btn-sm" onclick="App.adminGenerateBlog(this)">Generate Blog Now</button>
             <button class="btn btn-outline btn-sm" onclick="App.adminShowCalibration()">Model Calibration</button>
             <button class="btn btn-outline btn-sm" onclick="App.adminBackfillClv(this)" title="Compute Closing Line Value for settled tips that have price history but no CLV">Backfill CLV</button>
+            <button class="btn btn-outline btn-sm" onclick="App.adminRescorePredictions(this)" title="Re-grade all settled Our Take predictions with the fixed scorer (Double Chance / Total Goals were mis-scored)">Re-score Our Take</button>
           </div>
           <div id="admin-calibration-out" style="display:none;margin-bottom:16px;"></div>
           <div id="admin-clv-out" style="display:none;margin-bottom:16px;"></div>
@@ -8926,6 +8927,20 @@ const App = {
       this.showToast('Blog generation failed: ' + (e.message || e), 'error');
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Generate Blog Now'; }
+    }
+  },
+
+  async adminRescorePredictions(btn) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Re-scoring…'; }
+    try {
+      var r = await this.api('/admin/rescore-predictions', { method: 'POST' });
+      var res = r.result || {};
+      this.showToast('Re-scored ' + (res.rescored || 0) + ' predictions, ' + (res.changed || 0) + ' corrected', 'success');
+      alert('Re-scored ' + (res.rescored || 0) + ' settled Our Take predictions.\n' + (res.changed || 0) + ' had the wrong result and are now fixed (Double Chance + Total Goals were being mis-scored).\n\nThe accuracy % will now reflect reality.');
+    } catch (e) {
+      this.showToast('Re-score failed: ' + (e.message || e), 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Re-score Our Take'; }
     }
   },
 

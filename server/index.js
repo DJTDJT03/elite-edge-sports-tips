@@ -1009,6 +1009,16 @@ app.post('/api/admin/trigger/generate', deps.authenticate, deps.requireAdmin, as
   }
 });
 
+app.post('/api/admin/rescore-predictions', deps.authenticate, deps.requireAdmin, async (req, res) => {
+  try {
+    if (!db.rescoreMatchPredictions) return res.status(503).json({ error: 'Not available' });
+    var result = await db.rescoreMatchPredictions();
+    res.json({ ok: true, result: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/admin/trigger/settle', deps.authenticate, deps.requireAdmin, async (req, res) => {
   try {
     console.log('[Admin] Manual auto-settle triggered');

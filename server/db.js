@@ -1262,7 +1262,7 @@ module.exports = {
   // User Bets (Personal ROI)
   backTip, unbackTip, getUserBets, settleUserBets, getUserROI,
   // Match Predictions (Our Take) + Race Predictions (Our Pick)
-  saveMatchPrediction, getMatchPredictions, settleMatchPredictions, getMatchPredictionStats, setMatchPredictionClosing,
+  saveMatchPrediction, getMatchPredictions, settleMatchPredictions, getMatchPredictionStats, setMatchPredictionClosing, rescoreMatchPredictions,
   saveRacePrediction, getRacePredictions, settleRacePredictions,
   // Loss Analysis
   saveLossAnalysis, getLossAnalysis, getLossPatterns,
@@ -1318,6 +1318,55 @@ async function getMatchPredictions(filters) {
   return rows;
 }
 
+// Grade a match prediction against the final score. Handles EVERY market Our
+// Take issues — Match Result, Draw, Double Chance, Over/Under (any market label),
+// BTTS Yes/No. Previously Double Chance and 'Total Goals'-labelled Over/Unders
+// fell through and were silently marked incorrect, tanking the headline accuracy.
+function evaluatePrediction(pickRaw, marketRaw, homeTeam, awayTeam, homeGoals, awayGoals) {
+  var pick = (pickRaw || '').toLowerCase();
+  var market = (marketRaw || '').toLowerCase();
+  var text = market + ' ' + pick;
+  var home = (homeTeam || '').toLowerCase();
+  var away = (awayTeam || '').toLowerCase();
+  var total = homeGoals + awayGoals;
+  var line = function() { return text.indexOf('3.5') !== -1 ? 3.5 : text.indexOf('1.5') !== -1 ? 1.5 : text.indexOf('4.5') !== -1 ? 4.5 : text.indexOf('0.5') !== -1 ? 0.5 : 2.5; };
+
+  // Double Chance FIRST (its label contains "draw" + a team name).
+  if (text.indexOf('double chance') !== -1) {
+    var dcHome = home && pick.indexOf(home) !== -1, dcAway = away && pick.indexOf(away) !== -1;
+    if (dcHome && dcAway) return homeGoals !== awayGoals;          // home or away (12)
+    if (dcHome) return homeGoals >= awayGoals;                     // home or draw (1X)
+    if (dcAway) return awayGoals >= homeGoals;                     // away or draw (X2)
+    return homeGoals >= awayGoals; // unparseable → favourite-or-draw
+  }
+  if (text.indexOf('btts') !== -1 || text.indexOf('both teams') !== -1) {
+    var bts = homeGoals > 0 && awayGoals > 0;
+    return pick.indexOf('no') !== -1 ? !bts : bts;
+  }
+  if (pick.indexOf('over') !== -1 || market.indexOf('over') !== -1) return total > line();
+  if (pick.indexOf('under') !== -1 || market.indexOf('under') !== -1) return total < line();
+  // Match result / plain draw / team win (default).
+  var pickHome = home && pick.indexOf(home) !== -1, pickAway = away && pick.indexOf(away) !== -1;
+  if (pickHome && !pickAway) return homeGoals > awayGoals;
+  if (pickAway && !pickHome) return awayGoals > homeGoals;
+  if (pick.indexOf('draw') !== -1) return homeGoals === awayGoals;
+  return false;
+}
+
+// Re-score ALL settled match predictions with the current grader (fixes rows
+// settled under the old buggy logic). Returns { rescored, changed }.
+async function rescoreMatchPredictions() {
+  if (!pool) return { rescored: 0, changed: 0 };
+  var { rows } = await query("SELECT id, pick, market, home_team, away_team, actual_home_goals, actual_away_goals, correct FROM match_predictions WHERE result IS NOT NULL AND actual_home_goals IS NOT NULL AND actual_away_goals IS NOT NULL");
+  var changed = 0;
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var c = evaluatePrediction(r.pick, r.market, r.home_team, r.away_team, r.actual_home_goals, r.actual_away_goals);
+    if (c !== r.correct) { await query('UPDATE match_predictions SET correct = $2 WHERE id = $1', [r.id, c]); changed++; }
+  }
+  return { rescored: rows.length, changed: changed };
+}
+
 async function settleMatchPredictions(footballResults) {
   if (!pool || !footballResults || footballResults.length === 0) return 0;
   var settled = 0;
@@ -1347,25 +1396,7 @@ async function settleMatchPredictions(footballResults) {
     if (rows.length === 0) continue;
 
     var pred = rows[0];
-    var pick = (pred.pick || '').toLowerCase();
-    var market = (pred.market || '').toLowerCase();
-    var correct = false;
-
-    // Evaluate prediction
-    if (market.includes('result') || market.includes('match')) {
-      if (pick.includes('draw')) correct = homeGoals === awayGoals;
-      else if (pick.includes(pred.home_team.toLowerCase())) correct = homeGoals > awayGoals;
-      else if (pick.includes(pred.away_team.toLowerCase())) correct = awayGoals > homeGoals;
-    } else if (market.includes('both teams') || market.includes('btts')) {
-      correct = pick.includes('yes') ? (homeGoals > 0 && awayGoals > 0) : !(homeGoals > 0 && awayGoals > 0);
-    } else if (market.includes('over')) {
-      if (pick.includes('3.5')) correct = totalGoals > 3;
-      else if (pick.includes('2.5')) correct = totalGoals > 2;
-      else if (pick.includes('1.5')) correct = totalGoals > 1;
-    } else if (market.includes('under')) {
-      if (pick.includes('2.5')) correct = totalGoals < 3;
-      else if (pick.includes('1.5')) correct = totalGoals < 2;
-    }
+    var correct = evaluatePrediction(pred.pick, pred.market, pred.home_team, pred.away_team, homeGoals, awayGoals);
 
     var resultStr = homeGoals + '-' + awayGoals;
     await query(
