@@ -5473,6 +5473,24 @@ module.exports = function startScheduler(deps) {
     var mpCorrect = mpSettled.filter(function(p) { return p.correct === true; });
     var mpAccuracy = mpSettled.length > 0 ? Math.round((mpCorrect.length / mpSettled.length) * 100) : 0;
 
+    // Per-market breakdown — a blended average hides a strong market inside a
+    // weaker one. Bucket each pick by its market family.
+    var mpMarketFamily = function(p) {
+      var m = ((p.market || '') + ' ' + (p.pick || '')).toLowerCase();
+      if (m.indexOf('double chance') !== -1) return 'Double Chance';
+      if (m.indexOf('btts') !== -1 || m.indexOf('both teams') !== -1) return 'Both Teams to Score';
+      if (m.indexOf('over') !== -1 || m.indexOf('under') !== -1 || m.indexOf('total goals') !== -1) return 'Goals (O/U)';
+      if (m.indexOf('draw') !== -1 && m.indexOf('result') !== -1) return 'Match Result';
+      return 'Match Result';
+    };
+    var mpByMarketStats = {};
+    mpSettled.forEach(function(p) {
+      var fam = mpMarketFamily(p);
+      if (!mpByMarketStats[fam]) mpByMarketStats[fam] = { total: 0, correct: 0 };
+      mpByMarketStats[fam].total++;
+      if (p.correct === true) mpByMarketStats[fam].correct++;
+    });
+
     // Shadow candidate accuracy — all scored selections
     var scWins = shadowCandidates.filter(function(c) { return c.result === 'won'; });
     var scTotal = shadowCandidates.filter(function(c) { return c.result === 'won' || c.result === 'lost'; });
@@ -5900,6 +5918,17 @@ module.exports = function startScheduler(deps) {
       }
       if (mpSettled.length > 0) {
         reportHtml += '<p style="color:#cbd5e1;">Football — Our Take on every game: <strong style="color:#22c55e;">' + mpCorrect.length + '/' + mpSettled.length + ' correct (' + mpAccuracy + '%)</strong></p>';
+        // Per-market breakdown (strongest first) — so a good market isn't hidden.
+        var mpRows = Object.keys(mpByMarketStats).map(function(fam) {
+          var s = mpByMarketStats[fam];
+          return { fam: fam, total: s.total, correct: s.correct, pct: Math.round((s.correct / s.total) * 100) };
+        }).filter(function(r) { return r.total >= 3; }).sort(function(a, b) { return b.pct - a.pct; });
+        if (mpRows.length) {
+          reportHtml += '<div style="margin:6px 0 2px 12px;">' + mpRows.map(function(r) {
+            var col = r.pct >= 60 ? '#22c55e' : r.pct >= 45 ? '#d4a843' : '#94a3b8';
+            return '<p style="color:#94a3b8;font-size:13px;margin:2px 0;">· ' + r.fam + ': <strong style="color:' + col + ';">' + r.correct + '/' + r.total + ' (' + r.pct + '%)</strong></p>';
+          }).join('') + '</div>';
+        }
       }
       if (scTotal.length > 0) {
         var scOverallSR = scTotal.length > 0 ? Math.round((scWins.length / scTotal.length) * 100) : 0;
