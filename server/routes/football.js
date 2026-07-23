@@ -83,6 +83,46 @@ module.exports = function(deps) {
     } catch (e) { console.warn('[Match Intelligence] verdict lock failed: ' + e.message); }
   }
 
+  // GENERAL verdict lock — the SAME integrity guarantee for ALL football, not
+  // just the World Cup. A pick is computed ONCE, pre-kick-off, frozen, and shown
+  // identically forever. It is NEVER recomputed from post-result data. If the
+  // very first view of a game is after kick-off (no pre-match pick on record),
+  // we show "no pre-match take" rather than a retrofitted, result-aware pick.
+  // In-play/finished codes across both feeds (incl. penalties 'P', break 'BT',
+  // suspended 'SUSP', interrupted 'INT'). Explicit "not yet played" codes below.
+  var _STARTED = ['FT', 'AET', 'PEN', 'LIVE', 'HT', '1H', '2H', 'ET', 'BREAK', 'INT', 'P', 'BT', 'SUSP', 'FT_PEN'];
+  var _NOT_STARTED = ['NS', 'TBD', 'PST', 'POSTP', 'CANC', 'ABD', 'AWD', 'WO', 'DELAYED'];
+  function _hasStarted(status, kickoff) {
+    var st = String(status || '').toUpperCase();
+    if (_STARTED.indexOf(st) !== -1) return true;      // known in-play/finished
+    if (_NOT_STARTED.indexOf(st) !== -1) return false; // known upcoming/void → safe to lock a pre-match pick
+    var ko = kickoff ? new Date(kickoff).getTime() : NaN;
+    if (!isNaN(ko)) return ko <= Date.now();           // trust a valid kickoff
+    return true; // ambiguous (unknown status + no valid kickoff) → FAIL SAFE: treat as started, never retrofit a pick
+  }
+  async function getLockedVerdict(fid) {
+    try {
+      if (!db || !db.query) return null;
+      var r = await db.query('SELECT market, selection, reason, confidence, risk_level, risk_text FROM match_verdict_locks WHERE fixture_id = $1 LIMIT 1', [String(fid)]);
+      if (r.rows && r.rows.length) {
+        var v = r.rows[0];
+        return { market: v.market, pick: v.selection, reason: v.reason, confidence: v.confidence, riskLevel: v.risk_level || 'medium', riskText: v.risk_text || '', source: 'locked' };
+      }
+    } catch (e) { /* table may not exist yet */ }
+    return null;
+  }
+  async function saveLockedVerdict(fid, v, kickoff, status) {
+    try {
+      if (!db || !db.query || !fid || !v || !v.pick) return;
+      if (_hasStarted(status, kickoff)) return; // only ever lock a PRE-kick-off pick
+      await db.query(
+        'INSERT INTO match_verdict_locks (fixture_id, market, selection, reason, confidence, risk_level, risk_text, kickoff) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (fixture_id) DO NOTHING',
+        [String(fid), v.market || null, v.pick || null, v.reason || null, v.confidence || null, v.riskLevel || null, v.riskText || null, kickoff || null]
+      );
+    } catch (e) { /* non-fatal */ }
+  }
+
   // ---------------------------------------------------------------------------
   // LIVE FOOTBALL DATA — SportMonks primary, API-Football fallback
   // ---------------------------------------------------------------------------
@@ -524,9 +564,26 @@ module.exports = function(deps) {
             };
             // No draw-guard / market override — the engine's verdict stands as-is.
 
-            // Lock the verdict pre-kick-off if it came from the live model (not a
-            // stored consensus), so it can't rewrite itself after the result.
+            // INTEGRITY (all football): a pick is computed ONCE pre-kick-off,
+            // frozen, and shown identically forever — NEVER recomputed from
+            // post-result data. A stored WC consensus verdict is already frozen,
+            // so this only governs the live-model verdict.
             if (!wcConsensusVerdict && _finalVerdict && _finalVerdict.pick) {
+              var _locked = await getLockedVerdict(fixtureId);
+              if (_locked) {
+                _finalVerdict = _locked; // serve the exact pick the subscriber saw pre-match
+              } else if (_hasStarted(smF.status, smF.kickoff)) {
+                // First ever view is post-kick-off → we have no pre-match pick on
+                // record, and we will NOT compute a result-aware one.
+                _finalVerdict = {
+                  market: 'Match Result', pick: 'No pre-match take on record',
+                  reason: 'We lock our verdict in before kick-off and never publish one after the result is known — so there is no pre-match take on record for this game.',
+                  confidence: 0, riskLevel: 'n/a', riskText: 'Integrity: we only publish pre-kick-off.', source: 'none',
+                };
+              } else {
+                // Pre-kick-off, no lock yet → freeze this pick now.
+                await saveLockedVerdict(fixtureId, _finalVerdict, smF.kickoff, smF.status);
+              }
               try {
                 var _wcfx = await db.query("SELECT id, home_team, away_team, kickoff, status FROM world_cup_fixtures WHERE external_fixture_id::text = $1 LIMIT 1", [String(fixtureId)]);
                 if (_wcfx.rows && _wcfx.rows.length) {
@@ -865,11 +922,25 @@ module.exports = function(deps) {
       if (confidence < 6) confidence = 6;
       if (confidence > 9) confidence = 9;
 
-      // Lock the verdict pre-kick-off if it was auto-generated from live stats
-      // (not a stored consensus or published tip), so it can't rewrite itself
-      // after the result — this is the integrity fix for the WC "Our Take".
-      if (typeof _cf !== 'undefined' && _cf && !fromConsensus && !fromPublishedTip && verdictPick) {
-        await lockWcVerdict(_cf, verdictReason, verdictMarket, verdictPick, confidence);
+      // INTEGRITY (all football): an AUTO-GENERATED pick is frozen pre-kick-off
+      // and NEVER recomputed from post-result data. Published tips + WC consensus
+      // are already stable sources (kept as-is). Applies to domestic + friendlies
+      // too, not just the World Cup.
+      if (!fromConsensus && !fromPublishedTip && verdictPick) {
+        var _afStatus = status && (status.short || status);
+        var _lockedAf = await getLockedVerdict(fixtureId);
+        if (_lockedAf) {
+          verdictMarket = _lockedAf.market; verdictPick = _lockedAf.pick; verdictReason = _lockedAf.reason;
+          confidence = _lockedAf.confidence || confidence; riskLevel = _lockedAf.riskLevel || riskLevel;
+        } else if (_hasStarted(_afStatus, kickoff)) {
+          verdictMarket = 'Match Result';
+          verdictPick = 'No pre-match take on record';
+          verdictReason = 'We lock our verdict in before kick-off and never publish one after the result is known — so there is no pre-match take on record for this game.';
+          confidence = 0; riskLevel = 'n/a';
+        } else {
+          await saveLockedVerdict(fixtureId, { market: verdictMarket, pick: verdictPick, reason: verdictReason, confidence: confidence, riskLevel: riskLevel, riskText: riskText }, kickoff, _afStatus);
+        }
+        if (typeof _cf !== 'undefined' && _cf) await lockWcVerdict(_cf, verdictReason, verdictMarket, verdictPick, confidence);
       }
 
       // Generate written analysis paragraphs

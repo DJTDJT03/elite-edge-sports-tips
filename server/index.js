@@ -317,6 +317,9 @@ app.use('/', require('./routes/public')(deps));
         'ALTER TABLE tips ADD COLUMN IF NOT EXISTS fair_odds_decimal NUMERIC(8,2)',
         'ALTER TABLE tips ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ',
         'ALTER TABLE tips ADD COLUMN IF NOT EXISTS settlement_source TEXT',
+        // Verdict integrity lock — freeze the match-intel "Our Take" pre-kick-off
+        // for ALL football so it can never be recomputed once the result is known.
+        "CREATE TABLE IF NOT EXISTS match_verdict_locks (fixture_id TEXT PRIMARY KEY, market TEXT, selection TEXT, reason TEXT, confidence INTEGER, risk_level TEXT, risk_text TEXT, kickoff TIMESTAMPTZ, locked_at TIMESTAMPTZ DEFAULT NOW())",
         // CLV on the flagship "Our Take" consensus picks (match_predictions)
         'ALTER TABLE match_predictions ADD COLUMN IF NOT EXISTS advised_price NUMERIC(8,2)',
         'ALTER TABLE match_predictions ADD COLUMN IF NOT EXISTS closing_price NUMERIC(8,2)',
