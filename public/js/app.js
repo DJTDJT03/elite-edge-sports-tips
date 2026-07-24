@@ -1237,6 +1237,7 @@ const App = {
       case 'acca-generator': this.renderAccaGenerator(); break;
       case 'challenge': this.renderChallenge(); break;
       case 'world-cup': if (typeof WorldCup !== 'undefined') { WorldCup.render(); } else { this.render404(); } break;
+      case 'events': this.renderEventHub(hash.split('/')[1]); break;
       case 'reset-password': this.handleResetPasswordRoute(); break;
       default: this.render404();
     }
@@ -2920,6 +2921,9 @@ const App = {
         </div>
         ` : ''}
 
+        <!-- FEATURED SPORTING EVENT SPOTLIGHT (data-driven; filled by _loadEventSpotlight) -->
+        <div id="event-spotlight-slot"></div>
+
         <!-- LAST MAN STANDING BANNER (data-driven; filled by _loadLmsBanner) -->
         <div id="lms-banner-slot"></div>
 
@@ -3280,6 +3284,9 @@ const App = {
 
     // Render dynamic big winner banner
     this.renderBigWinnerBanner();
+
+    // Featured sporting-event spotlight (Goodwood, season kick-off, York Ebor…)
+    this._loadEventSpotlight();
 
     // Render Last Man Standing banner (data-driven; only if a competition is live)
     this._loadLmsBanner();
@@ -6049,7 +6056,7 @@ const App = {
             sectionLabel = 'Live Fixtures';
             showRefresh = true;
           }
-          if (tabFixtures.length === 0) return '<div class="section"><div style="text-align:center;padding:40px 20px;"><div style="font-size:40px;margin-bottom:12px;">&#9917;</div><div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">No Fixtures ' + (dateTab === 'today' ? 'Today' : 'For This Date') + '</div><div style="font-size:13px;color:rgba(255,255,255,0.4);max-width:400px;margin:0 auto;">Most European leagues are between seasons. The World Cup kicks off June 11 with 104 matches across 39 days. Our daily previews and AI analysis start then.</div><div style="margin-top:16px;"><a href="#/world-cup" style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;padding:10px 24px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">View World Cup Hub</a></div></div></div>';
+          if (tabFixtures.length === 0) return '<div class="section"><div style="text-align:center;padding:40px 20px;"><div style="font-size:40px;margin-bottom:12px;">&#9917;</div><div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">No Fixtures ' + (dateTab === 'today' ? 'Today' : 'For This Date') + '</div><div style="font-size:13px;color:rgba(255,255,255,0.4);max-width:420px;margin:0 auto;">No games on this date. The domestic season is building back up — our previews and Our Take on every game return with the fixtures. Check the dashboard for the next featured meeting.</div><div style="margin-top:16px;"><a href="#/dashboard" style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;padding:10px 24px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">Back to Dashboard</a></div></div></div>';
           // Group by league
           var tabByLeague = {};
           tabFixtures.forEach(function(f) {
@@ -8052,6 +8059,7 @@ const App = {
           <button class="admin-tab" onclick="App.switchAdminTab('lms', this)">&#127942; Last Man Standing</button>
           <button class="admin-tab" onclick="App.switchAdminTab('winners', this)">Winners Wall</button>
           <button class="admin-tab" onclick="App.switchAdminTab('asklog', this)">Ask Log</button>
+          <button class="admin-tab" onclick="App.switchAdminTab('events', this)">&#127942; Events</button>
         </div>
 
         <!-- TIPS PANEL -->
@@ -8363,8 +8371,116 @@ const App = {
           <p class="text-muted mb-16" style="font-size:13px;">Live demand intel from the assistant. Use the most-asked questions to decide which fixtures/races to prioritise for previews and content.</p>
           <div id="asklog-content"><p class="text-muted">Loading…</p></div>
         </div>
+
+        <div class="admin-panel" id="panel-events">
+          <h3 class="mb-8">&#127942; Sporting Events Calendar</h3>
+          <p class="text-muted mb-16" style="font-size:13px;">Manage the big meetings the site features. The soonest live/upcoming event shows as a spotlight on the dashboard and gets its own hub page (#/events/&lt;slug&gt;).</p>
+          <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-gold btn-sm" onclick="App.adminSaveEvent()">Add / Save event</button>
+            <button class="btn btn-outline btn-sm" onclick="App.adminSeedEvents()">Seed big meetings (Goodwood, season, Ebor)</button>
+          </div>
+          <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:640px;">
+            <input type="hidden" id="ev-id">
+            <label class="text-sm text-muted">Name<br><input id="ev-name" placeholder="Glorious Goodwood" style="padding:7px;width:100%;box-sizing:border-box;"></label>
+            <label class="text-sm text-muted">Sport<br><select id="ev-sport" style="padding:7px;width:100%;"><option value="racing">Racing</option><option value="football">Football</option><option value="other">Other</option></select></label>
+            <label class="text-sm text-muted">Start date<br><input id="ev-start" type="date" style="padding:7px;width:100%;box-sizing:border-box;"></label>
+            <label class="text-sm text-muted">End date<br><input id="ev-end" type="date" style="padding:7px;width:100%;box-sizing:border-box;"></label>
+            <label class="text-sm text-muted">Venue<br><input id="ev-venue" placeholder="Goodwood" style="padding:7px;width:100%;box-sizing:border-box;"></label>
+            <label class="text-sm text-muted">Emoji<br><input id="ev-emoji" placeholder="&#127943;" style="padding:7px;width:100%;box-sizing:border-box;"></label>
+            <label class="text-sm text-muted" style="grid-column:1/3;">Tagline<br><input id="ev-tagline" placeholder="Racing's marquee summer flat festival" style="padding:7px;width:100%;box-sizing:border-box;"></label>
+            <label class="text-sm text-muted" style="grid-column:1/3;">Blurb<br><textarea id="ev-blurb" rows="2" style="padding:7px;width:100%;box-sizing:border-box;"></textarea></label>
+          </div>
+          <div id="events-list"><p class="text-muted">Loading…</p></div>
+        </div>
       </div>
     `;
+  },
+
+  async _loadAdminEvents() {
+    var box = document.getElementById('events-list');
+    if (box) box.innerHTML = '<p class="text-muted">Loading…</p>';
+    try {
+      var d = await this.api('/events/admin/all');
+      box = document.getElementById('events-list');
+      if (!box) return;
+      var evs = (d && d.events) || [];
+      this._adminEventsCache = evs; // safe lookup for Edit (no inline JSON injection)
+      if (!evs.length) { box.innerHTML = '<p class="text-muted">No events yet. Click "Seed big meetings" or add one above.</p>'; return; }
+      box.innerHTML = evs.map(function (e) {
+        var col = e.status === 'live' ? '#22c55e' : e.status === 'upcoming' ? '#d4a843' : '#64748b';
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;flex-wrap:wrap;">' +
+          '<span style="font-size:11px;font-weight:800;color:' + col + ';border:1px solid ' + col + ';border-radius:4px;padding:1px 6px;">' + e.status.toUpperCase() + '</span>' +
+          '<strong style="color:#fff;">' + App.escapeHtml(e.emoji || '') + ' ' + App.escapeHtml(e.name) + '</strong>' +
+          '<span style="color:var(--text-muted);font-size:12px;">' + App._eventDateLabel(e.startDate, e.endDate) + ' · ' + App.escapeHtml(e.sport || '') + (e.enabled ? '' : ' · DISABLED') + '</span>' +
+          '<span style="margin-left:auto;display:flex;gap:6px;">' +
+            '<button class="btn btn-outline btn-sm" onclick="App.adminEditEventById(' + e.id + ')">Edit</button>' +
+            '<button class="btn btn-outline btn-sm" onclick="App.adminToggleEvent(' + e.id + ',' + (!e.enabled) + ')">' + (e.enabled ? 'Disable' : 'Enable') + '</button>' +
+            '<button class="btn btn-outline btn-sm" onclick="App.adminDeleteEvent(' + e.id + ')">Delete</button>' +
+          '</span>' +
+        '</div>';
+      }).join('');
+    } catch (e) { if (box) box.innerHTML = '<p style="color:#ef4444;">Failed to load events: ' + (e.message || e) + '</p>'; }
+  },
+
+  adminEditEventById(id) {
+    var e = (this._adminEventsCache || []).find(function (x) { return x.id === id; });
+    if (e) this.adminEditEvent(e);
+  },
+
+  adminEditEvent(e) {
+    document.getElementById('ev-id').value = e.id || '';
+    document.getElementById('ev-name').value = e.name || '';
+    document.getElementById('ev-sport').value = e.sport || 'racing';
+    document.getElementById('ev-start').value = String(e.startDate || '').slice(0, 10);
+    document.getElementById('ev-end').value = String(e.endDate || '').slice(0, 10);
+    document.getElementById('ev-venue').value = e.venue || '';
+    document.getElementById('ev-emoji').value = e.emoji || '';
+    document.getElementById('ev-tagline').value = e.tagline || '';
+    document.getElementById('ev-blurb').value = e.blurb || '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  },
+
+  async adminSaveEvent() {
+    var body = {
+      id: document.getElementById('ev-id').value || undefined,
+      name: document.getElementById('ev-name').value.trim(),
+      sport: document.getElementById('ev-sport').value,
+      startDate: document.getElementById('ev-start').value,
+      endDate: document.getElementById('ev-end').value,
+      venue: document.getElementById('ev-venue').value.trim(),
+      emoji: document.getElementById('ev-emoji').value.trim() || '🏆',
+      tagline: document.getElementById('ev-tagline').value.trim(),
+      blurb: document.getElementById('ev-blurb').value.trim(),
+    };
+    if (!body.name || !body.startDate || !body.endDate) { this.showToast('Name, start and end dates are required', 'error'); return; }
+    try {
+      await this.api('/events/admin/save', { method: 'POST', body: JSON.stringify(body) });
+      this.showToast('Event saved', 'success');
+      ['ev-id', 'ev-name', 'ev-venue', 'ev-emoji', 'ev-tagline', 'ev-blurb', 'ev-start', 'ev-end'].forEach(function (i) { var el = document.getElementById(i); if (el) el.value = ''; });
+      this._loadAdminEvents();
+    } catch (e) { this.showToast('Save failed: ' + (e.message || e), 'error'); }
+  },
+
+  async adminSeedEvents() {
+    try { var r = await this.api('/events/admin/seed', { method: 'POST' }); this.showToast('Seeded ' + (r.seeded || 0) + ' events', 'success'); this._loadAdminEvents(); }
+    catch (e) { this.showToast('Seed failed: ' + (e.message || e), 'error'); }
+  },
+
+  async adminToggleEvent(id, enabled) {
+    try {
+      var all = await this.api('/events/admin/all');
+      var e = (all.events || []).find(function (x) { return x.id === id; });
+      if (!e) return;
+      e.enabled = enabled; e.startDate = String(e.startDate).slice(0, 10); e.endDate = String(e.endDate).slice(0, 10);
+      await this.api('/events/admin/save', { method: 'POST', body: JSON.stringify(e) });
+      this._loadAdminEvents();
+    } catch (er) { this.showToast('Failed: ' + (er.message || er), 'error'); }
+  },
+
+  async adminDeleteEvent(id) {
+    if (!confirm('Delete this event?')) return;
+    try { await this.api('/events/admin/delete', { method: 'POST', body: JSON.stringify({ id: id }) }); this._loadAdminEvents(); }
+    catch (e) { this.showToast('Delete failed: ' + (e.message || e), 'error'); }
   },
 
   switchAdminTab(panel, btn) {
@@ -8377,6 +8493,7 @@ const App = {
     if (panel === 'lms') this.adminLoadLms();
     if (panel === 'winners') this._loadAdminWinners('pending');
     if (panel === 'asklog') this._loadAssistantQueries();
+    if (panel === 'events') this._loadAdminEvents();
   },
 
   async _loadAssistantQueries() {
@@ -14816,6 +14933,86 @@ const App = {
   // Data-driven Last Man Standing dashboard banner. Pulls the live competition
   // and its branding from /lms/featured, so it re-skins itself (World Cup ->
   // Premier League) and detaches automatically when nothing is running.
+  async _loadEventSpotlight() {
+    var slot = document.getElementById('event-spotlight-slot');
+    if (!slot) return;
+    try {
+      var d = await this.api('/events/spotlight');
+      slot = document.getElementById('event-spotlight-slot');
+      if (!slot || !d || !d.event) return;
+      var e = d.event;
+      var accent = this._safeAccent(e.accent);
+      var slug = encodeURIComponent(e.slug || '');
+      var emoji = this.escapeHtml(e.emoji || '🏆');
+      var live = e.status === 'live';
+      var when = live ? 'LIVE NOW' : (e.daysToStart <= 0 ? 'STARTS TODAY' : 'IN ' + e.daysToStart + ' DAY' + (e.daysToStart === 1 ? '' : 'S'));
+      var dates = this._eventDateLabel(e.startDate, e.endDate);
+      slot.innerHTML =
+        '<div onclick="window.location.hash=\'#/events/' + slug + '\'" style="background:linear-gradient(135deg,#10131f,#0a0e1a);border:2px solid ' + accent + '55;border-radius:14px;padding:20px 24px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;">' +
+          '<div style="position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle at 25% 50%,' + accent + '18,transparent 45%);"></div>' +
+          '<div style="position:relative;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;">' +
+            '<div style="min-width:0;">' +
+              '<div style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:1.5px;color:' + accent + ';border:1px solid ' + accent + '66;border-radius:5px;padding:2px 8px;margin-bottom:8px;">' + emoji + ' FEATURED · ' + when + '</div>' +
+              '<div style="font-size:21px;font-weight:900;color:#fff;">' + this.escapeHtml(e.name) + '</div>' +
+              '<div style="color:rgba(255,255,255,0.6);font-size:13px;margin-top:3px;">' + this.escapeHtml(e.tagline || '') + (e.venue ? ' · ' + this.escapeHtml(e.venue) : '') + ' · ' + dates + '</div>' +
+            '</div>' +
+            '<div style="background:' + accent + ';color:#0a0e1a;font-weight:800;font-size:13px;padding:9px 18px;border-radius:8px;white-space:nowrap;">View hub →</div>' +
+          '</div>' +
+        '</div>';
+    } catch (e) { /* no spotlight — silent */ }
+  },
+
+  async renderEventHub(slug) {
+    var app = document.getElementById('app');
+    if (!app) return;
+    app.innerHTML = '<div style="text-align:center;padding:60px 0;color:var(--text-muted);">Loading event…</div>';
+    var d;
+    try { d = await this.api('/events/' + encodeURIComponent(slug || '')); } catch (e) { d = null; }
+    if (!d || !d.event) { app.innerHTML = '<div class="section" style="text-align:center;padding:60px 20px;"><h2>Event not found</h2><p class="text-muted">This meeting isn\'t on the calendar. <a href="#/dashboard" style="color:var(--gold);">Back to dashboard →</a></p></div>'; return; }
+    var e = d.event;
+    var accent = this._safeAccent(e.accent);
+    var emoji = this.escapeHtml(e.emoji || '🏆');
+    var live = e.status === 'live', past = e.status === 'past';
+    var badge = live ? 'LIVE NOW' : past ? 'CONCLUDED' : 'UPCOMING';
+    var dates = this._eventDateLabel(e.startDate, e.endDate);
+    var isRacing = (e.sport || '').toLowerCase().indexOf('rac') !== -1;
+    var ctaHash = isRacing ? '#/racing' : '#/football';
+    var ctaLabel = isRacing ? 'See today\'s racecards & our picks' : 'See the fixtures & Our Take';
+    app.innerHTML =
+      '<div style="max-width:900px;margin:0 auto;padding:0 4px;">' +
+        '<div style="background:linear-gradient(135deg,#10131f,#0a0e1a);border:2px solid ' + accent + '55;border-radius:16px;padding:28px 26px;margin-bottom:22px;position:relative;overflow:hidden;">' +
+          '<div style="position:absolute;top:-40%;left:-30%;width:180%;height:180%;background:radial-gradient(circle at 25% 40%,' + accent + '1f,transparent 45%);"></div>' +
+          '<div style="position:relative;">' +
+            '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:' + accent + ';border:1px solid ' + accent + '66;border-radius:5px;padding:3px 10px;margin-bottom:12px;">' + emoji + ' ' + badge + '</div>' +
+            '<h1 style="font-size:30px;font-weight:900;color:#fff;margin:0 0 6px;">' + this.escapeHtml(e.name) + '</h1>' +
+            '<div style="color:' + accent + ';font-weight:700;font-size:14px;margin-bottom:10px;">' + this.escapeHtml(e.tagline || '') + '</div>' +
+            '<div style="color:rgba(255,255,255,0.6);font-size:14px;">' + dates + (e.venue ? ' · ' + this.escapeHtml(e.venue) : '') + '</div>' +
+            (e.blurb ? '<p style="color:rgba(255,255,255,0.75);font-size:15px;line-height:1.6;margin:16px 0 0;max-width:640px;">' + this.escapeHtml(e.blurb) + '</p>' : '') +
+            '<a href="' + ctaHash + '" style="display:inline-block;margin-top:18px;background:' + accent + ';color:#0a0e1a;font-weight:800;font-size:14px;padding:11px 22px;border-radius:9px;text-decoration:none;">' + ctaLabel + ' →</a>' +
+          '</div>' +
+        '</div>' +
+        (past ? '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:10px;">This meeting has concluded — see our track record on the results page.</div>' :
+          '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:18px 20px;">' +
+            '<div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">What to expect</div>' +
+            '<p style="color:var(--text-secondary);font-size:14px;line-height:1.6;margin:0;">Our engine covers every ' + (isRacing ? 'race at the meeting — daily NAP, value picks and full card analysis' : 'game — Our Take on every fixture, proven-edge value and one-tap bet links') + '. Selections appear on the ' + (isRacing ? 'Racing' : 'Football') + ' page as the ' + (isRacing ? 'cards' : 'fixtures') + ' are declared.</p>' +
+          '</div>') +
+      '</div>';
+    this.updatePageMeta && this.updatePageMeta('events');
+  },
+
+  // Only ever emit a hex colour into style/attribute contexts (defence-in-depth;
+  // the server already validates, but never trust stored data on render).
+  _safeAccent(a) { return /^#[0-9a-fA-F]{3,8}$/.test(String(a || '')) ? a : '#d4a843'; },
+
+  _eventDateLabel(start, end) {
+    try {
+      var s = new Date(String(start).slice(0, 10)), e = new Date(String(end).slice(0, 10));
+      var opt = { day: 'numeric', month: 'short' };
+      var ss = s.toLocaleDateString('en-GB', opt), ee = e.toLocaleDateString('en-GB', opt);
+      return ss === ee ? ss : ss + ' – ' + ee;
+    } catch (er) { return ''; }
+  },
+
   async _loadLmsBanner() {
     var slot = document.getElementById('lms-banner-slot');
     if (!slot) return;

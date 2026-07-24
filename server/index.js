@@ -200,6 +200,7 @@ app.get('/ready', (req, res) => {
 app.use('/api/auth', require('./routes/auth')(deps));
 app.use('/api', require('./routes/racing')(deps));
 app.use('/api', require('./routes/football')(deps));
+app.use('/api', require('./routes/events')(deps));
 app.use('/api', require('./routes/odds')(deps));
 app.use('/api', require('./routes/tips')(deps));
 app.use('/api', require('./routes/results')(deps));
@@ -320,6 +321,10 @@ app.use('/', require('./routes/public')(deps));
         // Verdict integrity lock — freeze the match-intel "Our Take" pre-kick-off
         // for ALL football so it can never be recomputed once the result is known.
         "CREATE TABLE IF NOT EXISTS match_verdict_locks (fixture_id TEXT PRIMARY KEY, market TEXT, selection TEXT, reason TEXT, confidence INTEGER, risk_level TEXT, risk_text TEXT, kickoff TIMESTAMPTZ, locked_at TIMESTAMPTZ DEFAULT NOW())",
+        // Sporting-events calendar — reusable "featured meeting" hubs (replaces the
+        // one-off World Cup hub). Admin-managed; the site spotlights the active one.
+        "CREATE TABLE IF NOT EXISTS sporting_events (id SERIAL PRIMARY KEY, slug TEXT UNIQUE NOT NULL, name TEXT NOT NULL, sport TEXT, tagline TEXT, blurb TEXT, start_date DATE NOT NULL, end_date DATE NOT NULL, venue TEXT, accent TEXT, emoji TEXT, enabled BOOLEAN DEFAULT TRUE, created_at TIMESTAMPTZ DEFAULT NOW())",
+        "CREATE INDEX IF NOT EXISTS idx_sporting_events_dates ON sporting_events(start_date, end_date)",
         // CLV on the flagship "Our Take" consensus picks (match_predictions)
         'ALTER TABLE match_predictions ADD COLUMN IF NOT EXISTS advised_price NUMERIC(8,2)',
         'ALTER TABLE match_predictions ADD COLUMN IF NOT EXISTS closing_price NUMERIC(8,2)',
