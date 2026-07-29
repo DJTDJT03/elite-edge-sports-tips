@@ -1278,6 +1278,7 @@ const App = {
       case 'challenge': this.renderChallenge(); break;
       case 'world-cup': if (typeof WorldCup !== 'undefined') { WorldCup.render(); } else { this.render404(); } break;
       case 'events': this.renderEventHub(hash.split('/')[1]); break;
+      case 'matches': this.renderMatches(); break;
       case 'reset-password': this.handleResetPasswordRoute(); break;
       default: this.render404();
     }
@@ -6134,6 +6135,94 @@ const App = {
   // -----------------------------------------------------------------------
   // FOOTBALL PAGE
   // -----------------------------------------------------------------------
+  // ALL MATCHES — every game grouped by league, each league collapsible with an
+  // arrow (NerdyTips-style). Team crests, kickoff/score, and our pick where we
+  // have one. This is the visual, interactive matches hub Darren asked for.
+  async renderMatches() {
+    var app = document.getElementById('app');
+    if (!app) return;
+    app.innerHTML = '<div class="container" style="padding-top:20px;"><div style="text-align:center;padding:50px 0;color:var(--text-muted);"><div class="loading-spinner" style="margin:0 auto 12px;"></div>Loading today\'s matches…</div></div>';
+    var self = this;
+    var fixtures = [], tips = [];
+    try {
+      var res = await Promise.all([ this.fetchLiveFootball(true), this.api('/tips?sport=football').catch(function(){return [];}) ]);
+      fixtures = (res[0] && res[0].fixtures) || [];
+      tips = res[1] || [];
+    } catch (e) {}
+
+    // Match a fixture to our published pick (by team names) to show "Our pick".
+    var norm = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+    var pickFor = function (f) {
+      var h = norm(f.homeTeam), a = norm(f.awayTeam);
+      return tips.find(function (t) { var e = norm(t.event); return e && (e.indexOf(h) !== -1 || e.indexOf(a) !== -1) && (e.indexOf(h) !== -1 && e.indexOf(a) !== -1); });
+    };
+
+    // Group by league (live/upcoming first, finished after).
+    var groups = {};
+    fixtures.forEach(function (f) {
+      var key = f.league || 'Other';
+      if (!groups[key]) groups[key] = { name: key, logo: f.leagueLogo || '', games: [] };
+      groups[key].games.push(f);
+    });
+    var leagues = Object.values(groups).sort(function (a, b) { return b.games.length - a.games.length; });
+
+    var crest = function (url, name) {
+      if (url) return '<img src="' + url + '" alt="" style="width:26px;height:26px;object-fit:contain;" onerror="this.style.visibility=\'hidden\'">';
+      return '<div style="width:26px;height:26px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--gold);">' + self.escapeHtml((name || '?')[0]) + '</div>';
+    };
+    var isLive = function (s) { return ['LIVE', '1H', '2H', 'HT', 'ET'].indexOf(s) !== -1; };
+    var isFin = function (s) { return ['FT', 'AET', 'PEN'].indexOf(s) !== -1; };
+
+    var gameRow = function (f) {
+      var pk = pickFor(f);
+      var t = f.kickoff ? new Date(f.kickoff) : null;
+      var timeTxt = isLive(f.status) ? '<span style="color:#ef4444;font-weight:800;font-size:11px;">● LIVE</span>' : isFin(f.status) ? '<span style="color:var(--text-muted);font-size:11px;">FT</span>' : (t && !isNaN(t.getTime()) ? t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
+      var score = (f.homeGoals != null && f.awayGoals != null) ? f.homeGoals + ' - ' + f.awayGoals : 'v';
+      var clickable = f.id ? ' onclick="window.location.hash=\'#/tip/' + f.id + '\'" style="cursor:pointer;"' : '';
+      return '<div' + clickable + ' style="display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:center;padding:11px 14px;border-top:1px solid var(--border);">' +
+        '<div style="font-size:11px;color:var(--text-secondary);text-align:center;">' + timeTxt + '</div>' +
+        '<div style="min-width:0;">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">' + crest(f.homeTeamLogo, f.homeTeam) + '<span style="font-size:14px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + self.escapeHtml(f.homeTeam) + '</span></div>' +
+          '<div style="display:flex;align-items:center;gap:8px;">' + crest(f.awayTeamLogo, f.awayTeam) + '<span style="font-size:14px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + self.escapeHtml(f.awayTeam) + '</span></div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          (score !== 'v' ? '<div style="font-size:16px;font-weight:900;color:#fff;">' + score + '</div>' : '') +
+          (pk ? '<div style="margin-top:2px;font-size:10px;font-weight:800;color:#0a0e1a;background:var(--gold);border-radius:5px;padding:2px 7px;display:inline-block;">OUR PICK</div>' : (f.homeOdds ? '<div style="font-size:12px;color:var(--text-muted);">' + self.formatOdds(f.homeOdds) + ' · ' + self.formatOdds(f.drawOdds) + ' · ' + self.formatOdds(f.awayOdds) + '</div>' : '')) +
+        '</div>' +
+      '</div>';
+    };
+
+    var body = leagues.length ? leagues.map(function (lg, i) {
+      var open = i === 0; // first league expanded by default
+      var lid = 'lg-' + i;
+      return '<div class="match-league" style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:12px;">' +
+        '<div onclick="App._toggleLeague(\'' + lid + '\',this)" style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none;">' +
+          (lg.logo ? '<img src="' + lg.logo + '" alt="" style="width:24px;height:24px;object-fit:contain;" onerror="this.style.display=\'none\'">' : '') +
+          '<span style="font-size:15px;font-weight:800;color:#fff;flex:1;">' + self.escapeHtml(lg.name) + '</span>' +
+          '<span style="font-size:12px;color:var(--text-muted);background:var(--bg-elevated);border-radius:12px;padding:2px 10px;">' + lg.games.length + '</span>' +
+          '<span class="league-arrow" style="color:var(--gold);font-size:14px;transition:transform .2s;transform:rotate(' + (open ? '180' : '0') + 'deg);">▼</span>' +
+        '</div>' +
+        '<div id="' + lid + '" style="display:' + (open ? 'block' : 'none') + ';">' + lg.games.map(gameRow).join('') + '</div>' +
+      '</div>';
+    }).join('') : '<div style="text-align:center;padding:50px 20px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">No football matches loaded right now. Check back soon, or see our <a href="#/racing" style="color:var(--gold);">racing card</a>.</div>';
+
+    app.innerHTML =
+      '<div class="container" style="padding-top:18px;max-width:900px;">' +
+        '<div style="margin-bottom:18px;"><h1 style="font-size:clamp(24px,6vw,32px);font-weight:900;color:#fff;margin:0 0 4px;">All Matches</h1>' +
+        '<p style="color:var(--text-muted);font-size:14px;margin:0;">Every game, grouped by competition — tap a league to open its fixtures. Games with a gold badge carry Our Take.</p></div>' +
+        body +
+      '</div>';
+  },
+
+  _toggleLeague(id, header) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var open = el.style.display !== 'none';
+    el.style.display = open ? 'none' : 'block';
+    var arrow = header.querySelector('.league-arrow');
+    if (arrow) arrow.style.transform = 'rotate(' + (open ? '0' : '180') + 'deg)';
+  },
+
   async renderFootball() {
     const app = document.getElementById('app');
     app.innerHTML = this.renderSkeleton('tips');
