@@ -2901,6 +2901,15 @@ const App = {
       }
     }
 
+    // GUEST LANDING FUNNEL — a cold visitor gets a clear conversion path
+    // (hero → free tips → how it works → proof → pricing → FAQ), not the dense
+    // members' dashboard. Members keep the full dashboard below.
+    if (!this.user) {
+      app.innerHTML = this._renderLandingFunnel({ todayTips: todayTips, napTip: napTip, perf: perf, recentWins: recentWins, streak: streak });
+      this._loadEventSpotlight(); // featured meeting (Goodwood etc.) — fills the slot in the funnel
+      return;
+    }
+
     app.innerHTML = `
       <div class="container">
         ${!this.user ? `
@@ -3829,6 +3838,129 @@ const App = {
         (pnlStr ? '<div style="font-size:13px;margin-top:2px;">' + pnlStr + '</div>' : '') +
       '</div>' +
     '</div>';
+  },
+
+  // Guest landing funnel — clear conversion path for cold visitors. Reuses the
+  // existing tip-card component + already-fetched data (no backend changes).
+  _renderLandingFunnel(ctx) {
+    var self = this;
+    var perf = ctx.perf || {};
+    var todayTips = (ctx.todayTips || []).slice(0, 6);
+    var recentWins = ctx.recentWins || [];
+    var dateLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    var hasProof = perf && (perf.strikeRate || perf.roi || perf.totalTips);
+
+    // 1) HERO
+    var hero =
+      '<div style="text-align:center;padding:48px 20px 36px;background:radial-gradient(circle at 50% 0%,rgba(212,168,67,0.12),transparent 60%);">' +
+        '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:2px;color:var(--gold);border:1px solid rgba(212,168,67,0.4);border-radius:6px;padding:5px 12px;margin-bottom:18px;">UK\'S #1 AI TIPPING PLATFORM</div>' +
+        '<h1 style="font-size:38px;line-height:1.1;font-weight:900;color:#fff;max-width:720px;margin:0 auto 14px;">Data-driven betting tips that <span style="background:linear-gradient(135deg,#d4a843,#f0d078);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">prove their edge</span></h1>' +
+        '<p style="font-size:16px;color:var(--text-secondary);max-width:560px;margin:0 auto 8px;">5 self-learning analysts, 3 AI engines and our own quant model debate every pick — then we track our Closing Line Value to prove it beats the market. Not opinion. Evidence.</p>' +
+        (hasProof ? '<div style="display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin:22px 0 8px;">' +
+          (perf.strikeRate ? '<div><div style="font-size:26px;font-weight:900;color:#22c55e;">' + perf.strikeRate + '%</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Strike rate</div></div>' : '') +
+          (perf.roi ? '<div><div style="font-size:26px;font-weight:900;color:#22c55e;">' + (perf.roi > 0 ? '+' : '') + perf.roi + '%</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">ROI</div></div>' : '') +
+          (perf.totalTips ? '<div><div style="font-size:26px;font-weight:900;color:#fff;">' + perf.totalTips + '</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Verified tips</div></div>' : '') +
+        '</div>' : '') +
+        '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:22px;">' +
+          '<button class="btn btn-gold" onclick="App.showModal(\'register\')" style="padding:13px 30px;font-size:15px;">Sign Up Free →</button>' +
+          '<a href="javascript:void(0)" onclick="var el=document.getElementById(\'free-tips\');if(el)el.scrollIntoView({behavior:\'smooth\'});" class="btn btn-outline" style="padding:13px 30px;font-size:15px;">See today\'s free tips</a>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--text-muted);margin-top:12px;">No card needed · 6 sports · 18+ · BeGambleAware.org</div>' +
+      '</div>';
+
+    // 1b) FEATURED MEETING spotlight (filled by _loadEventSpotlight after render)
+    var spotlight = '<div style="max-width:1000px;margin:0 auto;padding:0 20px;"><div id="event-spotlight-slot"></div></div>';
+
+    // 2) TODAY'S FREE TIPS
+    var tipsHtml = todayTips.length
+      ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;">' + todayTips.map(function (t) { return self.renderTipCard(t); }).join('') + '</div>'
+      : '<div style="text-align:center;padding:30px;color:var(--text-muted);">Today\'s selections are being finalised — sign up free and they land the moment they\'re published.</div>';
+    var tipsSection =
+      '<div id="free-tips" style="padding:40px 20px;max-width:1000px;margin:0 auto;">' +
+        '<div style="text-align:center;margin-bottom:24px;">' +
+          '<h2 style="font-size:26px;font-weight:900;color:#fff;margin:0 0 4px;">Today\'s Tips</h2>' +
+          '<p style="color:var(--text-muted);font-size:14px;">' + dateLabel + ' · free picks shown in full, premium picks unlock with an account</p>' +
+        '</div>' + tipsHtml +
+      '</div>';
+
+    // 3) HOW IT WORKS
+    var steps = [
+      { n: '1', t: 'We gather the data', d: '14 live data feeds — form, xG, lineups, going, market moves — across 6 sports and 160+ competitions.' },
+      { n: '2', t: 'The engine debates it', d: '5 self-learning analysts + a GPT/Gemini/Grok arbiter panel + our Elo/Dixon-Coles quant model argue every fixture to a single, most-probable call.' },
+      { n: '3', t: 'We prove the edge', d: 'Every pick is locked before kick-off and its Closing Line Value tracked — so you can see we beat the market, not just claim it.' },
+    ];
+    var howSection =
+      '<div style="padding:44px 20px;background:rgba(255,255,255,0.02);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">' +
+        '<div style="max-width:1000px;margin:0 auto;">' +
+          '<h2 style="text-align:center;font-size:26px;font-weight:900;color:#fff;margin:0 0 28px;">How it works</h2>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;">' +
+            steps.map(function (s) { return '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:22px;"><div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-weight:900;display:flex;align-items:center;justify-content:center;margin-bottom:14px;">' + s.n + '</div><div style="font-size:17px;font-weight:800;color:#fff;margin-bottom:6px;">' + s.t + '</div><div style="font-size:14px;color:var(--text-secondary);line-height:1.6;">' + s.d + '</div></div>'; }).join('') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    // 4) PROVEN EDGE (winners strip)
+    var winnersHtml = recentWins.slice(0, 6).map(function (r) {
+      return '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:10px 14px;white-space:nowrap;"><span style="color:#22c55e;font-weight:800;">✓ ' + self.escapeHtml(r.selection || 'Winner') + '</span>' + (r.odds ? ' <span style="color:var(--text-muted);font-size:12px;">@ ' + self.escapeHtml(self.formatOdds ? self.formatOdds(r.odds) : String(r.odds)) + '</span>' : '') + '</div>';
+    }).join('');
+    var proofSection = (recentWins.length || hasProof) ?
+      '<div style="padding:40px 20px;max-width:1000px;margin:0 auto;text-align:center;">' +
+        '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:4px 12px;margin-bottom:14px;">📈 PROVEN, NOT PROMISED</div>' +
+        '<h2 style="font-size:26px;font-weight:900;color:#fff;margin:0 0 10px;">We publish our track record</h2>' +
+        '<p style="color:var(--text-secondary);font-size:15px;max-width:560px;margin:0 auto 20px;">Closing Line Value on every tip is how professionals prove genuine edge. We show it — win or lose. That\'s the difference between us and a bloke with a Telegram channel.</p>' +
+        (winnersHtml ? '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:20px;">' + winnersHtml + '</div>' : '') +
+        '<a href="#/track-record" class="btn btn-outline" style="padding:11px 26px;">See the full track record →</a>' +
+      '</div>' : '';
+
+    // 5) PRICING (compact — full detail on the pricing page)
+    var tiers = [
+      { name: 'Free', price: '£0', sub: 'forever', feats: ['Daily free tips', 'Results & analysis', 'Ask the Edge assistant'], cta: 'Sign Up Free', action: "App.showModal('register')", highlight: false },
+      { name: 'Premium', price: '£19.99', sub: 'per month', feats: ['Every tip unlocked', 'Full match intelligence', 'Value Finder & Acca Builder', 'Proven-edge CLV data'], cta: 'Start 14-day trial', action: "window.location.hash='#/pricing'", highlight: true },
+      { name: 'VIP', price: '£39.99', sub: 'per month', feats: ['Everything in Premium', 'Priority + SMS/Telegram alerts', 'Unlimited credits', 'First access to new features'], cta: 'Go VIP', action: "window.location.hash='#/pricing'", highlight: false },
+    ];
+    var pricingSection =
+      '<div style="padding:44px 20px;background:rgba(255,255,255,0.02);border-top:1px solid var(--border);">' +
+        '<div style="max-width:1000px;margin:0 auto;">' +
+          '<h2 style="text-align:center;font-size:26px;font-weight:900;color:#fff;margin:0 0 6px;">Simple plans, cancel anytime</h2>' +
+          '<p style="text-align:center;color:var(--text-muted);font-size:14px;margin:0 0 28px;">Start free. Upgrade when you\'re convinced by the results — not before.</p>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;">' +
+            tiers.map(function (t) {
+              return '<div style="background:var(--bg-card);border:' + (t.highlight ? '2px solid var(--gold)' : '1px solid var(--border)') + ';border-radius:14px;padding:24px;position:relative;">' +
+                (t.highlight ? '<div style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--gold);color:#0a0e1a;font-size:11px;font-weight:800;padding:3px 12px;border-radius:6px;">MOST POPULAR</div>' : '') +
+                '<div style="font-size:15px;font-weight:800;color:#fff;">' + t.name + '</div>' +
+                '<div style="margin:8px 0 16px;"><span style="font-size:32px;font-weight:900;color:var(--gold);">' + t.price + '</span> <span style="font-size:13px;color:var(--text-muted);">' + t.sub + '</span></div>' +
+                '<div style="margin-bottom:18px;">' + t.feats.map(function (f) { return '<div style="font-size:13px;color:var(--text-secondary);padding:4px 0;">✓ ' + f + '</div>'; }).join('') + '</div>' +
+                '<button class="btn ' + (t.highlight ? 'btn-gold' : 'btn-outline') + '" onclick="' + t.action + '" style="width:100%;">' + t.cta + '</button>' +
+              '</div>';
+            }).join('') +
+          '</div>' +
+          '<div style="text-align:center;margin-top:16px;"><a href="#/pricing" style="color:var(--gold);font-size:13px;">Compare all plans →</a></div>' +
+        '</div>' +
+      '</div>';
+
+    // 6) FAQ
+    var faqs = [
+      { q: 'Is it really free?', a: 'Yes — free daily tips, results and our AI assistant with no card needed. Premium unlocks every pick and the full intelligence.' },
+      { q: 'How is this different from other tipsters?', a: 'We publish our Closing Line Value — mathematical proof our picks beat the market. Most tipsters just show you their winners and hide the losers.' },
+      { q: 'What sports do you cover?', a: 'Horse racing, football (top leagues), NBA, tennis, rugby league and NFL — plus featured meetings like Glorious Goodwood and the season\'s big fixtures.' },
+      { q: 'Can I cancel anytime?', a: 'Anytime, in a couple of clicks. Premium comes with a 14-day money-back guarantee.' },
+    ];
+    var faqSection =
+      '<div style="padding:44px 20px;max-width:760px;margin:0 auto;">' +
+        '<h2 style="text-align:center;font-size:26px;font-weight:900;color:#fff;margin:0 0 24px;">Questions</h2>' +
+        faqs.map(function (f) { return '<div style="border-bottom:1px solid var(--border);padding:16px 0;"><div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">' + f.q + '</div><div style="font-size:14px;color:var(--text-secondary);line-height:1.6;">' + f.a + '</div></div>'; }).join('') +
+      '</div>';
+
+    // 7) FINAL CTA
+    var finalCta =
+      '<div style="text-align:center;padding:44px 20px 56px;background:radial-gradient(circle at 50% 100%,rgba(212,168,67,0.1),transparent 60%);">' +
+        '<h2 style="font-size:24px;font-weight:900;color:#fff;margin:0 0 10px;">Ready to bet with an edge?</h2>' +
+        '<p style="color:var(--text-secondary);font-size:15px;margin:0 0 20px;">Join free and get today\'s tips in seconds.</p>' +
+        '<button class="btn btn-gold" onclick="App.showModal(\'register\')" style="padding:14px 34px;font-size:16px;">Create your free account →</button>' +
+        '<div style="font-size:12px;color:var(--text-muted);margin-top:14px;">18+ · Please gamble responsibly · BeGambleAware.org · Analysis, not betting advice</div>' +
+      '</div>';
+
+    return '<div style="max-width:100%;overflow-x:hidden;">' + hero + spotlight + tipsSection + howSection + proofSection + pricingSection + faqSection + finalCta + '</div>';
   },
 
   renderTipCard(tip) {
