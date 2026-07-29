@@ -3876,7 +3876,7 @@ const App = {
     // A visual prediction card (the signature NerdyTips element, our colours).
     var predCard = function (t) {
       var icon = sportIcon(t.sport);
-      var accent = t.sport === 'racing' ? '#22c55e' : '#d4a843';
+      var accent = t.sport === 'racing' ? '#d4a843' : '#d4a843';
       var _kd = t.kickoff ? new Date(t.kickoff) : null;
       var when = t.raceTime || (_kd && !isNaN(_kd.getTime()) ? _kd.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
       var league = t.league || t.meeting || '';
@@ -3909,7 +3909,7 @@ const App = {
           '</div>' +
           '<div style="display:flex;align-items:center;justify-content:space-between;">' +
             '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Odds</div><div style="font-size:22px;font-weight:900;color:var(--gold);">' + oddsTxt + '</div></div>' +
-            (vr ? '<span style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:11px;font-weight:800;padding:6px 11px;border-radius:7px;">' + esc(vr) + ' VALUE</span>' : '<span style="background:' + (locked ? 'rgba(212,168,67,0.15);color:var(--gold);border:1px solid ' + accent + '55' : accent + ';color:#0a0e1a') + ';font-size:11px;font-weight:800;padding:6px 11px;border-radius:7px;">' + (locked ? '🔒 PREMIUM' : 'FREE PICK') + '</span>') +
+            (vr ? '<span style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#fff;font-size:11px;font-weight:800;padding:6px 11px;border-radius:7px;">' + esc(vr) + ' VALUE</span>' : '<span style="background:' + (locked ? 'rgba(212,168,67,0.15);color:var(--gold);border:1px solid ' + accent + '55' : accent + ';color:#0a0e1a') + ';font-size:11px;font-weight:800;padding:6px 11px;border-radius:7px;">' + (locked ? '🔒 PREMIUM' : 'FREE PICK') + '</span>') +
           '</div>' +
         '</div>' +
       '</div>';
@@ -3923,30 +3923,42 @@ const App = {
       '</div>';
     };
 
-    // 1) HERO — atmospheric: layered glows + a large faded diamond watermark
-    // behind the headline (gold spotlight, our palette).
-    var stars = '<span style="color:#22c55e;letter-spacing:2px;">★★★★★</span>';
+    // 1) HERO — split banner with the athlete image (right) + betting copy (left),
+    // navy/gold/blue brand palette. Save the generated footballer image to
+    // /public/images/hero-athlete.png. Graceful navy fallback if it's missing.
+    var featIcons = [
+      { i: '📊', t: 'Data-Driven Insights' },
+      { i: '🎯', t: 'Elite Analysis' },
+      { i: '🧠', t: 'Smarter Predictions' },
+      { i: '🏆', t: 'Better Results' },
+    ];
     var hero =
-      '<div style="position:relative;text-align:center;padding:clamp(44px,10vw,84px) 18px clamp(32px,6vw,44px);overflow:hidden;' +
-        'background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(212,168,67,0.22),transparent 60%),radial-gradient(ellipse 50% 40% at 50% 90%,rgba(34,197,94,0.10),transparent 60%),#0a0e1a;">' +
-        // decorative: oversized faded diamond + glow spotlight behind headline
-        '<div aria-hidden="true" style="position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);width:min(560px,90vw);height:min(560px,90vw);background:radial-gradient(circle,rgba(212,168,67,0.14),transparent 62%);filter:blur(8px);pointer-events:none;"></div>' +
-        '<svg aria-hidden="true" viewBox="0 0 64 64" style="position:absolute;top:34%;left:50%;transform:translate(-50%,-50%);width:min(420px,72vw);opacity:0.06;pointer-events:none;"><path d="M32 4L4 32l28 28 28-28L32 4z" fill="none" stroke="#d4a843" stroke-width="1.5"/></svg>' +
-        '<div style="position:relative;">' +
-          '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:2px;color:var(--gold);background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.35);border-radius:20px;padding:6px 16px;margin-bottom:22px;">⚡ UK\'S #1 AI TIPPING PLATFORM</div>' +
-          '<h1 style="font-size:clamp(32px,9vw,58px);line-height:1.06;font-weight:900;color:#fff;max-width:780px;margin:0 auto 16px;letter-spacing:-1px;">Betting tips that<br><span style="background:linear-gradient(135deg,#d4a843,#f0d078);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">prove their edge</span></h1>' +
-          '<p style="font-size:clamp(15px,4vw,18px);color:var(--text-secondary);max-width:590px;margin:0 auto 8px;line-height:1.55;">5 self-learning analysts, 3 AI engines and our own quant model debate every pick — then we publish the Closing Line Value to prove it beats the market.</p>' +
-          (hasProof ? '<div style="display:flex;gap:clamp(18px,6vw,44px);justify-content:center;flex-wrap:wrap;margin:28px 0 8px;">' +
-            (perf.strikeRate ? '<div><div style="font-size:clamp(28px,7vw,38px);font-weight:900;color:#22c55e;line-height:1;">' + perf.strikeRate + '%</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Strike rate</div></div>' : '') +
-            (perf.roi ? '<div><div style="font-size:clamp(28px,7vw,38px);font-weight:900;color:#22c55e;line-height:1;">' + (perf.roi > 0 ? '+' : '') + perf.roi + '%</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">ROI</div></div>' : '') +
-            (perf.totalTips ? '<div><div style="font-size:clamp(28px,7vw,38px);font-weight:900;color:#fff;line-height:1;">' + perf.totalTips + '</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Verified tips</div></div>' : '') +
-          '</div>' : '') +
-          '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:28px;">' +
-            '<button class="btn btn-gold" onclick="App.showModal(\'register\')" style="padding:15px 36px;font-size:16px;flex:1 1 230px;max-width:300px;box-shadow:0 8px 24px rgba(212,168,67,0.25);">Get Started Free →</button>' +
-            '<a href="javascript:void(0)" onclick="var el=document.getElementById(\'free-tips\');if(el)el.scrollIntoView({behavior:\'smooth\'});" class="btn btn-outline" style="padding:15px 36px;font-size:16px;flex:1 1 230px;max-width:300px;">See today\'s tips</a>' +
+      '<div style="position:relative;overflow:hidden;background:#0a1020;min-height:clamp(460px,60vw,600px);display:flex;align-items:center;">' +
+        // full-bleed athlete image (centre-right), darkened on the left for text
+        '<div aria-hidden="true" style="position:absolute;inset:0;background-image:url(\'/images/hero-athlete.jpg\');background-repeat:no-repeat;background-position:center right;background-size:cover;"></div>' +
+        '<div aria-hidden="true" style="position:absolute;inset:0;background:linear-gradient(90deg,#0a1020 0%,rgba(10,16,32,0.94) 30%,rgba(10,16,32,0.62) 52%,rgba(10,16,32,0.12) 74%,transparent 100%);"></div>' +
+        '<div style="position:relative;max-width:1120px;margin:0 auto;width:100%;padding:clamp(36px,7vw,64px) 20px;">' +
+          '<div style="max-width:560px;">' +
+            '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:2px;color:var(--gold);background:rgba(212,168,67,0.12);border:1px solid rgba(212,168,67,0.4);border-radius:20px;padding:6px 15px;margin-bottom:20px;">⚡ UK\'S #1 AI TIPPING PLATFORM</div>' +
+            '<h1 style="font-size:clamp(34px,8vw,60px);line-height:1.02;font-weight:900;letter-spacing:-1px;margin:0 0 14px;">' +
+              '<span style="color:#fff;display:block;">DATA IN.</span>' +
+              '<span style="color:var(--gold);display:block;">EDGE OUT.</span>' +
+            '</h1>' +
+            '<p style="font-size:clamp(15px,4vw,18px);color:#c7d0e0;max-width:480px;margin:0 0 6px;line-height:1.55;">5 self-learning analysts, 3 AI engines and our own quant model debate every pick — then we publish the Closing Line Value to prove it beats the market.</p>' +
+            (hasProof ? '<div style="display:flex;gap:clamp(16px,5vw,36px);flex-wrap:wrap;margin:24px 0 6px;">' +
+              (perf.strikeRate ? '<div><div style="font-size:clamp(26px,6vw,34px);font-weight:900;color:var(--gold);line-height:1;">' + perf.strikeRate + '%</div><div style="font-size:11px;color:#8b97ad;text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Strike rate</div></div>' : '') +
+              (perf.roi ? '<div><div style="font-size:clamp(26px,6vw,34px);font-weight:900;color:var(--gold);line-height:1;">' + (perf.roi > 0 ? '+' : '') + perf.roi + '%</div><div style="font-size:11px;color:#8b97ad;text-transform:uppercase;letter-spacing:1px;margin-top:4px;">ROI</div></div>' : '') +
+              (perf.totalTips ? '<div><div style="font-size:clamp(26px,6vw,34px);font-weight:900;color:#fff;line-height:1;">' + perf.totalTips + '</div><div style="font-size:11px;color:#8b97ad;text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Verified tips</div></div>' : '') +
+            '</div>' : '') +
+            '<div style="display:flex;gap:22px;flex-wrap:wrap;margin:22px 0;">' +
+              featIcons.map(function (f) { return '<div style="text-align:center;"><div style="font-size:22px;margin-bottom:5px;">' + f.i + '</div><div style="font-size:10px;font-weight:700;color:#8b97ad;text-transform:uppercase;letter-spacing:0.5px;max-width:80px;">' + f.t + '</div></div>'; }).join('') +
+            '</div>' +
+            '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+              '<button class="btn btn-gold" onclick="App.showModal(\'register\')" style="padding:15px 32px;font-size:15px;box-shadow:0 8px 24px rgba(212,168,67,0.28);">Get Started Free →</button>' +
+              '<a href="javascript:void(0)" onclick="var el=document.getElementById(\'free-tips\');if(el)el.scrollIntoView({behavior:\'smooth\'});" class="btn btn-outline" style="padding:15px 32px;font-size:15px;">See today\'s tips</a>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-top:18px;font-size:13px;color:#c7d0e0;"><span style="color:#00b67a;letter-spacing:2px;">★★★★★</span><span>Trusted by bettors across the UK · 18+ · BeGambleAware.org</span></div>' +
           '</div>' +
-          '<div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-top:18px;font-size:13px;color:var(--text-secondary);">' + stars + '<span>Trusted by bettors across the UK</span></div>' +
-          '<div style="font-size:12px;color:var(--text-muted);margin-top:8px;">No card needed · 6 sports · 160+ competitions · 18+ · BeGambleAware.org</div>' +
         '</div>' +
       '</div>';
 
@@ -3981,9 +3993,9 @@ const App = {
           '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:14px;">' +
             heroCard +
             featureCard('🤖', '3 AI engines verify it', 'A GPT, Gemini and Grok arbiter panel independently reviews each call before it\'s published.', '#3b82f6') +
-            featureCard('📈', 'Proven with CLV', 'Closing Line Value tracked on every tip — mathematical proof we beat the market, win or lose.', '#22c55e') +
+            featureCard('📈', 'Proven with CLV', 'Closing Line Value tracked on every tip — mathematical proof we beat the market, win or lose.', '#d4a843') +
             featureCard('⚡', '14 live data feeds', 'Form, xG, lineups, going and live market moves across 6 sports, 160+ competitions.', '#3b82f6') +
-            featureCard('🔒', 'Locked before kick-off', 'Every pick frozen pre-match, never changed after the result — total integrity.', '#22c55e') +
+            featureCard('🔒', 'Locked before kick-off', 'Every pick frozen pre-match, never changed after the result — total integrity.', '#d4a843') +
           '</div>' +
         '</div>' +
       '</div>';
@@ -4004,11 +4016,11 @@ const App = {
 
     // 5) PROVEN EDGE + winners
     var winnersHtml = recentWins.slice(0, 8).map(function (r) {
-      return '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:9px 14px;white-space:nowrap;font-size:13px;"><span style="color:#22c55e;font-weight:800;">✓ ' + esc(r.selection || 'Winner') + '</span>' + (r.odds ? ' <span style="color:var(--text-muted);">@ ' + esc(self.formatOdds ? self.formatOdds(r.odds) : String(r.odds)) + '</span>' : '') + '</div>';
+      return '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:8px;padding:9px 14px;white-space:nowrap;font-size:13px;"><span style="color:#d4a843;font-weight:800;">✓ ' + esc(r.selection || 'Winner') + '</span>' + (r.odds ? ' <span style="color:var(--text-muted);">@ ' + esc(self.formatOdds ? self.formatOdds(r.odds) : String(r.odds)) + '</span>' : '') + '</div>';
     }).join('');
     var proofSection = (recentWins.length || hasProof) ?
-      '<div style="padding:clamp(34px,7vw,48px) 18px;background:radial-gradient(ellipse at 50% 120%,rgba(34,197,94,0.08),transparent 60%);border-top:1px solid var(--border);"><div style="max-width:1080px;margin:0 auto;text-align:center;">' +
-        '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:20px;padding:5px 14px;margin-bottom:14px;">📈 PROVEN, NOT PROMISED</div>' +
+      '<div style="padding:clamp(34px,7vw,48px) 18px;background:radial-gradient(ellipse at 50% 120%,rgba(212,168,67,0.08),transparent 60%);border-top:1px solid var(--border);"><div style="max-width:1080px;margin:0 auto;text-align:center;">' +
+        '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:#d4a843;border:1px solid rgba(212,168,67,0.3);border-radius:20px;padding:5px 14px;margin-bottom:14px;">📈 PROVEN, NOT PROMISED</div>' +
         '<h2 style="font-size:clamp(22px,5.5vw,30px);font-weight:900;color:#fff;margin:0 0 12px;">We publish our track record</h2>' +
         '<p style="color:var(--text-secondary);font-size:15px;max-width:600px;margin:0 auto 22px;line-height:1.6;">Closing Line Value on every tip is how professionals prove genuine edge. We show it — win or lose. That\'s the difference between us and a bloke with a Telegram channel.</p>' +
         (winnersHtml ? '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:24px;">' + winnersHtml + '</div>' : '') +
