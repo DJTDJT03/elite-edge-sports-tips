@@ -145,7 +145,8 @@ const App = {
     this.initInstallPrompt();
     // Real-time engine — keeps dashboard alive without manual refresh
     this._initRealTimeEngine();
-    // Feature flags — show/hide World Cup nav
+    // Feature flags — show/hide World Cup + LMS nav, then sync the Competitions
+    // group (hide the whole dropdown if neither is live).
     this.api('/status').then(function(data) {
       if (data && data.features && data.features.worldCup) {
         var wcNav = document.getElementById('nav-world-cup');
@@ -155,7 +156,19 @@ const App = {
         var lmsNav = document.getElementById('nav-lms');
         if (lmsNav) lmsNav.style.display = '';
       }
-    }).catch(function() {});
+      App._syncNavGroups();
+    }).catch(function() { App._syncNavGroups(); });
+  },
+
+  // Hide any grouped nav dropdown that has no visible links (e.g. Competitions
+  // when neither World Cup nor Last Man Standing is live), so the top nav never
+  // shows an empty menu.
+  _syncNavGroups() {
+    document.querySelectorAll('[data-nav-group]').forEach(function(group) {
+      var links = group.querySelectorAll('.nav-dropdown-menu > a');
+      var anyVisible = Array.prototype.some.call(links, function(a) { return a.style.display !== 'none'; });
+      group.style.display = anyVisible ? '' : 'none';
+    });
   },
 
   // -----------------------------------------------------------------------
@@ -1168,9 +1181,16 @@ const App = {
       this._wcDashInterval = null;
     }
 
-    // Update active nav
+    // Update active nav — highlight the link AND its parent dropdown trigger, so
+    // a grouped page (e.g. Football under Sports) lights up its menu.
+    document.querySelectorAll('.nav-dropdown-trigger').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.nav-link').forEach(link => {
-      link.classList.toggle('active', link.dataset.page === page);
+      var on = link.dataset.page === page;
+      link.classList.toggle('active', on);
+      if (on) {
+        var group = link.closest('.nav-dropdown');
+        if (group) { var trig = group.querySelector('.nav-dropdown-trigger'); if (trig) trig.classList.add('active'); }
+      }
     });
 
     // Check for upgrade success
