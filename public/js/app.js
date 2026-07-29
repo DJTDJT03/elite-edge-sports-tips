@@ -3923,22 +3923,31 @@ const App = {
       '</div>';
     };
 
-    // 1) HERO
+    // 1) HERO — atmospheric: layered glows + a large faded diamond watermark
+    // behind the headline (gold spotlight, our palette).
+    var stars = '<span style="color:#22c55e;letter-spacing:2px;">★★★★★</span>';
     var hero =
-      '<div style="text-align:center;padding:clamp(36px,9vw,64px) 18px clamp(28px,6vw,40px);background:radial-gradient(ellipse at 50% -10%,rgba(212,168,67,0.16),transparent 55%),linear-gradient(180deg,rgba(34,197,94,0.04),transparent);">' +
-        '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:2px;color:var(--gold);background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.35);border-radius:20px;padding:6px 16px;margin-bottom:20px;">⚡ UK\'S #1 AI TIPPING PLATFORM</div>' +
-        '<h1 style="font-size:clamp(30px,8vw,52px);line-height:1.08;font-weight:900;color:#fff;max-width:760px;margin:0 auto 16px;letter-spacing:-0.5px;">Betting tips that <span style="background:linear-gradient(135deg,#d4a843,#f0d078);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">prove their edge</span></h1>' +
-        '<p style="font-size:clamp(15px,4vw,18px);color:var(--text-secondary);max-width:580px;margin:0 auto 6px;line-height:1.55;">5 self-learning analysts, 3 AI engines and our own quant model debate every pick — then we publish the Closing Line Value to prove it beats the market.</p>' +
-        (hasProof ? '<div style="display:flex;gap:clamp(18px,6vw,40px);justify-content:center;flex-wrap:wrap;margin:26px 0 6px;">' +
-          (perf.strikeRate ? '<div><div style="font-size:clamp(26px,7vw,34px);font-weight:900;color:#22c55e;line-height:1;">' + perf.strikeRate + '%</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Strike rate</div></div>' : '') +
-          (perf.roi ? '<div><div style="font-size:clamp(26px,7vw,34px);font-weight:900;color:#22c55e;line-height:1;">' + (perf.roi > 0 ? '+' : '') + perf.roi + '%</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">ROI</div></div>' : '') +
-          (perf.totalTips ? '<div><div style="font-size:clamp(26px,7vw,34px);font-weight:900;color:#fff;line-height:1;">' + perf.totalTips + '</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Verified tips</div></div>' : '') +
-        '</div>' : '') +
-        '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:26px;">' +
-          '<button class="btn btn-gold" onclick="App.showModal(\'register\')" style="padding:15px 34px;font-size:16px;flex:1 1 230px;max-width:300px;">Get Started Free →</button>' +
-          '<a href="javascript:void(0)" onclick="var el=document.getElementById(\'free-tips\');if(el)el.scrollIntoView({behavior:\'smooth\'});" class="btn btn-outline" style="padding:15px 34px;font-size:16px;flex:1 1 230px;max-width:300px;">See today\'s tips</a>' +
+      '<div style="position:relative;text-align:center;padding:clamp(44px,10vw,84px) 18px clamp(32px,6vw,44px);overflow:hidden;' +
+        'background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(212,168,67,0.22),transparent 60%),radial-gradient(ellipse 50% 40% at 50% 90%,rgba(34,197,94,0.10),transparent 60%),#0a0e1a;">' +
+        // decorative: oversized faded diamond + glow spotlight behind headline
+        '<div aria-hidden="true" style="position:absolute;top:38%;left:50%;transform:translate(-50%,-50%);width:min(560px,90vw);height:min(560px,90vw);background:radial-gradient(circle,rgba(212,168,67,0.14),transparent 62%);filter:blur(8px);pointer-events:none;"></div>' +
+        '<svg aria-hidden="true" viewBox="0 0 64 64" style="position:absolute;top:34%;left:50%;transform:translate(-50%,-50%);width:min(420px,72vw);opacity:0.06;pointer-events:none;"><path d="M32 4L4 32l28 28 28-28L32 4z" fill="none" stroke="#d4a843" stroke-width="1.5"/></svg>' +
+        '<div style="position:relative;">' +
+          '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:2px;color:var(--gold);background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.35);border-radius:20px;padding:6px 16px;margin-bottom:22px;">⚡ UK\'S #1 AI TIPPING PLATFORM</div>' +
+          '<h1 style="font-size:clamp(32px,9vw,58px);line-height:1.06;font-weight:900;color:#fff;max-width:780px;margin:0 auto 16px;letter-spacing:-1px;">Betting tips that<br><span style="background:linear-gradient(135deg,#d4a843,#f0d078);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">prove their edge</span></h1>' +
+          '<p style="font-size:clamp(15px,4vw,18px);color:var(--text-secondary);max-width:590px;margin:0 auto 8px;line-height:1.55;">5 self-learning analysts, 3 AI engines and our own quant model debate every pick — then we publish the Closing Line Value to prove it beats the market.</p>' +
+          (hasProof ? '<div style="display:flex;gap:clamp(18px,6vw,44px);justify-content:center;flex-wrap:wrap;margin:28px 0 8px;">' +
+            (perf.strikeRate ? '<div><div style="font-size:clamp(28px,7vw,38px);font-weight:900;color:#22c55e;line-height:1;">' + perf.strikeRate + '%</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Strike rate</div></div>' : '') +
+            (perf.roi ? '<div><div style="font-size:clamp(28px,7vw,38px);font-weight:900;color:#22c55e;line-height:1;">' + (perf.roi > 0 ? '+' : '') + perf.roi + '%</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">ROI</div></div>' : '') +
+            (perf.totalTips ? '<div><div style="font-size:clamp(28px,7vw,38px);font-weight:900;color:#fff;line-height:1;">' + perf.totalTips + '</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px;">Verified tips</div></div>' : '') +
+          '</div>' : '') +
+          '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:28px;">' +
+            '<button class="btn btn-gold" onclick="App.showModal(\'register\')" style="padding:15px 36px;font-size:16px;flex:1 1 230px;max-width:300px;box-shadow:0 8px 24px rgba(212,168,67,0.25);">Get Started Free →</button>' +
+            '<a href="javascript:void(0)" onclick="var el=document.getElementById(\'free-tips\');if(el)el.scrollIntoView({behavior:\'smooth\'});" class="btn btn-outline" style="padding:15px 36px;font-size:16px;flex:1 1 230px;max-width:300px;">See today\'s tips</a>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-top:18px;font-size:13px;color:var(--text-secondary);">' + stars + '<span>Trusted by bettors across the UK</span></div>' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-top:8px;">No card needed · 6 sports · 160+ competitions · 18+ · BeGambleAware.org</div>' +
         '</div>' +
-        '<div style="font-size:12px;color:var(--text-muted);margin-top:14px;">No card needed · 6 sports · 160+ competitions · 18+ · BeGambleAware.org</div>' +
       '</div>';
 
     // 1b) SPOTLIGHT (featured meeting)
@@ -3957,19 +3966,24 @@ const App = {
         '</div>' + predStrip +
       '</div>';
 
-    // 3) WHY ELITE EDGE — feature grid (the "story", our colours)
+    // 3) WHY ELITE EDGE — bento grid with one highlighted hero card (our colours)
+    var heroCard =
+      '<div style="grid-column:span 2;grid-row:span 2;background:linear-gradient(150deg,#d4a843,#a87c22);color:#0a0e1a;border-radius:16px;padding:26px;display:flex;flex-direction:column;justify-content:space-between;min-height:220px;">' +
+        '<div style="font-size:30px;">🏆</div>' +
+        '<div><div style="font-size:clamp(20px,3vw,26px);font-weight:900;line-height:1.15;margin-bottom:8px;">A prediction engine, not a tipster.</div>' +
+        '<div style="font-size:14px;font-weight:600;line-height:1.55;opacity:0.85;">5 analysts, a 3-AI arbiter panel and our own quant model debate every fixture to a single, most-probable call — and we publish the Closing Line Value to prove it.</div></div>' +
+      '</div>';
     var whySection =
-      '<div style="padding:clamp(34px,7vw,52px) 18px;background:rgba(255,255,255,0.02);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">' +
+      '<div style="padding:clamp(34px,7vw,52px) 18px;background:radial-gradient(ellipse at 50% 0%,rgba(212,168,67,0.05),transparent 55%);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">' +
         '<div style="max-width:1080px;margin:0 auto;">' +
           '<div style="text-align:center;margin-bottom:30px;"><div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:var(--gold);margin-bottom:8px;">ENGINEERED TO WIN</div>' +
           '<h2 style="font-size:clamp(22px,5.5vw,30px);font-weight:900;color:#fff;margin:0;">Why Elite Edge is different</h2></div>' +
-          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:16px;">' +
-            featureCard('🧠', '5 analysts debate every pick', 'The Tactician, Professor and Market analyst argue each fixture — no single opinion, a genuine consensus.', '#d4a843') +
-            featureCard('🤖', '3 AI engines verify it', 'A GPT, Gemini and Grok arbiter panel independently reviews the call before it\'s published.', '#3b82f6') +
-            featureCard('📊', 'Our own quant model', 'An in-house Elo + Dixon-Coles engine that self-learns from every result — the maths behind the pick.', '#22c55e') +
-            featureCard('📈', 'Proven with CLV', 'We track Closing Line Value on every tip — mathematical proof we beat the market, published win or lose.', '#d4a843') +
-            featureCard('⚡', '14 live data feeds', 'Form, xG, lineups, going, injuries and live market moves across 6 sports and 160+ competitions.', '#3b82f6') +
-            featureCard('🔒', 'Locked before kick-off', 'Every pick is frozen pre-match and never changed after the result — total integrity, no retro-fitting.', '#22c55e') +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:14px;">' +
+            heroCard +
+            featureCard('🤖', '3 AI engines verify it', 'A GPT, Gemini and Grok arbiter panel independently reviews each call before it\'s published.', '#3b82f6') +
+            featureCard('📈', 'Proven with CLV', 'Closing Line Value tracked on every tip — mathematical proof we beat the market, win or lose.', '#22c55e') +
+            featureCard('⚡', '14 live data feeds', 'Form, xG, lineups, going and live market moves across 6 sports, 160+ competitions.', '#3b82f6') +
+            featureCard('🔒', 'Locked before kick-off', 'Every pick frozen pre-match, never changed after the result — total integrity.', '#22c55e') +
           '</div>' +
         '</div>' +
       '</div>';
