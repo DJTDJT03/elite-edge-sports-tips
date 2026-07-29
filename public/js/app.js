@@ -109,6 +109,7 @@ const App = {
     this.loadTheme();
     this.loadOddsFormat();
     this.checkTokenExpiry();
+    this._wireNavDropdowns();
     // Capture referral code from URL on landing
     var refParam = new URLSearchParams(window.location.search).get('ref');
     if (refParam) localStorage.setItem('ee_ref', refParam);
@@ -158,6 +159,25 @@ const App = {
       }
       App._syncNavGroups();
     }).catch(function() { App._syncNavGroups(); });
+  },
+
+  // Make nav dropdowns work on CLICK/TAP (not just hover) — essential for touch
+  // devices and for users who click the trigger. Toggles an .open class; clicks
+  // outside close them; selecting a link closes the menu.
+  _wireNavDropdowns() {
+    document.addEventListener('click', function (e) {
+      var trigger = e.target.closest('.nav-dropdown-trigger');
+      if (trigger) {
+        e.preventDefault();
+        var group = trigger.closest('.nav-dropdown');
+        var wasOpen = group.classList.contains('open');
+        document.querySelectorAll('.nav-dropdown.open').forEach(function (g) { g.classList.remove('open'); });
+        if (!wasOpen) group.classList.add('open');
+        return;
+      }
+      // A link inside a menu, or any outside click → close all.
+      document.querySelectorAll('.nav-dropdown.open').forEach(function (g) { g.classList.remove('open'); });
+    });
   },
 
   // Hide any grouped nav dropdown that has no visible links (e.g. Competitions
@@ -3856,7 +3876,8 @@ const App = {
     var predCard = function (t) {
       var icon = sportIcon(t.sport);
       var accent = t.sport === 'racing' ? '#22c55e' : '#d4a843';
-      var when = t.raceTime || (t.kickoff ? new Date(t.kickoff).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
+      var _kd = t.kickoff ? new Date(t.kickoff) : null;
+      var when = t.raceTime || (_kd && !isNaN(_kd.getTime()) ? _kd.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
       var league = t.league || t.meeting || '';
       var titleLine, subLine;
       if (t.sport === 'racing') { titleLine = esc(t.selection || ''); subLine = esc((t.meeting || '') + (t.raceClass ? ' · ' + t.raceClass : '')); }
@@ -3869,16 +3890,26 @@ const App = {
       var locked = self.isPremium() ? false : t.locked;
       var oddsTxt = locked ? '?.??' : self.formatOdds(t.odds);
       var vr = t.valueRating && t.valueRating !== 'No Value' ? t.valueRating : '';
-      return '<div onclick="window.location.hash=\'#/tip/' + t.id + '\'" style="min-width:250px;flex:0 0 250px;scroll-snap-align:start;background:linear-gradient(160deg,#141824,#0e111b);border:1px solid var(--border);border-radius:14px;padding:16px;cursor:pointer;transition:border-color .15s;position:relative;">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
-          '<span style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;">' + icon + ' ' + esc(league) + '</span>' +
-          (when ? '<span style="font-size:11px;font-weight:700;color:' + accent + ';">' + esc(when) + '</span>' : '') +
-        '</div>' +
-        '<div style="font-size:15px;font-weight:800;color:#fff;line-height:1.3;margin-bottom:6px;min-height:40px;">' + titleLine + '</div>' +
-        '<div style="display:inline-block;background:' + accent + '1a;color:' + accent + ';border:1px solid ' + accent + '55;border-radius:6px;padding:3px 9px;font-size:12px;font-weight:700;margin-bottom:14px;">' + esc(t.market || 'Selection') + (t.sport !== 'racing' ? ' · ' + subLine : '') + '</div>' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);padding-top:12px;">' +
-          '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Odds</div><div style="font-size:20px;font-weight:900;color:var(--gold);">' + oddsTxt + '</div></div>' +
-          (vr ? '<span style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:11px;font-weight:800;padding:5px 10px;border-radius:6px;">' + esc(vr) + ' VALUE</span>' : '<span style="background:' + accent + ';color:#0a0e1a;font-size:11px;font-weight:800;padding:5px 10px;border-radius:6px;">' + (locked ? 'PREMIUM' : 'FREE PICK') + '</span>') +
+      // The pick text (selection) — strip a redundant leading market prefix so it
+      // reads cleanly (e.g. "Kairat Almaty or Draw", not "Double Chance - ...").
+      var pick = String(t.selection || '');
+      if (t.market && pick.toLowerCase().indexOf(String(t.market).toLowerCase() + ' -') === 0) pick = pick.slice(String(t.market).length + 2).trim();
+      return '<div onclick="window.location.hash=\'#/tip/' + t.id + '\'" style="min-width:270px;flex:0 0 270px;scroll-snap-align:start;background:linear-gradient(160deg,#161b28,#0d1019);border:1px solid var(--border);border-radius:16px;padding:0;cursor:pointer;transition:transform .15s,border-color .15s;position:relative;overflow:hidden;" onmouseover="this.style.transform=\'translateY(-3px)\';this.style.borderColor=\'' + accent + '66\'" onmouseout="this.style.transform=\'\';this.style.borderColor=\'\'">' +
+        '<div style="height:3px;background:linear-gradient(90deg,' + accent + ',transparent);"></div>' +
+        '<div style="padding:16px;">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
+            '<span style="font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;">' + icon + ' ' + esc(league) + '</span>' +
+            (when ? '<span style="font-size:11px;font-weight:800;color:#fff;background:' + accent + '22;border-radius:5px;padding:2px 7px;">' + esc(when) + '</span>' : '') +
+          '</div>' +
+          '<div style="font-size:16px;font-weight:800;color:#fff;line-height:1.3;margin-bottom:12px;min-height:42px;">' + titleLine + '</div>' +
+          '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:14px;">' +
+            '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">Our pick · ' + esc(t.market || '') + '</div>' +
+            '<div style="font-size:14px;font-weight:800;color:' + accent + ';line-height:1.3;">' + esc(pick) + '</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+            '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Odds</div><div style="font-size:22px;font-weight:900;color:var(--gold);">' + oddsTxt + '</div></div>' +
+            (vr ? '<span style="background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:11px;font-weight:800;padding:6px 11px;border-radius:7px;">' + esc(vr) + ' VALUE</span>' : '<span style="background:' + (locked ? 'rgba(212,168,67,0.15);color:var(--gold);border:1px solid ' + accent + '55' : accent + ';color:#0a0e1a') + ';font-size:11px;font-weight:800;padding:6px 11px;border-radius:7px;">' + (locked ? '🔒 PREMIUM' : 'FREE PICK') + '</span>') +
+          '</div>' +
         '</div>' +
       '</div>';
     };
