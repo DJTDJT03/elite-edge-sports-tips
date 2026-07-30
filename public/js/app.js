@@ -6202,51 +6202,145 @@ const App = {
     var leagues = Object.values(groups).sort(function (a, b) { return b.games.length - a.games.length; });
 
     var crest = function (url, name) {
-      if (url) return '<img src="' + url + '" alt="" style="width:26px;height:26px;object-fit:contain;" onerror="this.style.visibility=\'hidden\'">';
+      if (url) return '<img src="' + self.escapeHtml(url) + '" alt="" style="width:26px;height:26px;object-fit:contain;" onerror="this.style.visibility=\'hidden\'">';
       return '<div style="width:26px;height:26px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--gold);">' + self.escapeHtml((name || '?')[0]) + '</div>';
     };
     var isLive = function (s) { return ['LIVE', '1H', '2H', 'HT', 'ET'].indexOf(s) !== -1; };
     var isFin = function (s) { return ['FT', 'AET', 'PEN'].indexOf(s) !== -1; };
 
-    var gameRow = function (f) {
+    // Implied probability from decimal odds (real bookmaker data, not invented).
+    var impl = function (o) { o = parseFloat(o); return (o && o > 1) ? 1 / o : 0; };
+    // Compress a market + selection into a NerdyTips-style short code (1 / 1X / O2.5).
+    var shortCode = function (market, selection, f) {
+      var m = String(market || '').toLowerCase();
+      var s = String(selection || '').toLowerCase();
+      var h = String(f.homeTeam || '').toLowerCase(), a = String(f.awayTeam || '').toLowerCase();
+      if (m.indexOf('double') !== -1) {
+        var hasH = h && s.indexOf(h.split(' ')[0]) !== -1, hasA = a && s.indexOf(a.split(' ')[0]) !== -1, hasD = s.indexOf('draw') !== -1;
+        if (hasH && hasD) return '1X'; if (hasA && hasD) return 'X2'; if (hasH && hasA) return '12'; return '1X';
+      }
+      // Check the selection's own Under/Over first so a market literally named
+      // "Total Goals" with an "Under 2.5" selection is not mislabelled as Over.
+      if (s.indexOf('under') !== -1) return 'U' + (s.match(/[\d.]+/) || ['2.5'])[0];
+      if (s.indexOf('over') !== -1 || m.indexOf('over') !== -1 || m.indexOf('total') !== -1) return 'O' + (s.match(/[\d.]+/) || ['2.5'])[0];
+      if (m.indexOf('btts') !== -1 || m.indexOf('both teams') !== -1) return s.indexOf('no') !== -1 ? 'NO BTTS' : 'BTTS';
+      if (m.indexOf('result') !== -1 || m.indexOf('1x2') !== -1 || m.indexOf('match') !== -1) {
+        if (h && s.indexOf(h.split(' ')[0]) !== -1) return '1'; if (a && s.indexOf(a.split(' ')[0]) !== -1) return '2'; if (s.indexOf('draw') !== -1) return 'X';
+      }
+      return self.escapeHtml((selection || market || '').slice(0, 8));
+    };
+    // Confidence bar (gold = Our Take, muted = market implied). pct is 0-100.
+    var confBar = function (pct, gold) {
+      pct = Math.max(4, Math.min(99, Math.round(pct || 0)));
+      var col = gold ? 'linear-gradient(90deg,#d4a843,#e8b93a)' : 'linear-gradient(90deg,#3b82f6,#60a5fa)';
+      return '<div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">' +
+        '<div style="width:64px;height:5px;border-radius:3px;background:var(--bg-elevated);overflow:hidden;"><div style="width:' + pct + '%;height:100%;background:' + col + ';"></div></div>' +
+        '<span style="font-size:12px;font-weight:800;color:' + (gold ? 'var(--gold)' : '#9fb0c9') + ';min-width:34px;text-align:right;">' + pct + '%</span></div>';
+    };
+
+    var gameRow = function (f, ri) {
       var pk = pickFor(f);
       var t = f.kickoff ? new Date(f.kickoff) : null;
-      var timeTxt = isLive(f.status) ? '<span style="color:#ef4444;font-weight:800;font-size:11px;">● LIVE</span>' : isFin(f.status) ? '<span style="color:var(--text-muted);font-size:11px;">FT</span>' : (t && !isNaN(t.getTime()) ? t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
-      var score = (f.homeGoals != null && f.awayGoals != null) ? f.homeGoals + ' - ' + f.awayGoals : 'v';
-      var clickable = f.id ? ' onclick="window.location.hash=\'#/tip/' + f.id + '\'" style="cursor:pointer;"' : '';
-      return '<div' + clickable + ' style="display:grid;grid-template-columns:52px 1fr auto;gap:10px;align-items:center;padding:11px 14px;border-top:1px solid var(--border);">' +
-        '<div style="font-size:11px;color:var(--text-secondary);text-align:center;">' + timeTxt + '</div>' +
-        '<div style="min-width:0;">' +
-          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">' + crest(f.homeTeamLogo, f.homeTeam) + '<span style="font-size:14px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + self.escapeHtml(f.homeTeam) + '</span></div>' +
-          '<div style="display:flex;align-items:center;gap:8px;">' + crest(f.awayTeamLogo, f.awayTeam) + '<span style="font-size:14px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + self.escapeHtml(f.awayTeam) + '</span></div>' +
-        '</div>' +
-        '<div style="text-align:right;">' +
-          (score !== 'v' ? '<div style="font-size:16px;font-weight:900;color:#fff;">' + score + '</div>' : '') +
-          (pk ? '<div style="margin-top:2px;font-size:10px;font-weight:800;color:#0a0e1a;background:var(--gold);border-radius:5px;padding:2px 7px;display:inline-block;">OUR PICK</div>' : (f.homeOdds ? '<div style="font-size:12px;color:var(--text-muted);">' + self.formatOdds(f.homeOdds) + ' · ' + self.formatOdds(f.drawOdds) + ' · ' + self.formatOdds(f.awayOdds) + '</div>' : '')) +
-        '</div>' +
+      var live = isLive(f.status), fin = isFin(f.status);
+      var timeTxt = live ? '<span style="color:#ef4444;font-weight:800;font-size:10px;">● LIVE</span>' : fin ? '<span style="color:var(--text-muted);font-size:10px;font-weight:700;">FT</span>' : (t && !isNaN(t.getTime()) ? t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
+      var scored = (f.homeGoals != null && f.awayGoals != null);
+
+      // 1X2 implied probabilities from real odds.
+      var ph = impl(f.homeOdds), pd = impl(f.drawOdds), pa = impl(f.awayOdds), psum = ph + pd + pa;
+      var hasOdds = psum > 0;
+      var nH = hasOdds ? ph / psum : 0, nD = hasOdds ? pd / psum : 0, nA = hasOdds ? pa / psum : 0;
+
+      // Prediction pill: our genuine Our Take if published, else the market favourite.
+      var predHtml = '';
+      if (pk) {
+        var code = shortCode(pk.market, pk.selection, f);
+        var cNum = Number(pk.confidence);
+        var conf = (cNum && !isNaN(cNum)) ? cNum * 10 : (hasOdds ? Math.max(nH, nD, nA) * 100 : 60);
+        predHtml = '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">' +
+          '<span title="Our Take" style="font-size:12px;font-weight:900;color:#0a0e1a;background:var(--gold);border-radius:6px;padding:3px 9px;display:inline-block;">' + code + '</span>' +
+          confBar(conf, true) + '</div>';
+      } else if (hasOdds) {
+        var best = Math.max(nH, nD, nA);
+        // Explicit argmax so a float tie can't mislabel the favourite.
+        var mcode = (nH >= nD && nH >= nA) ? '1' : (nA >= nD && nA >= nH) ? '2' : 'X';
+        predHtml = '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">' +
+          '<span title="Market favourite (implied by odds)" style="font-size:12px;font-weight:800;color:#c7d0e0;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:3px 9px;display:inline-block;">' + mcode + '</span>' +
+          confBar(best * 100, false) + '</div>';
+      } else {
+        predHtml = '<span style="font-size:11px;color:var(--text-muted);">—</span>';
+      }
+
+      var rid = 'mr-' + ri;
+      var teamLine = function (logo, name, goals, bold) {
+        return '<div style="display:flex;align-items:center;gap:9px;min-width:0;">' + crest(logo, name) +
+          '<span style="font-size:14px;font-weight:' + (bold ? '800' : '600') + ';color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + self.escapeHtml(name) + '</span>' +
+          (scored ? '<span style="font-size:15px;font-weight:900;color:#fff;margin-left:auto;">' + goals + '</span>' : '') + '</div>';
+      };
+      // Winner emphasis when finished.
+      var hWin = scored && f.homeGoals > f.awayGoals, aWin = scored && f.awayGoals > f.homeGoals;
+
+      // Expandable detail — the full multi-market odds grid (real odds only).
+      var oddsCell = function (label, val) {
+        return '<div style="flex:1;text-align:center;padding:8px 4px;background:var(--bg-elevated);border-radius:8px;">' +
+          '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">' + label + '</div>' +
+          '<div style="font-size:13px;font-weight:800;color:#fff;">' + (val ? self.formatOdds(val) : '—') + '</div></div>';
+      };
+      var detail =
+        '<div id="' + rid + '" class="mtch-detail" style="display:none;padding:0 14px 14px;">' +
+          '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin:2px 0 6px;">Match Result</div>' +
+          '<div style="display:flex;gap:6px;margin-bottom:8px;">' + oddsCell('1 · Home', f.homeOdds) + oddsCell('X · Draw', f.drawOdds) + oddsCell('2 · Away', f.awayOdds) + '</div>' +
+          ((f.overOdds || f.underOdds || f.bttsOdds) ?
+            '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin:2px 0 6px;">Goals</div>' +
+            '<div style="display:flex;gap:6px;margin-bottom:10px;">' + oddsCell('Over 2.5', f.overOdds) + oddsCell('Under 2.5', f.underOdds) + oddsCell('BTTS', f.bttsOdds) + '</div>' : '') +
+          (pk ? '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:#e8e6e3;"><strong style="color:var(--gold);">Our Take:</strong> ' + self.escapeHtml(pk.selection || '') + (pk.market ? ' <span style="color:var(--text-muted);">(' + self.escapeHtml(pk.market) + ')</span>' : '') + '</div>' : '') +
+          // Published pick → its tip page (rich analysis by tip id); otherwise open
+          // match intelligence by FIXTURE id (openMatchIntelligence hits /match-intelligence/:id).
+          ((pk && pk.id) ? '<a href="#/tip/' + pk.id + '" onclick="event.stopPropagation();" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--gold);">Full match intelligence →</a>'
+            : (f.id ? '<a href="javascript:void(0)" onclick="event.stopPropagation();App.openMatchIntelligence(' + f.id + ',this);" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--gold);">Full match intelligence →</a>' : '')) +
+        '</div>';
+
+      return '<div style="border-top:1px solid var(--border);">' +
+        '<div onclick="App._toggleMatchRow(\'' + rid + '\',this)" style="display:grid;grid-template-columns:46px 1fr auto 16px;gap:10px;align-items:center;padding:11px 14px;cursor:pointer;user-select:none;">' +
+          '<div style="font-size:11px;color:var(--text-secondary);text-align:center;line-height:1.3;">' + timeTxt + '</div>' +
+          '<div style="min-width:0;display:flex;flex-direction:column;gap:5px;">' + teamLine(f.homeTeamLogo, f.homeTeam, f.homeGoals, hWin) + teamLine(f.awayTeamLogo, f.awayTeam, f.awayGoals, aWin) + '</div>' +
+          '<div>' + predHtml + '</div>' +
+          '<span class="mtch-arrow" style="color:var(--text-muted);font-size:11px;transition:transform .2s;">▼</span>' +
+        '</div>' + detail +
       '</div>';
     };
 
+    var rowIdx = 0;
     var body = leagues.length ? leagues.map(function (lg, i) {
       var open = i === 0; // first league expanded by default
       var lid = 'lg-' + i;
+      var rows = lg.games.map(function (g) { return gameRow(g, rowIdx++); }).join('');
       return '<div class="match-league" style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:12px;">' +
         '<div onclick="App._toggleLeague(\'' + lid + '\',this)" style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none;">' +
-          (lg.logo ? '<img src="' + lg.logo + '" alt="" style="width:24px;height:24px;object-fit:contain;" onerror="this.style.display=\'none\'">' : '') +
+          (lg.logo ? '<img src="' + self.escapeHtml(lg.logo) + '" alt="" style="width:24px;height:24px;object-fit:contain;" onerror="this.style.display=\'none\'">' : '') +
           '<span style="font-size:15px;font-weight:800;color:#fff;flex:1;">' + self.escapeHtml(lg.name) + '</span>' +
           '<span style="font-size:12px;color:var(--text-muted);background:var(--bg-elevated);border-radius:12px;padding:2px 10px;">' + lg.games.length + '</span>' +
           '<span class="league-arrow" style="color:var(--gold);font-size:14px;transition:transform .2s;transform:rotate(' + (open ? '180' : '0') + 'deg);">▼</span>' +
         '</div>' +
-        '<div id="' + lid + '" style="display:' + (open ? 'block' : 'none') + ';">' + lg.games.map(gameRow).join('') + '</div>' +
+        '<div id="' + lid + '" style="display:' + (open ? 'block' : 'none') + ';">' + rows + '</div>' +
       '</div>';
     }).join('') : '<div style="text-align:center;padding:50px 20px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">No football matches loaded right now. Check back soon, or see our <a href="#/racing" style="color:var(--gold);">racing card</a>.</div>';
 
     app.innerHTML =
       '<div class="container" style="padding-top:18px;max-width:900px;">' +
         '<div style="margin-bottom:18px;"><h1 style="font-size:clamp(24px,6vw,32px);font-weight:900;color:#fff;margin:0 0 4px;">All Matches</h1>' +
-        '<p style="color:var(--text-muted);font-size:14px;margin:0;">Every game, grouped by competition — tap a league to open its fixtures. Games with a gold badge carry Our Take.</p></div>' +
+        '<p style="color:var(--text-muted);font-size:14px;margin:0;">Every game, grouped by competition. Tap a match to open the full odds. <span style="color:var(--gold);font-weight:700;">Gold</span> = Our Take; blue = market favourite.</p></div>' +
         body +
       '</div>';
+  },
+
+  // Expand/collapse a single match row to reveal its multi-market odds grid.
+  _toggleMatchRow(id, header) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var open = el.style.display !== 'none';
+    el.style.display = open ? 'none' : 'block';
+    var arrow = header.querySelector('.mtch-arrow');
+    if (arrow) arrow.style.transform = 'rotate(' + (open ? '0' : '180') + 'deg)';
   },
 
   _toggleLeague(id, header) {
