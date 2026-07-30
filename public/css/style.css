@@ -84,7 +84,11 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
 .logo-icon { font-size: 24px; color: var(--gold); filter: drop-shadow(0 0 8px rgba(212,168,67,.3)); }
 .logo-text { font-size: 16px; font-weight: 800; color: var(--text-primary); letter-spacing: -.3px; line-height: 1.1; }
 .logo-sub { display: block; font-size: 9px; font-weight: 600; color: var(--gold); text-transform: uppercase; letter-spacing: 1.5px; }
-.nav-links { display: flex; gap: 1px; align-items: center; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; flex: 1; min-width: 0; }
+/* NOTE: overflow MUST stay visible on desktop — the nav-dropdown menus are
+   position:absolute children of this container, and any overflow:hidden/auto
+   clips them so they open but never show. Horizontal scroll is not needed now
+   the nav is consolidated to ~7 items; mobile (<=768px) redefines .nav-links. */
+.nav-links { display: flex; gap: 1px; align-items: center; flex-wrap: nowrap; overflow: visible; scrollbar-width: none; flex: 1; min-width: 0; }
 .nav-links::-webkit-scrollbar { display: none; }
 /* Mobile-only auth sections inside nav — always hidden on desktop */
 #nav-auth-top-guest, #nav-auth-top-user { display: none !important; }

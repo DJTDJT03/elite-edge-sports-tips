@@ -1170,6 +1170,9 @@ const App = {
     // Close mobile menu when any nav link OR dropdown menu link is clicked
     document.querySelectorAll('.nav-link, .nav-dropdown-menu a').forEach(link => {
       link.addEventListener('click', () => {
+        // A dropdown group header (trigger) is not a real destination — tapping it
+        // must NOT collapse the whole mobile menu, only real links close it.
+        if (link.classList.contains('nav-dropdown-trigger')) return;
         document.getElementById('nav-links').classList.remove('open');
       });
     });
