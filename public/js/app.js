@@ -6319,7 +6319,7 @@ const App = {
       return '<div class="match-league" style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:12px;">' +
         '<div onclick="App._toggleLeague(\'' + lid + '\',this)" style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none;">' +
           (lg.logo ? '<img src="' + self._attrUrl(lg.logo) + '" alt="" style="width:24px;height:24px;object-fit:contain;" onerror="this.style.display=\'none\'">' : '') +
-          '<span style="font-size:15px;font-weight:800;color:#fff;flex:1;">' + self.escapeHtml(lg.name) + '</span>' +
+          '<a href="#/league/' + self._leagueSlug(lg.name) + '" onclick="event.stopPropagation();" style="font-size:15px;font-weight:800;color:#fff;flex:1;text-decoration:none;">' + self.escapeHtml(lg.name) + ' <span style="color:var(--gold);font-size:11px;">›</span></a>' +
           '<span style="font-size:12px;color:var(--text-muted);background:var(--bg-elevated);border-radius:12px;padding:2px 10px;">' + lg.games.length + '</span>' +
           '<span class="league-arrow" style="color:var(--gold);font-size:14px;transition:transform .2s;transform:rotate(' + (open ? '180' : '0') + 'deg);">▼</span>' +
         '</div>' +
@@ -6357,7 +6357,7 @@ const App = {
     'championship':          { name: 'Championship',          country: 'England',      flag: '🏴',  std: 'ELC', xg: null,         match: ['championship'] },
     'champions-league':      { name: 'UEFA Champions League',  country: 'Europe',       flag: '🇪🇺', std: 'CL',  xg: null,         match: ['champions league'] },
     'la-liga':               { name: 'La Liga',               country: 'Spain',        flag: '🇪🇸', std: 'PD',  xg: 'La_Liga',    match: ['la liga', 'laliga', 'primera'] },
-    'serie-a':               { name: 'Serie A',               country: 'Italy',        flag: '🇮🇹', std: 'SA',  xg: 'Serie_A',    match: ['serie a'] },
+    'serie-a':               { name: 'Serie A',               country: 'Italy',        flag: '🇮🇹', std: 'SA',  xg: 'Serie_A',    match: ['serie a (italy)'] },
     'bundesliga':            { name: 'Bundesliga',            country: 'Germany',      flag: '🇩🇪', std: 'BL1', xg: 'Bundesliga', match: ['bundesliga'] },
     'ligue-1':               { name: 'Ligue 1',               country: 'France',       flag: '🇫🇷', std: 'FL1', xg: 'Ligue_1',    match: ['ligue 1'] },
     'ligue-2':               { name: 'Ligue 2',               country: 'France',       flag: '🇫🇷', std: 'FL2', xg: null,         match: ['ligue 2'] },
@@ -6366,6 +6366,14 @@ const App = {
 
   _teamSlug(name) {
     return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  },
+
+  // League display name → URL slug: a catalog major (by keyword) or a slugified
+  // name for everything else. renderLeaguePage reverses this.
+  _leagueSlug(name) {
+    var n = String(name || '').toLowerCase();
+    for (var s in this.LEAGUES) { if (this.LEAGUES[s].match.some(function (kw) { return n.indexOf(kw) !== -1; })) return s; }
+    return this._teamSlug(name);
   },
 
   // Attribute-safe URL encoder. escapeHtml (textContent-based) does NOT escape
@@ -6385,58 +6393,87 @@ const App = {
     var app = document.getElementById('app');
     if (!app) return;
     var self = this;
-    var lg = this.LEAGUES[slug];
-    if (!lg) {
-      app.innerHTML = '<div class="container" style="padding-top:24px;max-width:900px;"><div style="text-align:center;padding:50px 20px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">League not found. <a href="#/matches" style="color:var(--gold);">Browse all matches →</a></div></div>';
-      return;
-    }
-    app.innerHTML = '<div class="container" style="padding-top:20px;"><div style="text-align:center;padding:50px 0;color:var(--text-muted);"><div class="loading-spinner" style="margin:0 auto 12px;"></div>Loading ' + this.escapeHtml(lg.name) + '…</div></div>';
+    var catalog = this.LEAGUES[slug] || null;
+    app.innerHTML = '<div class="container" style="padding-top:20px;"><div style="text-align:center;padding:50px 0;color:var(--text-muted);"><div class="loading-spinner" style="margin:0 auto 12px;"></div>Loading league…</div></div>';
 
-    var standings = null, xg = null, fixtures = [], tips = [];
+    // Load fixtures + tips (+ xG for catalog leagues) first — we need a fixture
+    // to read the SportMonks seasonId used for broad standings coverage.
+    var fixtures = [], tips = [], xg = null;
     try {
-      var results = await Promise.all([
-        this.api('/football/standings/' + lg.std).catch(function () { return null; }),
-        lg.xg ? this.api('/football/xg/' + lg.xg).catch(function () { return null; }) : Promise.resolve(null),
+      var base = await Promise.all([
         this.fetchLiveFootball(true).catch(function () { return { fixtures: [] }; }),
         this.api('/tips?sport=football').catch(function () { return []; }),
+        (catalog && catalog.xg) ? this.api('/football/xg/' + catalog.xg).catch(function () { return null; }) : Promise.resolve(null),
       ]);
-      standings = results[0]; xg = results[1];
-      fixtures = (results[2] && results[2].fixtures) || [];
-      tips = results[3] || [];
+      fixtures = (base[0] && base[0].fixtures) || [];
+      tips = base[1] || [];
+      xg = base[2];
     } catch (e) {}
 
+    var norm = function (s) { return String(s || '').toLowerCase(); };
+    var normT = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+
+    // Resolve the league's display name + its fixtures (catalog keywords, else slug).
+    var leagueName, leagueFixtures;
+    if (catalog) {
+      leagueName = catalog.name;
+      leagueFixtures = fixtures.filter(function (f) { return catalog.match.some(function (kw) { return norm(f.league).indexOf(kw) !== -1; }); });
+    } else {
+      leagueFixtures = fixtures.filter(function (f) { return self._teamSlug(f.league) === slug; });
+      leagueName = (leagueFixtures[0] && leagueFixtures[0].league) || String(slug || '').replace(/-/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    }
+
+    // Unknown league with no fixtures → nothing to show.
+    if (!catalog && !leagueFixtures.length) {
+      app.innerHTML = '<div class="container" style="padding-top:24px;max-width:900px;"><div style="text-align:center;padding:50px 20px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">No fixtures loaded for this league right now. <a href="#/matches" style="color:var(--gold);">Browse all matches →</a></div></div>';
+      return;
+    }
+
+    // Standings: football-data for catalog majors (clickable teams + form);
+    // otherwise SportMonks by seasonId — thousands of leagues, no form/team link.
+    var seasonId = null;
+    leagueFixtures.some(function (f) { if (f.seasonId) { seasonId = f.seasonId; return true; } return false; });
+    var standings = null, tableClickable = false;
+    if (catalog && catalog.std) {
+      standings = await this.api('/football/standings/' + catalog.std).catch(function () { return null; });
+      if (standings && standings.standings && standings.standings.length) tableClickable = true;
+    }
+    if ((!standings || !standings.standings || !standings.standings.length) && seasonId) {
+      standings = await this.api('/football/sm-standings/' + seasonId).catch(function () { return null; });
+      tableClickable = false;
+    }
     var table = (standings && standings.standings) || [];
 
     // League-wide summary — only what we can genuinely compute from the table.
     var teams = table.length;
+    // Require EVERY row to carry the stat before showing an aggregate — otherwise
+    // a partially-populated SportMonks table would understate matches/draws.
+    var hasPlayed = teams > 0 && table.every(function (r) { return Number(r.playedGames) > 0; });
+    var hasGoals = hasPlayed && table.every(function (r) { return r.goalsFor != null; });
     var sum = function (k) { return table.reduce(function (a, r) { return a + (Number(r[k]) || 0); }, 0); };
-    var matchesPlayed = Math.round(sum('playedGames') / 2);
+    var matchesPlayed = hasPlayed ? Math.round(sum('playedGames') / 2) : 0;
     var totalGoals = sum('goalsFor');
     var drawnMatches = Math.round(sum('draw') / 2);
     var goalsPerGame = matchesPlayed ? (totalGoals / matchesPlayed) : 0;
     var drawRate = matchesPlayed ? Math.round((drawnMatches / matchesPlayed) * 100) : 0;
 
-    // Fixtures in THIS league (from live-fixtures, matched by league name keywords).
-    var norm = function (s) { return String(s || '').toLowerCase(); };
-    var leagueFixtures = fixtures.filter(function (f) {
-      var ln = norm(f.league);
-      return lg.match.some(function (kw) { return ln.indexOf(kw) !== -1; });
-    });
-    var normT = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
     var pickFor = function (f) {
       var h = normT(f.homeTeam), a = normT(f.awayTeam);
       return tips.find(function (t) { var e = normT(t.event); return e && e.indexOf(h) !== -1 && e.indexOf(a) !== -1; });
     };
 
+    var flag = catalog ? catalog.flag : '⚽';
+    var country = catalog ? catalog.country : '';
+
     // --- Header ---
     var header =
       '<div style="background:linear-gradient(160deg,#141b2e,#0a0e1a);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:16px;text-align:center;">' +
-        '<div style="font-size:34px;line-height:1;margin-bottom:8px;">' + lg.flag + '</div>' +
-        '<h1 style="font-size:clamp(22px,5vw,30px);font-weight:900;color:#fff;margin:0 0 4px;">' + this.escapeHtml(lg.name) + '</h1>' +
-        '<div style="color:var(--gold);font-size:13px;font-weight:700;">' + this.escapeHtml(lg.country) + (standings && standings.season ? ' · ' + this.escapeHtml(standings.season) : '') + '</div>' +
+        '<div style="font-size:34px;line-height:1;margin-bottom:8px;">' + flag + '</div>' +
+        '<h1 style="font-size:clamp(22px,5vw,30px);font-weight:900;color:#fff;margin:0 0 4px;">' + this.escapeHtml(leagueName) + '</h1>' +
+        (country || (standings && standings.season) ? '<div style="color:var(--gold);font-size:13px;font-weight:700;">' + this.escapeHtml(country) + (country && standings && standings.season ? ' · ' : '') + (standings && standings.season ? this.escapeHtml(standings.season) : '') + '</div>' : '') +
       '</div>';
 
-    // --- Summary stat cards (computed, honest) ---
+    // --- Summary stat cards (only cards whose data genuinely exists) ---
     var statCard = function (val, label, accent) {
       return '<div style="flex:1;min-width:120px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">' +
         '<div style="font-size:26px;font-weight:900;color:' + (accent || '#fff') + ';line-height:1;">' + val + '</div>' +
@@ -6445,9 +6482,9 @@ const App = {
     var statsRow = teams ?
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' +
         statCard(teams, 'Teams') +
-        statCard(matchesPlayed, 'Matches Played') +
-        statCard(goalsPerGame.toFixed(2), 'Goals / Game', 'var(--gold)') +
-        statCard(drawRate + '%', 'Draw Rate', '#3b82f6') +
+        (hasPlayed ? statCard(matchesPlayed, 'Matches Played') : '') +
+        (hasGoals ? statCard(goalsPerGame.toFixed(2), 'Goals / Game', 'var(--gold)') : '') +
+        (hasPlayed ? statCard(drawRate + '%', 'Draw Rate', '#3b82f6') : '') +
       '</div>' : '';
 
     // --- Fixtures in this league (compact prediction rows) ---
@@ -6460,22 +6497,25 @@ const App = {
     // --- Standings table (real, clickable teams → team pages) ---
     var tableHtml = '';
     if (teams) {
+      var dv = function (v) { return (v == null || v === '') ? '—' : v; };
       var rows = table.map(function (r) {
+        // Only football-data rows carry a teamId usable by the team page.
+        var canClick = tableClickable && r.teamId;
         var slugId = self._teamSlug(r.team) + (r.teamId ? '-' + r.teamId : '');
         var formDots = r.form ? r.form.split(',').slice(-5).map(function (c) {
           c = c.trim().toUpperCase();
           var col = c === 'W' ? '#22c55e' : c === 'L' ? '#ef4444' : '#8b97ad';
           return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + col + ';margin-left:2px;"></span>';
         }).join('') : '';
-        return '<tr onclick="window.location.hash=\'#/team/' + slugId + '\'" style="cursor:pointer;border-top:1px solid var(--border);">' +
-          '<td style="padding:9px 6px;text-align:center;color:var(--text-muted);font-weight:700;font-size:13px;">' + r.position + '</td>' +
+        return '<tr ' + (canClick ? 'onclick="window.location.hash=\'#/team/' + slugId + '\'" style="cursor:pointer;' : 'style="') + 'border-top:1px solid var(--border);">' +
+          '<td style="padding:9px 6px;text-align:center;color:var(--text-muted);font-weight:700;font-size:13px;">' + dv(r.position) + '</td>' +
           '<td style="padding:9px 6px;"><span style="display:inline-flex;align-items:center;gap:8px;">' + self._crestImg(r.teamCrest, r.team, 22) + '<span style="font-size:13px;font-weight:600;color:#fff;">' + self.escapeHtml(r.team) + '</span></span></td>' +
-          '<td style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + r.playedGames + '</td>' +
-          '<td class="lg-hide-sm" style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + r.won + '</td>' +
-          '<td class="lg-hide-sm" style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + r.draw + '</td>' +
-          '<td class="lg-hide-sm" style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + r.lost + '</td>' +
-          '<td class="lg-hide-sm" style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + r.goalDifference + '</td>' +
-          '<td style="padding:9px 6px;text-align:center;font-size:14px;font-weight:800;color:var(--gold);">' + r.points + '</td>' +
+          '<td style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + dv(r.playedGames) + '</td>' +
+          '<td class="lg-hide-sm" style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + dv(r.won) + '</td>' +
+          '<td class="lg-hide-sm" style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + dv(r.draw) + '</td>' +
+          '<td class="lg-hide-sm" style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + dv(r.lost) + '</td>' +
+          '<td class="lg-hide-sm" style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + dv(r.goalDifference) + '</td>' +
+          '<td style="padding:9px 6px;text-align:center;font-size:14px;font-weight:800;color:var(--gold);">' + dv(r.points) + '</td>' +
           '<td class="lg-hide-sm" style="padding:9px 6px;white-space:nowrap;">' + formDots + '</td>' +
         '</tr>';
       }).join('');
@@ -6516,19 +6556,20 @@ const App = {
       }
     }
 
-    // --- SEO copy (real computed numbers only) ---
+    // --- SEO copy (real computed numbers only, guarded by what we actually have) ---
     var copy = teams ?
       '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:24px;color:var(--text-secondary);font-size:14px;line-height:1.7;">' +
-        '<h2 style="font-size:16px;font-weight:800;color:var(--gold);margin:0 0 10px;text-transform:uppercase;letter-spacing:0.5px;">' + this.escapeHtml(lg.name) + ' Predictions &amp; Tips</h2>' +
-        '<p style="margin:0 0 10px;">Elite Edge covers ' + this.escapeHtml(lg.name) + ' with our 5-analyst consensus engine, 3-AI arbiter panel and in-house quant model — every pick locked before kick-off and tracked for Closing Line Value. So far this season the division has played <strong>' + matchesPlayed + '</strong> matches at <strong>' + goalsPerGame.toFixed(2) + '</strong> goals per game, with <strong>' + drawRate + '%</strong> ending level.</p>' +
-        (table[0] ? '<p style="margin:0;"><strong>' + this.escapeHtml(table[0].team) + '</strong> currently lead on ' + table[0].points + ' points. Tap any team for their form, trends and our upcoming predictions.</p>' : '') +
+        '<h2 style="font-size:16px;font-weight:800;color:var(--gold);margin:0 0 10px;text-transform:uppercase;letter-spacing:0.5px;">' + this.escapeHtml(leagueName) + ' Predictions &amp; Tips</h2>' +
+        '<p style="margin:0 0 10px;">Elite Edge covers ' + this.escapeHtml(leagueName) + ' with our 5-analyst consensus engine, 3-AI arbiter panel and in-house quant model — every pick locked before kick-off and tracked for Closing Line Value.' +
+          (hasPlayed ? ' So far this season the division has played <strong>' + matchesPlayed + '</strong> matches' + (hasGoals ? ' at <strong>' + goalsPerGame.toFixed(2) + '</strong> goals per game' : '') + ', with <strong>' + drawRate + '%</strong> ending level.' : '') + '</p>' +
+        (table[0] ? '<p style="margin:0;"><strong>' + this.escapeHtml(table[0].team) + '</strong> currently lead' + (table[0].points != null ? ' on ' + table[0].points + ' points' : ' the table') + '.' + (tableClickable ? ' Tap any team for their form, trends and our upcoming predictions.' : '') + '</p>' : '') +
       '</div>' : '';
 
     app.innerHTML =
       '<div class="container" style="padding-top:18px;max-width:900px;">' +
         '<div style="margin-bottom:14px;"><a href="#/matches" style="color:var(--text-muted);font-size:13px;">← All Matches</a></div>' +
         header + statsRow + fxHtml + tableHtml + xgHtml + copy +
-        (!teams ? '<div style="text-align:center;padding:30px 20px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">Live standings for ' + this.escapeHtml(lg.name) + ' aren\'t available right now — check back shortly, or see <a href="#/matches" style="color:var(--gold);">today\'s fixtures</a>.</div>' : '') +
+        ((!leagueFixtures.length && !teams) ? '<div style="text-align:center;padding:30px 20px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">Nothing loaded for ' + this.escapeHtml(leagueName) + ' right now — check back shortly, or see <a href="#/matches" style="color:var(--gold);">today\'s fixtures</a>.</div>' : '') +
       '</div>';
   },
 

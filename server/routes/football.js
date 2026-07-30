@@ -1578,6 +1578,80 @@ module.exports = function(deps) {
     }
   });
 
+  // GET /api/football/sm-standings/:seasonId — SportMonks standings (All-In plan)
+  // Covers thousands of leagues beyond football-data.org's 9. Normalised to the
+  // SAME shape as /standings/:league so the frontend renders both identically.
+  // Rows without detail stats still return position/team/crest/points.
+  router.get('/football/sm-standings/:seasonId', async (req, res) => {
+    try {
+      if (!sportMonks || !sportMonks.isAvailable()) {
+        return res.status(503).json({ error: 'SportMonks not available.' });
+      }
+      var seasonId = parseInt(req.params.seasonId, 10);
+      if (!seasonId) return res.status(400).json({ error: 'Invalid season id.' });
+
+      var raw = await sportMonks.getStandings(seasonId);
+      if (!raw || !raw.length) return res.status(404).json({ error: 'No standings for season ' + seasonId });
+
+      // Grouped competitions (Champions League, cup group stages, etc.) return
+      // one flat array where each row's `position` is relative to ITS group — a
+      // single sorted table would be nonsense (many teams at "position 1"). We
+      // only serve a flat league table; grouped seasons fall back to fixtures.
+      var groupIds = {};
+      raw.forEach(function (row) { var g = row.group_id != null ? row.group_id : (row.stage_id != null ? 's' + row.stage_id : null); if (g != null) groupIds[g] = 1; });
+      if (Object.keys(groupIds).length > 1) {
+        return res.status(404).json({ error: 'Grouped standings not shown as a single table.', grouped: true });
+      }
+
+      // Read a stat off a row's details[] by matching the type developer_name,
+      // ignoring home/away splits so we only take the overall figure.
+      var statOf = function (row, keys) {
+        if (!Array.isArray(row.details)) return null;
+        for (var i = 0; i < row.details.length; i++) {
+          var d = row.details[i];
+          var dn = (d.type && d.type.developer_name ? d.type.developer_name : '').toUpperCase();
+          if (!dn || dn.indexOf('HOME') !== -1 || dn.indexOf('AWAY') !== -1) continue;
+          for (var k = 0; k < keys.length; k++) {
+            if (dn.indexOf(keys[k]) !== -1) {
+              var v = (d.value != null) ? d.value : (d.data && d.data.value != null ? d.data.value : null);
+              if (v != null) return Number(v);
+            }
+          }
+        }
+        return null;
+      };
+
+      var standings = raw.map(function (row) {
+        var p = row.participant || {};
+        var gf = statOf(row, ['GOALS_FOR', 'SCORED']);
+        var ga = statOf(row, ['GOALS_AGAINST', 'CONCEDED']);
+        var gd = statOf(row, ['GOAL_DIFFERENCE']);
+        if (gd == null && gf != null && ga != null) gd = gf - ga;
+        return {
+          position: row.position != null ? row.position : null,
+          team: p.name || 'Unknown',
+          teamId: null, // SportMonks id ≠ football-data id; team pages need FD id, so omit
+          teamCrest: p.image_path || null,
+          playedGames: statOf(row, ['MATCHES_PLAYED', 'GAMES_PLAYED', 'PLAYED']),
+          won: statOf(row, ['WON']),
+          draw: statOf(row, ['DRAW']),
+          lost: statOf(row, ['LOST']),
+          points: row.points != null ? row.points : statOf(row, ['POINTS']),
+          goalsFor: gf,
+          goalsAgainst: ga,
+          goalDifference: gd,
+          form: null,
+        };
+      }).filter(function (r) { return r.position != null; })
+        .sort(function (a, b) { return a.position - b.position; });
+
+      res.json({ competition: '', season: '', source: 'sportmonks', standings: standings });
+    } catch (err) {
+      console.error('[sm-standings] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // GET /api/football/top-scorers/:league — top scorers
   router.get('/football/top-scorers/:league', async (req, res) => {
     try {

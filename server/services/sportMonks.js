@@ -202,7 +202,7 @@ SportMonks.prototype.getLeagues = function() {
 // =========================================================================
 SportMonks.prototype.getStandings = function(seasonId) {
   return this._request('/standings/seasons/' + seasonId, {
-    include: 'participant',
+    include: 'participant;details.type',
   }).then(function(data) {
     return data.data || [];
   });
