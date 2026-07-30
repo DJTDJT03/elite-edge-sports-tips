@@ -1282,6 +1282,8 @@ const App = {
       case 'world-cup': if (typeof WorldCup !== 'undefined') { WorldCup.render(); } else { this.render404(); } break;
       case 'events': this.renderEventHub(hash.split('/')[1]); break;
       case 'matches': this.renderMatches(); break;
+      case 'league': this.renderLeaguePage(hash.split('/')[1]); break;
+      case 'team': this.renderTeamPage(hash.split('/')[1]); break;
       case 'reset-password': this.handleResetPasswordRoute(); break;
       default: this.render404();
     }
@@ -6202,7 +6204,7 @@ const App = {
     var leagues = Object.values(groups).sort(function (a, b) { return b.games.length - a.games.length; });
 
     var crest = function (url, name) {
-      if (url) return '<img src="' + self.escapeHtml(url) + '" alt="" style="width:26px;height:26px;object-fit:contain;" onerror="this.style.visibility=\'hidden\'">';
+      if (url) return '<img src="' + self._attrUrl(url) + '" alt="" style="width:26px;height:26px;object-fit:contain;" onerror="this.style.visibility=\'hidden\'">';
       return '<div style="width:26px;height:26px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--gold);">' + self.escapeHtml((name || '?')[0]) + '</div>';
     };
     var isLive = function (s) { return ['LIVE', '1H', '2H', 'HT', 'ET'].indexOf(s) !== -1; };
@@ -6316,7 +6318,7 @@ const App = {
       var rows = lg.games.map(function (g) { return gameRow(g, rowIdx++); }).join('');
       return '<div class="match-league" style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:12px;">' +
         '<div onclick="App._toggleLeague(\'' + lid + '\',this)" style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none;">' +
-          (lg.logo ? '<img src="' + self.escapeHtml(lg.logo) + '" alt="" style="width:24px;height:24px;object-fit:contain;" onerror="this.style.display=\'none\'">' : '') +
+          (lg.logo ? '<img src="' + self._attrUrl(lg.logo) + '" alt="" style="width:24px;height:24px;object-fit:contain;" onerror="this.style.display=\'none\'">' : '') +
           '<span style="font-size:15px;font-weight:800;color:#fff;flex:1;">' + self.escapeHtml(lg.name) + '</span>' +
           '<span style="font-size:12px;color:var(--text-muted);background:var(--bg-elevated);border-radius:12px;padding:2px 10px;">' + lg.games.length + '</span>' +
           '<span class="league-arrow" style="color:var(--gold);font-size:14px;transition:transform .2s;transform:rotate(' + (open ? '180' : '0') + 'deg);">▼</span>' +
@@ -6341,6 +6343,374 @@ const App = {
     el.style.display = open ? 'none' : 'block';
     var arrow = header.querySelector('.mtch-arrow');
     if (arrow) arrow.style.transform = 'rotate(' + (open ? '0' : '180') + 'deg)';
+  },
+
+  // ------------------------------------------------------------------------
+  // LEAGUE + TEAM PAGES (NerdyTips-style, on our real data only)
+  // Catalog maps a URL slug → the codes each data source uses:
+  //   std = football-data.org standings code, xg = Understat league code,
+  //   match = keywords to match live-fixtures league names.
+  // This same catalog powers the Leagues dropdown.
+  // ------------------------------------------------------------------------
+  LEAGUES: {
+    'premier-league':        { name: 'Premier League',        country: 'England',      flag: '🏴',  std: 'PL',  xg: 'EPL',        match: ['premier league'] },
+    'championship':          { name: 'Championship',          country: 'England',      flag: '🏴',  std: 'ELC', xg: null,         match: ['championship'] },
+    'champions-league':      { name: 'UEFA Champions League',  country: 'Europe',       flag: '🇪🇺', std: 'CL',  xg: null,         match: ['champions league'] },
+    'la-liga':               { name: 'La Liga',               country: 'Spain',        flag: '🇪🇸', std: 'PD',  xg: 'La_Liga',    match: ['la liga', 'laliga', 'primera'] },
+    'serie-a':               { name: 'Serie A',               country: 'Italy',        flag: '🇮🇹', std: 'SA',  xg: 'Serie_A',    match: ['serie a'] },
+    'bundesliga':            { name: 'Bundesliga',            country: 'Germany',      flag: '🇩🇪', std: 'BL1', xg: 'Bundesliga', match: ['bundesliga'] },
+    'ligue-1':               { name: 'Ligue 1',               country: 'France',       flag: '🇫🇷', std: 'FL1', xg: 'Ligue_1',    match: ['ligue 1'] },
+    'ligue-2':               { name: 'Ligue 2',               country: 'France',       flag: '🇫🇷', std: 'FL2', xg: null,         match: ['ligue 2'] },
+    'scottish-premiership':  { name: 'Scottish Premiership',  country: 'Scotland',     flag: '🏴',  std: 'SPL', xg: null,         match: ['premiership', 'scottish'] },
+  },
+
+  _teamSlug(name) {
+    return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  },
+
+  // Attribute-safe URL encoder. escapeHtml (textContent-based) does NOT escape
+  // double-quotes, so a crest URL containing " could break out of src="…" and
+  // inject an onerror handler. Encode the chars that can escape the attribute.
+  _attrUrl(url) {
+    return String(url || '').replace(/&/g, '&amp;').replace(/"/g, '%22').replace(/</g, '%3C').replace(/>/g, '%3E');
+  },
+
+  _crestImg(url, name, size) {
+    size = size || 24;
+    if (url) return '<img src="' + this._attrUrl(url) + '" alt="" style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;vertical-align:middle;" onerror="this.style.visibility=\'hidden\'">';
+    return '<span style="display:inline-flex;width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:var(--bg-elevated);align-items:center;justify-content:center;font-size:' + Math.round(size * 0.42) + 'px;font-weight:800;color:var(--gold);vertical-align:middle;">' + this.escapeHtml((name || '?')[0]) + '</span>';
+  },
+
+  async renderLeaguePage(slug) {
+    var app = document.getElementById('app');
+    if (!app) return;
+    var self = this;
+    var lg = this.LEAGUES[slug];
+    if (!lg) {
+      app.innerHTML = '<div class="container" style="padding-top:24px;max-width:900px;"><div style="text-align:center;padding:50px 20px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">League not found. <a href="#/matches" style="color:var(--gold);">Browse all matches →</a></div></div>';
+      return;
+    }
+    app.innerHTML = '<div class="container" style="padding-top:20px;"><div style="text-align:center;padding:50px 0;color:var(--text-muted);"><div class="loading-spinner" style="margin:0 auto 12px;"></div>Loading ' + this.escapeHtml(lg.name) + '…</div></div>';
+
+    var standings = null, xg = null, fixtures = [], tips = [];
+    try {
+      var results = await Promise.all([
+        this.api('/football/standings/' + lg.std).catch(function () { return null; }),
+        lg.xg ? this.api('/football/xg/' + lg.xg).catch(function () { return null; }) : Promise.resolve(null),
+        this.fetchLiveFootball(true).catch(function () { return { fixtures: [] }; }),
+        this.api('/tips?sport=football').catch(function () { return []; }),
+      ]);
+      standings = results[0]; xg = results[1];
+      fixtures = (results[2] && results[2].fixtures) || [];
+      tips = results[3] || [];
+    } catch (e) {}
+
+    var table = (standings && standings.standings) || [];
+
+    // League-wide summary — only what we can genuinely compute from the table.
+    var teams = table.length;
+    var sum = function (k) { return table.reduce(function (a, r) { return a + (Number(r[k]) || 0); }, 0); };
+    var matchesPlayed = Math.round(sum('playedGames') / 2);
+    var totalGoals = sum('goalsFor');
+    var drawnMatches = Math.round(sum('draw') / 2);
+    var goalsPerGame = matchesPlayed ? (totalGoals / matchesPlayed) : 0;
+    var drawRate = matchesPlayed ? Math.round((drawnMatches / matchesPlayed) * 100) : 0;
+
+    // Fixtures in THIS league (from live-fixtures, matched by league name keywords).
+    var norm = function (s) { return String(s || '').toLowerCase(); };
+    var leagueFixtures = fixtures.filter(function (f) {
+      var ln = norm(f.league);
+      return lg.match.some(function (kw) { return ln.indexOf(kw) !== -1; });
+    });
+    var normT = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+    var pickFor = function (f) {
+      var h = normT(f.homeTeam), a = normT(f.awayTeam);
+      return tips.find(function (t) { var e = normT(t.event); return e && e.indexOf(h) !== -1 && e.indexOf(a) !== -1; });
+    };
+
+    // --- Header ---
+    var header =
+      '<div style="background:linear-gradient(160deg,#141b2e,#0a0e1a);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:16px;text-align:center;">' +
+        '<div style="font-size:34px;line-height:1;margin-bottom:8px;">' + lg.flag + '</div>' +
+        '<h1 style="font-size:clamp(22px,5vw,30px);font-weight:900;color:#fff;margin:0 0 4px;">' + this.escapeHtml(lg.name) + '</h1>' +
+        '<div style="color:var(--gold);font-size:13px;font-weight:700;">' + this.escapeHtml(lg.country) + (standings && standings.season ? ' · ' + this.escapeHtml(standings.season) : '') + '</div>' +
+      '</div>';
+
+    // --- Summary stat cards (computed, honest) ---
+    var statCard = function (val, label, accent) {
+      return '<div style="flex:1;min-width:120px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">' +
+        '<div style="font-size:26px;font-weight:900;color:' + (accent || '#fff') + ';line-height:1;">' + val + '</div>' +
+        '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">' + label + '</div></div>';
+    };
+    var statsRow = teams ?
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' +
+        statCard(teams, 'Teams') +
+        statCard(matchesPlayed, 'Matches Played') +
+        statCard(goalsPerGame.toFixed(2), 'Goals / Game', 'var(--gold)') +
+        statCard(drawRate + '%', 'Draw Rate', '#3b82f6') +
+      '</div>' : '';
+
+    // --- Fixtures in this league (compact prediction rows) ---
+    var fxHtml = leagueFixtures.length ?
+      '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px;">' +
+        '<div style="padding:14px 16px;font-size:15px;font-weight:800;color:#fff;border-bottom:1px solid var(--border);">Fixtures &amp; Predictions</div>' +
+        leagueFixtures.map(function (f) { return self._miniFixtureRow(f, pickFor(f)); }).join('') +
+      '</div>' : '';
+
+    // --- Standings table (real, clickable teams → team pages) ---
+    var tableHtml = '';
+    if (teams) {
+      var rows = table.map(function (r) {
+        var slugId = self._teamSlug(r.team) + (r.teamId ? '-' + r.teamId : '');
+        var formDots = r.form ? r.form.split(',').slice(-5).map(function (c) {
+          c = c.trim().toUpperCase();
+          var col = c === 'W' ? '#22c55e' : c === 'L' ? '#ef4444' : '#8b97ad';
+          return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + col + ';margin-left:2px;"></span>';
+        }).join('') : '';
+        return '<tr onclick="window.location.hash=\'#/team/' + slugId + '\'" style="cursor:pointer;border-top:1px solid var(--border);">' +
+          '<td style="padding:9px 6px;text-align:center;color:var(--text-muted);font-weight:700;font-size:13px;">' + r.position + '</td>' +
+          '<td style="padding:9px 6px;"><span style="display:inline-flex;align-items:center;gap:8px;">' + self._crestImg(r.teamCrest, r.team, 22) + '<span style="font-size:13px;font-weight:600;color:#fff;">' + self.escapeHtml(r.team) + '</span></span></td>' +
+          '<td style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + r.playedGames + '</td>' +
+          '<td class="lg-hide-sm" style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + r.won + '</td>' +
+          '<td class="lg-hide-sm" style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + r.draw + '</td>' +
+          '<td class="lg-hide-sm" style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + r.lost + '</td>' +
+          '<td class="lg-hide-sm" style="padding:9px 6px;text-align:center;font-size:13px;color:var(--text-secondary);">' + r.goalDifference + '</td>' +
+          '<td style="padding:9px 6px;text-align:center;font-size:14px;font-weight:800;color:var(--gold);">' + r.points + '</td>' +
+          '<td class="lg-hide-sm" style="padding:9px 6px;white-space:nowrap;">' + formDots + '</td>' +
+        '</tr>';
+      }).join('');
+      tableHtml =
+        '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px;">' +
+          '<div style="padding:14px 16px;font-size:15px;font-weight:800;color:#fff;border-bottom:1px solid var(--border);">Standings &amp; Form</div>' +
+          '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">' +
+            '<thead><tr style="background:var(--bg-elevated);">' +
+              '<th style="padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;">#</th>' +
+              '<th style="padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;text-align:left;">Team</th>' +
+              '<th style="padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;">P</th>' +
+              '<th class="lg-hide-sm" style="padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;">W</th>' +
+              '<th class="lg-hide-sm" style="padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;">D</th>' +
+              '<th class="lg-hide-sm" style="padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;">L</th>' +
+              '<th class="lg-hide-sm" style="padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;">GD</th>' +
+              '<th style="padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;">Pts</th>' +
+              '<th class="lg-hide-sm" style="padding:8px 6px;font-size:10px;color:var(--text-muted);text-transform:uppercase;">Form</th>' +
+            '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+        '</div>';
+    }
+
+    // --- xG strip (only leagues Understat covers) ---
+    var xgHtml = '';
+    if (xg && typeof xg === 'object' && !xg.error) {
+      var xgTeams = Object.keys(xg).map(function (k) { var t = xg[k] || {}; return { name: k, xg: Number(t.xG || t.xg || 0), xga: Number(t.xGA || t.xga || 0) }; })
+        .filter(function (t) { return t.xg > 0; }).sort(function (a, b) { return b.xg - a.xg; }).slice(0, 6);
+      if (xgTeams.length) {
+        xgHtml =
+          '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px;">' +
+            '<div style="font-size:15px;font-weight:800;color:#fff;margin-bottom:12px;">Top xG (Expected Goals)</div>' +
+            xgTeams.map(function (t) {
+              return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-top:1px solid var(--border);">' +
+                '<span style="font-size:13px;color:#fff;font-weight:600;">' + self.escapeHtml(t.name) + '</span>' +
+                '<span style="font-size:12px;color:var(--text-secondary);">xG <strong style="color:var(--gold);">' + t.xg.toFixed(1) + '</strong> · xGA <strong style="color:#3b82f6;">' + t.xga.toFixed(1) + '</strong></span>' +
+              '</div>';
+            }).join('') +
+          '</div>';
+      }
+    }
+
+    // --- SEO copy (real computed numbers only) ---
+    var copy = teams ?
+      '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:24px;color:var(--text-secondary);font-size:14px;line-height:1.7;">' +
+        '<h2 style="font-size:16px;font-weight:800;color:var(--gold);margin:0 0 10px;text-transform:uppercase;letter-spacing:0.5px;">' + this.escapeHtml(lg.name) + ' Predictions &amp; Tips</h2>' +
+        '<p style="margin:0 0 10px;">Elite Edge covers ' + this.escapeHtml(lg.name) + ' with our 5-analyst consensus engine, 3-AI arbiter panel and in-house quant model — every pick locked before kick-off and tracked for Closing Line Value. So far this season the division has played <strong>' + matchesPlayed + '</strong> matches at <strong>' + goalsPerGame.toFixed(2) + '</strong> goals per game, with <strong>' + drawRate + '%</strong> ending level.</p>' +
+        (table[0] ? '<p style="margin:0;"><strong>' + this.escapeHtml(table[0].team) + '</strong> currently lead on ' + table[0].points + ' points. Tap any team for their form, trends and our upcoming predictions.</p>' : '') +
+      '</div>' : '';
+
+    app.innerHTML =
+      '<div class="container" style="padding-top:18px;max-width:900px;">' +
+        '<div style="margin-bottom:14px;"><a href="#/matches" style="color:var(--text-muted);font-size:13px;">← All Matches</a></div>' +
+        header + statsRow + fxHtml + tableHtml + xgHtml + copy +
+        (!teams ? '<div style="text-align:center;padding:30px 20px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">Live standings for ' + this.escapeHtml(lg.name) + ' aren\'t available right now — check back shortly, or see <a href="#/matches" style="color:var(--gold);">today\'s fixtures</a>.</div>' : '') +
+      '</div>';
+  },
+
+  // Compact fixture row for league/team pages (time, crests, teams, our pick / market).
+  _miniFixtureRow(f, pk) {
+    var self = this;
+    var t = f.kickoff ? new Date(f.kickoff) : null;
+    var live = ['LIVE', '1H', '2H', 'HT', 'ET'].indexOf(f.status) !== -1;
+    var fin = ['FT', 'AET', 'PEN'].indexOf(f.status) !== -1;
+    var when = live ? '<span style="color:#ef4444;font-weight:800;font-size:10px;">● LIVE</span>' : fin ? '<span style="color:var(--text-muted);font-size:10px;font-weight:700;">FT</span>' : (t && !isNaN(t.getTime()) ? t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
+    var scored = (f.homeGoals != null && f.awayGoals != null);
+    var pill = pk
+      ? '<span style="font-size:11px;font-weight:900;color:#0a0e1a;background:var(--gold);border-radius:6px;padding:3px 8px;">' + self.escapeHtml(String(pk.selection || '').split(' - ').pop().slice(0, 18)) + '</span>'
+      : (f.homeOdds ? '<span style="font-size:11px;color:var(--text-muted);">' + self.formatOdds(f.homeOdds) + ' · ' + self.formatOdds(f.drawOdds) + ' · ' + self.formatOdds(f.awayOdds) + '</span>' : '');
+    var link = (pk && pk.id) ? "window.location.hash='#/tip/" + pk.id + "'" : (f.id ? 'App.openMatchIntelligence(' + f.id + ',this)' : '');
+    return '<div ' + (link ? 'onclick="' + link + '" style="cursor:pointer;' : 'style="') + 'display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--border);">' +
+      '<div style="font-size:11px;color:var(--text-secondary);text-align:center;">' + when + '</div>' +
+      '<div style="min-width:0;display:flex;flex-direction:column;gap:4px;">' +
+        '<span style="display:flex;align-items:center;gap:8px;">' + this._crestImg(f.homeTeamLogo, f.homeTeam, 20) + '<span style="font-size:13px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + this.escapeHtml(f.homeTeam) + '</span>' + (scored ? '<span style="margin-left:auto;font-weight:900;color:#fff;">' + f.homeGoals + '</span>' : '') + '</span>' +
+        '<span style="display:flex;align-items:center;gap:8px;">' + this._crestImg(f.awayTeamLogo, f.awayTeam, 20) + '<span style="font-size:13px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + this.escapeHtml(f.awayTeam) + '</span>' + (scored ? '<span style="margin-left:auto;font-weight:900;color:#fff;">' + f.awayGoals + '</span>' : '') + '</span>' +
+      '</div>' +
+      '<div style="text-align:right;">' + pill + '</div>' +
+    '</div>';
+  },
+
+  async renderTeamPage(slugId) {
+    var app = document.getElementById('app');
+    if (!app) return;
+    var self = this;
+    // Slug carries the football-data team id as a trailing number (e.g. arsenal-42).
+    var m = String(slugId || '').match(/-(\d+)$/);
+    var teamId = m ? m[1] : null;
+    var slugName = String(slugId || '').replace(/-\d+$/, '').replace(/-/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+
+    if (!teamId) {
+      app.innerHTML = '<div class="container" style="padding-top:24px;max-width:900px;"><div style="text-align:center;padding:50px 20px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">Team not found. <a href="#/matches" style="color:var(--gold);">Browse all matches →</a></div></div>';
+      return;
+    }
+    app.innerHTML = '<div class="container" style="padding-top:20px;"><div style="text-align:center;padding:50px 0;color:var(--text-muted);"><div class="loading-spinner" style="margin:0 auto 12px;"></div>Loading ' + this.escapeHtml(slugName) + '…</div></div>';
+
+    var matches = [], fixtures = [], tips = [];
+    try {
+      var results = await Promise.all([
+        this.api('/football/team-matches/' + teamId + '?limit=15').catch(function () { return { matches: [] }; }),
+        this.fetchLiveFootball(true).catch(function () { return { fixtures: [] }; }),
+        this.api('/tips?sport=football').catch(function () { return []; }),
+      ]);
+      matches = (results[0] && results[0].matches) || [];
+      fixtures = (results[1] && results[1].fixtures) || [];
+      tips = results[2] || [];
+    } catch (e) {}
+
+    // Resolve the team's canonical name: the club appearing in every match.
+    var teamName = slugName;
+    if (matches.length) {
+      var counts = {};
+      matches.forEach(function (mt) { counts[mt.homeTeam] = (counts[mt.homeTeam] || 0) + 1; counts[mt.awayTeam] = (counts[mt.awayTeam] || 0) + 1; });
+      teamName = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; })[0] || slugName;
+    }
+
+    // Most-recent-first, only decided matches with scores.
+    var played = matches.filter(function (mt) { return mt.homeScore != null && mt.awayScore != null; })
+      .sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+
+    var persp = played.map(function (mt) {
+      var isHome = mt.homeTeam === teamName;
+      var gf = isHome ? mt.homeScore : mt.awayScore;
+      var ga = isHome ? mt.awayScore : mt.homeScore;
+      return { mt: mt, isHome: isHome, gf: gf, ga: ga, res: gf > ga ? 'W' : gf < ga ? 'L' : 'D', total: gf + ga, btts: gf > 0 && ga > 0 };
+    });
+
+    // Recent form (last 5) + win rate.
+    var last5 = persp.slice(0, 5);
+    var formDots = last5.map(function (p) {
+      var col = p.res === 'W' ? '#22c55e' : p.res === 'L' ? '#ef4444' : '#d4a843';
+      return '<span style="display:inline-flex;width:26px;height:26px;border-radius:50%;background:' + col + ';color:#0a0e1a;font-weight:900;font-size:12px;align-items:center;justify-content:center;">' + p.res + '</span>';
+    }).join('');
+    var wins = persp.filter(function (p) { return p.res === 'W'; }).length;
+    var winRate = persp.length ? Math.round((wins / persp.length) * 100) : 0;
+
+    // Current-streak trends (honest, computed from consecutive most-recent matches).
+    var streak = function (test) { var n = 0; for (var i = 0; i < persp.length; i++) { if (test(persp[i])) n++; else break; } return n; };
+    var trendCards = [];
+    var wStreak = streak(function (p) { return p.res === 'W'; });
+    var unbeaten = streak(function (p) { return p.res !== 'L'; });
+    var scoring = streak(function (p) { return p.gf > 0; });
+    var over25 = streak(function (p) { return p.total > 2.5; });
+    var under35 = streak(function (p) { return p.total < 3.5; });
+    var bttsY = streak(function (p) { return p.btts; });
+    if (wStreak >= 2) trendCards.push({ up: true, label: 'Winning run', text: 'Won the last ' + wStreak + ' matches' });
+    else if (unbeaten >= 3) trendCards.push({ up: true, label: 'Unbeaten', text: 'Unbeaten in the last ' + unbeaten + ' matches' });
+    if (scoring >= 3) trendCards.push({ up: true, label: 'Attack', text: 'Scored in the last ' + scoring + ' matches' });
+    if (over25 >= 3) trendCards.push({ up: true, label: 'Goals', text: 'Over 2.5 goals in the last ' + over25 + ' matches' });
+    else if (under35 >= 3) trendCards.push({ up: false, label: 'Goals', text: 'Under 3.5 goals in the last ' + under35 + ' matches' });
+    if (bttsY >= 3) trendCards.push({ up: true, label: 'BTTS', text: 'Both teams scored in the last ' + bttsY + ' matches' });
+    trendCards = trendCards.slice(0, 3);
+
+    // Try to find a crest + upcoming fixtures for this team from live-fixtures.
+    var normT = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+    var tn = normT(teamName);
+    var teamFix = fixtures.filter(function (f) { return normT(f.homeTeam).indexOf(tn) !== -1 || tn.indexOf(normT(f.homeTeam)) !== -1 || normT(f.awayTeam).indexOf(tn) !== -1 || tn.indexOf(normT(f.awayTeam)) !== -1; });
+    var crestUrl = null;
+    teamFix.some(function (f) { if (normT(f.homeTeam).indexOf(tn) !== -1 && f.homeTeamLogo) { crestUrl = f.homeTeamLogo; return true; } if (normT(f.awayTeam).indexOf(tn) !== -1 && f.awayTeamLogo) { crestUrl = f.awayTeamLogo; return true; } return false; });
+    var pickFor = function (f) { var h = normT(f.homeTeam), a = normT(f.awayTeam); return tips.find(function (t) { var e = normT(t.event); return e && e.indexOf(h) !== -1 && e.indexOf(a) !== -1; }); };
+
+    // --- Header ---
+    var header =
+      '<div style="background:linear-gradient(160deg,#141b2e,#0a0e1a);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:16px;text-align:center;">' +
+        '<div style="margin-bottom:10px;">' + this._crestImg(crestUrl, teamName, 64) + '</div>' +
+        '<h1 style="font-size:clamp(22px,5vw,30px);font-weight:900;color:#fff;margin:0 0 4px;">' + this.escapeHtml(teamName) + '</h1>' +
+        '<div style="color:var(--gold);font-size:13px;font-weight:700;">Predictions, Stats &amp; Form</div>' +
+      '</div>';
+
+    // --- Trend cards ---
+    var trendHtml = trendCards.length ?
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' +
+        trendCards.map(function (c) {
+          return '<div style="flex:1;min-width:200px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;">' +
+            '<div style="font-size:18px;line-height:1;margin-bottom:8px;color:' + (c.up ? '#22c55e' : '#ef4444') + ';">' + (c.up ? '↗' : '↘') + '</div>' +
+            '<div style="font-size:10px;color:' + (c.up ? '#22c55e' : '#ef4444') + ';text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:4px;">' + c.label + '</div>' +
+            '<div style="font-size:14px;color:#fff;font-weight:600;line-height:1.4;">' + self.escapeHtml(c.text) + '</div></div>';
+        }).join('') +
+      '</div>' : '';
+
+    // --- Form + numbers strip ---
+    var numbersHtml = persp.length ?
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:stretch;">' +
+        '<div style="flex:1;min-width:180px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Recent Form</div><div style="display:flex;gap:6px;justify-content:center;">' + (formDots || '<span style="color:var(--text-muted);">—</span>') + '</div></div>' +
+        '<div style="flex:1;min-width:120px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:26px;font-weight:900;color:#fff;">' + persp.length + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Recent Matches</div></div>' +
+        '<div style="flex:1;min-width:120px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:26px;font-weight:900;color:var(--gold);">' + winRate + '%</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Win Rate</div></div>' +
+      '</div>' : '';
+
+    // --- Tabs: Predictions (upcoming) / Recent Results ---
+    var predBody = teamFix.length
+      ? teamFix.map(function (f) { return self._miniFixtureRow(f, pickFor(f)); }).join('')
+      : '<div style="padding:24px;text-align:center;color:var(--text-muted);">No upcoming fixture loaded for ' + this.escapeHtml(teamName) + ' right now.</div>';
+    var resultsBody = persp.length
+      ? persp.slice(0, 10).map(function (p) {
+          var mt = p.mt;
+          var col = p.res === 'W' ? '#22c55e' : p.res === 'L' ? '#ef4444' : '#d4a843';
+          var d = new Date(mt.date); var ds = !isNaN(d.getTime()) ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
+          return '<div style="display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--border);">' +
+            '<span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:' + col + ';color:#0a0e1a;font-weight:900;font-size:10px;align-items:center;justify-content:center;">' + p.res + '</span>' +
+            '<span style="font-size:13px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + self.escapeHtml(mt.homeTeam) + ' <span style="color:var(--gold);font-weight:800;">' + mt.homeScore + '-' + mt.awayScore + '</span> ' + self.escapeHtml(mt.awayTeam) + '</span>' +
+            '<span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">' + ds + '</span>' +
+          '</div>';
+        }).join('')
+      : '<div style="padding:24px;text-align:center;color:var(--text-muted);">No recent results available.</div>';
+
+    var tabs =
+      '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px;">' +
+        '<div style="display:flex;border-bottom:1px solid var(--border);">' +
+          '<button id="tt-pred-btn" onclick="App._switchTeamTab(\'pred\')" class="team-tab-btn" style="flex:1;padding:13px;background:var(--bg-elevated);border:none;color:var(--gold);font-weight:800;font-size:13px;cursor:pointer;">Predictions</button>' +
+          '<button id="tt-res-btn" onclick="App._switchTeamTab(\'res\')" class="team-tab-btn" style="flex:1;padding:13px;background:transparent;border:none;color:var(--text-muted);font-weight:800;font-size:13px;cursor:pointer;">Recent Results</button>' +
+        '</div>' +
+        '<div id="tt-pred">' + predBody + '</div>' +
+        '<div id="tt-res" style="display:none;">' + resultsBody + '</div>' +
+      '</div>';
+
+    // --- SEO copy (real numbers only) ---
+    var copy = persp.length ?
+      '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:24px;color:var(--text-secondary);font-size:14px;line-height:1.7;">' +
+        '<h2 style="font-size:16px;font-weight:800;color:var(--gold);margin:0 0 10px;text-transform:uppercase;letter-spacing:0.5px;">' + this.escapeHtml(teamName) + ' Predictions &amp; Betting Tips</h2>' +
+        '<p style="margin:0;">Over their last <strong>' + persp.length + '</strong> matches ' + this.escapeHtml(teamName) + ' have won <strong>' + wins + '</strong> (' + winRate + '% win rate). Elite Edge runs every ' + this.escapeHtml(teamName) + ' fixture through our 5-analyst consensus, 3-AI arbiter panel and quant model — locked before kick-off and tracked for Closing Line Value, win or lose.</p>' +
+      '</div>' : '';
+
+    app.innerHTML =
+      '<div class="container" style="padding-top:18px;max-width:900px;">' +
+        '<div style="margin-bottom:14px;"><a href="#/matches" style="color:var(--text-muted);font-size:13px;">← All Matches</a></div>' +
+        header + trendHtml + numbersHtml + tabs + copy +
+      '</div>';
+  },
+
+  _switchTeamTab(which) {
+    var pred = document.getElementById('tt-pred'), res = document.getElementById('tt-res');
+    var pb = document.getElementById('tt-pred-btn'), rb = document.getElementById('tt-res-btn');
+    if (!pred || !res) return;
+    var on = which === 'pred';
+    pred.style.display = on ? 'block' : 'none';
+    res.style.display = on ? 'none' : 'block';
+    if (pb) { pb.style.background = on ? 'var(--bg-elevated)' : 'transparent'; pb.style.color = on ? 'var(--gold)' : 'var(--text-muted)'; }
+    if (rb) { rb.style.background = on ? 'transparent' : 'var(--bg-elevated)'; rb.style.color = on ? 'var(--text-muted)' : 'var(--gold)'; }
   },
 
   _toggleLeague(id, header) {

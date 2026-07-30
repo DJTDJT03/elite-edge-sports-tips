@@ -137,6 +137,10 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
   .ee-bento { grid-template-columns: 1fr; }
   .ee-bento .ee-bento-hero { grid-column: span 1; grid-row: span 1; }
 }
+
+/* League standings table: drop secondary columns on narrow screens so the
+   position / team / played / points core stays readable on mobile. */
+@media (max-width: 560px) { .lg-hide-sm { display: none !important; } }
 .nav-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .nav-toggle { display: none; background: none; border: none; color: var(--text-primary); font-size: 22px; cursor: pointer; padding: 4px 8px; }
 .nav-signup-mobile { display: none; }
