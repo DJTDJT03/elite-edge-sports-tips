@@ -120,6 +120,19 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
   color: var(--text-secondary); transition: all 0.15s; white-space: nowrap;
 }
 .nav-dropdown-menu a:hover { color: var(--gold); background: var(--bg-elevated); }
+
+/* Landing-funnel "Why Elite Edge" bento grid — collapses cleanly on mobile.
+   Inline grid-span can't hold a media query, so the hero-card span lives here. */
+.ee-bento { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.ee-bento .ee-bento-hero { grid-column: span 2; grid-row: span 2; }
+@media (max-width: 900px) {
+  .ee-bento { grid-template-columns: repeat(2, 1fr); }
+  .ee-bento .ee-bento-hero { grid-column: span 2; grid-row: span 1; }
+}
+@media (max-width: 560px) {
+  .ee-bento { grid-template-columns: 1fr; }
+  .ee-bento .ee-bento-hero { grid-column: span 1; grid-row: span 1; }
+}
 .nav-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .nav-toggle { display: none; background: none; border: none; color: var(--text-primary); font-size: 22px; cursor: pointer; padding: 4px 8px; }
 .nav-signup-mobile { display: none; }

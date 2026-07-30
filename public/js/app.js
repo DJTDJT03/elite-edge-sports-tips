@@ -3980,7 +3980,7 @@ const App = {
 
     // 3) WHY ELITE EDGE — bento grid with one highlighted hero card (our colours)
     var heroCard =
-      '<div style="grid-column:span 2;grid-row:span 2;background:linear-gradient(150deg,#d4a843,#a87c22);color:#0a0e1a;border-radius:16px;padding:26px;display:flex;flex-direction:column;justify-content:space-between;min-height:220px;">' +
+      '<div class="ee-bento-hero" style="background:linear-gradient(150deg,#d4a843,#a87c22);color:#0a0e1a;border-radius:16px;padding:26px;display:flex;flex-direction:column;justify-content:space-between;min-height:220px;">' +
         '<div style="font-size:30px;">🏆</div>' +
         '<div><div style="font-size:clamp(20px,3vw,26px);font-weight:900;line-height:1.15;margin-bottom:8px;">A prediction engine, not a tipster.</div>' +
         '<div style="font-size:14px;font-weight:600;line-height:1.55;opacity:0.85;">5 analysts, a 3-AI arbiter panel and our own quant model debate every fixture to a single, most-probable call — and we publish the Closing Line Value to prove it.</div></div>' +
@@ -3990,7 +3990,7 @@ const App = {
         '<div style="max-width:1080px;margin:0 auto;">' +
           '<div style="text-align:center;margin-bottom:30px;"><div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:var(--gold);margin-bottom:8px;">ENGINEERED TO WIN</div>' +
           '<h2 style="font-size:clamp(22px,5.5vw,30px);font-weight:900;color:#fff;margin:0;">Why Elite Edge is different</h2></div>' +
-          '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:14px;">' +
+          '<div class="ee-bento">' +
             heroCard +
             featureCard('🤖', '3 AI engines verify it', 'A GPT, Gemini and Grok arbiter panel independently reviews each call before it\'s published.', '#3b82f6') +
             featureCard('📈', 'Proven with CLV', 'Closing Line Value tracked on every tip — mathematical proof we beat the market, win or lose.', '#d4a843') +
@@ -4016,7 +4016,12 @@ const App = {
 
     // 5) PROVEN EDGE + winners
     var winnersHtml = recentWins.slice(0, 8).map(function (r) {
-      return '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:8px;padding:9px 14px;white-space:nowrap;font-size:13px;"><span style="color:#d4a843;font-weight:800;">✓ ' + esc(r.selection || 'Winner') + '</span>' + (r.odds ? ' <span style="color:var(--text-muted);">@ ' + esc(self.formatOdds ? self.formatOdds(r.odds) : String(r.odds)) + '</span>' : '') + '</div>';
+      // Strip the redundant market prefix ("Double Chance - Kairat or Draw" → "Kairat or Draw")
+      // so the strip reads as clean selections, not eight identical "Double Chance" rows.
+      var sel = String(r.selection || 'Winner');
+      var di = sel.indexOf(' - ');
+      if (di > -1) sel = sel.slice(di + 3);
+      return '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:8px;padding:9px 14px;white-space:nowrap;font-size:13px;"><span style="color:#d4a843;font-weight:800;">✓ ' + esc(sel) + '</span>' + (r.odds ? ' <span style="color:var(--text-muted);">@ ' + esc(self.formatOdds ? self.formatOdds(r.odds) : String(r.odds)) + '</span>' : '') + '</div>';
     }).join('');
     var proofSection = (recentWins.length || hasProof) ?
       '<div style="padding:clamp(34px,7vw,48px) 18px;background:radial-gradient(ellipse at 50% 120%,rgba(212,168,67,0.08),transparent 60%);border-top:1px solid var(--border);"><div style="max-width:1080px;margin:0 auto;text-align:center;">' +
@@ -4030,8 +4035,9 @@ const App = {
     // 6) PRICING
     var tiers = [
       { name: 'Free', price: '£0', sub: 'forever', feats: ['Daily free tips', 'Results & analysis', 'Ask the Edge assistant'], cta: 'Sign Up Free', action: "App.showModal('register')", highlight: false },
+      { name: 'Starter', price: '£9.99', sub: 'per month', feats: ['50 credits every month', '~2 tips per day', 'Racing + Football selections', 'Personal ROI tracking'], cta: 'Get Starter', action: "window.location.hash='#/pricing'", highlight: false },
       { name: 'Premium', price: '£19.99', sub: 'per month', feats: ['Every tip unlocked', 'Full match intelligence', 'Value Finder & Acca Builder', 'Proven-edge CLV data'], cta: 'Start 14-day trial', action: "window.location.hash='#/pricing'", highlight: true },
-      { name: 'VIP', price: '£39.99', sub: 'per month', feats: ['Everything in Premium', 'Priority + SMS/Telegram alerts', 'Unlimited credits', 'First access to new features'], cta: 'Go VIP', action: "window.location.hash='#/pricing'", highlight: false },
+      { name: 'VIP', price: '£39.99', sub: 'per month', feats: ['Everything in Premium', 'Unlimited credits', 'Early access (6:30am tips)', 'Priority + SMS/Telegram alerts'], cta: 'Go VIP', action: "window.location.hash='#/pricing'", highlight: false },
     ];
     var pricingSection =
       '<div style="padding:clamp(34px,7vw,52px) 18px;background:rgba(255,255,255,0.02);border-top:1px solid var(--border);"><div style="max-width:1080px;margin:0 auto;">' +
