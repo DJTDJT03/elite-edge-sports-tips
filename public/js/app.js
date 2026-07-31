@@ -4377,6 +4377,15 @@ const App = {
             ${Bookmakers.renderOddsBar(tip)}
           </div>`}
 
+          <!-- Partner CTA — back this exact pick with our official sportsbook partner.
+               Phase 1: honest tracked link (CPA) on every pick. The #tip-cosmo-slot
+               id is here so a later phase can upgrade matched football picks to
+               Cosmo's live price + add-to-betslip without touching this markup. -->
+          <div class="card mb-24">
+            <div id="tip-cosmo-slot">${this.renderCosmoCta('tip-' + (tip.sport || 'x'), 'Back ' + this.escapeHtml(tip.selection || 'this pick') + ' with Cosmo Bet')}</div>
+            <div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:8px;">Official partner · 18+ · Please gamble responsibly · <a href="https://www.begambleaware.org" target="_blank" rel="noopener" style="color:var(--text-muted);">BeGambleAware.org</a></div>
+          </div>
+
           <!-- Probability comparison -->
           <div class="card mb-24">
             <h4 class="text-gold text-xs mb-8" style="letter-spacing:1px;">PROBABILITY COMPARISON</h4>
