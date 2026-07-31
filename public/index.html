@@ -49,7 +49,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css?v=20260731a">
+  <link rel="stylesheet" href="/css/style.css?v=20260731b">
   <link rel="stylesheet" href="/css/worldCup.css?v=20260503a">
 
   <!-- Google Analytics 4 — Uncomment and replace GA_ID when ready
@@ -231,13 +231,16 @@
   <!-- Live football news ticker (populated by app.js; hidden if no feed) -->
   <div id="news-ticker" class="news-ticker" style="display:none;"></div>
 
-  <!-- Sponsor Header Banner -->
-  <div class="sponsor-header" id="sponsor-header">
+  <!-- Sponsor Header Banner — Cosmo Bet (official sportsbook partner).
+       The whole bar is the tracked affiliate link (CPA, subid=header-banner).
+       To use Cosmo's official logo, drop the file in /images and replace the
+       .sponsor-brand <span> with: <img src="/images/cosmobet-logo.svg" alt="Cosmo Bet" class="sponsor-logo-img"> -->
+  <a class="sponsor-header" id="sponsor-header" href="https://track.cosmobetpartners.com/visit/?bta=42583&nci=6102&subid=header-banner" target="_blank" rel="noopener sponsored">
     <span class="sponsor-label">Official Partner</span>
-    <span class="sponsor-logo-placeholder">Premium Odds Comparison</span>
-    <span class="sponsor-cta">New customers: Bet &pound;10 Get &pound;30 in Free Bets</span>
-    <span class="sponsor-disclaimer">18+ | T&Cs Apply | BeGambleAware.org</span>
-  </div>
+    <span class="sponsor-brand">COSMO<span class="sponsor-brand-accent">BET</span></span>
+    <span class="sponsor-cta">Bet with our official sportsbook partner &rarr;</span>
+    <span class="sponsor-disclaimer">18+ | T&amp;Cs Apply | BeGambleAware.org</span>
+  </a>
 
   <!-- Subscription bar -->
   <div class="sub-bar" id="sub-bar" style="display:none;"></div>
