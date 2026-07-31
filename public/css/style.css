@@ -144,6 +144,9 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
 .nav-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .nav-toggle { display: none; background: none; border: none; color: var(--text-primary); font-size: 22px; cursor: pointer; padding: 4px 8px; }
 .nav-signup-mobile { display: none; }
+/* Logged-in: hide the mobile Sign-Up CTA. Needs !important + higher specificity to
+   beat the mobile `display: inline-flex !important` rule below (toggled by JS). */
+.nav-signup-mobile.nav-hidden { display: none !important; }
 /* Desktop: never show the compact mobile CTA — the nav-right Log In + Sign Up
    buttons cover it. Prevents the duplicate "Sign Up" + "Sign Up Free". */
 @media (min-width: 769px) { .nav-signup-mobile { display: none !important; } }

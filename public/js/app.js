@@ -177,7 +177,11 @@ const App = {
     // Feature flags — show/hide World Cup + LMS nav, then sync the Competitions
     // group (hide the whole dropdown if neither is live).
     this.api('/status').then(function(data) {
-      if (data && data.features && data.features.worldCup) {
+      // Show the World Cup nav only while the tournament is live — the flag may
+      // still be on server-side, but a finished WC must not keep promoting itself
+      // ("UNDERWAY" forever). The dashboard WC banner keys off this nav's visibility,
+      // so this hides both the nav item and the banner once the WC is over.
+      if (data && data.features && data.features.worldCup && !App._worldCupOver()) {
         var wcNav = document.getElementById('nav-world-cup');
         if (wcNav) wcNav.style.display = '';
       }
@@ -586,6 +590,9 @@ const App = {
     try { return new Date(d).toISOString().split('T')[0]; } catch(e) { return ''; }
   },
   _getToday() { return new Date().toISOString().split('T')[0]; },
+  // FIFA World Cup 2026 ran 11 Jun – 19 Jul 2026. Once it's over the promo hub +
+  // countdown must retire (don't keep showing a finished tournament as "UNDERWAY").
+  _worldCupOver() { try { return Date.now() > Date.parse('2026-07-20T00:00:00Z'); } catch (e) { return false; } },
   _getTomorrow() {
     var d = new Date(); d.setDate(d.getDate() + 1);
     return d.toISOString().split('T')[0];
@@ -1033,7 +1040,10 @@ const App = {
       if (guestMobile) guestMobile.style.display = 'none';
       if (userMobile) userMobile.style.display = '';
       var signupMobileBtn = document.getElementById('nav-signup-mobile');
-      if (signupMobileBtn) signupMobileBtn.style.display = 'none';
+      // Use a class, not inline display — the mobile CSS forces this button visible
+      // with `!important`, which an inline style can't override (logged-in users were
+      // still seeing "Sign Up Free"). .nav-hidden hides it with matching !important.
+      if (signupMobileBtn) { signupMobileBtn.style.display = 'none'; signupMobileBtn.classList.add('nav-hidden'); }
       if (badgeMobile) { badgeMobile.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">VIP</span>' : ''); badgeMobile.style.cursor = 'pointer'; badgeMobile.onclick = () => { window.location.hash = '#/account'; }; }
       // Top menu auth (mobile only — toggled via class, CSS hides on desktop)
       var topGuest = document.getElementById('nav-auth-top-guest');
@@ -1118,7 +1128,7 @@ const App = {
       if (guestMobile) guestMobile.style.display = '';
       if (userMobile) userMobile.style.display = 'none';
       var signupMobileBtnG = document.getElementById('nav-signup-mobile');
-      if (signupMobileBtnG) signupMobileBtnG.style.display = '';  // CSS shows it on mobile only
+      if (signupMobileBtnG) { signupMobileBtnG.style.display = ''; signupMobileBtnG.classList.remove('nav-hidden'); }  // CSS shows it on mobile only
       // Top menu auth (mobile only — toggled via class, CSS hides on desktop)
       var topGuest2 = document.getElementById('nav-auth-top-guest');
       var topUser2 = document.getElementById('nav-auth-top-user');
