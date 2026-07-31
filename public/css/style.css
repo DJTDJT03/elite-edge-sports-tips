@@ -901,8 +901,10 @@ ul, ol { list-style: none; padding: 0; margin: 0; }
   }
   .nav-links .nav-link:active { background: rgba(212,168,67,0.1); }
   .nav-links .nav-link.nav-link-live { color: #ef4444; }
-  /* Mobile: dropdowns expand inline — section headers with sub-items indented */
-  .nav-dropdown { border-bottom: 1px solid rgba(255,255,255,0.05); }
+  /* Mobile: dropdowns expand inline — section headers with sub-items indented.
+     MUST be block (not the desktop flex row) so the gold section label stacks
+     ABOVE its items instead of sitting centred beside them and overlapping. */
+  .nav-dropdown { display: block; border-bottom: 1px solid rgba(255,255,255,0.05); }
   .nav-dropdown > .nav-link {
     padding: 12px 20px 6px; font-size: 11px; font-weight: 700;
     text-transform: uppercase; letter-spacing: 1.5px;
