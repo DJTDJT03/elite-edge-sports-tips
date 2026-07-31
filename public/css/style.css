@@ -1875,8 +1875,8 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   justify-content: center;
   gap: 16px;
   height: 40px;
-  background: linear-gradient(90deg, var(--bg-deep), #101826 55%, var(--bg-deep));
-  border-bottom: 1px solid rgba(212,168,67,0.25);
+  background: linear-gradient(90deg, var(--bg-deep), #0c1622 55%, var(--bg-deep));
+  border-bottom: 1px solid rgba(45,216,221,0.28);
   font-size: 12px;
   color: var(--text-muted);
   padding: 0 16px;
@@ -1884,7 +1884,7 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   text-decoration: none;
   transition: background 0.2s ease;
 }
-.sponsor-header:hover { background: linear-gradient(90deg, var(--bg-deep), #16202f 55%, var(--bg-deep)); }
+.sponsor-header:hover { background: linear-gradient(90deg, var(--bg-deep), #0f1d2b 55%, var(--bg-deep)); }
 .sponsor-label {
   font-weight: 700;
   color: var(--gold);
@@ -1892,21 +1892,23 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   letter-spacing: 1px;
   font-size: 10px;
 }
-/* Cosmo Bet wordmark — swap for their official logo <img class="sponsor-logo-img"> when supplied. */
+/* Cosmobet wordmark — their brand colours (Cosmo = cyan, bet = magenta). Swap for
+   their official logo via <img class="sponsor-logo-img"> when the asset is supplied. */
 .sponsor-brand {
-  font-weight: 900;
-  font-size: 15px;
-  letter-spacing: 0.5px;
-  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -0.2px;
   line-height: 1;
 }
-.sponsor-brand-accent { color: var(--gold); }
+.cb-cosmo { color: #2fd8dd; }
+.cb-bet { color: #e62e8c; }
 .sponsor-logo-img { height: 22px; width: auto; display: block; }
 .sponsor-cta {
   font-weight: 600;
   color: var(--text-secondary);
 }
-.sponsor-header:hover .sponsor-cta { color: var(--gold); }
+.sponsor-cta strong { color: #2fd8dd; }
+.sponsor-header:hover .sponsor-cta { color: var(--text-primary); }
 .sponsor-disclaimer {
   font-size: 10px;
   color: var(--text-dim);
