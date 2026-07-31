@@ -401,6 +401,14 @@ app.use('/', require('./routes/public')(deps));
         // Ask the Edge — log of questions asked (demand intel + adaptive prompts)
         "CREATE TABLE IF NOT EXISTS assistant_queries (id SERIAL PRIMARY KEY, question TEXT NOT NULL, answered BOOLEAN DEFAULT TRUE, ip_hash TEXT, created_at TIMESTAMPTZ DEFAULT NOW())",
         'CREATE INDEX IF NOT EXISTS idx_aq_created ON assistant_queries(created_at DESC)',
+        // Stripe webhook idempotency — dedupe redelivered events by Stripe event id
+        // so credits/subscriptions are never provisioned twice.
+        "CREATE TABLE IF NOT EXISTS stripe_events (event_id TEXT PRIMARY KEY, type TEXT, processed_at TIMESTAMPTZ DEFAULT NOW())",
+        // Indexed lookups to kill full-table user scans on the Stripe/referral hot paths.
+        'CREATE INDEX IF NOT EXISTS idx_users_stripe_sub ON users(stripe_subscription_id)',
+        'CREATE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)',
+        // Fast "has this user already unlocked this tip?" idempotency check.
+        "CREATE INDEX IF NOT EXISTS idx_credit_tx_tip_unlock ON credit_transactions(user_id, tip_id, type)",
       ];
       for (var ci = 0; ci < alterCols.length; ci++) {
         try { await db.query(alterCols[ci]); } catch(e) {}
@@ -1133,5 +1141,19 @@ function shutdown(signal) {
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+
+// ---------------------------------------------------------------------------
+// Process-level safety nets. This app has many fire-and-forget async tasks
+// (schedulers, enrichment, webhooks). A single stray rejection or throw outside
+// a request handler must NOT take down the whole Railway instance and drop all
+// live traffic. Log loudly and keep serving; Railway restarts on a true exit.
+// ---------------------------------------------------------------------------
+process.on('unhandledRejection', (reason) => {
+  const msg = reason && reason.stack ? reason.stack : (reason && reason.message) || String(reason);
+  console.error('[FATAL] Unhandled promise rejection (kept alive):', msg);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception (kept alive):', err && err.stack ? err.stack : err);
+});
 
 module.exports = app;

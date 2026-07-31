@@ -13,8 +13,9 @@ module.exports = function(deps) {
   async function applyReferralReward(friend) {
     try {
       if (!friend || !friend.referredBy || friend.referralRewarded) return;
-      var allUsers = await db.getUsers();
-      var referrer = allUsers.find(function (u) { return u.referralCode === friend.referredBy; });
+      var referrer = db.getUserByReferralCode
+        ? await db.getUserByReferralCode(friend.referredBy)
+        : (await db.getUsers()).find(function (u) { return u.referralCode === friend.referredBy; });
       if (!referrer) return;
 
       var samePerson = referrer.id === friend.id || (referrer.email && friend.email && referrer.email.toLowerCase() === friend.email.toLowerCase());
@@ -99,7 +100,8 @@ module.exports = function(deps) {
       }
 
       const hashed = await bcrypt.hash(password, 10);
-      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      // Trusted client IP (req.ip via `trust proxy`) — not the spoofable X-Forwarded-For hop.
+      const ip = req.ip || req.socket?.remoteAddress || 'unknown';
       const userAgent = req.headers['user-agent'] || '';
       const sessionId = helpers.generateSessionId();
       const now = new Date().toISOString();
@@ -200,7 +202,8 @@ module.exports = function(deps) {
     try {
       let { email, password } = req.body;
       email = (email || '').trim().toLowerCase(); // Normalize for case-insensitive lookup
-      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      // Trusted client IP — brute-force limiter must not key on a spoofable header.
+      const ip = req.ip || req.socket?.remoteAddress || 'unknown';
       const userAgent = req.headers['user-agent'] || '';
 
       // Rate limit check
@@ -440,8 +443,9 @@ module.exports = function(deps) {
       // Reward referrer with +5 bonus if this user was referred and starting trial
       if (user.referredBy) {
         try {
-          var trialUsers = await db.getUsers();
-          var trialReferrer = trialUsers.find(function(u) { return u.referralCode === user.referredBy; });
+          var trialReferrer = db.getUserByReferralCode
+            ? await db.getUserByReferralCode(user.referredBy)
+            : (await db.getUsers()).find(function(u) { return u.referralCode === user.referredBy; });
           if (trialReferrer) {
             await db.addCredits(trialReferrer.id, 5, 'referral_trial', 'Referral bonus: ' + user.name + ' started trial');
             console.log('[Referral] +5 trial bonus to ' + trialReferrer.email);

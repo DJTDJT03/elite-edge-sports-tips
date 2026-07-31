@@ -287,6 +287,20 @@ module.exports = function(deps) {
     return arr.length > 20;
   }
 
+  // Global daily backstop: the AI assistant is unauthenticated and each call costs
+  // real money (Perplexity + Anthropic). A per-IP limit alone can be defeated by a
+  // botnet / IP rotation, so cap total calls per day across ALL callers. Tune via
+  // AI_CHAT_DAILY_CAP (default 3000/day ~ generous for real users, cheap ceiling on abuse).
+  var _aiChatDay = '';
+  var _aiChatDayCount = 0;
+  var AI_CHAT_DAILY_CAP = parseInt(process.env.AI_CHAT_DAILY_CAP || '3000', 10);
+  function aiChatGlobalCapReached() {
+    var today = new Date().toISOString().split('T')[0];
+    if (today !== _aiChatDay) { _aiChatDay = today; _aiChatDayCount = 0; }
+    _aiChatDayCount++;
+    return _aiChatDayCount > AI_CHAT_DAILY_CAP;
+  }
+
   // Direct Perplexity Sonar call for live, cited web grounding (so answers about
   // things outside our own data are CURRENT, not from the model's training cutoff).
   function askPerplexitySonar(question) {
@@ -441,9 +455,13 @@ module.exports = function(deps) {
       if (!message.trim()) {
         return res.status(400).json({ reply: 'Please send a message.' });
       }
-      var ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+      // Trusted client IP (req.ip via `trust proxy`) — not the spoofable header.
+      var ip = req.ip || (req.socket && req.socket.remoteAddress) || 'unknown';
       if (aiChatRateLimited(ip)) {
         return res.json({ reply: "You're firing questions in fast! Give it a minute and ask again." });
+      }
+      if (aiChatGlobalCapReached()) {
+        return res.json({ reply: "The Edge assistant is taking a breather for today — it's been busy! Try again tomorrow, or explore today's tips and analysis in the meantime." });
       }
 
       if (!aiReports || !aiReports.isAvailable() || !aiReports.client) {

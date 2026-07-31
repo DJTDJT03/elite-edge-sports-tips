@@ -44,7 +44,10 @@ const RATE_LIMIT_WINDOW = 60 * 1000;
 const RATE_LIMIT_MAX = 100;
 
 function rateLimiter(req, res, next) {
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+  // Use Express's computed req.ip. With `trust proxy: 1` it is the real client IP
+  // as seen by Railway's proxy — NOT the client-controlled first X-Forwarded-For
+  // hop, which an attacker can spoof to rotate past this limit.
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
   const now = Date.now();
   if (!rateLimitStore[ip] || now - rateLimitStore[ip].start > RATE_LIMIT_WINDOW) {
     rateLimitStore[ip] = { start: now, count: 1 };

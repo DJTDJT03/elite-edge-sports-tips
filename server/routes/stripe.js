@@ -196,6 +196,7 @@ module.exports = function(deps) {
   // IMPORTANT: This route receives raw body, not parsed JSON
   // ---------------------------------------------------------------------------
   router.post('/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    let event; // hoisted to handler scope so the outer catch can release the idempotency claim
     try {
       if (!stripeService.isAvailable) {
         return res.status(503).send('Stripe not configured');
@@ -206,7 +207,6 @@ module.exports = function(deps) {
         return res.status(400).send('Missing stripe-signature header');
       }
 
-      let event;
       try {
         event = await stripeService.handleWebhook(req.body, sig);
       } catch (err) {
@@ -215,6 +215,17 @@ module.exports = function(deps) {
       }
 
       console.log('[Stripe] Webhook event:', event.type);
+
+      // Idempotency: Stripe can deliver the same event more than once. Claim it by
+      // id; if we've already processed it, acknowledge and skip so credits/subs are
+      // never provisioned twice. Released on error so a later redelivery can retry.
+      if (db.claimStripeEvent) {
+        const isNew = await db.claimStripeEvent(event.id, event.type);
+        if (!isNew) {
+          console.log('[Stripe] Duplicate webhook ignored:', event.id, event.type);
+          return res.json({ received: true, duplicate: true });
+        }
+      }
 
       switch (event.type) {
         case 'checkout.session.completed': {
@@ -302,8 +313,7 @@ module.exports = function(deps) {
             }
           }
           if (!user && info && info.ok) {
-            const users = await db.getUsers();
-            user = users.find(u => u.stripeSubscriptionId === info.subscriptionId);
+            user = await db.getUserByStripeSubscriptionId(info.subscriptionId);
           }
           if (user && info && info.ok) {
             const expiry = info.currentPeriodEnd ? new Date(info.currentPeriodEnd * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -337,8 +347,7 @@ module.exports = function(deps) {
         case 'customer.subscription.deleted': {
           // Subscription cancelled — downgrade to free + start win-back sequence
           const sub = event.data.object;
-          const users = await db.getUsers();
-          const user = users.find(u => u.stripeSubscriptionId === sub.id);
+          const user = await db.getUserByStripeSubscriptionId(sub.id);
           if (user) {
             // Record the tier they're leaving from so the win-back offer can pitch it back
             var churnedTier = (user.subscription === 'vip' || user.subscription === 'premium' || user.subscription === 'starter')
@@ -359,8 +368,7 @@ module.exports = function(deps) {
         case 'customer.subscription.updated': {
           // Plan changed / renewed / card updated etc.
           const sub = event.data.object;
-          const users = await db.getUsers();
-          const user = users.find(u => u.stripeSubscriptionId === sub.id);
+          const user = await db.getUserByStripeSubscriptionId(sub.id);
           if (user) {
             const pe = subPeriodEnd(sub);
             const expiry = pe ? new Date(pe * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -384,8 +392,7 @@ module.exports = function(deps) {
         case 'invoice.payment_failed': {
           // Payment failed — send dunning email + set grace period
           const invoice = event.data.object;
-          const users = await db.getUsers();
-          const user = users.find(u => u.stripeSubscriptionId === invoice.subscription);
+          const user = await db.getUserByStripeSubscriptionId(invoice.subscription);
           if (user) {
             console.log('[Stripe] Webhook: payment failed for', user.email);
 
@@ -421,6 +428,8 @@ module.exports = function(deps) {
       res.json({ received: true });
     } catch (err) {
       console.error('[Stripe] Webhook processing error:', err.message);
+      // Release the idempotency claim so a redelivery of this event can reprocess it.
+      try { if (db.releaseStripeEvent && event && event.id) await db.releaseStripeEvent(event.id); } catch (e) {}
       // Still return 200 to prevent Stripe retries on our errors
       res.json({ received: true });
     }

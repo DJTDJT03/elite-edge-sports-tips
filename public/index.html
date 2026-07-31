@@ -407,8 +407,8 @@
         <label class="radio-label"><input type="radio" name="reg-odds-format" value="decimal"> Decimal (e.g. 2.50)</label>
       </div>
       <div class="form-group">
-        <label>Mobile Number <span style="font-size:11px;color:var(--text-muted);">(for SMS alerts &amp; your Telegram invite)</span></label>
-        <input type="tel" id="reg-mobile" required placeholder="e.g. 07123 456789" autocomplete="tel">
+        <label>Mobile Number <span style="font-size:11px;color:var(--text-muted);">(optional — for SMS alerts &amp; your Telegram invite)</span></label>
+        <input type="tel" id="reg-mobile" placeholder="e.g. 07123 456789" autocomplete="tel">
       </div>
       <div class="form-group">
         <label>Referral Code (optional)</label>
@@ -496,18 +496,30 @@
   <div class="modal" id="modal-stripe" style="display:none;">
     <button class="modal-close" onclick="App.closeModal()">&times;</button>
     <div style="text-align:center;padding:20px 0;">
-      <h2 style="margin-bottom:16px;">Choose Your Plan</h2>
-      <div style="display:grid;gap:12px;">
-        <button class="btn btn-gold btn-full" onclick="App.startCheckout('monthly')" style="padding:16px;">
-          <strong>Monthly — &pound;19.99/month</strong><br>
-          <span style="font-size:12px;opacity:0.8;">Cancel anytime</span>
-        </button>
-        <button class="btn btn-outline btn-full" onclick="App.startCheckout('annual')" style="padding:16px;">
-          <strong>Annual — &pound;199.99/year</strong><br>
-          <span style="font-size:12px;opacity:0.8;">Save &pound;40 — best value</span>
-        </button>
+      <h2 style="margin-bottom:6px;">Choose Your Plan</h2>
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;">Cancel anytime. 14-day free trial on Premium.</p>
+      <div style="display:grid;gap:12px;text-align:left;">
+        <div style="border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:14px;">
+          <strong style="color:var(--gold);">Starter — &pound;9.99/month</strong>
+          <div style="font-size:12px;color:var(--text-secondary);margin:4px 0 10px;">50 credits/month &middot; daily tips</div>
+          <button class="btn btn-outline btn-full" onclick="App.startCheckout('starter-monthly')">Subscribe Monthly</button>
+          <button class="btn btn-ghost btn-full" style="margin-top:6px;" onclick="App.startCheckout('starter-annual')">Annual &mdash; &pound;99.99/yr</button>
+        </div>
+        <div style="border:1px solid var(--gold);border-radius:10px;padding:14px;position:relative;">
+          <span style="position:absolute;top:-10px;right:12px;background:var(--gold);color:#0a1a2f;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">MOST POPULAR</span>
+          <strong style="color:var(--gold);">Premium — &pound;19.99/month</strong>
+          <div style="font-size:12px;color:var(--text-secondary);margin:4px 0 10px;">250 credits/month &middot; full analysis &middot; 14-day free trial</div>
+          <button class="btn btn-gold btn-full" onclick="App.startCheckout('premium-monthly')">Start Premium</button>
+          <button class="btn btn-ghost btn-full" style="margin-top:6px;" onclick="App.startCheckout('premium-annual')">Annual &mdash; &pound;199.99/yr (Save &pound;40)</button>
+        </div>
+        <div style="border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:14px;">
+          <strong style="color:var(--gold);">VIP — &pound;39.99/month</strong>
+          <div style="font-size:12px;color:var(--text-secondary);margin:4px 0 10px;">Unlimited credits &middot; every pick, every sport</div>
+          <button class="btn btn-outline btn-full" onclick="App.startCheckout('vip-monthly')">Subscribe Monthly</button>
+          <button class="btn btn-ghost btn-full" style="margin-top:6px;" onclick="App.startCheckout('vip-annual')">Annual &mdash; &pound;399.99/yr (Save &pound;80)</button>
+        </div>
       </div>
-      <p style="font-size:11px;color:var(--text-muted);margin-top:12px;text-align:center;">Secure payment via Stripe. Cancel anytime. 14-day money-back guarantee.</p>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:12px;text-align:center;">Secure payment via Stripe. Cancel anytime.</p>
     </div>
   </div>
 
@@ -632,7 +644,7 @@
   <script src="/js/calculators.js?v=20260501c"></script>
   <script src="/js/worldCup.js?v=20260616c"></script>
   <script src="/js/lms.js?v=20260612b"></script>
-  <script src="/js/app.js?v=20260731a"></script>
+  <script src="/js/app.js?v=20260731b"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

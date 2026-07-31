@@ -625,7 +625,16 @@ const App = {
     }
     try {
       const res = await fetch(`/api${endpoint}`, { cache: 'no-store', ...options, headers: { ...headers, ...options.headers } });
-      const data = await res.json();
+      // Guard against non-JSON responses (Railway 502/504 HTML error pages, gateway
+      // timeouts). res.json() would otherwise throw a SyntaxError that bypasses the
+      // friendly data.error handling below and surfaces as a broken UI.
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        if (!res.ok) throw new Error(res.status >= 500 ? 'Service temporarily unavailable. Please try again in a moment.' : 'Request failed');
+        data = {};
+      }
       if (!res.ok) {
         // Handle session expired (login from another device)
         if (res.status === 401 && (data.code === 'session_expired' || (data.error && data.error.includes('another device')))) {
@@ -894,7 +903,8 @@ const App = {
 
     if (!firstName || !surname) { document.getElementById('reg-error').textContent = 'Please enter your first name and surname.'; return; }
     if (!dateOfBirth) { document.getElementById('reg-error').textContent = 'Please enter your date of birth.'; return; }
-    if (!mobileVal || mobileVal.replace(/\D/g, '').length < 7) { document.getElementById('reg-error').textContent = 'Please enter a valid mobile number.'; return; }
+    // Mobile is optional — but if supplied it must look valid (avoids junk numbers).
+    if (mobileVal && mobileVal.replace(/\D/g, '').length < 7) { document.getElementById('reg-error').textContent = 'That mobile number looks incomplete. Leave it blank or enter a valid number.'; return; }
     // 18+ check
     var _dob = new Date(dateOfBirth);
     var _age = (Date.now() - _dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
@@ -920,8 +930,9 @@ const App = {
       this._updateOddsToggleUI();
     }
     try {
-      // Capture referral code from URL if present
-      var refCode = new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('ee_ref') || '';
+      // Capture referral code: a code typed into the form wins, else the URL ?ref / stored code.
+      var typedRef = (document.getElementById('reg-referral')?.value || '').trim();
+      var refCode = typedRef || new URLSearchParams(window.location.search).get('ref') || localStorage.getItem('ee_ref') || '';
       if (refCode) localStorage.setItem('ee_ref', refCode);
 
       const data = await this.api('/auth/register', {
@@ -937,10 +948,10 @@ const App = {
       this.showEmailVerificationMessage();
       this.showWelcomeEmailNotice();
       trackEvent('auth', 'register', email);
-      // Show Telegram join popup after registration
+      // Show Telegram join popup after registration. The 14-day trial offer is NOT
+      // auto-fired here — it surfaces on intent (first locked-tip click) so new users
+      // aren't hit with verification + Telegram + trial popups stacked in a few seconds.
       setTimeout(() => this.showTelegramPopup(), 1500);
-      // Show free trial offer after Telegram popup
-      setTimeout(() => this.showTrialOffer(), 6000);
       this.route();
     } catch (err) {
       document.getElementById('reg-error').textContent = err.message;
@@ -1390,7 +1401,7 @@ const App = {
       if (dsTips) dsTips.textContent = todayTips;
       if (dsWon) dsWon.textContent = won;
       if (dsPnl) {
-        dsPnl.textContent = (pnl >= 0 ? '+' : '') + pnl.toFixed(2);
+        dsPnl.textContent = (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' pts';
         dsPnl.className = 'ds-value ' + (pnl >= 0 ? 'ds-positive' : 'ds-negative');
       }
       if (dsStreak) dsStreak.textContent = streak;
@@ -4179,7 +4190,7 @@ const App = {
             <div class="lock-icon">&#128274;</div>
             <div class="lock-text">Premium Selection</div>
             <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:8px;">Full analysis, staking advice & edge data</div>
-            <div class="lock-cta" onclick="event.stopPropagation();App.showTrialOffer()">Unlock Free for 7 Days</div>
+            <div class="lock-cta" onclick="event.stopPropagation();App.showTrialOffer()">Unlock Free for 14 Days</div>
           </div>
         ` : ''}
       </div>

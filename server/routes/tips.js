@@ -226,6 +226,20 @@ module.exports = function(deps) {
         }
 
         var user = await db.getUserById(userId);
+
+        // Idempotency: if this user has ALREADY spent a credit unlocking this exact
+        // tip, don't charge again on a re-view / refresh. Return it unlocked.
+        if (user && db.hasUnlockedTip && await db.hasUnlockedTip(userId, tip.id)) {
+          if (access === 'starter') {
+            return res.json({
+              ...tip, locked: false, starterLimited: true, creditsRemaining: user.credits,
+              analysis: { summary: tip.analysis ? tip.analysis.summary : 'Upgrade to Premium for full breakdown.' },
+              alreadyUnlocked: true,
+            });
+          }
+          return res.json({ ...tip, locked: false, creditsRemaining: user.credits, alreadyUnlocked: true });
+        }
+
         if (!user || user.credits <= 0) {
           return res.json({
             ...tip,
@@ -237,7 +251,7 @@ module.exports = function(deps) {
           });
         }
 
-        // Auto-deduct 1 credit for viewing premium tip (1 credit per tip)
+        // Auto-deduct 1 credit for viewing premium tip (1 credit per tip, once per tip)
         var newBalance = await db.deductCredits(userId, 1, 'view_tip', 'Viewed: ' + (tip.selection || 'tip'), tip.id);
         if (newBalance < 0) {
           return res.json({ ...tip, analysis: { summary: 'Insufficient credits.' }, locked: true, outOfCredits: true });

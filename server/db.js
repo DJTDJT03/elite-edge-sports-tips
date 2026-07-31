@@ -22,6 +22,10 @@ if (USE_DB) {
     max: 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
+    // Cap any single query at 15s so a slow/hung query can't hold a connection and
+    // starve the pool (max:10) — which would stall the whole app under load.
+    statement_timeout: 15000,
+    query_timeout: 15000,
   });
   pool.on('error', (err) => {
     console.error('[DB] Unexpected pool error:', err.message);
@@ -102,6 +106,29 @@ async function getUserByResetToken(token) {
     return users.find(u => u.resetToken === token) || null;
   }
   const { rows } = await query('SELECT * FROM users WHERE reset_token = $1', [token]);
+  return rows.length > 0 ? dbUserToApp(rows[0]) : null;
+}
+
+// Indexed lookup by Stripe subscription id — avoids scanning every user on every
+// Stripe webhook (deleted/updated/payment_failed) as volume grows.
+async function getUserByStripeSubscriptionId(subId) {
+  if (!subId) return null;
+  if (!pool) {
+    const users = getFileStore().readJSON('sample-users.json') || [];
+    return users.find(u => u.stripeSubscriptionId === subId) || null;
+  }
+  const { rows } = await query('SELECT * FROM users WHERE stripe_subscription_id = $1 LIMIT 1', [subId]);
+  return rows.length > 0 ? dbUserToApp(rows[0]) : null;
+}
+
+// Indexed lookup by referral code — avoids full-table scans on the signup/referral hot path.
+async function getUserByReferralCode(code) {
+  if (!code) return null;
+  if (!pool) {
+    const users = getFileStore().readJSON('sample-users.json') || [];
+    return users.find(u => u.referralCode === code) || null;
+  }
+  const { rows } = await query('SELECT * FROM users WHERE referral_code = $1 LIMIT 1', [code]);
   return rows.length > 0 ? dbUserToApp(rows[0]) : null;
 }
 
@@ -950,29 +977,74 @@ async function getCreditHistory(userId, limit) {
  */
 async function deductCredits(userId, cost, type, description, tipId) {
   if (!pool) return -1;
-  const { rows } = await query(
-    'UPDATE users SET credits = credits - $2 WHERE id = $1 AND credits >= $2 RETURNING credits',
-    [userId, cost]
-  );
-  if (rows.length === 0) return -1; // insufficient credits
-  var newBalance = parseInt(rows[0].credits);
-  await recordCreditTransaction({ userId: userId, amount: -cost, balanceAfter: newBalance, type: type, description: description, tipId: tipId });
-  return newBalance;
+  // Atomic: balance update + ledger insert in ONE transaction so a crash between
+  // them can't leave the ledger out of sync with the balance.
+  return withTransaction(async (client) => {
+    const { rows } = await client.query(
+      'UPDATE users SET credits = credits - $2 WHERE id = $1 AND credits >= $2 RETURNING credits',
+      [userId, cost]
+    );
+    if (rows.length === 0) return -1; // insufficient credits
+    var newBalance = parseInt(rows[0].credits);
+    await client.query(
+      'INSERT INTO credit_transactions (user_id, amount, balance_after, type, description, tip_id) VALUES ($1,$2,$3,$4,$5,$6)',
+      [userId, -cost, newBalance, type, description || null, tipId || null]
+    );
+    return newBalance;
+  });
 }
 
 /**
- * Add credits to a user.
+ * Add credits to a user. Atomic balance + ledger insert.
  */
 async function addCredits(userId, amount, type, description) {
   if (!pool) return 0;
+  return withTransaction(async (client) => {
+    const { rows } = await client.query(
+      'UPDATE users SET credits = credits + $2 WHERE id = $1 RETURNING credits',
+      [userId, amount]
+    );
+    if (rows.length === 0) return 0;
+    var newBalance = parseInt(rows[0].credits);
+    await client.query(
+      'INSERT INTO credit_transactions (user_id, amount, balance_after, type, description, tip_id) VALUES ($1,$2,$3,$4,$5,$6)',
+      [userId, amount, newBalance, type, description || null, null]
+    );
+    return newBalance;
+  });
+}
+
+/**
+ * Idempotency: has this user already spent a credit to unlock this specific tip?
+ * Used so re-viewing / refreshing a premium tip does NOT charge again.
+ */
+async function hasUnlockedTip(userId, tipId) {
+  if (!pool || !userId || tipId == null) return false;
   const { rows } = await query(
-    'UPDATE users SET credits = credits + $2 WHERE id = $1 RETURNING credits',
-    [userId, amount]
+    "SELECT 1 FROM credit_transactions WHERE user_id = $1 AND tip_id = $2 AND type = 'view_tip' LIMIT 1",
+    [userId, String(tipId)]
   );
-  if (rows.length === 0) return 0;
-  var newBalance = parseInt(rows[0].credits);
-  await recordCreditTransaction({ userId: userId, amount: amount, balanceAfter: newBalance, type: type, description: description });
-  return newBalance;
+  return rows.length > 0;
+}
+
+/**
+ * Stripe webhook idempotency. claimStripeEvent inserts the event id and returns
+ * true only the FIRST time we see it (so duplicate/redelivered events are skipped).
+ * releaseStripeEvent removes the claim when processing failed, so Stripe's retry
+ * can reprocess it.
+ */
+async function claimStripeEvent(eventId, type) {
+  if (!pool || !eventId) return true; // no DB → don't block processing
+  const { rows } = await query(
+    'INSERT INTO stripe_events (event_id, type) VALUES ($1,$2) ON CONFLICT (event_id) DO NOTHING RETURNING event_id',
+    [eventId, type || null]
+  );
+  return rows.length > 0;
+}
+
+async function releaseStripeEvent(eventId) {
+  if (!pool || !eventId) return;
+  try { await query('DELETE FROM stripe_events WHERE event_id = $1', [eventId]); } catch (e) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -1226,7 +1298,7 @@ module.exports = {
   query,
   isAvailable,
   // Users
-  getUsers, getUserById, getUserByEmail, getUserByResetToken, createUser, updateUser, deleteUser, saveUsers,
+  getUsers, getUserById, getUserByEmail, getUserByResetToken, getUserByStripeSubscriptionId, getUserByReferralCode, createUser, updateUser, deleteUser, saveUsers,
   // Tips
   getTips, getTipById, createTip, updateTip, deleteTip, saveTips,
   // Results
@@ -1248,7 +1320,9 @@ module.exports = {
   // Scored Candidates (shadow scoring)
   saveScoredCandidate, getScoredCandidates, settleCandidate, getCandidateStats,
   // Credits
-  recordCreditTransaction, getCreditHistory, deductCredits, addCredits,
+  recordCreditTransaction, getCreditHistory, deductCredits, addCredits, hasUnlockedTip,
+  // Stripe webhook idempotency
+  claimStripeEvent, releaseStripeEvent,
   // Sonar Cache
   getSonarCache, claimSonarCache, completeSonarCache, checkSonarClaim, reclaimStaleSonarCache, cleanExpiredSonarCache,
   // Sonar Spend
