@@ -421,6 +421,44 @@ SportMonks.prototype.getTeamRecentFixtures = function(teamId, fromDate, toDate) 
 };
 
 // =========================================================================
+// TEAM DETAIL — rich club data (All-In plan). Tries a full include set and
+// falls back to the bare team if SportMonks rejects an include, so we always
+// return at least name/logo/founded.
+// =========================================================================
+SportMonks.prototype.getTeam = function(teamId) {
+  var self = this;
+  return this._request('/teams/' + teamId, { include: 'country;venue;activeseasons' })
+    .then(function(d) { return d.data || null; })
+    .catch(function() {
+      return self._request('/teams/' + teamId, {}).then(function(d) { return d.data || null; }).catch(function() { return null; });
+    });
+};
+
+// Current squad with player detail. Best-effort — returns [] on failure.
+SportMonks.prototype.getTeamSquad = function(teamId) {
+  return this._request('/squads/teams/' + teamId, { include: 'player;position' })
+    .then(function(d) { return d.data || []; })
+    .catch(function() {
+      return this._request ? Promise.resolve([]) : [];
+    }.bind(this))
+    .catch(function() { return []; });
+};
+
+// Season statistics for a team (goals, form, etc.). Best-effort.
+SportMonks.prototype.getTeamStats = function(teamId) {
+  return this._request('/teams/' + teamId, { include: 'statistics.details.type' })
+    .then(function(d) { return (d.data && d.data.statistics) || []; })
+    .catch(function() { return []; });
+};
+
+// Search teams by name → returns matches (id, name, image_path, country).
+SportMonks.prototype.searchTeams = function(name) {
+  return this._request('/teams/search/' + encodeURIComponent(name), { include: 'country' })
+    .then(function(d) { return d.data || []; })
+    .catch(function() { return []; });
+};
+
+// =========================================================================
 // LEAGUE SEARCH — find a league by name (e.g. "FIFA World Cup")
 // =========================================================================
 SportMonks.prototype.searchLeagues = function(name) {

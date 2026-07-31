@@ -1630,7 +1630,7 @@ module.exports = function(deps) {
         return {
           position: row.position != null ? row.position : null,
           team: p.name || 'Unknown',
-          teamId: null, // SportMonks id ≠ football-data id; team pages need FD id, so omit
+          teamId: p.id != null ? p.id : null, // SportMonks team id → links to /football/club
           teamCrest: p.image_path || null,
           playedGames: statOf(row, ['MATCHES_PLAYED', 'GAMES_PLAYED', 'PLAYED']),
           won: statOf(row, ['WON']),
@@ -1648,6 +1648,81 @@ module.exports = function(deps) {
       res.json({ competition: '', season: '', source: 'sportmonks', standings: standings });
     } catch (err) {
       console.error('[sm-standings] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/football/club/:key — rich SportMonks club data (All-In plan).
+  // key is a SportMonks team id (numeric) OR a team name to search. Combines
+  // team detail + current squad + recent fixtures into one normalised payload.
+  router.get('/football/club/:key', async (req, res) => {
+    try {
+      if (!sportMonks || !sportMonks.isAvailable()) {
+        return res.status(503).json({ error: 'SportMonks not available.' });
+      }
+      var key = req.params.key;
+      var teamId = /^\d+$/.test(key) ? parseInt(key, 10) : null;
+
+      // Resolve a name to an id via search (closest name match wins).
+      if (!teamId) {
+        var q = decodeURIComponent(key).replace(/-/g, ' ');
+        var found = await sportMonks.searchTeams(q);
+        if (found && found.length) {
+          var ql = q.toLowerCase();
+          var exact = found.find(function (t) { return (t.name || '').toLowerCase() === ql; });
+          teamId = (exact || found[0]).id;
+        }
+      }
+      if (!teamId) return res.status(404).json({ error: 'Club not found for "' + key + '".' });
+
+      var today = new Date().toISOString().split('T')[0];
+      var from = new Date(Date.now() - 160 * 864e5).toISOString().split('T')[0];
+
+      var out = await Promise.all([
+        sportMonks.getTeam(teamId).catch(function () { return null; }),
+        sportMonks.getTeamSquad(teamId).catch(function () { return []; }),
+        sportMonks.getTeamRecentFixtures(teamId, from, today).catch(function () { return []; }),
+      ]);
+      var t = out[0], squadRaw = out[1] || [], recent = out[2] || [];
+      if (!t) return res.status(404).json({ error: 'No data for club ' + teamId });
+
+      // Position bucketing (SportMonks position ids; unknowns fall to "Squad").
+      var posName = function (s) {
+        if (s.position && s.position.name) return s.position.name;
+        var map = { 24: 'Goalkeepers', 25: 'Defenders', 26: 'Midfielders', 27: 'Attackers', 148: 'Goalkeepers', 149: 'Defenders', 150: 'Midfielders', 151: 'Attackers' };
+        return map[s.position_id] || 'Squad';
+      };
+      var squad = squadRaw.map(function (s) {
+        var p = s.player || {};
+        return {
+          name: p.name || p.display_name || p.common_name || '',
+          image: p.image_path || null,
+          number: s.jersey_number != null ? s.jersey_number : null,
+          position: posName(s),
+          dob: p.date_of_birth || null,
+          nationality: p.nationality ? (p.nationality.name || null) : null,
+        };
+      }).filter(function (p) { return p.name; });
+
+      var club = {
+        id: t.id,
+        name: t.name || '',
+        shortCode: t.short_code || null,
+        logo: t.image_path || null,
+        founded: t.founded || null,
+        country: t.country ? { name: t.country.name || '', flag: t.country.image_path || null } : null,
+        venue: t.venue ? { name: t.venue.name || '', city: t.venue.city_name || '', capacity: t.venue.capacity || null, image: t.venue.image_path || null } : null,
+      };
+
+      // Trim recent fixtures to the payload the client needs.
+      var recentOut = recent.filter(function (f) { return f.homeGoals != null && f.awayGoals != null; })
+        .map(function (f) {
+          return { id: f.id, kickoff: f.kickoff, league: f.league, homeTeam: f.homeTeam, awayTeam: f.awayTeam, homeTeamId: f.homeTeamId, awayTeamId: f.awayTeamId, homeTeamLogo: f.homeTeamLogo, awayTeamLogo: f.awayTeamLogo, homeGoals: f.homeGoals, awayGoals: f.awayGoals };
+        });
+
+      res.json({ club: club, squad: squad, recent: recentOut });
+    } catch (err) {
+      console.error('[club] Error:', err.message);
       res.status(500).json({ error: err.message });
     }
   });

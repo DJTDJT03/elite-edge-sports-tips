@@ -46,7 +46,7 @@ const App = {
       'style="display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;box-sizing:border-box;' +
       'background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-weight:800;font-size:14px;' +
       'padding:11px 16px;border-radius:8px;text-decoration:none;margin-top:12px;">' +
-      '⚡ ' + (label || 'Bet with Cosmo Bet') + ' →' +
+      '⚡ ' + this.escapeHtml(label || 'Bet with Cosmo Bet') + ' →' +
       '</a>' +
       '<div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:6px;">' +
       'Official partner · 18+ · <a href="https://www.begambleaware.org" target="_blank" rel="noopener" style="color:var(--text-muted);">BeGambleAware.org</a></div>';
@@ -6273,9 +6273,10 @@ const App = {
       }
 
       var rid = 'mr-' + ri;
-      var teamLine = function (logo, name, goals, bold) {
+      var teamLine = function (logo, name, goals, bold, teamId) {
+        var slug = self._teamSlug(name) + (teamId ? '-' + teamId : '');
         return '<div style="display:flex;align-items:center;gap:9px;min-width:0;">' + crest(logo, name) +
-          '<span style="font-size:14px;font-weight:' + (bold ? '800' : '600') + ';color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + self.escapeHtml(name) + '</span>' +
+          '<a href="#/team/' + slug + '" onclick="event.stopPropagation();" style="font-size:14px;font-weight:' + (bold ? '800' : '600') + ';color:#fff;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">' + self.escapeHtml(name) + '</a>' +
           (scored ? '<span style="font-size:15px;font-weight:900;color:#fff;margin-left:auto;">' + goals + '</span>' : '') + '</div>';
       };
       // Winner emphasis when finished.
@@ -6304,7 +6305,7 @@ const App = {
       return '<div style="border-top:1px solid var(--border);">' +
         '<div onclick="App._toggleMatchRow(\'' + rid + '\',this)" style="display:grid;grid-template-columns:46px 1fr auto 16px;gap:10px;align-items:center;padding:11px 14px;cursor:pointer;user-select:none;">' +
           '<div style="font-size:11px;color:var(--text-secondary);text-align:center;line-height:1.3;">' + timeTxt + '</div>' +
-          '<div style="min-width:0;display:flex;flex-direction:column;gap:5px;">' + teamLine(f.homeTeamLogo, f.homeTeam, f.homeGoals, hWin) + teamLine(f.awayTeamLogo, f.awayTeam, f.awayGoals, aWin) + '</div>' +
+          '<div style="min-width:0;display:flex;flex-direction:column;gap:5px;">' + teamLine(f.homeTeamLogo, f.homeTeam, f.homeGoals, hWin, f.homeTeamId) + teamLine(f.awayTeamLogo, f.awayTeam, f.awayGoals, aWin, f.awayTeamId) + '</div>' +
           '<div>' + predHtml + '</div>' +
           '<span class="mtch-arrow" style="color:var(--text-muted);font-size:11px;transition:transform .2s;">▼</span>' +
         '</div>' + detail +
@@ -6497,11 +6498,13 @@ const App = {
     // --- Standings table (real, clickable teams → team pages) ---
     var tableHtml = '';
     if (teams) {
+      // SportMonks rows carry a SportMonks team id → link by id; football-data
+      // rows link by name slug (the /club route resolves the SM id via search).
+      var smSource = standings && standings.source === 'sportmonks';
       var dv = function (v) { return (v == null || v === '') ? '—' : v; };
       var rows = table.map(function (r) {
-        // Only football-data rows carry a teamId usable by the team page.
-        var canClick = tableClickable && r.teamId;
-        var slugId = self._teamSlug(r.team) + (r.teamId ? '-' + r.teamId : '');
+        var slugId = self._teamSlug(r.team) + (smSource && r.teamId ? '-' + r.teamId : '');
+        var canClick = !!slugId; // every club now has a page (id or name-resolved)
         var formDots = r.form ? r.form.split(',').slice(-5).map(function (c) {
           c = c.trim().toUpperCase();
           var col = c === 'W' ? '#22c55e' : c === 'L' ? '#ef4444' : '#8b97ad';
@@ -6585,11 +6588,17 @@ const App = {
       ? '<span style="font-size:11px;font-weight:900;color:#0a0e1a;background:var(--gold);border-radius:6px;padding:3px 8px;">' + self.escapeHtml(String(pk.selection || '').split(' - ').pop().slice(0, 18)) + '</span>'
       : (f.homeOdds ? '<span style="font-size:11px;color:var(--text-muted);">' + self.formatOdds(f.homeOdds) + ' · ' + self.formatOdds(f.drawOdds) + ' · ' + self.formatOdds(f.awayOdds) + '</span>' : '');
     var link = (pk && pk.id) ? "window.location.hash='#/tip/" + pk.id + "'" : (f.id ? 'App.openMatchIntelligence(' + f.id + ',this)' : '');
+    var teamLink = function (name, id, logo, goals) {
+      var slug = self._teamSlug(name) + (id ? '-' + id : '');
+      return '<span style="display:flex;align-items:center;gap:8px;">' + self._crestImg(logo, name, 20) +
+        '<a href="#/team/' + slug + '" onclick="event.stopPropagation();" style="font-size:13px;font-weight:600;color:#fff;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + self.escapeHtml(name) + '</a>' +
+        (scored ? '<span style="margin-left:auto;font-weight:900;color:#fff;">' + goals + '</span>' : '') + '</span>';
+    };
     return '<div ' + (link ? 'onclick="' + link + '" style="cursor:pointer;' : 'style="') + 'display:grid;grid-template-columns:44px 1fr auto;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--border);">' +
       '<div style="font-size:11px;color:var(--text-secondary);text-align:center;">' + when + '</div>' +
       '<div style="min-width:0;display:flex;flex-direction:column;gap:4px;">' +
-        '<span style="display:flex;align-items:center;gap:8px;">' + this._crestImg(f.homeTeamLogo, f.homeTeam, 20) + '<span style="font-size:13px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + this.escapeHtml(f.homeTeam) + '</span>' + (scored ? '<span style="margin-left:auto;font-weight:900;color:#fff;">' + f.homeGoals + '</span>' : '') + '</span>' +
-        '<span style="display:flex;align-items:center;gap:8px;">' + this._crestImg(f.awayTeamLogo, f.awayTeam, 20) + '<span style="font-size:13px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + this.escapeHtml(f.awayTeam) + '</span>' + (scored ? '<span style="margin-left:auto;font-weight:900;color:#fff;">' + f.awayGoals + '</span>' : '') + '</span>' +
+        teamLink(f.homeTeam, f.homeTeamId, f.homeTeamLogo, f.homeGoals) +
+        teamLink(f.awayTeam, f.awayTeamId, f.awayTeamLogo, f.awayGoals) +
       '</div>' +
       '<div style="text-align:right;">' + pill + '</div>' +
     '</div>';
@@ -6599,45 +6608,47 @@ const App = {
     var app = document.getElementById('app');
     if (!app) return;
     var self = this;
-    // Slug carries the football-data team id as a trailing number (e.g. arsenal-42).
+    // Slug carries the SportMonks team id as a trailing number (e.g. arsenal-19).
+    // If there's no id (football-data table rows link by name), the /club route
+    // resolves it via SportMonks team search.
     var m = String(slugId || '').match(/-(\d+)$/);
-    var teamId = m ? m[1] : null;
+    var key = m ? m[1] : String(slugId || '');
     var slugName = String(slugId || '').replace(/-\d+$/, '').replace(/-/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
 
-    if (!teamId) {
-      app.innerHTML = '<div class="container" style="padding-top:24px;max-width:900px;"><div style="text-align:center;padding:50px 20px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">Team not found. <a href="#/matches" style="color:var(--gold);">Browse all matches →</a></div></div>';
+    if (!key) {
+      app.innerHTML = '<div class="container" style="padding-top:24px;max-width:900px;"><div style="text-align:center;padding:50px 20px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">Club not found. <a href="#/matches" style="color:var(--gold);">Browse all matches →</a></div></div>';
       return;
     }
     app.innerHTML = '<div class="container" style="padding-top:20px;"><div style="text-align:center;padding:50px 0;color:var(--text-muted);"><div class="loading-spinner" style="margin:0 auto 12px;"></div>Loading ' + this.escapeHtml(slugName) + '…</div></div>';
 
-    var matches = [], fixtures = [], tips = [];
+    var club = null, squad = [], recent = [], fixtures = [], tips = [];
     try {
       var results = await Promise.all([
-        this.api('/football/team-matches/' + teamId + '?limit=15').catch(function () { return { matches: [] }; }),
+        this.api('/football/club/' + encodeURIComponent(key)).catch(function () { return null; }),
         this.fetchLiveFootball(true).catch(function () { return { fixtures: [] }; }),
         this.api('/tips?sport=football').catch(function () { return []; }),
       ]);
-      matches = (results[0] && results[0].matches) || [];
+      if (results[0]) { club = results[0].club || null; squad = results[0].squad || []; recent = results[0].recent || []; }
       fixtures = (results[1] && results[1].fixtures) || [];
       tips = results[2] || [];
     } catch (e) {}
 
-    // Resolve the team's canonical name: the club appearing in every match.
-    var teamName = slugName;
-    if (matches.length) {
-      var counts = {};
-      matches.forEach(function (mt) { counts[mt.homeTeam] = (counts[mt.homeTeam] || 0) + 1; counts[mt.awayTeam] = (counts[mt.awayTeam] || 0) + 1; });
-      teamName = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; })[0] || slugName;
+    if (!club) {
+      app.innerHTML = '<div class="container" style="padding-top:24px;max-width:900px;"><div style="margin-bottom:14px;"><a href="#/matches" style="color:var(--text-muted);font-size:13px;">← All Matches</a></div><div style="text-align:center;padding:50px 20px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;">Club data for ' + this.escapeHtml(slugName) + ' isn\'t available right now.</div></div>';
+      return;
     }
+    var teamName = club.name || slugName;
 
-    // Most-recent-first, only decided matches with scores.
-    var played = matches.filter(function (mt) { return mt.homeScore != null && mt.awayScore != null; })
-      .sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
-
+    // Perspective from SportMonks recent fixtures (most-recent-first).
+    var normN = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+    var tnorm = normN(teamName);
+    var kdate = function (k) { var d = new Date(k).getTime(); return isNaN(d) ? 0 : d; };
+    var played = recent.filter(function (mt) { return mt.homeGoals != null && mt.awayGoals != null; })
+      .sort(function (a, b) { return kdate(b.kickoff) - kdate(a.kickoff); });
     var persp = played.map(function (mt) {
-      var isHome = mt.homeTeam === teamName;
-      var gf = isHome ? mt.homeScore : mt.awayScore;
-      var ga = isHome ? mt.awayScore : mt.homeScore;
+      var isHome = normN(mt.homeTeam) === tnorm || (club.id && mt.homeTeamId === club.id);
+      var gf = isHome ? mt.homeGoals : mt.awayGoals;
+      var ga = isHome ? mt.awayGoals : mt.homeGoals;
       return { mt: mt, isHome: isHome, gf: gf, ga: ga, res: gf > ga ? 'W' : gf < ga ? 'L' : 'D', total: gf + ga, btts: gf > 0 && ga > 0 };
     });
 
@@ -6667,20 +6678,25 @@ const App = {
     if (bttsY >= 3) trendCards.push({ up: true, label: 'BTTS', text: 'Both teams scored in the last ' + bttsY + ' matches' });
     trendCards = trendCards.slice(0, 3);
 
-    // Try to find a crest + upcoming fixtures for this team from live-fixtures.
+    // Upcoming fixtures for this team from live-fixtures (by SportMonks id or name).
     var normT = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
     var tn = normT(teamName);
-    var teamFix = fixtures.filter(function (f) { return normT(f.homeTeam).indexOf(tn) !== -1 || tn.indexOf(normT(f.homeTeam)) !== -1 || normT(f.awayTeam).indexOf(tn) !== -1 || tn.indexOf(normT(f.awayTeam)) !== -1; });
-    var crestUrl = null;
-    teamFix.some(function (f) { if (normT(f.homeTeam).indexOf(tn) !== -1 && f.homeTeamLogo) { crestUrl = f.homeTeamLogo; return true; } if (normT(f.awayTeam).indexOf(tn) !== -1 && f.awayTeamLogo) { crestUrl = f.awayTeamLogo; return true; } return false; });
+    var teamFix = fixtures.filter(function (f) {
+      if (club.id && (f.homeTeamId === club.id || f.awayTeamId === club.id)) return true;
+      return normT(f.homeTeam).indexOf(tn) !== -1 || tn.indexOf(normT(f.homeTeam)) !== -1 || normT(f.awayTeam).indexOf(tn) !== -1 || tn.indexOf(normT(f.awayTeam)) !== -1;
+    });
     var pickFor = function (f) { var h = normT(f.homeTeam), a = normT(f.awayTeam); return tips.find(function (t) { var e = normT(t.event); return e && e.indexOf(h) !== -1 && e.indexOf(a) !== -1; }); };
 
-    // --- Header ---
+    // --- Header (crest + country + founded + venue) ---
+    var meta = [];
+    if (club.country && club.country.name) meta.push((club.country.flag ? this._crestImg(club.country.flag, club.country.name, 16) + ' ' : '') + this.escapeHtml(club.country.name));
+    if (club.founded) meta.push('Est. ' + this.escapeHtml(String(club.founded)));
+    if (club.venue && club.venue.name) meta.push('🏟 ' + this.escapeHtml(club.venue.name) + (club.venue.capacity ? ' (' + Number(club.venue.capacity).toLocaleString() + ')' : ''));
     var header =
       '<div style="background:linear-gradient(160deg,#141b2e,#0a0e1a);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:16px;text-align:center;">' +
-        '<div style="margin-bottom:10px;">' + this._crestImg(crestUrl, teamName, 64) + '</div>' +
-        '<h1 style="font-size:clamp(22px,5vw,30px);font-weight:900;color:#fff;margin:0 0 4px;">' + this.escapeHtml(teamName) + '</h1>' +
-        '<div style="color:var(--gold);font-size:13px;font-weight:700;">Predictions, Stats &amp; Form</div>' +
+        '<div style="margin-bottom:10px;">' + this._crestImg(club.logo, teamName, 68) + '</div>' +
+        '<h1 style="font-size:clamp(22px,5vw,30px);font-weight:900;color:#fff;margin:0 0 6px;">' + this.escapeHtml(teamName) + '</h1>' +
+        (meta.length ? '<div style="color:var(--text-secondary);font-size:12.5px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:center;">' + meta.join('<span style="opacity:.4;">·</span>') + '</div>' : '') +
       '</div>';
 
     // --- Trend cards ---
@@ -6700,7 +6716,11 @@ const App = {
         '<div style="flex:1;min-width:180px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Recent Form</div><div style="display:flex;gap:6px;justify-content:center;">' + (formDots || '<span style="color:var(--text-muted);">—</span>') + '</div></div>' +
         '<div style="flex:1;min-width:120px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:26px;font-weight:900;color:#fff;">' + persp.length + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Recent Matches</div></div>' +
         '<div style="flex:1;min-width:120px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:26px;font-weight:900;color:var(--gold);">' + winRate + '%</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Win Rate</div></div>' +
+        (squad.length ? '<div style="flex:1;min-width:120px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:26px;font-weight:900;color:#3b82f6;">' + squad.length + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:6px;">Squad Size</div></div>' : '') +
       '</div>' : '';
+
+    // --- Cosmo Bet CTA — promote our official sportsbook partner on every club page ---
+    var cosmoHtml = '<div style="margin-bottom:16px;">' + this.renderCosmoCta('club', 'Back ' + teamName + ' with Cosmo Bet') + '</div>';
 
     // --- Tabs: Predictions (upcoming) / Recent Results ---
     var predBody = teamFix.length
@@ -6710,23 +6730,48 @@ const App = {
       ? persp.slice(0, 10).map(function (p) {
           var mt = p.mt;
           var col = p.res === 'W' ? '#22c55e' : p.res === 'L' ? '#ef4444' : '#d4a843';
-          var d = new Date(mt.date); var ds = !isNaN(d.getTime()) ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
+          var d = new Date(mt.kickoff); var ds = !isNaN(d.getTime()) ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
           return '<div style="display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--border);">' +
             '<span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:' + col + ';color:#0a0e1a;font-weight:900;font-size:10px;align-items:center;justify-content:center;">' + p.res + '</span>' +
-            '<span style="font-size:13px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + self.escapeHtml(mt.homeTeam) + ' <span style="color:var(--gold);font-weight:800;">' + mt.homeScore + '-' + mt.awayScore + '</span> ' + self.escapeHtml(mt.awayTeam) + '</span>' +
+            '<span style="font-size:13px;color:#fff;display:flex;align-items:center;gap:6px;min-width:0;">' + self._crestImg(mt.homeTeamLogo, mt.homeTeam, 18) + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + self.escapeHtml(mt.homeTeam) + ' <span style="color:var(--gold);font-weight:800;">' + mt.homeGoals + '-' + mt.awayGoals + '</span> ' + self.escapeHtml(mt.awayTeam) + '</span>' + self._crestImg(mt.awayTeamLogo, mt.awayTeam, 18) + '</span>' +
             '<span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">' + ds + '</span>' +
           '</div>';
         }).join('')
       : '<div style="padding:24px;text-align:center;color:var(--text-muted);">No recent results available.</div>';
 
+    // Squad tab — players grouped by position, with photos (badges).
+    var squadBody = '';
+    if (squad.length) {
+      var order = ['Goalkeepers', 'Defenders', 'Midfielders', 'Attackers', 'Squad'];
+      var byPos = {};
+      squad.forEach(function (p) { (byPos[p.position] = byPos[p.position] || []).push(p); });
+      var keys = Object.keys(byPos).sort(function (a, b) { var ia = order.indexOf(a), ib = order.indexOf(b); return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib); });
+      squadBody = keys.map(function (pos) {
+        return '<div style="padding:10px 14px 4px;font-size:11px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:1px;border-top:1px solid var(--border);">' + self.escapeHtml(pos) + '</div>' +
+          byPos[pos].map(function (pl) {
+            return '<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;">' +
+              self._crestImg(pl.image, pl.name, 34) +
+              '<span style="font-size:14px;color:#fff;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + self.escapeHtml(pl.name) + '</span>' +
+              (pl.nationality ? '<span style="font-size:11px;color:var(--text-muted);">' + self.escapeHtml(pl.nationality) + '</span>' : '') +
+              (pl.number != null ? '<span style="font-size:13px;font-weight:800;color:var(--text-secondary);min-width:24px;text-align:right;">' + pl.number + '</span>' : '') +
+            '</div>';
+          }).join('');
+      }).join('');
+    } else {
+      squadBody = '<div style="padding:24px;text-align:center;color:var(--text-muted);">Squad list not available for this club.</div>';
+    }
+
+    var squadTabBtn = squad.length ? '<button id="tt-squad-btn" onclick="App._switchTeamTab(\'squad\')" class="team-tab-btn" style="flex:1;padding:13px;background:transparent;border:none;color:var(--text-muted);font-weight:800;font-size:13px;cursor:pointer;">Squad</button>' : '';
     var tabs =
       '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px;">' +
         '<div style="display:flex;border-bottom:1px solid var(--border);">' +
           '<button id="tt-pred-btn" onclick="App._switchTeamTab(\'pred\')" class="team-tab-btn" style="flex:1;padding:13px;background:var(--bg-elevated);border:none;color:var(--gold);font-weight:800;font-size:13px;cursor:pointer;">Predictions</button>' +
           '<button id="tt-res-btn" onclick="App._switchTeamTab(\'res\')" class="team-tab-btn" style="flex:1;padding:13px;background:transparent;border:none;color:var(--text-muted);font-weight:800;font-size:13px;cursor:pointer;">Recent Results</button>' +
+          squadTabBtn +
         '</div>' +
         '<div id="tt-pred">' + predBody + '</div>' +
         '<div id="tt-res" style="display:none;">' + resultsBody + '</div>' +
+        (squad.length ? '<div id="tt-squad" style="display:none;">' + squadBody + '</div>' : '') +
       '</div>';
 
     // --- SEO copy (real numbers only) ---
@@ -6739,19 +6784,20 @@ const App = {
     app.innerHTML =
       '<div class="container" style="padding-top:18px;max-width:900px;">' +
         '<div style="margin-bottom:14px;"><a href="#/matches" style="color:var(--text-muted);font-size:13px;">← All Matches</a></div>' +
-        header + trendHtml + numbersHtml + tabs + copy +
+        header + trendHtml + numbersHtml + cosmoHtml + tabs + copy +
       '</div>';
   },
 
   _switchTeamTab(which) {
-    var pred = document.getElementById('tt-pred'), res = document.getElementById('tt-res');
-    var pb = document.getElementById('tt-pred-btn'), rb = document.getElementById('tt-res-btn');
-    if (!pred || !res) return;
-    var on = which === 'pred';
-    pred.style.display = on ? 'block' : 'none';
-    res.style.display = on ? 'none' : 'block';
-    if (pb) { pb.style.background = on ? 'var(--bg-elevated)' : 'transparent'; pb.style.color = on ? 'var(--gold)' : 'var(--text-muted)'; }
-    if (rb) { rb.style.background = on ? 'transparent' : 'var(--bg-elevated)'; rb.style.color = on ? 'var(--text-muted)' : 'var(--gold)'; }
+    var panels = { pred: 'tt-pred', res: 'tt-res', squad: 'tt-squad' };
+    var btns = { pred: 'tt-pred-btn', res: 'tt-res-btn', squad: 'tt-squad-btn' };
+    Object.keys(panels).forEach(function (k) {
+      var panel = document.getElementById(panels[k]);
+      var btn = document.getElementById(btns[k]);
+      var on = k === which;
+      if (panel) panel.style.display = on ? 'block' : 'none';
+      if (btn) { btn.style.background = on ? 'var(--bg-elevated)' : 'transparent'; btn.style.color = on ? 'var(--gold)' : 'var(--text-muted)'; }
+    });
   },
 
   _toggleLeague(id, header) {
