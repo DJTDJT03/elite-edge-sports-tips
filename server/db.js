@@ -1048,6 +1048,53 @@ async function releaseStripeEvent(eventId) {
 }
 
 // ---------------------------------------------------------------------------
+// CONVERSION FUNNEL
+// ---------------------------------------------------------------------------
+// Record a top-of-funnel beacon (landing_view / signup_open / checkout_start).
+// Best-effort — a dropped analytics event must never affect the user.
+async function recordFunnelEvent(data) {
+  if (!pool || !data || !data.event) return;
+  try {
+    await query(
+      'INSERT INTO funnel_events (event, session_id, path, meta) VALUES ($1,$2,$3,$4)',
+      [String(data.event).slice(0, 40), (data.sessionId || null) && String(data.sessionId).slice(0, 64),
+       (data.path || null) && String(data.path).slice(0, 200), data.meta ? JSON.stringify(data.meta).slice(0, 2000) : null]
+    );
+  } catch (e) { /* non-fatal */ }
+}
+
+// Compute the whole funnel over the trailing `days` window. Top of funnel comes
+// from beacons (unique sessions); the lower funnel is DB truth from real tables
+// so registrations / trials / paid conversions can never be faked or drift.
+async function getFunnelMetrics(days) {
+  if (!pool) return null;
+  const d = Math.max(1, Math.min(365, parseInt(days, 10) || 30));
+  const sinceExpr = `NOW() - INTERVAL '${d} days'`;
+  const [visits, signupOpens, checkoutStarts, registrations, trials, paid] = await Promise.all([
+    query(`SELECT COUNT(DISTINCT session_id)::int AS n FROM funnel_events WHERE event='landing_view' AND created_at >= ${sinceExpr}`),
+    query(`SELECT COUNT(DISTINCT session_id)::int AS n FROM funnel_events WHERE event='signup_open' AND created_at >= ${sinceExpr}`),
+    query(`SELECT COUNT(DISTINCT session_id)::int AS n FROM funnel_events WHERE event='checkout_start' AND created_at >= ${sinceExpr}`),
+    query(`SELECT COUNT(*)::int AS n FROM users WHERE created_at >= ${sinceExpr}`),
+    query(`SELECT COUNT(*)::int AS n FROM users WHERE trial_start IS NOT NULL AND trial_start >= ${sinceExpr}`),
+    // Organic paid conversions only — exclude admin comps and reconcile sweeps,
+    // which also emit subscription_grant but aren't funnel conversions.
+    query(`SELECT COUNT(DISTINCT user_id)::int AS n FROM credit_transactions
+             WHERE type='subscription_grant' AND created_at >= ${sinceExpr}
+               AND COALESCE(description,'') NOT ILIKE 'Admin %'
+               AND COALESCE(description,'') NOT ILIKE '%reconcile%'`),
+  ]);
+  return {
+    days: d,
+    visits: visits.rows[0].n,
+    signupOpens: signupOpens.rows[0].n,
+    registrations: registrations.rows[0].n,
+    trials: trials.rows[0].n,
+    checkoutStarts: checkoutStarts.rows[0].n,
+    paid: paid.rows[0].n,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // SONAR CACHE
 // ---------------------------------------------------------------------------
 async function getSonarCache(cacheKey) {
@@ -1323,6 +1370,8 @@ module.exports = {
   recordCreditTransaction, getCreditHistory, deductCredits, addCredits, hasUnlockedTip,
   // Stripe webhook idempotency
   claimStripeEvent, releaseStripeEvent,
+  // Conversion funnel
+  recordFunnelEvent, getFunnelMetrics,
   // Sonar Cache
   getSonarCache, claimSonarCache, completeSonarCache, checkSonarClaim, reclaimStaleSonarCache, cleanExpiredSonarCache,
   // Sonar Spend

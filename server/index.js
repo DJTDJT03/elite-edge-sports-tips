@@ -409,6 +409,12 @@ app.use('/', require('./routes/public')(deps));
         'CREATE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)',
         // Fast "has this user already unlocked this tip?" idempotency check.
         "CREATE INDEX IF NOT EXISTS idx_credit_tx_tip_unlock ON credit_transactions(user_id, tip_id, type)",
+        // Conversion funnel — first-party top-of-funnel beacons (landing views,
+        // signup-modal opens, checkout starts) that GA sees but the DB doesn't.
+        // The lower funnel (registrations/trials/paid) is read from real tables.
+        "CREATE TABLE IF NOT EXISTS funnel_events (id BIGSERIAL PRIMARY KEY, event TEXT NOT NULL, session_id TEXT, path TEXT, meta JSONB, created_at TIMESTAMPTZ DEFAULT NOW())",
+        'CREATE INDEX IF NOT EXISTS idx_funnel_event_date ON funnel_events(event, created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_funnel_session ON funnel_events(session_id, event)',
       ];
       for (var ci = 0; ci < alterCols.length; ci++) {
         try { await db.query(alterCols[ci]); } catch(e) {}
@@ -969,6 +975,20 @@ app.use('/', require('./routes/public')(deps));
 
 // Mark app as ready after startup scripts
 setTimeout(function() { _appReady = true; console.log('[Startup] App ready'); }, 5000);
+
+// Prune old conversion-funnel beacons daily so the table can't grow unbounded.
+// Funnel analytics only needs a trailing window; 400 days keeps year-over-year.
+(function pruneFunnelEvents() {
+  async function prune() {
+    if (!db.isAvailable()) return;
+    try {
+      const r = await db.query("DELETE FROM funnel_events WHERE created_at < NOW() - INTERVAL '400 days'");
+      if (r && r.rowCount) console.log('[Cleanup] Pruned ' + r.rowCount + ' old funnel_events');
+    } catch (e) { /* table may not exist yet on first boot — non-fatal */ }
+  }
+  setTimeout(prune, 60000); // once, shortly after boot
+  setInterval(prune, 24 * 60 * 60 * 1000); // then daily
+})();
 
 // ---------------------------------------------------------------------------
 // Global error handler — catches unhandled errors in route handlers

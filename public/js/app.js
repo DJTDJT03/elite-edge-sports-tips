@@ -29,6 +29,34 @@ function trackEvent(category, action, label) {
   // console.log('[GA Event]', category, action, label);
 }
 
+// -------------------------------------------------------------------------
+// First-party conversion-funnel beacon. Unlike trackEvent (GA), this writes to
+// OUR database so the Admin funnel shows visit → signup → trial → paid without
+// depending on GA. Consent-gated (same cookie consent as GA), no PII, and uses
+// sendBeacon so it never blocks navigation. Each browser gets a random session
+// id (not tied to identity) so we can de-dupe visits into unique sessions.
+function _funnelSid() {
+  try {
+    var sid = localStorage.getItem('ee_sid');
+    if (!sid) {
+      sid = 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('ee_sid', sid);
+    }
+    return sid;
+  } catch (e) { return null; }
+}
+function trackFunnel(event, meta) {
+  try {
+    if (localStorage.getItem('ee_cookie_consent') !== 'accepted') return;
+    var payload = JSON.stringify({ event: event, sessionId: _funnelSid(), path: location.hash || '/', meta: meta || null });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon('/api/track', new Blob([payload], { type: 'application/json' }));
+    } else {
+      fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(function () {});
+    }
+  } catch (e) { /* analytics must never break the app */ }
+}
+
 const App = {
   // Cosmo Bet — our official sportsbook partner. This is the affiliate tracking
   // link (Cellxpert): a click drops the cookie so any resulting sign-up/deposit
@@ -1110,6 +1138,7 @@ const App = {
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
     const modal = document.getElementById(`modal-${type}`);
     if (modal) modal.style.display = 'block';
+    if (type === 'register') trackFunnel('signup_open');
     if (type === 'calculator') this.calculateStakes();
     if (type === 'mybets') this.renderMyBets();
     // Pre-fill remembered email on login modal
@@ -1145,6 +1174,7 @@ const App = {
         this.showModal('login');
         return;
       }
+      trackFunnel('checkout_start', { plan: plan });
       this.closeModal();
       App.showToast('Redirecting to secure checkout...', 'info');
       var res = await this.api('/stripe/create-checkout', { method: 'POST', body: JSON.stringify({ plan: plan }) });
@@ -2944,6 +2974,7 @@ const App = {
     if (!this.user) {
       app.innerHTML = this._renderLandingFunnel({ todayTips: todayTips, napTip: napTip, perf: perf, recentWins: recentWins, streak: streak });
       this._loadEventSpotlight(); // featured meeting (Goodwood etc.) — fills the slot in the funnel
+      if (!this._landingBeaconSent) { this._landingBeaconSent = true; trackFunnel('landing_view'); }
       return;
     }
 

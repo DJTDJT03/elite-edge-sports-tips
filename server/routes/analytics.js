@@ -8,6 +8,69 @@ module.exports = function(deps) {
   const { db, authenticate, requireAdmin } = deps;
 
   // -------------------------------------------------------------------------
+  // GET /api/analytics/funnel — conversion funnel (visit → signup → trial → paid)
+  // Top of funnel from first-party beacons; lower funnel from real tables.
+  // -------------------------------------------------------------------------
+  router.get('/analytics/funnel', authenticate, requireAdmin, async (req, res) => {
+    try {
+      if (!db.getFunnelMetrics) return res.json({ available: false });
+      const m = await db.getFunnelMetrics(req.query.days);
+      if (!m) return res.json({ available: false });
+
+      const pct = (num, den) => (den > 0 ? Math.round((num / den) * 1000) / 10 : null);
+
+      // IMPORTANT: we deliberately keep the two data sources in SEPARATE funnels.
+      // Top of funnel (visits/signupOpens/checkoutStarts) is consent-gated beacons —
+      // most visitors decline cookies, so these UNDERCOUNT. The account funnel
+      // (accounts/trials/paid) is exact DB truth and counts everyone. Computing a
+      // pass-through rate ACROSS that boundary (e.g. registrations ÷ signupOpens)
+      // is meaningless and can exceed 100%, so we never do it. Each funnel's rates
+      // are only relative to its OWN entry stage, where they're honest.
+      function buildFunnel(rows) {
+        const top = rows[0].count || 0;
+        let prev = null;
+        rows.forEach((s) => {
+          // Pass-through vs the previous stage, capped at 100% for display safety.
+          const raw = prev === null ? null : pct(s.count, prev);
+          s.stepRate = raw === null ? null : Math.min(raw, 100);
+          s.fromTop = pct(s.count, top);
+          prev = s.count;
+        });
+        return rows;
+      }
+
+      const trafficFunnel = buildFunnel([
+        { key: 'visits',         label: 'Site visits',      count: m.visits },
+        { key: 'signupOpens',    label: 'Signup opened',    count: m.signupOpens },
+        { key: 'checkoutStarts', label: 'Checkout started', count: m.checkoutStarts },
+      ]);
+      const accountFunnel = buildFunnel([
+        { key: 'registrations',  label: 'Accounts created', count: m.registrations },
+        { key: 'trials',         label: 'Trials started',   count: m.trials },
+        { key: 'paid',           label: 'Paid subscribers', count: m.paid },
+      ]);
+
+      res.json({
+        available: true,
+        days: m.days,
+        trafficFunnel,
+        accountFunnel,
+        // Honest headline conversions — both computed within a single data source.
+        kpis: {
+          signupToPaid: pct(m.paid, m.registrations),   // account → paying (DB truth)
+          trialToPaid: pct(m.paid, m.trials),           // trial → paying (DB truth)
+          visitToSignup: pct(m.signupOpens, m.visits),  // engagement (beacons)
+          newAccounts: m.registrations,
+          newPaid: m.paid,
+        },
+      });
+    } catch (err) {
+      console.error('[Analytics] funnel error:', err.message);
+      res.status(500).json({ error: 'Failed to compute funnel' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // GET /api/analytics/clv — CLV summary across all settled tips
   // -------------------------------------------------------------------------
   router.get('/analytics/clv', authenticate, requireAdmin, async (req, res) => {

@@ -239,6 +239,7 @@
         livedata: ['Live Data', 'API status and data refresh'],
         audit: ['Audit Log', 'System activity history'],
         analytics: ['Selection Analytics', 'Performance by sport, analyst, and market'],
+        funnel: ['Conversion Funnel', 'Visit → signup → trial → paid, and where it leaks'],
         lms: ['Last Man Standing', 'Competitions, entries, settlement, prize pot'],
       };
       var pageTitle = document.getElementById('pageTitle');
@@ -261,6 +262,7 @@
         'livedata': function() { if (window.LiveDataPage) LiveDataPage.render(); },
         'audit': function() { if (window.AuditPage) AuditPage.render(); },
         'analytics': function() { if (window.AnalyticsPage) AnalyticsPage.render(); },
+        'funnel': function() { if (window.FunnelPage) FunnelPage.render(); },
         'lms': function() { if (window.LMSPage) LMSPage.render(); },
       };
 

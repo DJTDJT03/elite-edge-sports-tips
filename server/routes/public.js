@@ -357,6 +357,26 @@ module.exports = function(deps) {
     } catch (e) { return null; }
   }
 
+  // POST /api/track — first-party conversion-funnel beacon. Consent-gated on the
+  // client; here we just allowlist the event names and store no PII. Always 204
+  // (fire-and-forget) so it never blocks or errors the visitor's flow.
+  var FUNNEL_EVENTS = ['landing_view', 'signup_open', 'checkout_start'];
+  router.post('/api/track', async (req, res) => {
+    try {
+      var event = (req.body && req.body.event) || '';
+      if (FUNNEL_EVENTS.indexOf(event) === -1) return res.status(204).end();
+      if (db && db.recordFunnelEvent) {
+        db.recordFunnelEvent({
+          event: event,
+          sessionId: (req.body && req.body.sessionId) || null,
+          path: (req.body && req.body.path) || null,
+          meta: (req.body && req.body.meta) || null,
+        });
+      }
+    } catch (e) { /* never fail a beacon */ }
+    res.status(204).end();
+  });
+
   // GET /api/assistant/popular — most-asked questions (adaptive suggested prompts).
   router.get('/api/assistant/popular', async (req, res) => {
     try {
