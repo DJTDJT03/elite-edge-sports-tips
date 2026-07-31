@@ -150,11 +150,17 @@ CosmoBet.prototype._teamName = function(id) {
 // { matchResult:{home,draw,away}, doubleChance:{...}, totals:[{line,over,under}] }
 // with decimal odds (coef). Any market absent -> that key omitted/null.
 CosmoBet.prototype.getGameOdds = async function(gameId) {
+  // Short-TTL cache so repeated tip-detail views don't hammer Cosmo's API. Prices
+  // move slowly pre-match; 3 min is fresh enough for a "back this pick" price.
+  var now = Date.now();
+  this._oddsCache = this._oddsCache || {};
+  var hit = this._oddsCache[gameId];
+  if (hit && (now - hit.at) < 180000) return hit.val;
   var outer = await this._get('/api/prematch/getprematchgameall/en/' + COMPANY + '/?games=' + gameId);
   var games = outer.game;
   if (typeof games === 'string') games = JSON.parse(games);
   var g = Array.isArray(games) ? games[0] : games;
-  if (!g || !g.ev) return null;
+  if (!g || !g.ev) { this._oddsCache[gameId] = { at: now, val: null }; return null; }
   var ev = g.ev;
   var byPos = function(marketId) {
     var m = ev[String(marketId)] || {};
@@ -195,6 +201,7 @@ CosmoBet.prototype.getGameOdds = async function(gameId) {
     lines[line]._pos[o.pos] = o.coef;
   });
   out.totals = Object.values(lines);
+  this._oddsCache[gameId] = { at: now, val: out };
   return out;
 };
 
@@ -285,11 +292,21 @@ CosmoBet.prototype.matchFixture = async function(homeName, awayName, dateISO) {
 // Map a pick's selection to the matched game's outcome id + price, orientation-
 // safe: the selection must match EXACTLY ONE of home/away (not both, not
 // neither), else return null so we never show a wrong-side price/betslip.
-CosmoBet.prototype.selectionOutcome = function(odds, selection, gameHome, gameAway) {
+CosmoBet.prototype.selectionOutcome = function(odds, selection, gameHome, gameAway, market) {
   if (!odds || !odds.matchResult) return null;
   var mr = odds.matchResult;
   var s = String(selection || '').toLowerCase();
-  if (s.indexOf('draw') !== -1) return { outcomeId: mr.drawId, price: mr.draw };
+  var mk = String(market || '').toLowerCase();
+  // Only the straight Match Result (1X2) market is wired to outcomes here. If a
+  // market is supplied and it is NOT match-result, bail — otherwise a team-named
+  // Double Chance / Handicap selection ("Chelsea -1", "Chelsea or Draw") would
+  // mis-map to the straight 1X2 price. Safer to show the generic tracked CTA.
+  if (mk && !/match result|match winner|1x2|full ?time result|to win( the)? match|\bwin\b/.test(mk)) return null;
+  // A GENUINE straight-draw only — never a Double Chance ("X or Draw", "Team or
+  // Draw"), which contains " or " and is a different (higher-priced) bet.
+  if (/\bdraw\b/.test(s) && s.indexOf(' or ') === -1) return { outcomeId: mr.drawId, price: mr.draw };
+  // Double Chance and any selection still referencing both/neither team → null.
+  if (s.indexOf(' or ') !== -1) return null;
   var norm = function(x) { return String(x || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
   var sn = norm(s.replace(/win/g, '')), hn = norm(gameHome), an = norm(gameAway);
   var homeMatch = hn && (sn.indexOf(hn) !== -1 || hn.indexOf(sn) !== -1);

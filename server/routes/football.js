@@ -18,13 +18,62 @@ module.exports = function(deps) {
       if (!game) return res.json({ ready: true, matched: false, trackedLink: trackedLink });
       var odds = await cosmoBet.getGameOdds(game.gameId);
       // Orientation-safe selection -> outcome mapping (never a wrong-side price).
-      var so = cosmoBet.selectionOutcome(odds, selection, game.home, game.away);
+      var so = cosmoBet.selectionOutcome(odds, selection, game.home, game.away, market);
       var betslipLink = (so && so.outcomeId) ? cosmoBet.betslipLink({ outcomeId: so.outcomeId, subId: 'betslip' }) : trackedLink;
       res.json({
         ready: true, matched: !!(so && so.outcomeId),
         game: { home: game.home, away: game.away },
         cosmoOdds: so ? so.price : null,
         betslipLink: betslipLink,
+        deepLink: cosmoBet.isDeepLinkReady(),
+      });
+    } catch (err) {
+      res.json({ ready: false, error: err.message });
+    }
+  });
+
+  // GET /api/football/cosmo-tip-odds — Cosmo's live price for a specific published
+  // TIP (by id), plus a "bigger price than we advised" flag for line-shopping value.
+  // Parses home/away from the tip's "Home vs Away - League" event string. Always
+  // safe: returns matched:false (→ generic tracked CTA) unless the fixture matches
+  // unambiguously AND the selection maps to a real outcome — never a wrong price.
+  router.get('/football/cosmo-tip-odds', async function(req, res) {
+    try {
+      if (!cosmoBet) return res.json({ ready: false, reason: 'not configured' });
+      var tipId = req.query.tipId;
+      if (!tipId || !db.getTipById) return res.json({ ready: false });
+      var tip = await db.getTipById(tipId);
+      if (!tip || (tip.sport && tip.sport !== 'football')) return res.json({ ready: false, reason: 'not football' });
+
+      // "Home vs Away - League" → home / away (strip the league suffix).
+      var parts = String(tip.event || '').split(/\s+vs\s+|\s+v\s+/i);
+      if (parts.length < 2) return res.json({ ready: false, reason: 'unparseable' });
+      var home = parts[0].trim();
+      var away = parts[1].split(/\s+[-–—]\s+/)[0].trim();
+      if (!home || !away) return res.json({ ready: false, reason: 'unparseable' });
+
+      var trackedLink = cosmoBet.trackedLink('tip-odds');
+      var game = await cosmoBet.matchFixture(home, away, tip.date);
+      if (!game) return res.json({ ready: true, matched: false, trackedLink: trackedLink });
+      var odds = await cosmoBet.getGameOdds(game.gameId);
+      var so = cosmoBet.selectionOutcome(odds, tip.selection, game.home, game.away, tip.market);
+      if (!so || !so.outcomeId || !so.price) return res.json({ ready: true, matched: false, trackedLink: trackedLink });
+
+      // Advised odds — only compare when it's a clean decimal (>1). Fractional/odd
+      // strings are skipped so we never show a bogus "bigger price" percentage.
+      var advised = parseFloat(tip.odds);
+      var advisedOk = isFinite(advised) && advised > 1 && !/\//.test(String(tip.odds));
+      var cosmo = so.price;
+      var betterPct = (advisedOk && cosmo > advised) ? Math.round((cosmo / advised - 1) * 100) : null;
+
+      res.json({
+        ready: true, matched: true,
+        selection: tip.selection,
+        advisedOdds: advisedOk ? advised : null,
+        cosmoOdds: cosmo,
+        betterPrice: !!(betterPct && betterPct > 0),
+        betterPct: betterPct,
+        betslipLink: cosmoBet.betslipLink({ outcomeId: so.outcomeId, subId: 'tip-betslip' }),
         deepLink: cosmoBet.isDeepLinkReady(),
       });
     } catch (err) {

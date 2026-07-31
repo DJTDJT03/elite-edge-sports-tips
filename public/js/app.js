@@ -4436,9 +4436,42 @@ const App = {
           </div>` : ''}
         </div>
       `;
+      // Football picks: upgrade the partner CTA to Cosmo's live price + a
+      // "bigger price than we advised" value tag when the fixture matches.
+      if (tip.sport === 'football') this._loadTipCosmoValue(tip);
     } catch (err) {
       app.innerHTML = `<div class="container text-center" style="padding:80px;"><h2>Tip not found</h2><a href="#/" class="btn btn-outline mt-16">Back to Dashboard</a></div>`;
     }
+  },
+
+  // Fill #tip-cosmo-slot with Cosmo's live price for THIS pick + betslip link, and
+  // a green "bigger price" value tag when Cosmo pay more than we advised. Silent on
+  // no match (keeps the generic tracked CTA already in the slot).
+  async _loadTipCosmoValue(tip) {
+    var slot = document.getElementById('tip-cosmo-slot');
+    if (!slot || !tip || !tip.id) return;
+    try {
+      var d = await this.api('/football/cosmo-tip-odds?tipId=' + encodeURIComponent(tip.id));
+      slot = document.getElementById('tip-cosmo-slot');
+      if (!slot || !d || !d.matched || !d.cosmoOdds) return;
+      var label = d.deepLink ? 'Add to Betslip' : 'Back this with Cosmo Bet';
+      var priceRow =
+        '<div style="display:flex;justify-content:center;gap:22px;align-items:flex-end;margin-bottom:10px;">' +
+          (d.advisedOdds ? '<div style="text-align:center;"><div style="font-size:11px;color:var(--text-muted);">We advised</div><div style="font-size:18px;font-weight:800;color:#c7d0e0;">' + this.formatOdds(d.advisedOdds) + '</div></div>' : '') +
+          '<div style="text-align:center;"><div style="font-size:11px;color:var(--gold);">Cosmo Bet price</div><div style="font-size:24px;font-weight:900;color:var(--gold);">' + this.formatOdds(d.cosmoOdds) + '</div></div>' +
+        '</div>';
+      var valueTag = d.betterPrice
+        ? '<div style="text-align:center;margin-bottom:10px;"><span style="display:inline-block;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.4);color:#22c55e;font-weight:800;font-size:12px;padding:4px 12px;border-radius:20px;">&#9650; Cosmo are paying a bigger price · +' + d.betterPct + '%</span></div>'
+        : '';
+      slot.innerHTML =
+        '<div style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.25);border-radius:10px;padding:14px;">' +
+          '<div style="font-size:12px;color:var(--text-secondary);text-align:center;margin-bottom:10px;">' + this.escapeHtml(d.selection || tip.selection || 'This pick') + '</div>' +
+          priceRow + valueTag +
+          '<a href="' + encodeURI(d.betslipLink) + '" target="_blank" rel="noopener sponsored" onclick="event.stopPropagation();" ' +
+          'style="display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-weight:800;font-size:14px;padding:11px 16px;border-radius:8px;text-decoration:none;">&#9889; ' + label + ' &rarr;</a>' +
+          '<div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:8px;">Official partner · 18+ · Please gamble responsibly · <a href="https://www.begambleaware.org" target="_blank" rel="noopener" style="color:var(--text-muted);">BeGambleAware.org</a></div>' +
+        '</div>';
+    } catch (e) { /* keep the generic tracked CTA */ }
   },
 
   // -----------------------------------------------------------------------
