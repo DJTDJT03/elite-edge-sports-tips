@@ -2974,6 +2974,7 @@ const App = {
     if (!this.user) {
       app.innerHTML = this._renderLandingFunnel({ todayTips: todayTips, napTip: napTip, perf: perf, recentWins: recentWins, streak: streak });
       this._loadEventSpotlight(); // featured meeting (Goodwood etc.) — fills the slot in the funnel
+      this._loadClvProof();       // CLV proof-of-edge block — fills #clv-proof-slot when ready
       if (!this._landingBeaconSent) { this._landingBeaconSent = true; trackFunnel('landing_view'); }
       return;
     }
@@ -4004,7 +4005,7 @@ const App = {
               '<button class="btn btn-gold" onclick="App.showModal(\'register\')" style="padding:15px 32px;font-size:15px;box-shadow:0 8px 24px rgba(212,168,67,0.28);">Get Started Free →</button>' +
               '<a href="javascript:void(0)" onclick="var el=document.getElementById(\'free-tips\');if(el)el.scrollIntoView({behavior:\'smooth\'});" class="btn btn-outline" style="padding:15px 32px;font-size:15px;">See today\'s tips</a>' +
             '</div>' +
-            '<div style="display:flex;align-items:center;gap:8px;margin-top:18px;font-size:13px;color:#c7d0e0;"><span style="color:#00b67a;letter-spacing:2px;">★★★★★</span><span>Trusted by bettors across the UK · 18+ · BeGambleAware.org</span></div>' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-top:18px;font-size:13px;color:#c7d0e0;"><span style="color:#22c55e;font-size:15px;">&#10003;</span><span>Every pick logged &amp; graded — winners and losers · 18+ · BeGambleAware.org</span></div>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -4070,11 +4071,40 @@ const App = {
       if (di > -1) sel = sel.slice(di + 3);
       return '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:8px;padding:9px 14px;white-space:nowrap;font-size:13px;"><span style="color:#d4a843;font-weight:800;">✓ ' + esc(sel) + '</span>' + (r.odds ? ' <span style="color:var(--text-muted);">@ ' + esc(self.formatOdds ? self.formatOdds(r.odds) : String(r.odds)) + '</span>' : '') + '</div>';
     }).join('');
+    // "Since <month year>" label from the first real bank-history point, so the
+    // proof always carries an honest timeframe (small sample looks credible, not hidden).
+    var sinceLabel = (function () {
+      try {
+        var bh = (perf.bankHistory || []).filter(function (h) { return h && h.date && h.date !== 'Start'; });
+        if (bh.length) { var d = new Date(bh[0].date); if (!isNaN(d.getTime())) return 'Since ' + d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }); }
+      } catch (e) {}
+      return 'Verified track record';
+    })();
+    // Real, verified performance tiles — the numbers actually exist (settled tips),
+    // so we lead with them instead of an unverifiable claim.
+    var proofTile = function (value, label, colour) {
+      return '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:18px 12px;">' +
+        '<div style="font-size:clamp(24px,6vw,32px);font-weight:900;color:' + (colour || '#fff') + ';line-height:1;">' + value + '</div>' +
+        '<div style="font-size:11px;color:#8b97ad;text-transform:uppercase;letter-spacing:1px;margin-top:6px;">' + label + '</div></div>';
+    };
+    var perfTiles = hasProof ?
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;max-width:760px;margin:0 auto 10px;">' +
+        (perf.roi ? proofTile((perf.roi > 0 ? '+' : '') + perf.roi + '%', 'Return on investment', '#22c55e') : '') +
+        (perf.strikeRate ? proofTile(perf.strikeRate + '%', 'Strike rate', '#d4a843') : '') +
+        (typeof perf.totalPnl === 'number' ? proofTile((perf.totalPnl >= 0 ? '+' : '') + perf.totalPnl.toFixed(1) + ' pts', 'Net profit (level stakes)', perf.totalPnl >= 0 ? '#22c55e' : '#ef4444') : '') +
+        (perf.totalTips ? proofTile(perf.totalTips, 'Tips settled & graded', '#fff') : '') +
+      '</div>' +
+      '<div style="font-size:12px;color:#6b7280;margin-bottom:20px;">' + sinceLabel + ' · every pick logged, winners and losers · <a href="#/track-record" style="color:#d4a843;">see them all</a></div>'
+      : '';
     var proofSection = (recentWins.length || hasProof) ?
       '<div style="padding:clamp(34px,7vw,48px) 18px;background:radial-gradient(ellipse at 50% 120%,rgba(212,168,67,0.08),transparent 60%);border-top:1px solid var(--border);"><div style="max-width:1080px;margin:0 auto;text-align:center;">' +
         '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:#d4a843;border:1px solid rgba(212,168,67,0.3);border-radius:20px;padding:5px 14px;margin-bottom:14px;">📈 PROVEN, NOT PROMISED</div>' +
         '<h2 style="font-size:clamp(22px,5.5vw,30px);font-weight:900;color:#fff;margin:0 0 12px;">We publish our track record</h2>' +
-        '<p style="color:var(--text-secondary);font-size:15px;max-width:600px;margin:0 auto 22px;line-height:1.6;">Closing Line Value on every tip is how professionals prove genuine edge. We show it — win or lose. That\'s the difference between us and a bloke with a Telegram channel.</p>' +
+        perfTiles +
+        // CLV proof — filled async by _loadClvProof(). Lights up the moment a
+        // meaningful sample (15+) exists; shows an honest "building" state until then.
+        '<div id="clv-proof-slot"></div>' +
+        '<p style="color:var(--text-secondary);font-size:15px;max-width:600px;margin:0 auto 22px;line-height:1.6;">Closing Line Value is how professionals prove genuine edge — beating the price the market settles at. We show it win or lose. That\'s the difference between us and a bloke with a Telegram channel.</p>' +
         (winnersHtml ? '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:24px;">' + winnersHtml + '</div>' : '') +
         '<a href="#/track-record" class="btn btn-outline" style="padding:12px 28px;">See the full track record →</a>' +
       '</div></div>' : '';
@@ -15888,6 +15918,47 @@ const App = {
   // Data-driven Last Man Standing dashboard banner. Pulls the live competition
   // and its branding from /lms/featured, so it re-skins itself (World Cup ->
   // Premier League) and detaches automatically when nothing is running.
+  // Fill the CLV proof block on the landing page. CLV (Closing Line Value) is the
+  // gold-standard proof of edge, but we only publish numbers off a meaningful
+  // sample. Until then we show an honest "building" state rather than a fake stat.
+  async _loadClvProof() {
+    var slot = document.getElementById('clv-proof-slot');
+    if (!slot) return;
+    var clv = null;
+    try { clv = await this.api('/analytics/clv-public'); } catch (e) { return; }
+    slot = document.getElementById('clv-proof-slot');
+    if (!slot || !clv) return;
+
+    if (clv.ready) {
+      var pos = clv.avgClv >= 0;
+      var self = this;
+      var sports = (clv.bySport || []).map(function (s) {
+        var raw = String(s.sport || '');
+        var name = self.escapeHtml(raw.charAt(0).toUpperCase() + raw.slice(1));
+        return '<span style="display:inline-block;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:20px;padding:4px 12px;margin:3px;font-size:12px;color:#c7d0e0;">' +
+          name + ' · ' + s.beatRate + '% beat close</span>';
+      }).join('');
+      slot.innerHTML =
+        '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.08),rgba(212,168,67,0.06));border:1px solid rgba(34,197,94,0.3);border-radius:16px;padding:22px 20px;max-width:760px;margin:0 auto 22px;">' +
+          '<div style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#22c55e;border:1px solid rgba(34,197,94,0.4);border-radius:5px;padding:2px 8px;margin-bottom:14px;">✓ PROOF OF EDGE · LIVE</div>' +
+          '<div style="display:flex;gap:28px;justify-content:center;flex-wrap:wrap;">' +
+            '<div><div style="font-size:clamp(28px,7vw,38px);font-weight:900;color:#22c55e;line-height:1;">' + clv.beatRate + '%</div><div style="font-size:11px;color:#8b97ad;text-transform:uppercase;letter-spacing:1px;margin-top:5px;">Beat the closing line</div></div>' +
+            '<div><div style="font-size:clamp(28px,7vw,38px);font-weight:900;color:' + (pos ? '#22c55e' : '#ef4444') + ';line-height:1;">' + (pos ? '+' : '') + clv.avgClv + '%</div><div style="font-size:11px;color:#8b97ad;text-transform:uppercase;letter-spacing:1px;margin-top:5px;">Average CLV</div></div>' +
+            '<div><div style="font-size:clamp(28px,7vw,38px);font-weight:900;color:#fff;line-height:1;">' + clv.sample + '</div><div style="font-size:11px;color:#8b97ad;text-transform:uppercase;letter-spacing:1px;margin-top:5px;">Bets measured</div></div>' +
+          '</div>' +
+          (sports ? '<div style="margin-top:14px;">' + sports + '</div>' : '') +
+        '</div>';
+    } else {
+      // Honest building state — no fake number, just the real progress.
+      var have = (clv && clv.sample) || 0;
+      var need = (clv && clv.minSample) || 15;
+      slot.innerHTML =
+        '<div style="background:rgba(255,255,255,0.03);border:1px dashed var(--border);border-radius:14px;padding:16px 18px;max-width:620px;margin:0 auto 22px;font-size:13px;color:#8b97ad;">' +
+          '<span style="color:#d4a843;font-weight:700;">Proof of Edge — tracking live.</span> We\'re capturing the closing price on every pick and will publish our CLV once the sample is meaningful (' + have + '/' + need + ' bets measured).' +
+        '</div>';
+    }
+  },
+
   async _loadEventSpotlight() {
     var slot = document.getElementById('event-spotlight-slot');
     if (!slot) return;
