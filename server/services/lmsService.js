@@ -85,9 +85,37 @@ function validatePick(entry, usedTeams, team) {
   return { ok: true, isReuse: true };
 }
 
+// Normalise a team name for comparison (strip everything but a-z0-9).
+function _normTeam(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+// Find a team's fixture in a gameweek — EXACT normalised name first (picks come
+// from the same SportMonks strings the fixtures use), falling back to fuzzy, so a
+// club whose name is a substring of another can't grab the wrong fixture.
+function findPlFixtureForTeam(plFx, team) {
+  var t = _normTeam(team);
+  var exact = (plFx || []).find(function (f) { return _normTeam(f.home_team) === t || _normTeam(f.away_team) === t; });
+  if (exact) return exact;
+  return (plFx || []).find(function (f) { return wcSchedule.teamsMatch(f.home_team, team) || wcSchedule.teamsMatch(f.away_team, team); }) || null;
+}
+// Is the picked team the HOME side of this fixture? Exact-first, fuzzy fallback.
+function _teamIsHome(fixture, team) {
+  var t = _normTeam(team);
+  if (_normTeam(fixture.home_team) === t) return true;
+  if (_normTeam(fixture.away_team) === t) return false;
+  return wcSchedule.teamsMatch(fixture.home_team, team);
+}
+
 // Has the picked team's match for this round already kicked off? Uses the live
 // feed's precise kickoff when available, otherwise the schedule's match date.
-async function teamMatchStarted(round, team) {
+async function teamMatchStarted(competition, round, team) {
+  // League (PL) phase — read the synced gameweek fixture's kickoff.
+  if (competition && competition.phase === 'pl_rollover') {
+    var leagueId = (competition.config && competition.config.leagueId) || 8;
+    var plFx = await lmsStore.getPlRoundFixtures(leagueId, round);
+    var m = findPlFixtureForTeam(plFx, team);
+    if (m && m.kickoff) return { started: Date.now() >= new Date(m.kickoff).getTime() };
+    if (m && m.status && m.status !== 'scheduled') return { started: true }; // live/finished with no kickoff
+    return { started: false };
+  }
   var fx = wcSchedule.fixtureForTeam(round, team);
   if (!fx) return { started: false };
   try {
@@ -122,8 +150,8 @@ async function makePick(competition, userId, team) {
   if (!v.ok) return v;
 
   // Pick deadline — you cannot pick/change to a team whose match has kicked off.
-  if (competition.phase === 'world_cup') {
-    var deadlineCheck = await teamMatchStarted(round, team);
+  if (competition.phase === 'world_cup' || competition.phase === 'pl_rollover') {
+    var deadlineCheck = await teamMatchStarted(competition, round, team);
     if (deadlineCheck.started) {
       return { ok: false, reason: team + "'s match has already kicked off — pick a team that hasn't started yet." };
     }
@@ -164,8 +192,24 @@ async function makePick(competition, userId, team) {
  */
 async function resolveTeamResult(competition, round, team, finishedResults) {
   if (competition.phase === 'pl_rollover') {
-    // PL fixtures aren't in the WC schedule — admin settles these for now.
-    return { status: 'pending', fixtureId: null, detail: 'PL phase — awaiting admin settlement' };
+    // League phase: resolve from the SportMonks-synced gameweek fixtures. Standard
+    // LMS rules — the picked team must WIN (a draw or loss is out). Holds (pending)
+    // until the team's fixture is finished, so nobody is eliminated prematurely.
+    var leagueId = (competition.config && competition.config.leagueId) || 8;
+    var plFx = await lmsStore.getPlRoundFixtures(leagueId, round);
+    var match = findPlFixtureForTeam(plFx, team);
+    if (!match) return { status: 'pending', fixtureId: null, detail: 'No fixture for this team in ' + roundLabel(competition.phase, round) };
+    // Postponed/cancelled → void: the player survives and their team is freed to
+    // re-pick (a postponement is nobody's fault and must not knock them out).
+    if (match.status === 'void') return { status: 'void', fixtureId: match.external_fixture_id || null, detail: 'Match postponed — pick voided' };
+    if (match.status !== 'finished' || match.home_goals === null || match.away_goals === null) {
+      return { status: 'pending', fixtureId: match.external_fixture_id || null, detail: 'Result not in yet' };
+    }
+    var teamIsHome = _teamIsHome(match, team);
+    var gf = teamIsHome ? match.home_goals : match.away_goals;
+    var ga = teamIsHome ? match.away_goals : match.home_goals;
+    if (gf > ga) return { status: 'won', fixtureId: match.external_fixture_id || null, detail: 'Win' };
+    return { status: 'lost', fixtureId: match.external_fixture_id || null, detail: gf === ga ? 'Draw — out' : 'Lost' };
   }
 
   // Find the team's fixture for this round from the CANONICAL schedule.
@@ -220,8 +264,9 @@ async function settleRound(competition, opts) {
   opts = opts || {};
   var round = competition.currentRound;
   var nowTs = new Date().toISOString();
-  // Fetch finished results once for this settlement pass.
-  var finishedResults = await lmsStore.getFinishedWcResults();
+  // Fetch finished results once for this settlement pass. WC reads the World Cup
+  // results feed; the league (PL) phase resolves per-team from pl_lms_fixtures.
+  var finishedResults = competition.phase === 'world_cup' ? await lmsStore.getFinishedWcResults() : [];
 
   var aliveEntries = await lmsStore.getEntriesForCompetition(competition.id, 'alive');
   if (aliveEntries.length === 0) {
@@ -239,6 +284,13 @@ async function settleRound(competition, opts) {
     if (!pick || pick.result !== 'pending') continue; // no pick yet / already settled
     var res = await resolveTeamResult(competition, round, pick.team, finishedResults);
     if (res.status === 'pending' && !opts.force) continue; // match not finished (or penalties)
+    if (res.status === 'void') {
+      // Postponed/cancelled match — void the pick: the player SURVIVES and the team
+      // is freed to re-pick (usedTeams ignores void picks). Never an elimination.
+      await lmsStore.updatePick(pick.id, { result: 'void', fixtureId: res.fixtureId || null, settledAt: nowTs });
+      resolvedNow++;
+      continue;
+    }
     var finalStatus = res.status === 'pending' ? 'lost' : res.status; // force => lost
     await lmsStore.updatePick(pick.id, { result: finalStatus, fixtureId: res.fixtureId || null, settledAt: nowTs });
     resolvedNow++;
@@ -253,7 +305,26 @@ async function settleRound(competition, opts) {
   // placeholders (opponent undecided) mean the round isn't ready.
   var roundComplete = opts.force === true;
   if (!roundComplete) {
-    if (competition.phase === 'world_cup' && lmsStore.getWcRoundFixtures) {
+    if (competition.phase === 'pl_rollover') {
+      // League gameweek is complete only when (a) its fixtures exist and are ALL
+      // settled (finished or void), AND (b) no still-alive player has an unresolved
+      // pick. (b) is the belt-and-braces guard: even if a sync race or a missing
+      // fixture made (a) look true, an unresolvable pick keeps the round open so
+      // nobody is eliminated on a match that hasn't actually finished.
+      var plLeagueId = (competition.config && competition.config.leagueId) || 8;
+      var plRoundFx = await lmsStore.getPlRoundFixtures(plLeagueId, round);
+      var fxAllSettled = plRoundFx.length > 0 && plRoundFx.every(function (fx) { return fx.status === 'finished' || fx.status === 'void'; });
+      roundComplete = fxAllSettled;
+      if (fxAllSettled) {
+        var plAliveNow = await lmsStore.getEntriesForCompetition(competition.id, 'alive');
+        for (var pz = 0; pz < plAliveNow.length; pz++) {
+          var pzp = await lmsStore.getPick(plAliveNow[pz].id, round);
+          if (!pzp) continue; // no pick → legitimately out in Phase B (gameweek is over)
+          var pzm = findPlFixtureForTeam(plRoundFx, pzp.team);
+          if (!(pzm && (pzm.status === 'finished' || pzm.status === 'void'))) { roundComplete = false; break; }
+        }
+      }
+    } else if (competition.phase === 'world_cup' && lmsStore.getWcRoundFixtures) {
       // Use the ACTUALLY-SYNCED matchday fixtures (deduplicated by SportMonks
       // round_name), NOT the hardcoded schedule. The hardcoded MATCHDAY list had
       // double-booked teams (a side appearing in two matchday-2 fixtures), which
@@ -296,14 +367,37 @@ async function settleRound(competition, opts) {
   for (var n = 0; n < remainingAlive.length; n++) {
     var rp = await lmsStore.getPick(remainingAlive[n].id, round);
     if (!rp) {
+      // No pick this round → eliminated (the gameweek is over).
       await lmsStore.updateEntry(remainingAlive[n].id, { status: 'out', eliminatedRound: round });
       eliminatedNow++;
     } else if (rp.result === 'pending') {
-      await lmsStore.updatePick(rp.id, { result: 'lost', settledAt: nowTs });
-      await lmsStore.updateEntry(remainingAlive[n].id, { status: 'out', eliminatedRound: round });
-      eliminatedNow++;
+      // RE-RESOLVE with a fresh read rather than blindly marking it lost. Under a
+      // rare read-skew race the pick's match may have just finished as a WIN (or
+      // been voided/postponed) since Phase A — we must never eliminate a winner.
+      var rr = await resolveTeamResult(competition, round, rp.team, finishedResults);
+      if (rr.status === 'won') {
+        await lmsStore.updatePick(rp.id, { result: 'won', fixtureId: rr.fixtureId || null, settledAt: nowTs });
+      } else if (rr.status === 'void') {
+        await lmsStore.updatePick(rp.id, { result: 'void', fixtureId: rr.fixtureId || null, settledAt: nowTs });
+      } else if (rr.status === 'pending' && !opts.force) {
+        // Genuinely not finished yet — hold the whole round rather than eliminate
+        // on an unfinished match. Nothing already settled this pass is undone.
+        return {
+          competitionId: competition.id, round: round,
+          roundLabel: roundLabel(competition.phase, round),
+          settled: resolvedNow, eliminated: eliminatedNow, held: true,
+          message: 'Round held — a picked match is not finished yet. Will retry.',
+        };
+      } else {
+        await lmsStore.updatePick(rp.id, { result: 'lost', fixtureId: rr.fixtureId || null, settledAt: nowTs });
+        await lmsStore.updateEntry(remainingAlive[n].id, { status: 'out', eliminatedRound: round });
+        eliminatedNow++;
+      }
     }
   }
+
+  var isFinalRound = (competition.phase === 'world_cup' && round >= WC_TOTAL_ROUNDS)
+    || (competition.phase === 'pl_rollover' && round >= 38); // full PL season played out
 
   // Rollover: nobody survived this round → reinstate everyone who went out in it
   // (eliminations may have happened across several progressive passes, so judge
@@ -311,28 +405,37 @@ async function settleRound(competition, opts) {
   var survivorsAlive = await lmsStore.getEntriesForCompetition(competition.id, 'alive');
   var outThisRound = (await lmsStore.getEntriesForCompetition(competition.id, 'out'))
     .filter(function (e) { return e.eliminatedRound === round; });
-  var rollover = false;
+  var rollover = false, completed = false, championEntryIds = [];
+
   if (survivorsAlive.length === 0 && outThisRound.length > 0) {
-    rollover = true;
-    for (var k = 0; k < outThisRound.length; k++) {
-      // keep them alive; their losing pick stays on record (team stays "used")
-      await lmsStore.updateEntry(outThisRound[k].id, { status: 'alive', eliminatedRound: null });
+    if (isFinalRound) {
+      // Everyone knocked out on the FINAL round — there's no next round to roll
+      // into, so those who reached the final share the pot (avoids a frozen comp).
+      completed = true;
+      for (var kf = 0; kf < outThisRound.length; kf++) {
+        await lmsStore.updateEntry(outThisRound[kf].id, { status: 'winner', eliminatedRound: null });
+        championEntryIds.push(outThisRound[kf].id);
+      }
+    } else {
+      rollover = true;
+      for (var k = 0; k < outThisRound.length; k++) {
+        // keep them alive; their losing pick stays on record (team stays "used")
+        await lmsStore.updateEntry(outThisRound[k].id, { status: 'alive', eliminatedRound: null });
+      }
     }
   }
 
   // Winner detection
   var aliveAfter = await lmsStore.countAlive(competition.id);
-  var isFinalRound = (competition.phase === 'world_cup' && round >= WC_TOTAL_ROUNDS);
-  var completed = false, championEntryIds = [];
 
-  if (!rollover && aliveAfter === 1) {
+  if (!completed && !rollover && aliveAfter === 1) {
     completed = true;
     var survivors = await lmsStore.getEntriesForCompetition(competition.id, 'alive');
     for (var s = 0; s < survivors.length; s++) {
       await lmsStore.updateEntry(survivors[s].id, { status: 'winner' });
       championEntryIds.push(survivors[s].id);
     }
-  } else if (!rollover && isFinalRound && aliveAfter >= 1) {
+  } else if (!completed && !rollover && isFinalRound && aliveAfter >= 1) {
     // Final played and people still alive → they share the pot
     completed = true;
     var champs = await lmsStore.getEntriesForCompetition(competition.id, 'alive');

@@ -32,7 +32,10 @@ module.exports = function (deps) {
   // Entries close once the tournament starts, the comp is past round 1, or admin closes them.
   function entriesClosed(c) {
     if (c.config && c.config.entriesClosed) return true;
-    if (c.currentRound > 1) return true;
+    // Closed once the competition has progressed past its FIRST round (which may
+    // be a mid-season gameweek, not round 1).
+    var startRound = (c.config && c.config.startRound) || 1;
+    if (c.currentRound > startRound) return true;
     if (c.phase === 'world_cup') {
       var schedule = require('../services/wc2026Schedule');
       var firstDate = schedule.matchday1[0] && schedule.matchday1[0].date;
@@ -154,12 +157,24 @@ module.exports = function (deps) {
           return { fixtureId: null, homeTeam: f.home, awayTeam: f.away, kickoff: f.date || null, group: null, status: 'scheduled' };
         });
         fixtures = roundFixtures; // the "fixtures" panel shows this round's matchups
+      } else if (c.phase === 'pl_rollover') {
+        // League phase — this gameweek's fixtures + pickable teams come from the
+        // SportMonks-synced table. Empty (safely) until the season's fixtures sync.
+        var leagueId = (c.config && c.config.leagueId) || 8;
+        var plFx = (await lmsStore.getPlRoundFixtures(leagueId, c.currentRound)) || [];
+        roundFixtures = plFx.map(function (f) {
+          return { fixtureId: f.external_fixture_id, homeTeam: f.home_team, awayTeam: f.away_team, kickoff: f.kickoff || null, group: null, status: f.status };
+        });
+        fixtures = roundFixtures;
+        var tset = {};
+        plFx.forEach(function (f) { tset[f.home_team] = true; tset[f.away_team] = true; });
+        teams = Object.keys(tset).sort();
       }
       res.json({
         competition: {
           id: c.id, name: c.name, phase: c.phase, status: c.status, access: c.access,
           currentRound: c.currentRound, roundLabel: lms.roundLabel(c.phase, c.currentRound),
-          prizePot: c.prizePot, totalRounds: c.phase === 'world_cup' ? lms.WC_TOTAL_ROUNDS : null,
+          prizePot: c.prizePot, totalRounds: c.phase === 'world_cup' ? lms.WC_TOTAL_ROUNDS : (c.phase === 'pl_rollover' ? 38 : null),
           rollovers: (c.config && c.config.rollovers) || [],
         },
         aliveCount: aliveCount,
@@ -371,14 +386,22 @@ module.exports = function (deps) {
       const b = req.body || {};
       if (!b.name || !b.phase) return res.status(400).json({ error: 'name and phase are required' });
       if (['world_cup', 'pl_rollover'].indexOf(b.phase) === -1) return res.status(400).json({ error: 'Invalid phase' });
+      // League phase config — which league (default Premier League = 8) and which
+      // gameweek to start at (so a mid-season launch begins at the right round).
+      const cfg = Object.assign({}, b.config || {});
+      if (b.phase === 'pl_rollover') {
+        cfg.leagueId = parseInt(b.leagueId || cfg.leagueId || 8, 10);
+      }
+      const startRound = Math.max(1, parseInt(b.startRound || b.currentRound || 1, 10) || 1);
+      cfg.startRound = startRound; // remember where entries close from
       const c = await lmsStore.createCompetition({
         name: b.name, phase: b.phase,
         status: b.status || 'open',
         access: b.access || (b.phase === 'pl_rollover' ? 'everyone' : 'subscriber'),
-        currentRound: 1,
+        currentRound: startRound,
         basePrize: b.basePrize || (b.phase === 'world_cup' ? 250 : 0),
         prizePot: b.basePrize || (b.phase === 'world_cup' ? 250 : 0),
-        config: b.config || {},
+        config: cfg,
       });
       res.json({ ok: true, competition: c });
     } catch (e) {
@@ -439,9 +462,18 @@ module.exports = function (deps) {
       const c = await lmsStore.getCompetitionById(req.params.id);
       if (!c) return res.status(404).json({ error: 'Competition not found' });
       const round = c.currentRound;
-      const finished = await lmsStore.getFinishedWcResults();
+      const finished = c.phase === 'world_cup' ? await lmsStore.getFinishedWcResults() : [];
       let fxStatus;
-      if (c.phase === 'world_cup' && lmsStore.getWcRoundFixtures) {
+      if (c.phase === 'pl_rollover') {
+        // League phase — show the synced gameweek fixtures + their results so we can
+        // confirm the sync is correct BEFORE any real settlement happens.
+        const leagueId = (c.config && c.config.leagueId) || 8;
+        const plFx = (await lmsStore.getPlRoundFixtures(leagueId, round)) || [];
+        fxStatus = plFx.map(function (fx) {
+          const hasResult = fx.status === 'finished' && fx.home_goals !== null && fx.away_goals !== null;
+          return { fixture: fx.home_team + ' v ' + fx.away_team, placeholder: false, hasResult: hasResult, score: hasResult ? (fx.home_goals + '-' + fx.away_goals) : null };
+        });
+      } else if (c.phase === 'world_cup' && lmsStore.getWcRoundFixtures) {
         // Use the actually-synced matchday fixtures (deduped by round_name) — same
         // source settlement uses — so phantom/double-booked fixtures don't show.
         const dbFx = await lmsStore.getWcRoundFixtures(round);

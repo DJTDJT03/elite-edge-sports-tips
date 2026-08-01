@@ -444,6 +444,77 @@ async function getWcFixtureByKickoffIndex(team, isGroup, index) {
   return filtered[index] || null;
 }
 
+// ---------------------------------------------------------------------------
+// PREMIER LEAGUE (and other leagues) LMS fixtures — SportMonks-fed. Lets the LMS
+// run on a real league season with fully automated settlement (no admin step).
+// ---------------------------------------------------------------------------
+// Sync a league's fixtures for a date window into pl_lms_fixtures. Reuses the
+// proven SportMonks parser; the gameweek number is the raw fixture's round.name.
+// Upserts by external fixture id, so it's idempotent and re-runnable.
+async function syncPlFixtures(sportMonks, leagueId, fromDate, toDate) {
+  if (!available() || !sportMonks || !sportMonks.getFixturesBetween) return { synced: 0 };
+  const SM = require('../services/sportMonks');
+  let raw;
+  try { raw = await sportMonks.getFixturesBetween(fromDate, toDate, leagueId); }
+  catch (e) { return { synced: 0, error: e.message }; }
+
+  // Build the rows first, then write them ALL in one transaction. This is
+  // important: settlement runs concurrently, and if it read the table mid-write
+  // it could see a gameweek's finished fixtures but not its not-yet-played ones,
+  // wrongly conclude the round is complete, and eliminate the outstanding pickers.
+  // A single transaction means settlement always sees the whole round or none of it.
+  const rows = [];
+  for (let i = 0; i < (raw || []).length; i++) {
+    const f = raw[i];
+    // Gameweek number from the round include (round.name = "1".."38"). Skip any
+    // fixture without a numeric round (cup ties, play-offs) — LMS is league GWs.
+    const roundName = f && f.round ? f.round.name : null;
+    const round = roundName != null ? parseInt(roundName, 10) : NaN;
+    if (!round || isNaN(round)) continue;
+    let nf;
+    try { nf = SM.normaliseFixture(f); } catch (e) { continue; }
+    if (!nf || !nf.homeTeam || !nf.awayTeam) continue;
+    // Postponed / suspended / abandoned / cancelled (SportMonks state ids
+    // 9,10,12,13) → 'void' so they never freeze a gameweek's completion and the
+    // pick is treated as void (player survives, team freed) rather than a loss.
+    const sid = nf._raw && nf._raw.stateId;
+    const voided = [9, 10, 12, 13].indexOf(sid) !== -1;
+    const status = voided ? 'void'
+      : (['FT', 'AET', 'PEN'].indexOf(nf.status) !== -1) ? 'finished'
+      : (nf.status && nf.status !== 'NS') ? 'live' : 'scheduled';
+    const hg = status === 'finished' ? nf.homeGoals : null;
+    const ag = status === 'finished' ? nf.awayGoals : null;
+    rows.push([leagueId, nf.seasonId || null, round, nf.homeTeam, nf.awayTeam, nf.kickoff || null, hg, ag, status, f.id]);
+  }
+  if (!rows.length) return { synced: 0 };
+  try {
+    await db.withTransaction(async function (client) {
+      for (let j = 0; j < rows.length; j++) {
+        await client.query(
+          `INSERT INTO pl_lms_fixtures (league_id, season_id, round, home_team, away_team, kickoff, home_goals, away_goals, status, external_fixture_id, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+           ON CONFLICT (external_fixture_id) DO UPDATE SET
+             round = EXCLUDED.round, home_team = EXCLUDED.home_team, away_team = EXCLUDED.away_team,
+             kickoff = EXCLUDED.kickoff, home_goals = EXCLUDED.home_goals, away_goals = EXCLUDED.away_goals,
+             status = EXCLUDED.status, season_id = EXCLUDED.season_id, updated_at = NOW()`,
+          rows[j]
+        );
+      }
+    });
+  } catch (e) { return { synced: 0, error: e.message }; }
+  return { synced: rows.length };
+}
+
+// All fixtures for one league gameweek (round), earliest kickoff first.
+async function getPlRoundFixtures(leagueId, round) {
+  if (!available()) return [];
+  const { rows } = await db.query(
+    'SELECT * FROM pl_lms_fixtures WHERE league_id = $1 AND round = $2 ORDER BY kickoff ASC NULLS LAST',
+    [leagueId, round]
+  );
+  return rows;
+}
+
 module.exports = {
   available,
   // competitions
@@ -456,6 +527,8 @@ module.exports = {
   createPurchase, getPurchaseBySession, updatePurchase, countPaidPurchases,
   // settlement source
   getWcFixturesForTeam, getWcTeams, getWcFixtureByKickoffIndex, getUpcomingWcFixtures, getWcRoundFixtures, getFinishedWcResults, getWcKickoffs,
+  // PL (league) LMS fixtures
+  syncPlFixtures, getPlRoundFixtures,
   // mappers (exposed for tests)
   _map: { mapCompetition, mapEntry, mapPick, mapPurchase },
 };

@@ -382,7 +382,10 @@ app.use('/', require('./routes/public')(deps));
           "CREATE TABLE IF NOT EXISTS lms_entries (id SERIAL PRIMARY KEY, competition_id INTEGER NOT NULL REFERENCES lms_competitions(id) ON DELETE CASCADE, user_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'alive', extra_teams INTEGER DEFAULT 0, reuses_used INTEGER DEFAULT 0, eliminated_round INTEGER, joined_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(competition_id, user_id))",
           'CREATE INDEX IF NOT EXISTS idx_lms_entries_comp ON lms_entries(competition_id)',
           'ALTER TABLE lms_entries ADD COLUMN IF NOT EXISTS reminded_round INTEGER DEFAULT 0',
-          "CREATE TABLE IF NOT EXISTS lms_picks (id SERIAL PRIMARY KEY, competition_id INTEGER NOT NULL REFERENCES lms_competitions(id) ON DELETE CASCADE, entry_id INTEGER NOT NULL REFERENCES lms_entries(id) ON DELETE CASCADE, user_id TEXT NOT NULL, round INTEGER NOT NULL, team TEXT NOT NULL, is_reuse BOOLEAN DEFAULT FALSE, result TEXT NOT NULL DEFAULT 'pending', fixture_id INTEGER, settled_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(entry_id, round))",
+          "CREATE TABLE IF NOT EXISTS lms_picks (id SERIAL PRIMARY KEY, competition_id INTEGER NOT NULL REFERENCES lms_competitions(id) ON DELETE CASCADE, entry_id INTEGER NOT NULL REFERENCES lms_entries(id) ON DELETE CASCADE, user_id TEXT NOT NULL, round INTEGER NOT NULL, team TEXT NOT NULL, is_reuse BOOLEAN DEFAULT FALSE, result TEXT NOT NULL DEFAULT 'pending', fixture_id BIGINT, settled_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(entry_id, round))",
+          // SportMonks league fixture ids can exceed INT4 — widen for existing DBs
+          // so settling a PL pick (which stores the fixture id) never overflows.
+          'ALTER TABLE lms_picks ALTER COLUMN fixture_id TYPE BIGINT',
           'CREATE INDEX IF NOT EXISTS idx_lms_picks_comp_round ON lms_picks(competition_id, round)',
           "CREATE TABLE IF NOT EXISTS lms_purchases (id SERIAL PRIMARY KEY, competition_id INTEGER NOT NULL REFERENCES lms_competitions(id) ON DELETE CASCADE, user_id TEXT NOT NULL, amount NUMERIC(10,2) NOT NULL, stripe_session_id TEXT UNIQUE, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT NOW())",
           'CREATE INDEX IF NOT EXISTS idx_lms_purchases_user ON lms_purchases(competition_id, user_id)',
@@ -409,6 +412,11 @@ app.use('/', require('./routes/public')(deps));
         'CREATE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)',
         // Fast "has this user already unlocked this tip?" idempotency check.
         "CREATE INDEX IF NOT EXISTS idx_credit_tx_tip_unlock ON credit_transactions(user_id, tip_id, type)",
+        // Last Man Standing — Premier League (and other league) fixtures, gameweek
+        // by gameweek, synced from SportMonks so the LMS auto-settles with no manual
+        // step. `round` = league gameweek number; status scheduled|live|finished.
+        "CREATE TABLE IF NOT EXISTS pl_lms_fixtures (id SERIAL PRIMARY KEY, league_id INTEGER NOT NULL, season_id INTEGER, round INTEGER NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, kickoff TIMESTAMPTZ, home_goals INTEGER, away_goals INTEGER, status TEXT NOT NULL DEFAULT 'scheduled', external_fixture_id BIGINT UNIQUE, updated_at TIMESTAMPTZ DEFAULT NOW())",
+        "CREATE INDEX IF NOT EXISTS idx_pl_lms_round ON pl_lms_fixtures(league_id, round)",
         // Conversion funnel — first-party top-of-funnel beacons (landing views,
         // signup-modal opens, checkout starts) that GA sees but the DB doesn't.
         // The lower funnel (registrations/trials/paid) is read from real tables.
@@ -988,6 +996,38 @@ setTimeout(function() { _appReady = true; console.log('[Startup] App ready'); },
   }
   setTimeout(prune, 60000); // once, shortly after boot
   setInterval(prune, 24 * 60 * 60 * 1000); // then daily
+})();
+
+// Last Man Standing (Premier League) — keep the current + upcoming gameweek
+// fixtures/results synced from SportMonks so the LMS auto-settles with NO manual
+// step. Runs independently of the (locked) tipping scheduler; safe no-op when LMS
+// is off or there's no active league competition. Degrades safely: if the sync
+// returns nothing, settlement simply holds (it never wrongly eliminates anyone).
+(function syncPlLmsFixtures() {
+  async function sync() {
+    if (process.env.ENABLE_LMS !== 'true') return;
+    if (!db.isAvailable || !db.isAvailable()) return;
+    try {
+      const lmsStore = require('./db/lmsStore');
+      if (!lmsStore.available || !lmsStore.available() || !lmsStore.syncPlFixtures) return;
+      const comps = await lmsStore.getCompetitions({ status: 'active' });
+      const leagues = {};
+      (comps || []).forEach(function (c) {
+        if (c.phase === 'pl_rollover') leagues[(c.config && c.config.leagueId) || 8] = true;
+      });
+      if (!Object.keys(leagues).length) return;
+      // Window: a few days back (to capture the just-finished gameweek's results)
+      // through ~3 weeks ahead (current + next gameweeks). UTC yyyy-mm-dd.
+      const from = new Date(Date.now() - 4 * 86400000).toISOString().split('T')[0];
+      const to = new Date(Date.now() + 21 * 86400000).toISOString().split('T')[0];
+      for (const lid in leagues) {
+        const r = await lmsStore.syncPlFixtures(sportMonks, parseInt(lid, 10), from, to);
+        if (r && r.synced) console.log('[LMS] Synced ' + r.synced + ' league-' + lid + ' fixtures');
+      }
+    } catch (e) { console.error('[LMS] PL fixture sync failed:', e.message); }
+  }
+  setTimeout(sync, 45000);            // shortly after boot
+  setInterval(sync, 30 * 60 * 1000);  // every 30 min
 })();
 
 // ---------------------------------------------------------------------------
