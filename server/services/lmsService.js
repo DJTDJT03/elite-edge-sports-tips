@@ -511,9 +511,17 @@ function bannerConfig(competition) {
   if (!competition) return null;
   var defaults = competition.phase === 'pl_rollover'
     ? { eyebrow: 'Premier League', title: 'LAST MAN STANDING', tagline: 'One pick a week. Survive the season. Win the pot.', emoji: '⚽', accent: '#d4a843', cta: 'Play Now' }
-    : { eyebrow: 'World Cup 2026', title: 'LAST MAN STANDING', tagline: 'One pick. One life. Free to enter — survive to win the pot.', emoji: '🏆', accent: '#d4a843', cta: 'Play Now' };
+    : { eyebrow: 'Elite Edge', title: 'LAST MAN STANDING', tagline: 'One pick. One life. Free to enter — survive to win the pot.', emoji: '🏆', accent: '#d4a843', cta: 'Play Now' };
   var custom = (competition.config && competition.config.banner) || {};
-  return Object.assign(defaults, custom);
+  var merged = Object.assign({}, defaults, custom);
+  // The World Cup is over — the LMS banner must never show WC branding, whatever a
+  // competition's stored name/banner says. Strip any WC-flavoured eyebrow/title and
+  // guarantee a clean, non-empty eyebrow so the client never falls back to a
+  // competition name that still contains "World Cup".
+  var stripWc = function (s) { return /world\s*cup|\bwc\s*20|\bfifa\b/i.test(String(s || '')) ? '' : s; };
+  merged.eyebrow = stripWc(merged.eyebrow) || 'Elite Edge';
+  merged.title = stripWc(merged.title) || 'LAST MAN STANDING';
+  return merged;
 }
 
 module.exports = {
