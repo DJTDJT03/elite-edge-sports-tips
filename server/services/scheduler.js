@@ -2013,7 +2013,7 @@ module.exports = function startScheduler(deps) {
 
     // In-app notification for all users — tips are live
     try {
-      var napTip = newTips.find(function(t) { return t.isNap; });
+      var napTip = newTips.find(function(t) { return t.isNap && (t.confidence || 0) >= 6; });
       await db.createNotification({
         type: 'tips_published',
         message: newTips.length + ' football selection' + (newTips.length === 1 ? '' : 's') + ' published for today' + (napTip ? ' — NAP: ' + napTip.selection + ' (' + napTip.confidence + '/10)' : '') + '. Check your dashboard now.',
@@ -2025,7 +2025,7 @@ module.exports = function startScheduler(deps) {
     // Push notification if available
     var pushSvc = deps.pushService;
     if (pushSvc && pushSvc.isAvailable) {
-      var napName = newTips.find(function(t) { return t.isNap; });
+      var napName = newTips.find(function(t) { return t.isNap && (t.confidence || 0) >= 6; });
       pushSvc.broadcast(db, {
         title: newTips.length + ' football tips published',
         body: (napName ? 'NAP: ' + napName.selection + ' — ' : '') + 'Check your dashboard for today\'s selections.',
@@ -4736,9 +4736,12 @@ module.exports = function startScheduler(deps) {
             && t.selection && t.selection !== 'Unknown' && t.market && t.odds && t.odds > 0;
         });
         if (todayTips.length > 0) {
-          var nap = todayTips.sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); })[0];
+          // Only announce a NAP if there genuinely IS one (the guarded isNap flag —
+          // a low-confidence pick is never the NAP). Don't crown the day's top pick
+          // NAP just because it's the highest of a weak set.
+          var nap = todayTips.find(function(t) { return t.isNap; });
           await telegramBot.sendMorningTeaser(todayTips.length, nap ? nap.confidence : null);
-          console.log('[Telegram] Morning teaser sent — ' + todayTips.length + ' tips');
+          console.log('[Telegram] Morning teaser sent — ' + todayTips.length + ' tips' + (nap ? ' (NAP ' + nap.confidence + '/10)' : ', no NAP'));
         }
       } catch(e) { console.error('[Telegram] Morning teaser error:', e.message); }
     }

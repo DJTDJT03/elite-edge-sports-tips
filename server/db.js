@@ -426,8 +426,21 @@ async function saveTips(tips) {
   }
 }
 
+// Published tips never fall below this confidence, and a NAP (the day's single
+// strongest pick) must clear it — a "NAP rated 1/10" can never reach a user.
+const TIP_CONFIDENCE_FLOOR = 6;
+
 function dbTipToApp(row) {
   if (!row) return null;
+  // Read-boundary invariant (catches ANY generation path): floor a LIVE tip's
+  // confidence at the platform minimum, and only keep the NAP flag when the pick
+  // genuinely clears that floor. Settled tips keep their recorded confidence for
+  // track-record integrity, but a sub-floor pick is still never shown as a NAP.
+  var _rawConf = typeof row.confidence === 'number' ? row.confidence : parseInt(row.confidence, 10);
+  var _conf = (row.status === 'active' && !isNaN(_rawConf) && _rawConf < TIP_CONFIDENCE_FLOOR) ? TIP_CONFIDENCE_FLOOR : row.confidence;
+  // NAP kept only when the pick GENUINELY clears the floor (raw confidence), so a
+  // floored display can never re-crown a weak pick as the NAP.
+  var _isNap = (row.is_nap || false) && !isNaN(_rawConf) && _rawConf >= TIP_CONFIDENCE_FLOOR;
   return {
     id: row.id,
     sport: row.sport,
@@ -443,7 +456,7 @@ function dbTipToApp(row) {
     market: row.market,
     selection: row.selection,
     odds: parseFloat(row.odds) || 0,
-    confidence: row.confidence,
+    confidence: _conf,
     modelProbability: parseFloat(row.model_probability) || 0,
     impliedProbability: parseFloat(row.implied_probability) || 0,
     edge: parseFloat(row.edge) || 0,
@@ -457,7 +470,7 @@ function dbTipToApp(row) {
     staking: row.staking,
     riskLevel: row.risk_level,
     analysis: row.analysis || {},
-    isNap: row.is_nap || false,
+    isNap: _isNap,
     isOutsider: row.is_outsider || false,
     openingOdds: parseFloat(row.opening_odds) || 0,
     bookmakerOdds: row.bookmaker_odds || {},
