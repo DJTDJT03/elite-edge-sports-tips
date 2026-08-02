@@ -9096,6 +9096,7 @@ const App = {
           <button class="admin-tab" onclick="App.switchAdminTab('lms', this)">&#127942; Last Man Standing</button>
           <button class="admin-tab" onclick="App.switchAdminTab('winners', this)">Winners Wall</button>
           <button class="admin-tab" onclick="App.switchAdminTab('asklog', this)">Ask Log</button>
+          <button class="admin-tab" onclick="App.switchAdminTab('funnel', this)">&#128200; Conversion Funnel</button>
           <button class="admin-tab" onclick="App.switchAdminTab('events', this)">&#127942; Events</button>
         </div>
 
@@ -9409,6 +9410,19 @@ const App = {
           <div id="asklog-content"><p class="text-muted">Loading…</p></div>
         </div>
 
+        <div class="admin-panel" id="panel-funnel">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+            <h3 class="mb-0">&#128200; Conversion Funnel</h3>
+            <div id="funnel-range-btns">
+              <button class="btn btn-outline btn-sm" onclick="App._loadAdminFunnel(7,this)">7d</button>
+              <button class="btn btn-gold btn-sm" onclick="App._loadAdminFunnel(30,this)">30d</button>
+              <button class="btn btn-outline btn-sm" onclick="App._loadAdminFunnel(90,this)">90d</button>
+            </div>
+          </div>
+          <p class="text-muted mb-16" style="font-size:13px;">Where visitors drop off: accounts &rarr; trials &rarr; paid (exact DB counts), and visits &rarr; signup &rarr; checkout (cookie-accepting visitors only, so real traffic is higher — read the shape, not the absolutes).</p>
+          <div id="funnel-content"><p class="text-muted">Loading…</p></div>
+        </div>
+
         <div class="admin-panel" id="panel-events">
           <h3 class="mb-8">&#127942; Sporting Events Calendar</h3>
           <p class="text-muted mb-16" style="font-size:13px;">Manage the big meetings the site features. The soonest live/upcoming event shows as a spotlight on the dashboard and gets its own hub page (#/events/&lt;slug&gt;).</p>
@@ -9530,7 +9544,62 @@ const App = {
     if (panel === 'lms') this.adminLoadLms();
     if (panel === 'winners') this._loadAdminWinners('pending');
     if (panel === 'asklog') this._loadAssistantQueries();
+    if (panel === 'funnel') this._loadAdminFunnel(30);
     if (panel === 'events') this._loadAdminEvents();
+  },
+
+  // Conversion funnel (admin) — two honest sub-funnels: accounts (exact DB) and
+  // traffic (consent-gated beacons). Never divides one into the other.
+  async _loadAdminFunnel(days, btn) {
+    days = days || 30;
+    if (btn) {
+      var grp = document.getElementById('funnel-range-btns');
+      if (grp) grp.querySelectorAll('button').forEach(function (b) { b.className = 'btn btn-outline btn-sm'; });
+      btn.className = 'btn btn-gold btn-sm';
+    }
+    var box = document.getElementById('funnel-content');
+    if (!box) return;
+    box.innerHTML = '<p class="text-muted">Loading…</p>';
+    var d;
+    try { d = await this.api('/analytics/funnel?days=' + days); }
+    catch (e) { box.innerHTML = '<div class="card"><p class="text-muted">Could not load funnel.</p></div>'; return; }
+    if (!d || d.available === false) {
+      box.innerHTML = '<div class="card"><p class="text-muted">No funnel data yet — it fills as members sign up and cookie-accepting visitors browse. Check back after some traffic.</p></div>';
+      return;
+    }
+    var k = d.kpis || {};
+    var rate = function (r) { return (r === null || r === undefined) ? '—' : r + '%'; };
+    var col = function (r) { return (r >= 60) ? '#22c55e' : (r >= 25) ? '#d4a843' : '#ef4444'; };
+    var kpi = function (label, value, colour) {
+      return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:14px 18px;min-width:140px;">' +
+        '<div style="color:var(--text-muted);font-size:12px;margin-bottom:4px;">' + label + '</div>' +
+        '<div style="font-size:24px;font-weight:800;color:' + colour + ';">' + value + '</div></div>';
+    };
+    var block = function (title, stages, note) {
+      stages = stages || [];
+      var maxC = Math.max.apply(null, stages.map(function (s) { return s.count; }).concat([1]));
+      var bars = stages.map(function (s) {
+        var w = Math.max(4, Math.round((s.count / maxC) * 100));
+        var step = s.stepRate === null ? '' : '<span style="font-weight:700;color:' + col(s.stepRate) + ';">' + s.stepRate + '%</span><span style="color:var(--text-muted);font-size:11px;"> of prev</span>';
+        return '<div style="margin-bottom:12px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;"><span style="font-weight:600;color:#e5e9f0;font-size:13px;">' + s.label + '</span><span>' + step + '</span></div>' +
+          '<div style="background:rgba(255,255,255,0.05);border-radius:6px;overflow:hidden;height:34px;"><div style="width:' + w + '%;height:100%;background:linear-gradient(90deg,#d4a843,#b8902f);display:flex;align-items:center;padding:0 12px;box-sizing:border-box;min-width:52px;"><span style="font-weight:800;color:#0a0e1a;font-size:14px;">' + (s.count || 0).toLocaleString() + '</span></div></div>' +
+        '</div>';
+      }).join('');
+      return '<div><div style="font-weight:700;color:#e5e9f0;margin-bottom:10px;">' + title + '</div>' + bars + '<div style="color:var(--text-muted);font-size:11px;line-height:1.5;margin-top:6px;">' + note + '</div></div>';
+    };
+    box.innerHTML =
+      '<div style="display:flex;gap:14px;margin-bottom:20px;flex-wrap:wrap;">' +
+        kpi('New accounts', (k.newAccounts || 0).toLocaleString(), '#2563eb') +
+        kpi('New paid subs', (k.newPaid || 0).toLocaleString(), '#22c55e') +
+        kpi('Signup → Paid', rate(k.signupToPaid), '#d4a843') +
+        kpi('Trial → Paid', rate(k.trialToPaid), '#d4a843') +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:26px;">' +
+        block('Accounts (exact)', d.accountFunnel, 'Everyone who signs up — exact database counts.') +
+        block('Traffic (beacons)', d.trafficFunnel, 'Cookie-accepting visitors only, so real traffic is higher. Use the shape, not the absolute numbers.') +
+      '</div>' +
+      '<div style="margin-top:16px;color:var(--text-muted);font-size:12px;">"% of prev" = pass-through to the next stage within the same funnel. The biggest drop is where to focus. Last ' + d.days + ' days.</div>';
   },
 
   async _loadAssistantQueries() {
