@@ -106,10 +106,14 @@ app.use('/api', rateLimiterFns.rateLimiter);
 // Static files — short cache for JS/CSS so updates propagate quickly
 app.use(express.static(path.join(__dirname, '..', 'public'), {
   setHeaders: function(res, filePath) {
-    if (filePath.endsWith('.html')) {
+    // The service worker script must NEVER be cached, or browsers stay stuck on an
+    // old SW that serves a stale build (users saw week-old content this way).
+    if (filePath.endsWith('sw.js') || filePath.endsWith('manifest.json')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else if (filePath.endsWith('.html')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     } else if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
-      res.setHeader('Cache-Control', 'public, max-age=300'); // 5 minutes
+      res.setHeader('Cache-Control', 'public, max-age=300'); // 5 minutes (assets are ?v=-busted)
     }
   }
 }));

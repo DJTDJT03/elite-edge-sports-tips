@@ -1,4 +1,4 @@
-const CACHE_NAME = 'elite-edge-v2-20260802a';
+const CACHE_NAME = 'elite-edge-v3-20260804a';
 const ASSETS = [
   '/',
   '/index.html',
@@ -60,6 +60,12 @@ self.addEventListener('notificationclick', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  // Never intercept the API or cross-origin (fonts/CDN) — those must always hit the
+  // live network, never a cached copy. The SW only shells the same-origin app.
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+  // Network-first: always serve the freshest build when online; fall back to cache
+  // only when the network is unavailable (offline).
   event.respondWith(
     fetch(event.request)
       .then((response) => {
