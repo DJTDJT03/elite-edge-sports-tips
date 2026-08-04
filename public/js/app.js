@@ -3274,12 +3274,12 @@ const App = {
           <div style="display:flex;align-items:flex-start;gap:16px;">
             <div style="font-size:32px;flex-shrink:0;">&#127873;</div>
             <div style="flex:1;">
-              <h3 style="font-size:18px;font-weight:800;margin-bottom:6px;">Refer a Friend — Earn Free Credits</h3>
-              <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;line-height:1.5;">Share your code. You both earn credits when they sign up.</p>
+              <h3 style="font-size:18px;font-weight:800;margin-bottom:6px;">Invite mates — you both win</h3>
+              <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;line-height:1.5;">Your mate gets <strong style="color:#22c55e;">10 free credits</strong>, you get <strong style="color:var(--gold);">3</strong> — plus a <strong style="color:var(--gold);">free month of Premium</strong> every 3 friends who join.</p>
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-gold btn-sm" onclick="window.location.hash='#/refer'">📤 Invite &amp; Earn</button>
                 <div style="background:var(--bg-elevated);border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:8px 16px;font-family:monospace;font-size:16px;font-weight:700;color:var(--gold);letter-spacing:1px;" id="dash-referral-code">${this.getReferralCode()}</div>
                 <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();var code=document.getElementById('dash-referral-code').textContent;navigator.clipboard.writeText(code).then(function(){App.showToast('Referral code copied!','success');}).catch(function(){});">Copy Code</button>
-                <button class="btn btn-ghost btn-sm" onclick="App.showReferral()">Full Details</button>
               </div>
             </div>
           </div>
@@ -5231,48 +5231,92 @@ const App = {
     try {
       var data = await this.api('/auth/referral');
       var referralLink = data.referralLink || '';
-      var referralCount = data.referralCount || 0;
       var referralCode = data.referralCode || '';
+      var verified = data.verifiedReferrals || 0;
+      var pending = data.pendingReferrals || 0;
+      var rw = data.rewards || { perReferral: 3, friendBonus: 10, milestoneEvery: 3, milestoneReward: '1 free month of Premium' };
+      var creditsEarned = data.creditsEarned || 0;
+      var toNext = (typeof data.toNextMilestone === 'number') ? data.toNextMilestone : (rw.milestoneEvery || 3);
+
+      // Stash the link + a compelling pre-filled message for the share handlers.
+      this._referralLink = referralLink;
+      this._referralShareText = "⚡ I back my bets with Elite Edge Sports Tips — AI-driven racing & football tips with verified results. Join FREE with my link and we both get bonus credits 👉 " + referralLink;
+
+      // Progress toward the next free month (every `milestoneEvery` verified refs).
+      var every = rw.milestoneEvery || 3;
+      var doneTowardNext = every - toNext; // how many of the current milestone are done
+      var progPct = Math.round((doneTowardNext / every) * 100);
 
       app.innerHTML =
-        '<div class="container" style="max-width:600px;padding-top:40px;">' +
-          '<div class="page-header text-center">' +
-            '<h1 style="color:var(--gold);">Refer &amp; Earn</h1>' +
-            '<p style="color:var(--text-secondary);">Share your link. Earn free credits.</p>' +
+        '<div class="container" style="max-width:640px;padding-top:32px;">' +
+          '<div class="text-center" style="margin-bottom:22px;">' +
+            '<h1 style="color:var(--gold);margin-bottom:6px;">Invite mates. You both win.</h1>' +
+            '<p style="color:var(--text-secondary);font-size:15px;max-width:460px;margin:0 auto;">Your mate gets <strong style="color:#22c55e;">' + rw.friendBonus + ' bonus credits</strong> when they join. You get <strong style="color:var(--gold);">' + rw.perReferral + ' credits</strong> per mate — plus a <strong style="color:var(--gold);">' + rw.milestoneReward + '</strong> for every ' + every + ' who join.</p>' +
           '</div>' +
 
-          '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px;text-align:center;">' +
-            '<div style="font-size:48px;margin-bottom:12px;">&#127381;</div>' +
-            '<h3 style="color:var(--text-primary);margin-bottom:16px;">How It Works</h3>' +
-            '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">' +
-              '<div><div style="font-size:24px;font-weight:900;color:var(--gold);">1</div><div style="font-size:12px;color:var(--text-secondary);">Share your unique link</div></div>' +
-              '<div><div style="font-size:24px;font-weight:900;color:var(--gold);">2</div><div style="font-size:12px;color:var(--text-secondary);">Friend signs up (free)</div></div>' +
-              '<div><div style="font-size:24px;font-weight:900;color:var(--gold);">3</div><div style="font-size:12px;color:var(--text-secondary);">You earn +3 credits</div></div>' +
+          // --- Share link + primary share button ---
+          '<div style="background:linear-gradient(160deg,rgba(212,168,67,0.1),var(--bg-card));border:1px solid rgba(212,168,67,0.35);border-radius:16px;padding:22px;margin-bottom:18px;">' +
+            '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Your invite link</div>' +
+            '<div style="display:flex;gap:8px;margin-bottom:14px;">' +
+              '<input type="text" value="' + referralLink + '" readonly onclick="this.select()" style="flex:1;min-width:0;padding:11px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:13px;" id="referral-link-input">' +
+              '<button class="btn btn-outline" onclick="App.copyReferralLink()">Copy</button>' +
             '</div>' +
-            '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#22c55e;">Bonus: Earn +5 extra credits when your referral starts a free trial!</div>' +
-          '</div>' +
-
-          '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px;">' +
-            '<div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;">Your Referral Link</div>' +
-            '<div style="display:flex;gap:8px;">' +
-              '<input type="text" value="' + referralLink + '" readonly style="flex:1;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:13px;" id="referral-link-input">' +
-              '<button class="btn btn-gold" onclick="navigator.clipboard.writeText(document.getElementById(\'referral-link-input\').value);App.showToast(\'Link copied!\',\'success\')">Copy</button>' +
+            '<button class="btn btn-gold btn-full" style="font-size:15px;padding:13px;" onclick="App.shareReferral()">📤 Share your link</button>' +
+            // --- Quick social share row ---
+            '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px;">' +
+              this._referralShareBtn('WhatsApp', '#25D366', "https://wa.me/?text=") +
+              this._referralShareBtn('Telegram', '#229ED9', "https://t.me/share/url?url=" + encodeURIComponent(referralLink) + "&text=") +
+              this._referralShareBtn('X', '#1d1d1f', "https://twitter.com/intent/tweet?text=") +
+              this._referralShareBtn('Email', '#6b7280', "mailto:?subject=" + encodeURIComponent('Join me on Elite Edge Sports Tips') + "&body=") +
             '</div>' +
           '</div>' +
 
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
-            '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;">' +
-              '<div style="font-size:32px;font-weight:900;color:var(--gold);">' + referralCount + '</div>' +
-              '<div style="font-size:12px;color:var(--text-muted);">People Referred</div>' +
+          // --- Milestone progress ---
+          '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:18px;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">' +
+              '<span style="font-weight:700;color:#fff;font-size:14px;">Next free month of Premium</span>' +
+              '<span style="font-size:13px;color:var(--gold);font-weight:700;">' + toNext + ' more to go</span>' +
             '</div>' +
-            '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;">' +
-              '<div style="font-size:32px;font-weight:900;color:#22c55e;">' + (referralCount * 3) + '</div>' +
-              '<div style="font-size:12px;color:var(--text-muted);">Credits Earned</div>' +
-            '</div>' +
+            '<div style="background:var(--bg-elevated);border-radius:20px;height:12px;overflow:hidden;"><div style="width:' + progPct + '%;height:100%;background:linear-gradient(90deg,#d4a843,#22c55e);"></div></div>' +
           '</div>' +
+
+          // --- Stats ---
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">' +
+            '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:18px 10px;text-align:center;">' +
+              '<div style="font-size:28px;font-weight:900;color:#22c55e;">' + verified + '</div><div style="font-size:11px;color:var(--text-muted);">Mates joined</div></div>' +
+            '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:18px 10px;text-align:center;">' +
+              '<div style="font-size:28px;font-weight:900;color:#d4a843;">' + pending + '</div><div style="font-size:11px;color:var(--text-muted);">Pending verify</div></div>' +
+            '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:18px 10px;text-align:center;">' +
+              '<div style="font-size:28px;font-weight:900;color:var(--gold);">' + creditsEarned + '</div><div style="font-size:11px;color:var(--text-muted);">Credits earned</div></div>' +
+          '</div>' +
+          (pending > 0 ? '<p style="text-align:center;color:var(--text-muted);font-size:12px;margin-top:12px;">' + pending + ' friend' + (pending === 1 ? '' : 's') + ' signed up but haven\'t verified their email yet — give them a nudge to unlock your reward.</p>' : '') +
         '</div>';
     } catch (err) {
       app.innerHTML = '<div class="container"><p>Unable to load referral data.</p></div>';
+    }
+  },
+
+  // A compact coloured social-share button for the referral page.
+  _referralShareBtn: function (label, colour, urlPrefix) {
+    return '<a href="' + urlPrefix + encodeURIComponent(this._referralShareText || '') + '" target="_blank" rel="noopener" ' +
+      'style="display:inline-flex;align-items:center;justify-content:center;background:' + colour + ';color:#fff;font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px;text-decoration:none;">' + label + '</a>';
+  },
+
+  copyReferralLink: function () {
+    var link = this._referralLink || (document.getElementById('referral-link-input') || {}).value || '';
+    if (navigator.clipboard && link) {
+      navigator.clipboard.writeText(link).then(function () { App.showToast('Invite link copied!', 'success'); }).catch(function () { App.showToast('Copy failed — long-press the link to copy.', 'info'); });
+    }
+  },
+
+  shareReferral: function () {
+    var link = this._referralLink || '';
+    var text = this._referralShareText || link;
+    if (navigator.share) {
+      navigator.share({ title: 'Elite Edge Sports Tips', text: text, url: link }).catch(function () {});
+    } else {
+      this.copyReferralLink();
+      this.showToast('Link copied — paste it to your mates!', 'success');
     }
   },
 

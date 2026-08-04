@@ -30,6 +30,11 @@ module.exports = function(deps) {
       }
 
       await db.addCredits(referrer.id, 3, 'referral_signup', 'Referral: ' + (friend.name || 'a friend') + ' joined & verified');
+      // Double-sided reward: the friend who joined via a referral gets a welcome
+      // bonus too. Granted on VERIFY (like the referrer's), so throwaway emails
+      // can't farm it. This is what makes "invite a mate, you both win" convert.
+      try { await db.addCredits(friend.id, 10, 'referral_welcome', 'Welcome bonus — joined via ' + (referrer.name || 'a friend')); }
+      catch (e) { /* non-fatal */ }
       var newCount = (referrer.referralCount || 0) + 1;
       var refUpdates = { referralCount: newCount };
       console.log('[Referral] +3 credits to ' + referrer.email + ' for verified referral ' + friend.email);
@@ -526,12 +531,24 @@ module.exports = function(deps) {
           });
         }
       } catch (e) { /* non-fatal */ }
+      var count = user.referralCount || 0;
       res.json({
         referralCode: user.referralCode,
-        referralCount: user.referralCount || 0,
+        referralCount: count,
         referralLink: 'https://eliteedgesports.co.uk/?ref=' + (user.referralCode || ''),
         pendingReferrals: pendingReferrals,
         verifiedReferrals: verifiedReferrals,
+        // Reward config (kept in sync with applyReferralReward) so the UI is accurate.
+        rewards: {
+          perReferral: 3,          // credits to you when a friend joins & verifies
+          friendBonus: 10,         // credits your friend gets
+          trialBonus: 5,           // extra credits when a referral starts a trial
+          milestoneEvery: 3,       // every N verified referrals...
+          milestoneReward: '1 free month of Premium',
+        },
+        creditsEarned: count * 3,
+        // Verified referrals still needed for the next free-month milestone.
+        toNextMilestone: (count % 3 === 0) ? 3 : (3 - (count % 3)),
       });
     } catch (err) {
       res.status(500).json({ error: err.message });
