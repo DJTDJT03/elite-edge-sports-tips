@@ -421,6 +421,10 @@ app.use('/', require('./routes/public')(deps));
         // step. `round` = league gameweek number; status scheduled|live|finished.
         "CREATE TABLE IF NOT EXISTS pl_lms_fixtures (id SERIAL PRIMARY KEY, league_id INTEGER NOT NULL, season_id INTEGER, round INTEGER NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, kickoff TIMESTAMPTZ, home_goals INTEGER, away_goals INTEGER, status TEXT NOT NULL DEFAULT 'scheduled', external_fixture_id BIGINT UNIQUE, updated_at TIMESTAMPTZ DEFAULT NOW())",
         "CREATE INDEX IF NOT EXISTS idx_pl_lms_round ON pl_lms_fixtures(league_id, round)",
+        // Email send-dedup: a daily/periodic email is sent at most once per recipient
+        // per day. Stops a deploy (which restarts the process and wipes the in-memory
+        // 'already sent today' guard) from re-blasting the daily bulletin.
+        "CREATE TABLE IF NOT EXISTS sent_emails (id SERIAL PRIMARY KEY, recipient TEXT NOT NULL, email_type TEXT NOT NULL, sent_date DATE NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(recipient, email_type, sent_date))",
         // Conversion funnel — first-party top-of-funnel beacons (landing views,
         // signup-modal opens, checkout starts) that GA sees but the DB doesn't.
         // The lower funnel (registrations/trials/paid) is read from real tables.

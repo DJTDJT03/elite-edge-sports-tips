@@ -15,6 +15,24 @@
  *   - Nodemailer SMTP: nodemailer
  */
 
+const crypto = require('crypto');
+const db = require('../db');
+
+// Periodic (scheduler-triggered) emails that must go out at most ONCE per recipient
+// per day — deduped so a deploy restart can't re-send them. Transactional emails
+// (welcome, password reset, payment failed, etc.) are NOT in here and always send.
+const DEDUPE_EMAIL_TYPES = {
+  daily_bulletin: true, weekly_summary: true, weekly_performance: true,
+  reengagement: true, andy_content_pack: true,
+};
+
+// A per-email unsubscribe token so the footer link works with one click, no login.
+function unsubToken(email) {
+  return crypto.createHmac('sha256', process.env.JWT_SECRET || 'ee-unsub-secret')
+    .update(String(email || '').toLowerCase().trim()).digest('hex').slice(0, 24);
+}
+const STATIC_UNSUB_URL = 'https://eliteedgesports.co.uk/#/unsubscribe';
+
 class EmailService {
   constructor() {
     this.transport = null;
@@ -291,6 +309,27 @@ ${preheader ? `<span style="display:none;font-size:1px;color:#0a0e1a;line-height
   // Internal send helper (logs + records)
   // -----------------------------------------------------------------------
   async _sendEmail({ to, subject, html, text, emailType }) {
+    const etype = emailType || 'automated';
+    const dateStr = new Date().toISOString().split('T')[0];
+
+    // Idempotent daily send: claim (recipient, type, date). If it was already sent
+    // today, skip — so a server restart (deploy) can never re-blast the daily bulletin.
+    if (DEDUPE_EMAIL_TYPES[etype] && db.claimEmailSend) {
+      try {
+        const isNew = await db.claimEmailSend(to, etype, dateStr);
+        if (!isNew) return { to, status: 'skipped_duplicate', emailType: etype };
+      } catch (e) { /* on error, fall through and send */ }
+    }
+
+    // Rewrite the static unsubscribe link into a tokenised link (works without
+    // login). The visible footer points to a friendly confirmation page; the
+    // List-Unsubscribe header points to a POST-able API for Gmail/Outlook one-click.
+    const unsubQ = '?e=' + encodeURIComponent(to) + '&t=' + unsubToken(to);
+    const unsubPage = STATIC_UNSUB_URL + unsubQ;
+    const unsubApi = 'https://eliteedgesports.co.uk/api/auth/unsubscribe' + unsubQ;
+    if (html) html = html.split(STATIC_UNSUB_URL).join(unsubPage);
+    if (text) text = text.split(STATIC_UNSUB_URL).join(unsubPage);
+
     try {
       const result = await this.transport.send({
         to,
@@ -298,6 +337,10 @@ ${preheader ? `<span style="display:none;font-size:1px;color:#0a0e1a;line-height
         subject,
         html,
         text,
+        headers: {
+          'List-Unsubscribe': '<' + unsubApi + '>',
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
       });
       const record = {
         id: `email_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -311,6 +354,10 @@ ${preheader ? `<span style="display:none;font-size:1px;color:#0a0e1a;line-height
       this.sentEmails.push(record);
       return record;
     } catch (err) {
+      // Send failed — release the daily claim so it can be retried (next tick/day).
+      if (DEDUPE_EMAIL_TYPES[etype] && db.releaseEmailSend) {
+        try { await db.releaseEmailSend(to, etype, dateStr); } catch (e) {}
+      }
       console.error(`[EmailService] Failed to send ${emailType} to ${to}:`, err.message);
       return { to, status: 'failed', error: err.message };
     }
@@ -1556,3 +1603,5 @@ The Elite Edge Team`;
 }
 
 module.exports = new EmailService();
+// Exposed so the unsubscribe endpoint can verify a link's token.
+module.exports.unsubToken = unsubToken;

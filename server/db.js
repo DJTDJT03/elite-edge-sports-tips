@@ -1061,6 +1061,28 @@ async function releaseStripeEvent(eventId) {
 }
 
 // ---------------------------------------------------------------------------
+// EMAIL SEND DEDUP — a daily/periodic email goes out at most once per recipient
+// per day, so a deploy restart can't re-send the daily bulletin.
+// ---------------------------------------------------------------------------
+// Claim the (recipient, type, date) slot. Returns true only the FIRST time today
+// (i.e. it's OK to send). Returns false if already sent → caller skips.
+async function claimEmailSend(recipient, emailType, dateStr) {
+  if (!pool || !recipient || !emailType) return true; // no DB → don't block sends
+  try {
+    const { rows } = await query(
+      'INSERT INTO sent_emails (recipient, email_type, sent_date) VALUES ($1,$2,$3) ON CONFLICT (recipient, email_type, sent_date) DO NOTHING RETURNING id',
+      [recipient, emailType, dateStr]
+    );
+    return rows.length > 0;
+  } catch (e) { return true; } // on error, allow the send rather than silently drop mail
+}
+
+async function releaseEmailSend(recipient, emailType, dateStr) {
+  if (!pool) return;
+  try { await query('DELETE FROM sent_emails WHERE recipient = $1 AND email_type = $2 AND sent_date = $3', [recipient, emailType, dateStr]); } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
 // CONVERSION FUNNEL
 // ---------------------------------------------------------------------------
 // Record a top-of-funnel beacon (landing_view / signup_open / checkout_start).
@@ -1383,6 +1405,8 @@ module.exports = {
   recordCreditTransaction, getCreditHistory, deductCredits, addCredits, hasUnlockedTip,
   // Stripe webhook idempotency
   claimStripeEvent, releaseStripeEvent,
+  // Email send dedup
+  claimEmailSend, releaseEmailSend,
   // Conversion funnel
   recordFunnelEvent, getFunnelMetrics,
   // Sonar Cache

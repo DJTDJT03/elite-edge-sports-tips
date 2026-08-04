@@ -746,6 +746,33 @@ module.exports = function(deps) {
   });
 
   // ---------------------------------------------------------------------------
+  // UNSUBSCRIBE — one-click, no login. Verified by the token in the email link.
+  // Handles GET (the confirmation page fetches it) + POST (Gmail/Outlook one-click).
+  // ---------------------------------------------------------------------------
+  async function doUnsubscribe(req, res) {
+    var email = String((req.query && req.query.e) || (req.body && req.body.e) || '');
+    var token = String((req.query && req.query.t) || (req.body && req.body.t) || '');
+    if (!email || !token || !emailService || !emailService.unsubToken || token !== emailService.unsubToken(email)) {
+      return res.status(400).json({ ok: false, error: 'Invalid or expired unsubscribe link.' });
+    }
+    try {
+      var u = await db.getUserByEmail(email);
+      if (u) {
+        var prefs = Object.assign({ dailyBulletin: true, weeklySummary: true, marketing: true, bigWins: true }, u.emailPrefs || {});
+        prefs.dailyBulletin = false; prefs.weeklySummary = false; prefs.marketing = false; prefs.bigWins = false;
+        await db.updateUser(u.id, { emailPrefs: prefs });
+        console.log('[Unsubscribe] ' + email + ' opted out of all marketing emails');
+      }
+      // Always report success — don't reveal whether the address is registered.
+      return res.json({ ok: true, message: "You've been unsubscribed from Elite Edge emails." });
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: 'Something went wrong — please try again.' });
+    }
+  }
+  router.get('/unsubscribe', doUnsubscribe);
+  router.post('/unsubscribe', doUnsubscribe);
+
+  // ---------------------------------------------------------------------------
   // RESET PASSWORD (using JWT token from email link)
   // ---------------------------------------------------------------------------
   router.post('/reset-password', async (req, res) => {

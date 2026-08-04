@@ -1227,6 +1227,13 @@ const App = {
     }
   },
 
+  // Cancel subscription — routes to the Stripe billing portal, where cancellation
+  // is handled securely (keeps access until the period ends, per our T&Cs).
+  cancelSubscription() {
+    if (!confirm('Cancel your subscription?\n\nYou\'ll keep full access until the end of your current billing period. You can resubscribe anytime.\n\nWe\'ll take you to the secure billing portal to confirm.')) return;
+    this.openBillingPortal();
+  },
+
   // -----------------------------------------------------------------------
   // NAVIGATION
   // -----------------------------------------------------------------------
@@ -1317,6 +1324,7 @@ const App = {
       case 'academy': this.renderAcademy(); break;
       case 'buy-credits': this.renderBuyCredits(); break;
       case 'refer': this.renderReferral(); break;
+      case 'unsubscribe': this.renderUnsubscribe(); break;
       case 'selections': this.renderSelections(); break;
       case 'value-bets': this.renderValueBets(); break;
       case 'compare': this.renderCompare(); break;
@@ -5340,6 +5348,32 @@ const App = {
       this.copyReferralLink();
       this.showToast('Link copied — paste it to your mates!', 'success');
     }
+  },
+
+  // Email unsubscribe landing (from the tokenised link in every email footer).
+  async renderUnsubscribe() {
+    var app = document.getElementById('app');
+    app.innerHTML = '<div class="container" style="max-width:520px;padding-top:64px;text-align:center;"><div class="inline-spinner">Updating your email preferences…</div></div>';
+    var hash = window.location.hash || '';
+    var qi = hash.indexOf('?');
+    var params = new URLSearchParams(qi >= 0 ? hash.slice(qi + 1) : '');
+    var e = params.get('e') || '';
+    var t = params.get('t') || '';
+    var ok = false, msg = '';
+    try {
+      var res = await fetch('/api/auth/unsubscribe?e=' + encodeURIComponent(e) + '&t=' + encodeURIComponent(t), { method: 'POST' });
+      var data = await res.json().catch(function () { return {}; });
+      ok = res.ok && data.ok;
+      msg = data.message || data.error || '';
+    } catch (err) { msg = 'Something went wrong — please try again.'; }
+    app.innerHTML =
+      '<div class="container" style="max-width:520px;padding-top:64px;text-align:center;">' +
+        '<div style="font-size:52px;margin-bottom:14px;">' + (ok ? '✅' : '⚠️') + '</div>' +
+        '<h1 style="color:var(--gold);margin-bottom:10px;">' + (ok ? 'Unsubscribed' : 'Link not valid') + '</h1>' +
+        '<p style="color:var(--text-secondary);font-size:15px;margin-bottom:18px;">' + this.escapeHtml(msg || (ok ? 'You will no longer receive marketing emails from Elite Edge.' : 'That unsubscribe link looks invalid or expired.')) + '</p>' +
+        (ok ? '<p style="color:var(--text-muted);font-size:13px;margin-bottom:22px;">Changed your mind? You can turn emails back on anytime in your <a href="#/account" style="color:var(--gold);">account settings</a>.</p>' : '') +
+        '<a href="#/" class="btn btn-outline">Back to Elite Edge</a>' +
+      '</div>';
   },
 
   // -----------------------------------------------------------------------
@@ -12192,7 +12226,10 @@ const App = {
             </div>
             <p class="text-sm text-muted mb-8">Next billing date: <strong>${expiryLabel}</strong></p>
             <div id="stripe-sub-details"></div>
-            <button class="btn btn-outline btn-sm" onclick="App.openBillingPortal()">Manage Billing</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+              <button class="btn btn-outline btn-sm" onclick="App.openBillingPortal()">Manage Billing</button>
+              <button class="btn btn-ghost btn-sm" style="color:#ef4444;border:1px solid rgba(239,68,68,0.4);" onclick="App.cancelSubscription()">Cancel Subscription</button>
+            </div>
           ` : u.subscription === 'premium' ? `
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
               <span style="background:var(--gold);color:#0a0e1a;padding:4px 12px;border-radius:20px;font-weight:700;font-size:13px;">Premium Active</span>
@@ -12202,6 +12239,7 @@ const App = {
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
               <button class="btn btn-gold btn-sm" onclick="App.startCheckout('vip-monthly')">Upgrade to VIP — &pound;39.99/month</button>
               <button class="btn btn-outline btn-sm" onclick="App.openBillingPortal()">Manage Billing</button>
+              <button class="btn btn-ghost btn-sm" style="color:#ef4444;border:1px solid rgba(239,68,68,0.4);" onclick="App.cancelSubscription()">Cancel Subscription</button>
             </div>
           ` : `
             <p class="text-muted text-sm mb-12">You are on the Free plan. Upgrade for full access to all tips, analysis, and features.</p>
