@@ -646,17 +646,30 @@ const App = {
     if (spinner) spinner.remove();
   },
 
+  _apiCache: {},
   async api(endpoint, options = {}) {
     // Check token expiry before making request
     this.checkTokenExpiry();
 
+    // Short-lived GET cache: reuse a very recent response instead of re-fetching on
+    // every render/navigation. Makes the UI feel instant and cuts redundant calls.
+    const method = (options.method || 'GET').toUpperCase();
+    const cacheKey = (method === 'GET' && options.cacheTtl) ? (endpoint + '|' + (this.token ? 'a' : 'g')) : null;
+    if (cacheKey && this._apiCache[cacheKey] && (Date.now() - this._apiCache[cacheKey].t) < options.cacheTtl) {
+      return this._apiCache[cacheKey].d;
+    }
+
     const headers = { 'Content-Type': 'application/json' };
     if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
-    this._activeRequests++;
+    // `silent` requests don't drive the global spinner — used for background/secondary
+    // loads (news, spotlight, CLV, LMS banner) so the spinner doesn't keep flashing.
+    const silent = !!options.silent;
     const startTime = Date.now();
-    // Show spinner after a brief moment to prevent flash
-    if (this._activeRequests === 1) {
-      this._spinnerTimeout = setTimeout(() => this.showLoadingSpinner(), 150);
+    if (!silent) {
+      this._activeRequests++;
+      if (this._activeRequests === 1) {
+        this._spinnerTimeout = setTimeout(() => this.showLoadingSpinner(), 150);
+      }
     }
     try {
       const res = await fetch(`/api${endpoint}`, { cache: 'no-store', ...options, headers: { ...headers, ...options.headers } });
@@ -681,19 +694,22 @@ const App = {
       // Track key events (Feature #7 - GA placeholder)
       if (endpoint.includes('/auth/login')) trackEvent('auth', 'login', 'success');
       if (endpoint.includes('/auth/register')) trackEvent('auth', 'register', 'success');
+      if (cacheKey) this._apiCache[cacheKey] = { t: Date.now(), d: data };
       return data;
     } catch (err) {
       console.error(`API ${endpoint}:`, err);
       throw err;
     } finally {
-      this._activeRequests--;
-      if (this._activeRequests <= 0) {
-        this._activeRequests = 0;
-        // Ensure spinner shows for minimum 300ms to prevent flash
-        const elapsed = Date.now() - startTime;
-        const remaining = Math.max(0, 300 - elapsed);
-        clearTimeout(this._spinnerTimeout);
-        setTimeout(() => this.hideLoadingSpinner(), remaining);
+      if (!silent) {
+        this._activeRequests--;
+        if (this._activeRequests <= 0) {
+          this._activeRequests = 0;
+          // Ensure spinner shows for minimum 300ms to prevent flash
+          const elapsed = Date.now() - startTime;
+          const remaining = Math.max(0, 300 - elapsed);
+          clearTimeout(this._spinnerTimeout);
+          setTimeout(() => this.hideLoadingSpinner(), remaining);
+        }
       }
     }
   },
@@ -1413,9 +1429,11 @@ const App = {
   // -----------------------------------------------------------------------
   async loadDailyStats() {
     try {
+      // Silent + cached: the stats bar reuses the dashboard's tips/results rather than
+      // re-fetching and flashing the spinner (it runs on load and on a timer).
       const [tips, results] = await Promise.all([
-        this.api('/tips'),
-        this.api('/results'),
+        this.api('/tips', { silent: true, cacheTtl: 30000 }),
+        this.api('/results', { silent: true, cacheTtl: 30000 }),
       ]);
       const today = new Date().toISOString().split('T')[0];
 
@@ -2885,18 +2903,22 @@ const App = {
     const app = document.getElementById('app');
     app.innerHTML = this.renderSkeleton('dashboard');
 
+    // Fetch everything the dashboard needs in ONE parallel batch (no waterfall),
+    // with a short client cache so re-navigating is instant.
+    let allResults = [];
     try {
-      const [tips, perf] = await Promise.all([
-        this.api('/tips'),
-        this.api('/results/performance'),
+      const [tips, perf, results] = await Promise.all([
+        this.api('/tips', { cacheTtl: 30000 }),
+        this.api('/results/performance', { cacheTtl: 60000 }),
+        this.api('/results', { cacheTtl: 30000 }).catch(() => []),
       ]);
       this.tips = tips;
       this.performance = perf;
+      allResults = results;
     } catch { /* use cached */ }
 
     const allTips = this.tips;
     const perf = this.performance || { roi: 0, strikeRate: 0, runningBank: 100, totalPnl: 0, totalTips: 0, wins: 0 };
-    const allResults = await this.api('/results').catch(() => []);
     const recentWins = allResults.filter(r => r.result === 'won').sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 8);
     const streak = this.calculateStreak(allResults);
 
@@ -3650,7 +3672,7 @@ const App = {
     var container = document.getElementById('football-news-section');
     if (!container) return;
     try {
-      var data = await this.api('/football-news?limit=12');
+      var data = await this.api('/football-news?limit=12', { silent: true, cacheTtl: 120000 });
       container = document.getElementById('football-news-section');
       if (!container) return;
       var news = (data && data.news) || [];
@@ -3684,7 +3706,7 @@ const App = {
     var ticker = document.getElementById('news-ticker');
     if (!ticker) return;
     try {
-      var data = await this.api('/football-news?limit=15');
+      var data = await this.api('/football-news?limit=15', { silent: true, cacheTtl: 120000 });
       var news = (data && data.news) || [];
       if (!news.length) { ticker.style.display = 'none'; return; }
       var items = news.slice(0, 15).map(function (n) {
@@ -16090,7 +16112,7 @@ const App = {
     var slot = document.getElementById('clv-proof-slot');
     if (!slot) return;
     var clv = null;
-    try { clv = await this.api('/analytics/clv-public'); } catch (e) { return; }
+    try { clv = await this.api('/analytics/clv-public', { silent: true, cacheTtl: 300000 }); } catch (e) { return; }
     slot = document.getElementById('clv-proof-slot');
     if (!slot || !clv) return;
 
@@ -16128,7 +16150,7 @@ const App = {
     var slot = document.getElementById('event-spotlight-slot');
     if (!slot) return;
     try {
-      var d = await this.api('/events/spotlight');
+      var d = await this.api('/events/spotlight', { silent: true, cacheTtl: 300000 });
       slot = document.getElementById('event-spotlight-slot');
       if (!slot || !d || !d.event) return;
       var e = d.event;
@@ -16211,7 +16233,7 @@ const App = {
     var nav = document.getElementById('nav-lms');
     if (!nav || nav.style.display === 'none') { slot.innerHTML = ''; return; }
     try {
-      var data = await this.api('/lms/featured');
+      var data = await this.api('/lms/featured', { silent: true, cacheTtl: 300000 });
       var c = data && data.competition;
       if (!c) { slot.innerHTML = ''; return; }
       var b = c.banner || {};
