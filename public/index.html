@@ -650,8 +650,24 @@
   <script src="/js/app.js?v=20260802a"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      // Auto-update: when a NEW build's service worker takes control, reload once so
+      // returning visitors and long-open tabs can never get stuck on a stale build.
+      // Only fires on a genuine UPDATE (page was already controlled) — never on first
+      // install — and never while a modal is open (don't interrupt signup/checkout).
+      var _swWasControlled = !!navigator.serviceWorker.controller;
+      var _swReloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (_swReloading || !_swWasControlled) return;
+        var overlay = document.getElementById('modal-overlay');
+        if (overlay && overlay.style.display === 'block') return; // mid-action — leave them be
+        _swReloading = true;
+        window.location.reload();
+      });
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').then(function (reg) {
+          // Poll for a new build hourly so a long-open tab updates itself without a manual reload.
+          setInterval(function () { try { reg.update(); } catch (e) {} }, 60 * 60 * 1000);
+        }).catch(function () {});
       });
     }
   </script>
