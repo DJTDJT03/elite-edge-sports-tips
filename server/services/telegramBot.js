@@ -168,11 +168,12 @@ class TelegramBot {
         weekday: 'long', day: 'numeric', month: 'long',
         timeZone: 'Europe/London',
       });
+      // Teaser only \u2014 no picks, no NAP confidence number (which could be low). Just
+      // signal that today's selections are live and drive to the site.
       var text = '\u2600\uFE0F <b>Good Morning \u2014 ' + today + '</b>\n\n' +
-        '\u26BD <b>' + tipCount + ' football selection' + (tipCount === 1 ? '' : 's') + '</b> live on the dashboard.\n' +
-        (napConfidence ? '\u2B50 NAP rated <b>' + napConfidence + '/10</b> confidence.\n' : '') +
-        '\n\uD83E\uDDE0 AI analysis includes form, injuries, xG, H2H & market intelligence.\n' +
-        '\n\uD83D\uDD17 eliteedgesports.co.uk/#/selections\n' +
+        '\u26BD Today\'s football is covered \u2014 <b>' + tipCount + ' selection' + (tipCount === 1 ? '' : 's') + '</b> from our 5 analysts + AI engines are live.\n' +
+        '\n\uD83E\uDDE0 Picks, the NAP of the day & full analysis (form, injuries, xG, H2H, market intel) are on the site:\n' +
+        '\n\uD83D\uDD17 <b>eliteedgesports.co.uk</b>\n' +
         '\n18+ | Entertainment only | BeGambleAware.org';
       return await this.sendMessage(text);
     } catch (err) {
@@ -269,35 +270,25 @@ class TelegramBot {
         timeZone: 'Europe/London',
       });
 
-      var text = '\u26BD <b>DAILY FOOTBALL INTELLIGENCE \u2014 ' + today + '</b>\n\n';
-      text += '\uD83C\uDFAF <b>' + tips.length + ' selection' + (tips.length === 1 ? '' : 's') + '</b> published:\n\n';
-
+      // TEASER ONLY \u2014 we no longer broadcast the actual picks/NAP/confidence on
+      // Telegram. List the GAMES our analysts have covered today and drive people to
+      // the site for the selections + full analysis. (Also removes any chance of a
+      // low-confidence "NAP" ever appearing here.)
+      var seen = {};
+      var games = [];
       for (var i = 0; i < tips.length; i++) {
-        var tip = tips[i];
-        var napLabel = tip.isNap ? ' \u2B50 <b>NAP</b>' : '';
-        var confBar = tip.confidence >= 8 ? '\uD83D\uDD25' : tip.confidence >= 7 ? '\u2705' : '\u26A1';
-        var analysis = tip.analysis || {};
-        var consensusLabel = analysis.consensus ? ' [' + analysis.consensus + ']' : '';
-        text += confBar + ' <b>' + (tip.selection || '') + '</b>' + napLabel + consensusLabel + '\n';
-        text += '   ' + (tip.event || '') + '\n';
-        text += '   ' + (tip.market || '') + ' @ <b>' + (tip.odds || '-') + '</b> | Conf: ' + (tip.confidence || '-') + '/10\n';
-        // Show agent debate
-        if (analysis.debate && analysis.debate.length > 0) {
-          analysis.debate.forEach(function(d) {
-            var emoji = d.pick === tip.selection ? '\u2705' : '\u274C';
-            text += '   ' + emoji + ' ' + d.agent + ': ' + d.pick + '\n';
-          });
-          if (analysis.gptVerdict) {
-            text += '   \uD83E\uDD16 GPT: ' + analysis.gptVerdict + '\n';
-          }
-        } else if (tip.tipsterProfile) {
-          text += '   Analyst: ' + tip.tipsterProfile + '\n';
-        }
-        text += '\n';
+        var ev = String(tips[i].event || '').trim();
+        if (ev && !seen[ev]) { seen[ev] = true; games.push(ev); }
       }
+      if (games.length === 0) return;
 
-      text += '\uD83E\uDDE0 Full AI analysis on each pick at:\n';
-      text += '\uD83D\uDD17 eliteedgesports.co.uk/#/selections\n';
+      var text = '\u26BD <b>TODAY\'S FOOTBALL \u2014 ' + today + '</b>\n\n';
+      text += 'Our 5 analysts + AI engines have run the numbers on today\'s games:\n\n';
+      for (var g = 0; g < games.length; g++) {
+        text += '\u2022 ' + games[g] + '\n';
+      }
+      text += '\n\uD83D\uDD12 Today\'s picks, the NAP of the day & full AI analysis are members-only \u2014 see them all on the site:\n';
+      text += '\uD83D\uDD17 <b>eliteedgesports.co.uk</b>\n';
       text += '\n18+ | Entertainment only | BeGambleAware.org';
 
       return await this.sendMessage(text);
