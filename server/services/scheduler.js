@@ -986,7 +986,12 @@ module.exports = function startScheduler(deps) {
               cEntry.scored.modelProbability = cResult.modelProbability;
               cEntry.scored.impliedProbability = cResult.impliedProbability;
               cEntry.scored.edge = cResult.edge;
+              // The consensus makes the actual pick, so its confidence is authoritative.
+              // Sync BOTH the top-level and the nested scored.confidence — the published
+              // tip reads scored.confidence, so without this it kept the old (low)
+              // scoring-model value and could ship a 1/10 tip flagged as NAP.
               cEntry.confidence = cResult.confidence;
+              cEntry.scored.confidence = cResult.confidence;
               cEntry.edge = cResult.edge;
               cEntry._consensus = {
                 level: cResult.agreementLabel,
