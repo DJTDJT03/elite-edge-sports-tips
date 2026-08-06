@@ -14761,14 +14761,33 @@ const App = {
       return;
     }
 
-    app.innerHTML = this.renderSkeleton('tips');
+    await this._accaLoadPool();
+  },
+
+  // Load the candidate pool for the current match window (published tips + live
+  // fixtures with real odds across the selected days), then render the builder.
+  // Split out of renderAccaGenerator so changing the window/filters reloads the
+  // pool WITHOUT re-charging credits.
+  async _accaLoadPool(autoGen) {
+    var app = document.getElementById('app');
+    var cfg = this._accaConfig || (this._accaConfig = {
+      targetOdds: 10, maxLegs: 5, minOdd: 1.2, maxOdd: 6, minConf: 6,
+      window: 'today', majorOnly: false, markets: { mr: true, ou: true, btts: true, dc: true },
+    });
+    if (!this._accaAllTips) app.innerHTML = this.renderSkeleton('tips');
+    // Stale-render guard: rapid window/filter toggles fire overlapping async loads;
+    // only the most recent may render (else a slow 3-day load overwrites a fast Today load).
+    var token = (this._accaToken = {});
 
     // Fetch published tips + live fixtures for the acca generator
     var selections = [];
     try {
       var now = new Date();
       var nowStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/London' });
-      var todayStr = now.toISOString().split('T')[0];
+      // London-local dates (en-CA → YYYY-MM-DD) so the day buckets match the London
+      // "now" above — avoids an off-by-one near midnight UTC.
+      var londonDay = function (d) { return d.toLocaleDateString('en-CA', { timeZone: 'Europe/London' }); };
+      var todayStr = londonDay(now);
 
       // Helper: check if a time is in the future
       var isUpcoming = function(tipTime, tipDate) {
@@ -14806,27 +14825,48 @@ const App = {
         });
       });
 
-      // 2. Live football fixtures (upcoming games not yet published as tips)
-      // Also store all fixtures for result checking on acca legs
+      // 2. Live football fixtures with real odds, across the chosen match window
+      // (today / +tomorrow / next 3 days). Also stored for leg result-checking.
       try {
-        var liveData = await this.fetchLiveFootball(true, null, true); // fresh + real odds on every fixture
-        var fixtures = liveData && liveData.fixtures ? liveData.fixtures : [];
+        var days = [todayStr];
+        if (cfg.window === '2d' || cfg.window === '3d') {
+          days.push(londonDay(new Date(now.getTime() + 86400000)));
+        }
+        if (cfg.window === '3d') {
+          days.push(londonDay(new Date(now.getTime() + 2 * 86400000)));
+        }
+        var fixtures = [];
+        for (var di = 0; di < days.length; di++) {
+          var dayStr = days[di];
+          try {
+            var ld = await this.fetchLiveFootball(true, dayStr === todayStr ? null : dayStr, true); // fresh + real odds
+            var fx = (ld && ld.fixtures) ? ld.fixtures : [];
+            fx.forEach(function(f) { f._accaDay = dayStr; });
+            fixtures = fixtures.concat(fx);
+          } catch (dErr) { /* skip a day that failed */ }
+        }
         this._accaFixtures = fixtures;
+        var majorOnly = !!cfg.majorOnly;
         fixtures.forEach(function(f) {
           if (!f.homeTeam || !f.awayTeam) return;
           if (f.status === 'FT' || f.status === 'AET' || f.status === 'PEN') return; // skip finished
+          if (majorOnly && !App._isMajorLeague(f.league)) return;
           var matchName = f.homeTeam + ' vs ' + f.awayTeam;
           var key = matchName.toLowerCase();
 
-          // Skip if we already have a published tip for this fixture
+          // Skip only if a PUBLISHED tip already covers THIS exact fixture — require
+          // both teams present (a home-team substring alone wrongly suppressed other
+          // games featuring the same club, esp. across a multi-day window).
           var alreadyHave = selections.some(function(s) {
-            return s.event && s.event.toLowerCase().indexOf(f.homeTeam.toLowerCase()) !== -1;
+            if (!s.isPublishedTip || !s.event) return false;
+            var e = s.event.toLowerCase();
+            return e.indexOf(f.homeTeam.toLowerCase()) !== -1 && e.indexOf(f.awayTeam.toLowerCase()) !== -1;
           });
           if (alreadyHave) return;
 
           var league = f.league || '';
           var kickoff = f.kickoff ? new Date(f.kickoff).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
-          if (kickoff && !isUpcoming(kickoff, todayStr)) return;
+          if (kickoff && !isUpcoming(kickoff, f._accaDay || todayStr)) return;
 
           // Build EVERY playable market on this fixture as its own candidate. The
           // optimiser dedups to one leg per fixture (best-scoring that fits the
@@ -14873,12 +14913,17 @@ const App = {
       // Racing removed — acca builder is football only
 
     } catch (e) {
+      if (this._accaToken !== token) return; // superseded by a newer load
       app.innerHTML = '<div class="container">' + this.renderApiError('Acca Generator', e.message) + '</div>';
       return;
     }
 
+    if (this._accaToken !== token) return; // a newer window/filter load won — don't clobber it
     this._accaAllTips = selections;
     this._renderAccaBuilder();
+    // On a pool reload (window/filter change) re-run the optimiser so the slip
+    // updates in place instead of silently reverting to the empty "Ready" panel.
+    if (autoGen) this._generateAcca();
   },
 
   // ============================================================================
@@ -14890,7 +14935,7 @@ const App = {
     var app = document.getElementById('app');
     var cfg = this._accaConfig || (this._accaConfig = {
       targetOdds: 10, maxLegs: 5, minOdd: 1.2, maxOdd: 6, minConf: 6,
-      markets: { mr: true, ou: true, btts: true, dc: true },
+      window: 'today', majorOnly: false, markets: { mr: true, ou: true, btts: true, dc: true },
     });
     // Count unique fixtures, not raw candidates (each fixture now offers several
     // markets), so "N analysed picks" reflects real games available.
@@ -14906,7 +14951,7 @@ const App = {
       '<div class="container" style="max-width:1080px;padding-top:28px;">' +
         '<div style="text-align:center;margin-bottom:8px;"><span style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:var(--accent);border:1px solid rgba(34,211,238,0.35);border-radius:20px;padding:4px 12px;">⚡ AI ACCUMULATOR BUILDER</span></div>' +
         '<h1 style="text-align:center;font-size:clamp(26px,5vw,38px);font-weight:900;margin:6px 0 4px;">Build the perfect acca <span style="color:var(--accent);">in seconds</span></h1>' +
-        '<p style="text-align:center;color:var(--text-secondary);max-width:560px;margin:0 auto 24px;">Set your target odds and rules — our model assembles the highest-confidence accumulator from today\'s ' + poolCount + ' analysed picks, with real edge on every leg.</p>' +
+        '<p style="text-align:center;color:var(--text-secondary);max-width:560px;margin:0 auto 24px;">Set your target odds and rules — our model assembles the highest-confidence accumulator from ' + poolCount + ' analysed ' + (cfg.window === 'today' ? 'fixtures today' : cfg.window === '2d' ? 'fixtures over today + tomorrow' : 'fixtures over the next 3 days') + ', with real edge on every leg.</p>' +
         '<div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:22px;align-items:start;">' +
           // ---- CONFIG PANEL ----
           '<div class="card" style="padding:22px;">' +
@@ -14914,6 +14959,13 @@ const App = {
             '<input type="range" class="acca-range" min="2" max="100" step="0.5" value="' + cfg.targetOdds + '" oninput="App._accaSet(\'targetOdds\', this.value)">' +
             '<div class="acca-cfg-row" style="margin-top:16px;"><div class="acca-cfg-label">Max legs</div><div class="acca-cfg-val" id="acca-legs-val">' + cfg.maxLegs + '</div></div>' +
             '<input type="range" class="acca-range" min="2" max="8" step="1" value="' + cfg.maxLegs + '" oninput="App._accaSet(\'maxLegs\', this.value)">' +
+            '<div class="acca-cfg-label" style="margin:18px 0 8px;">Match window</div>' +
+            '<div style="display:flex;gap:8px;">' +
+              ['today','Today','2d','+ Tomorrow','3d','Next 3 days'].reduce(function(acc, _, i, arr) {
+                if (i % 2) return acc; var val = arr[i], lab = arr[i + 1];
+                return acc + '<button onclick="App._accaSetWindow(\'' + val + '\')" class="acca-mk' + (cfg.window === val ? ' on' : '') + '" style="flex:1;">' + lab + '</button>';
+              }, '') +
+            '</div>' +
             '<div class="acca-cfg-label" style="margin:18px 0 8px;">Markets</div>' +
             '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
               chip('Match Result', cfg.markets.mr, "App._accaToggleMkt('mr')") +
@@ -14921,6 +14973,7 @@ const App = {
               chip('BTTS', cfg.markets.btts, "App._accaToggleMkt('btts')") +
               chip('Double Chance', cfg.markets.dc, "App._accaToggleMkt('dc')") +
             '</div>' +
+            '<div style="margin-top:12px;">' + chip('★ Major leagues only', cfg.majorOnly, "App._accaToggleMajor()") + '</div>' +
             '<div class="acca-cfg-row" style="margin-top:18px;"><div class="acca-cfg-label">Min odds / pick</div><div class="acca-cfg-val" id="acca-minodd-val">' + cfg.minOdd.toFixed(2) + '</div></div>' +
             '<input type="range" class="acca-range" min="1.05" max="3" step="0.05" value="' + cfg.minOdd + '" oninput="App._accaSet(\'minOdd\', this.value)">' +
             '<div class="acca-cfg-row" style="margin-top:14px;"><div class="acca-cfg-label">Max odds / pick</div><div class="acca-cfg-val" id="acca-maxodd-val">' + cfg.maxOdd.toFixed(2) + '</div></div>' +
@@ -14928,7 +14981,7 @@ const App = {
             '<div class="acca-cfg-row" style="margin-top:14px;"><div class="acca-cfg-label">Min confidence</div><div class="acca-cfg-val" id="acca-conf-val">' + cfg.minConf + '/10</div></div>' +
             '<input type="range" class="acca-range" min="5" max="9" step="1" value="' + cfg.minConf + '" oninput="App._accaSet(\'minConf\', this.value)">' +
             '<button class="btn btn-gold btn-full" style="margin-top:22px;font-size:15px;padding:13px;" onclick="App._generateAcca()">⚡ Generate slip</button>' +
-            '<button class="btn btn-ghost btn-full" style="margin-top:8px;font-size:12px;" onclick="App._accaConfig=null;App.renderAccaGenerator()">Reset</button>' +
+            '<button class="btn btn-ghost btn-full" style="margin-top:8px;font-size:12px;" onclick="App._accaConfig=null;App._accaLoadPool()">Reset</button>' +
           '</div>' +
           // ---- RESULT PANEL ----
           '<div id="acca-result" class="card" style="min-height:340px;display:flex;align-items:center;justify-content:center;padding:30px;">' +
@@ -14951,6 +15004,35 @@ const App = {
   _accaToggleMkt: function (m) {
     this._accaConfig.markets[m] = !this._accaConfig.markets[m];
     this._renderAccaBuilder(); // re-render to reflect chip state
+  },
+  // Widening the match window / toggling major-only changes the candidate POOL,
+  // so these reload it (no credit re-charge — _accaLoadPool doesn't gate credits).
+  _accaSetWindow: function (w) {
+    if (this._accaConfig.window === w) return;
+    this._accaConfig.window = w;
+    this._renderAccaBuilder(); // reflect the new selection immediately
+    var box = document.getElementById('acca-result');
+    if (box) {
+      box.style.alignItems = 'center';
+      var lab = w === 'today' ? "today's" : (w === '2d' ? 'today + tomorrow' : 'the next 3 days');
+      box.innerHTML = '<div style="text-align:center;color:var(--text-muted);"><div class="loading-spinner" style="margin:0 auto 12px;"></div>Loading ' + lab + ' matches…</div>';
+    }
+    this._accaLoadPool(!!this._accaResult); // re-optimise in place if a slip was already built
+  },
+  _accaToggleMajor: function () {
+    this._accaConfig.majorOnly = !this._accaConfig.majorOnly;
+    this._renderAccaBuilder();
+    this._accaLoadPool(!!this._accaResult);
+  },
+  // Is this competition one of the big, liquid leagues/cups? Used by the
+  // "Major leagues only" filter to strip obscure fixtures from the pool.
+  _isMajorLeague: function (name) {
+    var n = String(name || '').toLowerCase();
+    var majors = ['premier league', 'championship', 'league one', 'league two', 'fa cup', 'carabao', 'efl',
+      'la liga', 'laliga', 'serie a', 'bundesliga', 'ligue 1', 'eredivisie', 'primeira', 'liga portugal',
+      'champions league', 'europa league', 'conference league', 'scottish prem', 'mls', 'süper lig',
+      'super lig', 'saudi pro', 'copa'];
+    return majors.some(function (m) { return n.indexOf(m) !== -1; });
   },
 
   // Pure optimiser: assemble the highest-confidence acca that reaches the target
