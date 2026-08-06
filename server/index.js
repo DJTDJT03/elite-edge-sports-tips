@@ -425,6 +425,9 @@ app.use('/', require('./routes/public')(deps));
         // per day. Stops a deploy (which restarts the process and wipes the in-memory
         // 'already sent today' guard) from re-blasting the daily bulletin.
         "CREATE TABLE IF NOT EXISTS sent_emails (id SERIAL PRIMARY KEY, recipient TEXT NOT NULL, email_type TEXT NOT NULL, sent_date DATE NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(recipient, email_type, sent_date))",
+        // Team-name -> SportMonks id resolution cache, so any team (incl. name
+        // variants/nicknames) resolves to real SportMonks club data reliably + fast.
+        "CREATE TABLE IF NOT EXISTS team_sm_map (norm_key TEXT PRIMARY KEY, sm_id INTEGER NOT NULL, sm_name TEXT, updated_at TIMESTAMPTZ DEFAULT NOW())",
         // Conversion funnel — first-party top-of-funnel beacons (landing views,
         // signup-modal opens, checkout starts) that GA sees but the DB doesn't.
         // The lower funnel (registrations/trials/paid) is read from real tables.

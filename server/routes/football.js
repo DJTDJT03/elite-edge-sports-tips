@@ -1701,6 +1701,31 @@ module.exports = function(deps) {
     }
   });
 
+  // Nickname / abbreviation -> SportMonks search name, for teams a plain search
+  // can't match. Keys are the normalised form (lowercase, club suffixes + non
+  // alphanumerics stripped). Successful lookups are also cached in team_sm_map.
+  const TEAM_SM_ALIASES = {
+    // England
+    wolves: 'Wolverhampton Wanderers', wolverhampton: 'Wolverhampton Wanderers',
+    spurs: 'Tottenham Hotspur', tottenham: 'Tottenham Hotspur',
+    manutd: 'Manchester United', manunited: 'Manchester United', mufc: 'Manchester United',
+    mancity: 'Manchester City', mcfc: 'Manchester City',
+    forest: 'Nottingham Forest', nottmforest: 'Nottingham Forest', nottinghamforest: 'Nottingham Forest',
+    westham: 'West Ham United', newcastle: 'Newcastle United', leeds: 'Leeds United',
+    brighton: 'Brighton', westbrom: 'West Bromwich Albion', wba: 'West Bromwich Albion',
+    qpr: 'Queens Park Rangers', sheffutd: 'Sheffield United', sheffieldutd: 'Sheffield United',
+    sheffwed: 'Sheffield Wednesday', sheffieldwed: 'Sheffield Wednesday',
+    boro: 'Middlesbrough', wanderers: 'Bolton Wanderers',
+    // Scotland
+    celtic: 'Celtic', rangers: 'Rangers', hearts: 'Heart of Midlothian', hibs: 'Hibernian',
+    // Major European
+    barca: 'Barcelona', atleti: 'Atletico Madrid', atleticomadrid: 'Atletico Madrid',
+    inter: 'Internazionale', intermilan: 'Internazionale', acmilan: 'AC Milan',
+    bayern: 'Bayern Munich', dortmund: 'Borussia Dortmund', bvb: 'Borussia Dortmund',
+    psg: 'Paris Saint-Germain', parissg: 'Paris Saint-Germain', juve: 'Juventus',
+    gladbach: 'Borussia Monchengladbach', leverkusen: 'Bayer Leverkusen',
+  };
+
   // GET /api/football/club/:key — rich SportMonks club data (All-In plan).
   // key is a SportMonks team id (numeric) OR a team name to search. Combines
   // team detail + current squad + recent fixtures into one normalised payload.
@@ -1712,26 +1737,39 @@ module.exports = function(deps) {
       var key = req.params.key;
       var teamId = /^\d+$/.test(key) ? parseInt(key, 10) : null;
 
-      // Resolve a name to an id via search. SportMonks names clubs "Arsenal", not
-      // "Arsenal FC", so try the raw query, then with common club suffixes stripped,
-      // then a first-two-words fallback — and match tolerantly.
+      // Resolve a name to a SportMonks id. Robust so ANY team (name variants,
+      // suffixes, nicknames) pulls its club data: cache -> alias map -> tolerant
+      // search, then cache the result so it's instant + reliable next time.
       if (!teamId) {
         var q = decodeURIComponent(key).replace(/-/g, ' ').trim();
-        var stripSuffix = function (s) { return String(s).replace(/\b(fc|afc|cf|sc|ac|fk|sk|bk|if|cd|ud|sv)\b/gi, '').replace(/\s+/g, ' ').trim(); };
-        var variants = [q];
-        var qs = stripSuffix(q);
-        if (qs && qs !== q) variants.push(qs);
-        var firstTwo = q.split(' ').slice(0, 2).join(' ');
-        if (firstTwo && variants.indexOf(firstTwo) === -1) variants.push(firstTwo);
-        var found = [];
-        for (var vi = 0; vi < variants.length && !found.length; vi++) {
-          try { found = (await sportMonks.searchTeams(variants[vi])) || []; } catch (e) { found = []; }
+        var stripSuffix = function (s) { return String(s).replace(/\b(fc|afc|cf|sc|ac|fk|sk|bk|if|cd|ud|sv|hsc|bsc|rc)\b/gi, '').replace(/\s+/g, ' ').trim(); };
+        var norm = function (s) { return stripSuffix(String(s || '').toLowerCase()).replace(/[^a-z0-9]/g, ''); };
+        var normKey = norm(q);
+
+        // 1) Persistent cache — already resolved this team before?
+        if (db.getTeamSmId) {
+          try { var cached = await db.getTeamSmId(normKey); if (cached && cached.id) teamId = cached.id; } catch (e) {}
         }
-        if (found.length) {
-          var norm = function (s) { return stripSuffix(String(s || '').toLowerCase()).replace(/[^a-z0-9]/g, ''); };
-          var qn = norm(q);
-          var exact = found.find(function (t) { return norm(t.name) === qn; });
-          teamId = (exact || found[0]).id;
+        // 2) Alias map (nicknames/abbreviations search can't match) + tolerant search.
+        if (!teamId) {
+          var variants = [];
+          if (TEAM_SM_ALIASES[normKey]) variants.push(TEAM_SM_ALIASES[normKey]);
+          variants.push(q);
+          var qs = stripSuffix(q);
+          if (qs && variants.indexOf(qs) === -1) variants.push(qs);
+          var firstTwo = q.split(' ').slice(0, 2).join(' ');
+          if (firstTwo && variants.indexOf(firstTwo) === -1) variants.push(firstTwo);
+          var found = [];
+          for (var vi = 0; vi < variants.length && !found.length; vi++) {
+            try { found = (await sportMonks.searchTeams(variants[vi])) || []; } catch (e) { found = []; }
+          }
+          if (found.length) {
+            var exact = found.find(function (t) { return norm(t.name) === normKey; });
+            var chosen = exact || found[0];
+            teamId = chosen.id;
+            // Cache so the same team resolves instantly forever after.
+            if (db.saveTeamSmId && teamId) { try { await db.saveTeamSmId(normKey, teamId, chosen.name || null); } catch (e) {} }
+          }
         }
       }
       if (!teamId) return res.status(404).json({ error: 'Club not found for "' + key + '".' });

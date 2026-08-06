@@ -1083,6 +1083,27 @@ async function releaseEmailSend(recipient, emailType, dateStr) {
 }
 
 // ---------------------------------------------------------------------------
+// TEAM NAME -> SPORTMONKS ID CACHE — resolve any team (incl. variants) to real
+// SportMonks club data reliably, and cache it so it's instant next time.
+// ---------------------------------------------------------------------------
+async function getTeamSmId(normKey) {
+  if (!pool || !normKey) return null;
+  try {
+    const { rows } = await query('SELECT sm_id, sm_name FROM team_sm_map WHERE norm_key = $1', [normKey]);
+    return rows.length ? { id: rows[0].sm_id, name: rows[0].sm_name } : null;
+  } catch (e) { return null; }
+}
+async function saveTeamSmId(normKey, smId, smName) {
+  if (!pool || !normKey || !smId) return;
+  try {
+    await query(
+      'INSERT INTO team_sm_map (norm_key, sm_id, sm_name, updated_at) VALUES ($1,$2,$3,NOW()) ON CONFLICT (norm_key) DO UPDATE SET sm_id = EXCLUDED.sm_id, sm_name = EXCLUDED.sm_name, updated_at = NOW()',
+      [normKey, smId, smName || null]
+    );
+  } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
 // CONVERSION FUNNEL
 // ---------------------------------------------------------------------------
 // Record a top-of-funnel beacon (landing_view / signup_open / checkout_start).
@@ -1407,6 +1428,8 @@ module.exports = {
   claimStripeEvent, releaseStripeEvent,
   // Email send dedup
   claimEmailSend, releaseEmailSend,
+  // Team name -> SportMonks id cache
+  getTeamSmId, saveTeamSmId,
   // Conversion funnel
   recordFunnelEvent, getFunnelMetrics,
   // Sonar Cache
