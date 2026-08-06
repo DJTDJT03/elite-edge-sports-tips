@@ -14891,7 +14891,163 @@ const App = {
     }
 
     this._accaAllTips = selections;
-    this._renderAccaPage();
+    this._renderAccaBuilder();
+  },
+
+  // ============================================================================
+  // SMART ACCA BUILDER — configurable AI accumulator optimiser
+  // ============================================================================
+  _accaConfig: null,
+  _renderAccaBuilder() {
+    var self = this;
+    var app = document.getElementById('app');
+    var cfg = this._accaConfig || (this._accaConfig = {
+      targetOdds: 10, maxLegs: 5, minOdd: 1.2, maxOdd: 6, minConf: 6,
+      markets: { mr: true, ou: true, btts: true, dc: true },
+    });
+    var poolCount = (this._accaAllTips || []).length;
+    var chip = function (label, on, onclick) {
+      return '<button onclick="' + onclick + '" class="acca-mk' + (on ? ' on' : '') + '">' + (on ? '✓ ' : '') + label + '</button>';
+    };
+    app.innerHTML =
+      '<div class="container" style="max-width:1080px;padding-top:28px;">' +
+        '<div style="text-align:center;margin-bottom:8px;"><span style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:var(--accent);border:1px solid rgba(34,211,238,0.35);border-radius:20px;padding:4px 12px;">⚡ AI ACCUMULATOR BUILDER</span></div>' +
+        '<h1 style="text-align:center;font-size:clamp(26px,5vw,38px);font-weight:900;margin:6px 0 4px;">Build the perfect acca <span style="color:var(--accent);">in seconds</span></h1>' +
+        '<p style="text-align:center;color:var(--text-secondary);max-width:560px;margin:0 auto 24px;">Set your target odds and rules — our model assembles the highest-confidence accumulator from today\'s ' + poolCount + ' analysed picks, with real edge on every leg.</p>' +
+        '<div style="display:grid;grid-template-columns:minmax(280px,360px) 1fr;gap:22px;align-items:start;">' +
+          // ---- CONFIG PANEL ----
+          '<div class="card" style="padding:22px;">' +
+            '<div class="acca-cfg-row"><div class="acca-cfg-label">Target odds</div><div class="acca-cfg-val" id="acca-target-val">' + cfg.targetOdds.toFixed(1) + '</div></div>' +
+            '<input type="range" class="acca-range" min="2" max="100" step="0.5" value="' + cfg.targetOdds + '" oninput="App._accaSet(\'targetOdds\', this.value)">' +
+            '<div class="acca-cfg-row" style="margin-top:16px;"><div class="acca-cfg-label">Max legs</div><div class="acca-cfg-val" id="acca-legs-val">' + cfg.maxLegs + '</div></div>' +
+            '<input type="range" class="acca-range" min="2" max="8" step="1" value="' + cfg.maxLegs + '" oninput="App._accaSet(\'maxLegs\', this.value)">' +
+            '<div class="acca-cfg-label" style="margin:18px 0 8px;">Markets</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
+              chip('Match Result', cfg.markets.mr, "App._accaToggleMkt('mr')") +
+              chip('Over/Under', cfg.markets.ou, "App._accaToggleMkt('ou')") +
+              chip('BTTS', cfg.markets.btts, "App._accaToggleMkt('btts')") +
+              chip('Double Chance', cfg.markets.dc, "App._accaToggleMkt('dc')") +
+            '</div>' +
+            '<div class="acca-cfg-row" style="margin-top:18px;"><div class="acca-cfg-label">Min odds / pick</div><div class="acca-cfg-val" id="acca-minodd-val">' + cfg.minOdd.toFixed(2) + '</div></div>' +
+            '<input type="range" class="acca-range" min="1.05" max="3" step="0.05" value="' + cfg.minOdd + '" oninput="App._accaSet(\'minOdd\', this.value)">' +
+            '<div class="acca-cfg-row" style="margin-top:14px;"><div class="acca-cfg-label">Max odds / pick</div><div class="acca-cfg-val" id="acca-maxodd-val">' + cfg.maxOdd.toFixed(2) + '</div></div>' +
+            '<input type="range" class="acca-range" min="1.5" max="15" step="0.5" value="' + cfg.maxOdd + '" oninput="App._accaSet(\'maxOdd\', this.value)">' +
+            '<div class="acca-cfg-row" style="margin-top:14px;"><div class="acca-cfg-label">Min confidence</div><div class="acca-cfg-val" id="acca-conf-val">' + cfg.minConf + '/10</div></div>' +
+            '<input type="range" class="acca-range" min="5" max="9" step="1" value="' + cfg.minConf + '" oninput="App._accaSet(\'minConf\', this.value)">' +
+            '<button class="btn btn-gold btn-full" style="margin-top:22px;font-size:15px;padding:13px;" onclick="App._generateAcca()">⚡ Generate slip</button>' +
+            '<button class="btn btn-ghost btn-full" style="margin-top:8px;font-size:12px;" onclick="App._accaConfig=null;App.renderAccaGenerator()">Reset</button>' +
+          '</div>' +
+          // ---- RESULT PANEL ----
+          '<div id="acca-result" class="card" style="min-height:340px;display:flex;align-items:center;justify-content:center;padding:30px;">' +
+            '<div style="text-align:center;color:var(--text-muted);">' +
+              '<div style="font-size:44px;color:var(--accent);margin-bottom:14px;filter:drop-shadow(0 0 12px rgba(34,211,238,0.5));">⚡</div>' +
+              '<div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:6px;">Ready to build your slip</div>' +
+              '<div style="font-size:13px;">Set your rules on the left, then hit <strong style="color:var(--accent);">Generate slip</strong>.</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+  },
+
+  _accaSet: function (key, val) {
+    var v = parseFloat(val);
+    this._accaConfig[key] = v;
+    var map = { targetOdds: ['acca-target-val', v.toFixed(1)], maxLegs: ['acca-legs-val', String(v)], minOdd: ['acca-minodd-val', v.toFixed(2)], maxOdd: ['acca-maxodd-val', v.toFixed(2)], minConf: ['acca-conf-val', v + '/10'] };
+    if (map[key]) { var el = document.getElementById(map[key][0]); if (el) el.textContent = map[key][1]; }
+  },
+  _accaToggleMkt: function (m) {
+    this._accaConfig.markets[m] = !this._accaConfig.markets[m];
+    this._renderAccaBuilder(); // re-render to reflect chip state
+  },
+
+  // Pure optimiser: assemble the highest-confidence acca that reaches the target
+  // odds, one leg per fixture, capped per league (anti-correlation).
+  _optimizeAccaLegs: function (candidates, cfg) {
+    var self = this;
+    var marketOk = function (c) {
+      var m = (c.market || '').toLowerCase(), s = (c.selection || '').toLowerCase();
+      if (/match result|match winner|1x2/.test(m) || /win$/.test(s)) return cfg.markets.mr;
+      if (/over|under|total|goals/.test(m + s)) return cfg.markets.ou;
+      if (/btts|both teams/.test(m + s)) return cfg.markets.btts;
+      if (/double chance/.test(m + s)) return cfg.markets.dc;
+      if (s.indexOf('draw') !== -1) return cfg.markets.mr;
+      return true;
+    };
+    var pool = (candidates || []).filter(function (c) {
+      var o = parseFloat(c.odds) || 0;
+      return o >= cfg.minOdd && o <= cfg.maxOdd && (c.confidence || 0) >= cfg.minConf && marketOk(c);
+    });
+    // One leg per fixture — keep the highest-scoring.
+    var score = function (c) { return (c.confidence || 0) * 10 + (c.edge || 0) * 120; };
+    var byFx = {};
+    pool.forEach(function (c) {
+      var k = String(c.event || c.match || c.id).toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!byFx[k] || score(c) > score(byFx[k])) byFx[k] = c;
+    });
+    var legs = Object.keys(byFx).map(function (k) { return byFx[k]; }).sort(function (a, b) { return score(b) - score(a); });
+    // Greedy: add best legs (league cap = ceil(maxLegs/2)) until target reached or maxLegs.
+    var cap = Math.max(2, Math.ceil(cfg.maxLegs / 2));
+    var chosen = [], leagueCount = {}, combined = 1;
+    for (var i = 0; i < legs.length && chosen.length < cfg.maxLegs; i++) {
+      var c = legs[i];
+      var lg = String(c.league || 'x').toLowerCase();
+      if ((leagueCount[lg] || 0) >= cap) continue;
+      chosen.push(c); leagueCount[lg] = (leagueCount[lg] || 0) + 1;
+      combined *= (parseFloat(c.odds) || 1);
+      if (chosen.length >= 2 && combined >= cfg.targetOdds) break;
+    }
+    return { legs: chosen, combined: combined };
+  },
+
+  _generateAcca: function () {
+    var box = document.getElementById('acca-result');
+    if (!box) return;
+    var cfg = this._accaConfig;
+    var res = this._optimizeAccaLegs(this._accaAllTips || [], cfg);
+    if (!res.legs.length) {
+      box.style.alignItems = 'center';
+      box.innerHTML = '<div style="text-align:center;color:var(--text-muted);"><div style="font-size:40px;margin-bottom:10px;">🤔</div><div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">No legs match those rules</div><div style="font-size:13px;">Try lowering the min confidence, widening the odds range, or enabling more markets.</div></div>';
+      return;
+    }
+    this._accaResult = res;
+    box.style.alignItems = 'stretch';
+    box.innerHTML = this._renderAccaSlip(res, cfg);
+  },
+
+  _renderAccaSlip: function (res, cfg) {
+    var self = this;
+    var esc = function (s) { return self.escapeHtml(String(s == null ? '' : s)); };
+    var avgConf = Math.round(res.legs.reduce(function (s, l) { return s + (l.confidence || 0); }, 0) / res.legs.length);
+    var legsHtml = res.legs.map(function (l, i) {
+      var confPct = Math.min(100, (l.confidence || 0) * 10);
+      var edgePct = Math.round((l.edge || 0) * 100);
+      return '<div style="display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--border);">' +
+          '<div style="width:26px;height:26px;border-radius:8px;background:rgba(34,211,238,0.12);border:1px solid rgba(34,211,238,0.3);color:var(--accent);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + (i + 1) + '</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-weight:700;color:#fff;font-size:14px;">' + esc(l.selection) + '</div>' +
+            '<div style="font-size:12px;color:var(--text-muted);">' + esc(l.event || l.match) + (l.kickoff ? ' · ' + esc(l.kickoff) : '') + '</div>' +
+            '<div style="height:4px;background:rgba(255,255,255,0.06);border-radius:3px;margin-top:6px;overflow:hidden;max-width:180px;"><div style="width:' + confPct + '%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));"></div></div>' +
+          '</div>' +
+          '<div style="text-align:right;flex-shrink:0;">' +
+            '<div style="font-size:16px;font-weight:800;color:var(--accent);">' + self.formatOdds(l.odds) + '</div>' +
+            (edgePct > 0 ? '<div style="font-size:10px;color:#22c55e;font-weight:700;">+' + edgePct + '% edge</div>' : '') +
+          '</div>' +
+        '</div>';
+    }).join('');
+    var cosmoLink = this.cosmoLink ? this.cosmoLink('acca-builder') : 'https://eliteedgesports.co.uk';
+    return '<div style="width:100%;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+          '<div style="font-weight:800;color:#fff;font-size:17px;">Your ' + res.legs.length + '-leg acca</div>' +
+          '<div style="text-align:right;"><div style="font-size:22px;font-weight:900;color:var(--accent);">' + self.formatOdds(res.combined) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Combined odds</div></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:14px;margin-bottom:10px;font-size:12px;color:var(--text-secondary);"><span>Avg confidence <strong style="color:var(--accent);">' + avgConf + '/10</strong></span><span>·</span><span>£10 returns <strong style="color:#22c55e;">£' + (res.combined * 10).toFixed(2) + '</strong></span></div>' +
+        legsHtml +
+        '<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">' +
+          '<a href="' + encodeURI(cosmoLink) + '" target="_blank" rel="noopener sponsored" class="btn btn-gold" style="flex:1;min-width:150px;">⚡ Back with Cosmo Bet →</a>' +
+          '<button class="btn btn-outline" onclick="App._generateAcca()">↻ Rebuild</button>' +
+        '</div>' +
+        '<div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:10px;">Official partner · 18+ · Please gamble responsibly · BeGambleAware.org</div>' +
+      '</div>';
   },
 
   _renderAccaPage() {

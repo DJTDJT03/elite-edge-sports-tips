@@ -6553,6 +6553,17 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
 
 /* --- Smart Acca Generator --- */
 .acca-gen-page { max-width: 800px; margin: 0 auto; }
+/* Smart Acca Builder — configurator controls */
+.acca-cfg-row { display: flex; justify-content: space-between; align-items: baseline; }
+.acca-cfg-label { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+.acca-cfg-val { font-size: 18px; font-weight: 900; color: var(--accent); }
+.acca-range { -webkit-appearance: none; appearance: none; width: 100%; height: 5px; border-radius: 3px; background: rgba(34,211,238,0.15); outline: none; margin: 8px 0 2px; }
+.acca-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); cursor: pointer; box-shadow: 0 0 12px rgba(34,211,238,0.6); border: 2px solid #04060c; }
+.acca-range::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 2px solid #04060c; }
+.acca-mk { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border-light); background: var(--bg-elevated); color: var(--text-secondary); font-weight: 700; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+.acca-mk.on { background: rgba(34,211,238,0.14); border-color: rgba(34,211,238,0.5); color: var(--accent); }
+.acca-mk:hover { border-color: var(--accent); }
+@media (max-width: 760px) { .container [style*="grid-template-columns:minmax(280px,360px)"] { grid-template-columns: 1fr !important; } }
 .acca-fold-selector { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
 .acca-fold-btn { padding: 10px 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text-secondary); cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s; }
 .acca-fold-btn.active { background: var(--gold); color: #0a0e1a; border-color: var(--gold); }
