@@ -49,7 +49,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css?v=20260731e">
+  <link rel="stylesheet" href="/css/style.css?v=20260806a">
   <link rel="stylesheet" href="/css/worldCup.css?v=20260503a">
 
   <!-- Google Analytics 4 — Uncomment and replace GA_ID when ready
@@ -77,10 +77,10 @@
     .news-ticker:hover .news-ticker-track { animation-play-state:paused; }
     .news-ticker-item { display:inline-flex; align-items:center; gap:6px; color:#cbd5e1; text-decoration:none; font-size:13px; padding:0 22px; border-right:1px solid rgba(255,255,255,0.08); }
     .news-ticker-item:hover { color:#fff; }
-    .news-ticker-dot { color:#d4a843; }
+    .news-ticker-dot { color:#22d3ee; }
     .news-ticker-src { color:#7a8295; font-size:11px; margin-left:6px; }
     @keyframes ee-ticker { from { transform:translateX(0); } to { transform:translateX(-50%); } }
-    .live-strip { background:#0a0f1e; border-bottom:1px solid rgba(212,168,67,0.18); overflow:hidden; white-space:nowrap; }
+    .live-strip { background:#0a0f1e; border-bottom:1px solid rgba(34, 211, 238,0.18); overflow:hidden; white-space:nowrap; }
     .live-strip-track { display:inline-block; white-space:nowrap; padding:7px 0; animation: ee-ticker 75s linear infinite; will-change:transform; }
     .live-strip:hover .live-strip-track { animation-play-state:paused; }
     .live-strip-item { display:inline-flex; align-items:center; gap:7px; font-size:13px; padding:0 20px; border-right:1px solid rgba(255,255,255,0.07); color:#cbd5e1; }
@@ -97,9 +97,9 @@
     <div class="nav-inner">
       <a href="#/" class="logo">
         <svg class="logo-svg" width="36" height="36" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-          <defs><linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#d4a843"/><stop offset="100%" stop-color="#b8902f"/></linearGradient></defs>
+          <defs><linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#0891b2"/></linearGradient></defs>
           <path d="M32 4L4 32l28 28 28-28L32 4z" fill="none" stroke="url(#logo-grad)" stroke-width="3"/>
-          <text x="16" y="40" font-family="Inter,sans-serif" font-weight="900" font-size="24" fill="#d4a843">EE</text>
+          <text x="16" y="40" font-family="Inter,sans-serif" font-weight="900" font-size="24" fill="#22d3ee">EE</text>
         </svg>
         <span class="logo-text">Elite Edge<span class="logo-sub">Data-Driven Betting Intelligence</span></span>
       </a>
@@ -112,10 +112,10 @@
         </div>
         <div id="nav-auth-top-user" style="display:none;padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:8px;">
           <div style="display:flex;align-items:center;gap:10px;">
-            <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#d4a843,#b8902f);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;color:#0a0e1a;" id="nav-user-avatar">?</div>
+            <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#22d3ee,#0891b2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;color:#0a0e1a;" id="nav-user-avatar">?</div>
             <div>
               <div style="font-weight:700;color:#fff;font-size:14px;" id="nav-user-welcome">Welcome</div>
-              <div style="font-size:11px;color:#d4a843;" id="nav-user-plan">Free</div>
+              <div style="font-size:11px;color:#22d3ee;" id="nav-user-plan">Free</div>
             </div>
             <button class="btn btn-outline btn-sm" onclick="App.logout()" style="margin-left:auto;font-size:11px;">Log Out</button>
           </div>
@@ -367,7 +367,7 @@
   <div class="modal" id="modal-register" style="display:none;">
     <button class="modal-close" onclick="App.closeModal()">&times;</button>
     <h2>Create Account</h2>
-    <div style="background:rgba(212,168,67,0.1);border:1px solid var(--gold);border-radius:8px;padding:12px;margin-bottom:16px;text-align:center;">
+    <div style="background:rgba(34, 211, 238,0.1);border:1px solid var(--gold);border-radius:8px;padding:12px;margin-bottom:16px;text-align:center;">
       <strong style="color:var(--gold);">Create Your Free Account</strong><br>
       <span style="font-size:13px;color:var(--text-secondary);">Access free daily tips, results, and analysis. Upgrade to Premium anytime.</span>
     </div>
@@ -401,7 +401,7 @@
       <div style="margin-top:12px;max-height:120px;overflow-y:auto;border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:10px 12px;background:rgba(0,0,0,0.2);">
         <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:10px;color:var(--text-secondary);line-height:1.6;">
           <input type="checkbox" id="reg-agreement" required style="margin-top:3px;flex-shrink:0;">
-          <span>I confirm I am 18+ and understand that Elite Edge Sports Tips provides statistical analysis and entertainment content ONLY. This is NOT financial advice, betting advice, or any guarantee of profit. All content is opinion and statistical modelling only. Any decision to place bets is at my own risk. I take full responsibility for any losses. Elite Edge Sports Tips Ltd accepts no liability for losses. I have read and agree to the <a href="#/terms" onclick="event.stopPropagation();" style="color:#d4a843;">Terms &amp; Conditions</a>, <a href="#/privacy" onclick="event.stopPropagation();" style="color:#d4a843;">Privacy Policy</a>, and <a href="#/disclaimer" onclick="event.stopPropagation();" style="color:#d4a843;">Full Disclaimer</a>.</span>
+          <span>I confirm I am 18+ and understand that Elite Edge Sports Tips provides statistical analysis and entertainment content ONLY. This is NOT financial advice, betting advice, or any guarantee of profit. All content is opinion and statistical modelling only. Any decision to place bets is at my own risk. I take full responsibility for any losses. Elite Edge Sports Tips Ltd accepts no liability for losses. I have read and agree to the <a href="#/terms" onclick="event.stopPropagation();" style="color:#22d3ee;">Terms &amp; Conditions</a>, <a href="#/privacy" onclick="event.stopPropagation();" style="color:#22d3ee;">Privacy Policy</a>, and <a href="#/disclaimer" onclick="event.stopPropagation();" style="color:#22d3ee;">Full Disclaimer</a>.</span>
         </label>
       </div>
       <div class="reg-odds-group">
@@ -536,7 +536,7 @@
   <!-- Notification Permission Prompt -->
   <div class="notif-prompt" id="notif-prompt" style="display:none;">
     <div class="notif-prompt-inner">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4a843" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span>Enable notifications to get instant tip alerts</span>
       <button class="btn btn-gold btn-sm" onclick="App.enableNotifications()">Enable</button>
       <button class="btn btn-ghost btn-sm" onclick="App.dismissNotifPrompt()">Later</button>
@@ -577,7 +577,7 @@
     <div class="footer-inner">
       <div class="footer-col">
         <h4>
-          <svg width="20" height="20" viewBox="0 0 64 64" style="vertical-align:middle;margin-right:6px;"><defs><linearGradient id="fg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#d4a843"/><stop offset="100%" stop-color="#b8902f"/></linearGradient></defs><path d="M32 4L4 32l28 28 28-28L32 4z" fill="none" stroke="url(#fg)" stroke-width="3"/><text x="16" y="40" font-family="Inter,sans-serif" font-weight="900" font-size="24" fill="#d4a843">EE</text></svg>
+          <svg width="20" height="20" viewBox="0 0 64 64" style="vertical-align:middle;margin-right:6px;"><defs><linearGradient id="fg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#0891b2"/></linearGradient></defs><path d="M32 4L4 32l28 28 28-28L32 4z" fill="none" stroke="url(#fg)" stroke-width="3"/><text x="16" y="40" font-family="Inter,sans-serif" font-weight="900" font-size="24" fill="#22d3ee">EE</text></svg>
           Elite Edge Sports Tips
         </h4>
         <p>AI-powered racing and football betting intelligence. 5 self-learning analysts, 3 AI engines, every tip verified.</p>
@@ -624,7 +624,7 @@
     <!-- Persistent Disclaimer Bar -->
     <div class="disclaimer-bar" id="disclaimer-bar">
       <div class="disclaimer-bar-inner">
-        <strong style="background:#ef4444;color:#fff;padding:2px 6px;border-radius:3px;">18+</strong> &nbsp; <strong>FOR ENTERTAINMENT &amp; STATISTICAL ANALYSIS ONLY.</strong> NOT financial advice. NOT betting advice. NO guarantee of profit. All betting is at YOUR OWN RISK. We accept NO liability for losses. Only bet what you can afford to lose. &nbsp; <a href="https://www.begambleaware.org" target="_blank" rel="noopener" style="color:#d4a843;">BeGambleAware.org</a> &nbsp;|&nbsp; <a href="https://www.gamcare.org.uk" target="_blank" rel="noopener" style="color:#d4a843;">GamCare</a> &nbsp;|&nbsp; Helpline: <strong>0808 8020 133</strong>
+        <strong style="background:#ef4444;color:#fff;padding:2px 6px;border-radius:3px;">18+</strong> &nbsp; <strong>FOR ENTERTAINMENT &amp; STATISTICAL ANALYSIS ONLY.</strong> NOT financial advice. NOT betting advice. NO guarantee of profit. All betting is at YOUR OWN RISK. We accept NO liability for losses. Only bet what you can afford to lose. &nbsp; <a href="https://www.begambleaware.org" target="_blank" rel="noopener" style="color:#22d3ee;">BeGambleAware.org</a> &nbsp;|&nbsp; <a href="https://www.gamcare.org.uk" target="_blank" rel="noopener" style="color:#22d3ee;">GamCare</a> &nbsp;|&nbsp; Helpline: <strong>0808 8020 133</strong>
       </div>
     </div>
   </footer>
@@ -647,7 +647,7 @@
   <script src="/js/calculators.js?v=20260501c"></script>
   <script src="/js/worldCup.js?v=20260616c"></script>
   <script src="/js/lms.js?v=20260612b"></script>
-  <script src="/js/app.js?v=20260804d"></script>
+  <script src="/js/app.js?v=20260806a"></script>
   <script>
     if ('serviceWorker' in navigator) {
       // Auto-update: when a NEW build's service worker takes control, reload once so

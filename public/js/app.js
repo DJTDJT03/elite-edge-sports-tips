@@ -72,7 +72,7 @@ const App = {
     return '<a href="' + this.cosmoLink(sub) + '" target="_blank" rel="noopener sponsored" ' +
       'onclick="event.stopPropagation();" class="cosmo-cta" ' +
       'style="display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;box-sizing:border-box;' +
-      'background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-weight:800;font-size:14px;' +
+      'background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;font-weight:800;font-size:14px;' +
       'padding:11px 16px;border-radius:8px;text-decoration:none;margin-top:12px;">' +
       '⚡ ' + this.escapeHtml(label || 'Bet with Cosmo Bet') + ' →' +
       '</a>' +
@@ -358,7 +358,7 @@ const App = {
     if (document.getElementById('ios-install-prompt')) return;
     var prompt = document.createElement('div');
     prompt.id = 'ios-install-prompt';
-    prompt.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#141828;border-top:2px solid rgba(212,168,67,0.3);padding:16px 20px;z-index:9998;animation:slideUp 0.3s ease-out;';
+    prompt.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#141828;border-top:2px solid rgba(34, 211, 238,0.3);padding:16px 20px;z-index:9998;animation:slideUp 0.3s ease-out;';
     prompt.innerHTML =
       '<div style="display:flex;align-items:center;gap:14px;max-width:600px;margin:0 auto;">' +
         '<div style="font-size:36px;flex-shrink:0;">&#128241;</div>' +
@@ -1091,23 +1091,23 @@ const App = {
         var trialDaysLeft = Math.max(0, Math.ceil(trialMsLeft / (24 * 60 * 60 * 1000)));
         var trialHoursLeft = Math.max(0, Math.ceil(trialMsLeft / (1000 * 60 * 60)));
         subBar.style.display = 'block';
-        subBar.style.background = 'linear-gradient(135deg, rgba(212,168,67,0.15), rgba(212,168,67,0.05))';
+        subBar.style.background = 'linear-gradient(135deg, rgba(34, 211, 238,0.15), rgba(34, 211, 238,0.05))';
         subBar.style.borderBottom = '2px solid var(--gold)';
         subBar.style.color = '#e8e6e3';
         // Show hours when < 24h left for urgency
         if (trialHoursLeft <= 24 && trialHoursLeft > 0) {
-          subBar.innerHTML = '<strong style="color:#dc2626;">TRIAL ENDING</strong> <span style="color:#fca5a5;">&mdash; Only ' + trialHoursLeft + ' hour' + (trialHoursLeft !== 1 ? 's' : '') + ' left!</span> &nbsp; <a href="#/pricing" style="color:#d4a843;font-weight:700;text-decoration:underline;">Subscribe Now &rarr;</a>';
+          subBar.innerHTML = '<strong style="color:#dc2626;">TRIAL ENDING</strong> <span style="color:#fca5a5;">&mdash; Only ' + trialHoursLeft + ' hour' + (trialHoursLeft !== 1 ? 's' : '') + ' left!</span> &nbsp; <a href="#/pricing" style="color:#22d3ee;font-weight:700;text-decoration:underline;">Subscribe Now &rarr;</a>';
           subBar.style.background = 'linear-gradient(135deg, rgba(220,38,38,0.1), rgba(220,38,38,0.03))';
           subBar.style.borderBottom = '2px solid #dc2626';
         } else {
-          subBar.innerHTML = '<strong style="color:#d4a843;">FREE TRIAL</strong> <span style="color:#e8e6e3;">&mdash; ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' remaining</span> &nbsp; <a href="#/pricing" style="color:#d4a843;font-weight:700;text-decoration:underline;">Choose a Plan &rarr;</a>';
+          subBar.innerHTML = '<strong style="color:#22d3ee;">FREE TRIAL</strong> <span style="color:#e8e6e3;">&mdash; ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' remaining</span> &nbsp; <a href="#/pricing" style="color:#22d3ee;font-weight:700;text-decoration:underline;">Choose a Plan &rarr;</a>';
         }
       } else if (this.user.subscription === 'vip') {
         subBar.style.display = 'block';
         subBar.className = 'sub-bar sub-bar-vip';
         subBar.style.background = '';
         subBar.style.borderBottom = '';
-        subBar.innerHTML = '\uD83D\uDC51 <strong style="color:#d4a843;">VIP MEMBER</strong> — Elite access enabled. Priority support active.';
+        subBar.innerHTML = '\uD83D\uDC51 <strong style="color:#22d3ee;">VIP MEMBER</strong> — Elite access enabled. Priority support active.';
       } else if (this.user.subscription === 'premium') {
         subBar.style.display = 'block';
         subBar.className = 'sub-bar';
@@ -1117,10 +1117,10 @@ const App = {
       } else if (this.user.subscription === 'free' && this.user.trialStart && !this.user.trialActive) {
         // Trial expired — show conversion nudge
         subBar.style.display = 'block';
-        subBar.style.background = 'linear-gradient(135deg, rgba(212,168,67,0.12), rgba(212,168,67,0.04))';
+        subBar.style.background = 'linear-gradient(135deg, rgba(34, 211, 238,0.12), rgba(34, 211, 238,0.04))';
         subBar.style.borderBottom = '2px solid var(--gold)';
         subBar.style.color = '#e8e6e3';
-        subBar.innerHTML = '<strong style="color:#d4a843;">TRIAL EXPIRED</strong> <span style="color:#e8e6e3;">&mdash; Your free trial has ended. Subscribe to keep Premium access.</span> &nbsp; <a href="#/pricing" style="color:#d4a843;font-weight:700;text-decoration:underline;">Subscribe Now &rarr;</a>';
+        subBar.innerHTML = '<strong style="color:#22d3ee;">TRIAL EXPIRED</strong> <span style="color:#e8e6e3;">&mdash; Your free trial has ended. Subscribe to keep Premium access.</span> &nbsp; <a href="#/pricing" style="color:#22d3ee;font-weight:700;text-decoration:underline;">Subscribe Now &rarr;</a>';
         // Show conversion overlay once per session for expired trial users
         if (!sessionStorage.getItem('trialExpiredShown')) {
           sessionStorage.setItem('trialExpiredShown', 'true');
@@ -1922,7 +1922,7 @@ const App = {
 
       return '<tr>' +
         '<td>' + sportIcon + ' ' + (t.selection || '') + '</td>' +
-        '<td style="text-align:center;"><span style="color:' + (conf >= 8 ? '#22c55e' : '#d4a843') + ';font-weight:700;">' + conf + '</span></td>' +
+        '<td style="text-align:center;"><span style="color:' + (conf >= 8 ? '#22c55e' : '#22d3ee') + ';font-weight:700;">' + conf + '</span></td>' +
         '<td style="text-align:center;">' + units + 'u</td>' +
         '<td style="text-align:right;font-weight:700;color:var(--gold);">' + currency + stakeAmount.toFixed(2) + '</td>' +
         '<td style="text-align:right;color:#22c55e;">' + currency + potentialReturn.toFixed(2) + '</td>' +
@@ -1935,11 +1935,11 @@ const App = {
       return s + (units * unitSize);
     }, 0);
     var riskPct = Math.round((totalStake / bank) * 1000) / 10;
-    var riskColor = riskPct <= 5 ? '#22c55e' : riskPct <= 10 ? '#d4a843' : '#ef4444';
+    var riskColor = riskPct <= 5 ? '#22c55e' : riskPct <= 10 ? '#22d3ee' : '#ef4444';
 
-    return '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.06),rgba(212,168,67,0.02));border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;margin-bottom:20px;">' +
+    return '<div style="background:linear-gradient(135deg,rgba(34, 211, 238,0.06),rgba(34, 211, 238,0.02));border:1px solid rgba(34, 211, 238,0.2);border-radius:12px;padding:20px;margin-bottom:20px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
-        '<div style="font-weight:800;font-size:15px;color:#d4a843;">Your Daily Staking Plan</div>' +
+        '<div style="font-weight:800;font-size:15px;color:#22d3ee;">Your Daily Staking Plan</div>' +
         '<div style="font-size:12px;color:#94a3b8;">Bank: ' + currency + bank.toFixed(2) + ' | 1 unit = ' + currency + unitSize.toFixed(2) + '</div>' +
       '</div>' +
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">' +
@@ -2163,8 +2163,8 @@ const App = {
           labels: labels,
           datasets: [{
             data: data,
-            borderColor: '#d4a843',
-            backgroundColor: 'rgba(212,168,67,0.12)',
+            borderColor: '#22d3ee',
+            backgroundColor: 'rgba(34, 211, 238,0.12)',
             fill: true,
             tension: 0.3,
             pointRadius: 0,
@@ -2516,19 +2516,19 @@ const App = {
     overlay.onclick = function() { overlay.remove(); };
 
     overlay.innerHTML =
-      '<div style="background:linear-gradient(135deg,#0a0e1a,#141828);border:2px solid #d4a843;border-radius:16px;padding:40px;max-width:400px;width:90%;text-align:center;box-shadow:0 0 60px rgba(212,168,67,0.3);" onclick="event.stopPropagation()">' +
-        '<div style="font-size:12px;text-transform:uppercase;letter-spacing:2px;color:#d4a843;margin-bottom:16px;">Elite Edge Sports Tips</div>' +
+      '<div style="background:linear-gradient(135deg,#0a0e1a,#141828);border:2px solid #22d3ee;border-radius:16px;padding:40px;max-width:400px;width:90%;text-align:center;box-shadow:0 0 60px rgba(34, 211, 238,0.3);" onclick="event.stopPropagation()">' +
+        '<div style="font-size:12px;text-transform:uppercase;letter-spacing:2px;color:#22d3ee;margin-bottom:16px;">Elite Edge Sports Tips</div>' +
         '<div style="font-size:48px;margin-bottom:8px;">' + sportIcon + '</div>' +
         '<div style="font-size:13px;color:#22c55e;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;">\u2705 WINNER</div>' +
         '<div style="font-size:clamp(20px,5vw,24px);font-weight:900;color:#fff;margin-bottom:8px;">' + (result.selection || '') + '</div>' +
         '<div style="font-size:14px;color:#8b8d93;margin-bottom:16px;">' + (result.event || '') + '</div>' +
         '<div style="display:flex;justify-content:center;gap:24px;margin-bottom:20px;">' +
-          '<div><div style="font-size:28px;font-weight:800;color:#d4a843;">' + oddsDisplay + '</div><div style="font-size:10px;color:#8b8d93;">ODDS</div></div>' +
+          '<div><div style="font-size:28px;font-weight:800;color:#22d3ee;">' + oddsDisplay + '</div><div style="font-size:10px;color:#8b8d93;">ODDS</div></div>' +
           '<div><div style="font-size:28px;font-weight:800;color:#22c55e;">' + pnl + 'u</div><div style="font-size:10px;color:#8b8d93;">PROFIT</div></div>' +
         '</div>' +
-        '<div style="border-top:1px solid rgba(212,168,67,0.2);padding-top:16px;">' +
+        '<div style="border-top:1px solid rgba(34, 211, 238,0.2);padding-top:16px;">' +
           '<div style="font-size:12px;color:#8b8d93;">Our members had this BEFORE the off.</div>' +
-          '<div style="font-size:13px;color:#d4a843;font-weight:700;margin-top:8px;">eliteedgesports.co.uk</div>' +
+          '<div style="font-size:13px;color:#22d3ee;font-weight:700;margin-top:8px;">eliteedgesports.co.uk</div>' +
           '<div style="font-size:10px;color:#555;margin-top:8px;">18+ | Entertainment only | BeGambleAware.org</div>' +
         '</div>' +
         '<div style="margin-top:16px;display:flex;gap:8px;justify-content:center;">' +
@@ -2566,7 +2566,7 @@ const App = {
     };
     return `<div class="odds-comparison" onclick="event.stopPropagation();">
       ${entries.map(([k, v]) => `
-        <a href="${urls[k] || '#'}" target="_blank" rel="noopener nofollow" class="affiliate-btn ${v === bestOdds ? 'best-price' : ''}" title="Place bet at ${names[k] || k}" style="${v === bestOdds ? 'border-color:var(--gold);box-shadow:0 0 8px rgba(212,168,67,.2);' : ''}">
+        <a href="${urls[k] || '#'}" target="_blank" rel="noopener nofollow" class="affiliate-btn ${v === bestOdds ? 'best-price' : ''}" title="Place bet at ${names[k] || k}" style="${v === bestOdds ? 'border-color:var(--gold);box-shadow:0 0 8px rgba(34, 211, 238,.2);' : ''}">
           <span style="font-size:9px;text-transform:uppercase;">${names[k] || k}</span>
           <span style="font-weight:800;font-size:13px;${v === bestOdds ? 'color:var(--gold);' : ''}">${this.formatOdds(v)}</span>
           ${v === bestOdds ? '<span style="font-size:8px;color:var(--gold);">BEST</span>' : ''}
@@ -2659,7 +2659,7 @@ const App = {
     var avgFirst = firstHalf.reduce(function(s, v) { return s + v; }, 0) / firstHalf.length;
     var avgSecond = secondHalf.reduce(function(s, v) { return s + v; }, 0) / secondHalf.length;
     var diff = avgSecond - avgFirst;
-    var colour = diff > 0.1 ? '#22c55e' : diff < -0.1 ? '#ef4444' : '#d4a843';
+    var colour = diff > 0.1 ? '#22c55e' : diff < -0.1 ? '#ef4444' : '#22d3ee';
 
     // Generate SVG points
     var usableW = width - padding * 2;
@@ -2863,7 +2863,7 @@ const App = {
       // Login check-in calendar
       '<div style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.05);">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
-          '<span style="font-size:12px;font-weight:700;color:#d4a843;">Daily Check-In</span>' +
+          '<span style="font-size:12px;font-weight:700;color:#22d3ee;">Daily Check-In</span>' +
           '<span style="font-size:11px;color:#94a3b8;">' + (this._loginStreak || 0) + '-day streak &#128293;</span>' +
         '</div>' +
         '<div style="display:flex;gap:3px;flex-wrap:wrap;">' +
@@ -2874,8 +2874,8 @@ const App = {
             for (var d = 1; d <= daysInMonth; d++) {
               var isPast = d < today;
               var isToday = d === today;
-              var col = isToday ? '#d4a843' : isPast ? (daysTracked[year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0')] ? '#22c55e' : '#1e2235') : '#0f1320';
-              dots += '<div style="width:12px;height:12px;border-radius:2px;background:' + col + ';' + (isToday ? 'box-shadow:0 0 4px #d4a843;' : '') + '" title="' + d + '/' + (month + 1) + '"></div>';
+              var col = isToday ? '#22d3ee' : isPast ? (daysTracked[year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0')] ? '#22c55e' : '#1e2235') : '#0f1320';
+              dots += '<div style="width:12px;height:12px;border-radius:2px;background:' + col + ';' + (isToday ? 'box-shadow:0 0 4px #22d3ee;' : '') + '" title="' + d + '/' + (month + 1) + '"></div>';
             }
             return dots;
           })() +
@@ -3023,7 +3023,7 @@ const App = {
       <div class="container">
         ${!this.user ? `
         <!-- GUEST SIGN-UP HERO — unmissable for new visitors -->
-        <div style="background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(212,168,67,0.08));border:2px solid rgba(212,168,67,0.45);border-radius:14px;padding:22px 24px;margin-bottom:20px;text-align:center;">
+        <div style="background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(34, 211, 238,0.08));border:2px solid rgba(34, 211, 238,0.45);border-radius:14px;padding:22px 24px;margin-bottom:20px;text-align:center;">
           <div style="font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;">New here? Create your free account</div>
           <div style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">Free daily tips, results and analysis across 6 sports. No card needed. Upgrade anytime.</div>
           <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
@@ -3042,16 +3042,16 @@ const App = {
             </div>
             ${creditHtml}
           </div>
-          ${this._loginStreak >= 2 ? '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:18px;">&#128293;</span><span style="font-weight:800;color:#d4a843;">' + this._loginStreak + '-day streak</span>' + (this._loginStreak >= 7 ? '<span style="font-size:11px;color:#22c55e;font-weight:600;">Best: ' + (this._bestStreak || this._loginStreak) + '</span>' : '') + '</div>' : ''}
+          ${this._loginStreak >= 2 ? '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:18px;">&#128293;</span><span style="font-weight:800;color:#22d3ee;">' + this._loginStreak + '-day streak</span>' + (this._loginStreak >= 7 ? '<span style="font-size:11px;color:#22c55e;font-weight:600;">Best: ' + (this._bestStreak || this._loginStreak) + '</span>' : '') + '</div>' : ''}
         </div>
 
         <!-- WORLD CUP COUNTDOWN BANNER -->
         ${typeof WorldCup !== 'undefined' && document.getElementById('nav-world-cup') && document.getElementById('nav-world-cup').style.display !== 'none' ? `
         <div onclick="window.location.hash='#/world-cup'" style="background:linear-gradient(135deg,#1a0a2e 0%,#0a0e1a 40%,#0a2a1a 100%);border:2px solid rgba(34,197,94,0.3);border-radius:14px;padding:20px 24px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;">
-          <div style="position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle at 30% 50%,rgba(34,197,94,0.06),transparent 50%),radial-gradient(circle at 70% 50%,rgba(212,168,67,0.06),transparent 50%);"></div>
+          <div style="position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle at 30% 50%,rgba(34,197,94,0.06),transparent 50%),radial-gradient(circle at 70% 50%,rgba(34, 211, 238,0.06),transparent 50%);"></div>
           <div style="position:relative;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
             <div>
-              <div style="font-size:20px;font-weight:900;background:linear-gradient(135deg,#d4a843,#f0d078);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">&#9917; FIFA World Cup 2026</div>
+              <div style="font-size:20px;font-weight:900;background:linear-gradient(135deg,#22d3ee,#a5f3fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">&#9917; FIFA World Cup 2026</div>
               <div style="color:rgba(255,255,255,0.6);font-size:13px;margin-top:4px;">USA &#127482;&#127480; Canada &#127464;&#127462; Mexico &#127474;&#127485; — Predict, Compete & Represent Your Nation</div>
             </div>
             <div id="wc-dash-countdown" style="display:flex;gap:8px;"></div>
@@ -3066,7 +3066,7 @@ const App = {
         <div id="lms-banner-slot"></div>
 
         <!-- ASK ELITE EDGE — natural-language assistant grounded in our engine -->
-        <div style="background:linear-gradient(135deg,#10131f,#0a0e1a);border:1px solid rgba(212,168,67,0.3);border-radius:14px;padding:18px 20px;margin-bottom:20px;">
+        <div style="background:linear-gradient(135deg,#10131f,#0a0e1a);border:1px solid rgba(34, 211, 238,0.3);border-radius:14px;padding:18px 20px;margin-bottom:20px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
             <span style="font-size:20px;">&#128173;</span>
             <div>
@@ -3079,7 +3079,7 @@ const App = {
             <button onclick="App.askEliteEdge()" class="btn btn-gold" style="white-space:nowrap;padding:12px 22px;">Ask</button>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">
-            ${["Who's your NAP today?","Who wins the next at Kempton?","Best value in the football?","Any team news for today's games?"].map(function(q){ return '<button onclick="App.askEliteEdge(' + JSON.stringify(q).replace(/"/g,'&quot;') + ')" style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);color:#d4a843;font-size:11px;padding:5px 10px;border-radius:14px;cursor:pointer;">' + q + '</button>'; }).join('')}
+            ${["Who's your NAP today?","Who wins the next at Kempton?","Best value in the football?","Any team news for today's games?"].map(function(q){ return '<button onclick="App.askEliteEdge(' + JSON.stringify(q).replace(/"/g,'&quot;') + ')" style="background:rgba(34, 211, 238,0.1);border:1px solid rgba(34, 211, 238,0.25);color:#22d3ee;font-size:11px;padding:5px 10px;border-radius:14px;cursor:pointer;">' + q + '</button>'; }).join('')}
           </div>
           <div id="ee-ask-answer" style="display:none;margin-top:14px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:14px;line-height:1.6;color:var(--text-primary);"></div>
         </div>
@@ -3115,15 +3115,15 @@ const App = {
           <div class="nap-card" style="position:relative;min-height:280px;cursor:pointer;" onclick="window.location.hash='#/pricing'">
             <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#141828,#1a1f35);border-radius:12px;padding:24px;">
               <div style="font-size:42px;margin-bottom:14px;">&#128274;</div>
-              <div style="font-size:20px;font-weight:800;color:#d4a843;margin-bottom:8px;">Today's NAP is Live</div>
+              <div style="font-size:20px;font-weight:800;color:#22d3ee;margin-bottom:8px;">Today's NAP is Live</div>
               <div style="font-size:14px;color:#8a8fa0;margin-bottom:8px;text-align:center;max-width:360px;">Premium members received this selection before the off. Free members see it after the result.</div>
               <div style="display:flex;gap:16px;margin-bottom:12px;">
                 <div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#22c55e;">${napTip.confidence}/10</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Confidence</div></div>
                 <div style="width:1px;background:#2a2d45;"></div>
-                <div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#d4a843;">${((napTip.edge||0)*100).toFixed(1)}%</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Edge</div></div>
+                <div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#22d3ee;">${((napTip.edge||0)*100).toFixed(1)}%</div><div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Edge</div></div>
               </div>
               <div style="font-size:12px;color:#ef4444;margin-bottom:16px;">&#9200; Selection revealed after the event</div>
-              <div style="background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:15px;">Get Tips Before Kick-Off — Free Trial</div>
+              <div style="background:#22d3ee;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:15px;">Get Tips Before Kick-Off — Free Trial</div>
               <div style="font-size:11px;color:#555;margin-top:10px;">14 days free. Card stored securely. Cancel anytime.</div>
             </div>
           </div>
@@ -3206,11 +3206,11 @@ const App = {
 
         <!-- 8. AI BRIEFING + MORNING BRIEF — premium engagement -->
         ${this.isPremium() ? `
-        <div class="card" id="ai-briefing-card" style="margin-bottom:20px;padding:20px;border:1px solid rgba(212,168,67,0.2);background:linear-gradient(135deg,rgba(212,168,67,0.06),rgba(212,168,67,0.01));">
+        <div class="card" id="ai-briefing-card" style="margin-bottom:20px;padding:20px;border:1px solid rgba(34, 211, 238,0.2);background:linear-gradient(135deg,rgba(34, 211, 238,0.06),rgba(34, 211, 238,0.01));">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
             <div style="font-size:24px;">&#129302;</div>
             <div>
-              <div style="font-weight:800;font-size:15px;color:#d4a843;">AI Morning Briefing</div>
+              <div style="font-weight:800;font-size:15px;color:#22d3ee;">AI Morning Briefing</div>
               <div style="font-size:11px;color:var(--text-muted);">Powered by Claude + Perplexity — exclusive to subscribers</div>
             </div>
           </div>
@@ -3225,19 +3225,19 @@ const App = {
 
         <!-- 10. FREE USER INTELLIGENCE BRIEFING — taste of premium -->
         ${!this.isPremium() ? `
-        <div style="background:linear-gradient(135deg,#141828,#1a1f35);border:1px solid rgba(212,168,67,0.2);border-radius:14px;padding:24px;margin-bottom:24px;">
+        <div style="background:linear-gradient(135deg,#141828,#1a1f35);border:1px solid rgba(34, 211, 238,0.2);border-radius:14px;padding:24px;margin-bottom:24px;">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
             <div style="font-size:28px;">&#128200;</div>
             <div>
-              <div style="font-size:16px;font-weight:800;color:#d4a843;">Today's Market Intelligence</div>
+              <div style="font-size:16px;font-weight:800;color:#22d3ee;">Today's Market Intelligence</div>
               <div style="font-size:12px;color:#8a8fa0;">Free daily insight — what our model is watching</div>
             </div>
           </div>
-          <div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.15);border-radius:10px;padding:16px;margin-bottom:16px;">
-            <div style="font-size:13px;color:#c0c4d0;line-height:1.6;">Our model has identified <strong style="color:#fff;">${todayTips.filter(t => !t.isWeeklyAcca).length} edge opportunities</strong> today. The strongest carries a confidence of <strong style="color:#d4a843;">${napTip ? napTip.confidence + '/10' : '—'}</strong> with <strong style="color:#22c55e;">${napTip ? ((napTip.edge||0)*100).toFixed(1) + '%' : '—'}</strong> edge. Premium members have full access.</div>
+          <div style="background:rgba(34, 211, 238,0.08);border:1px solid rgba(34, 211, 238,0.15);border-radius:10px;padding:16px;margin-bottom:16px;">
+            <div style="font-size:13px;color:#c0c4d0;line-height:1.6;">Our model has identified <strong style="color:#fff;">${todayTips.filter(t => !t.isWeeklyAcca).length} edge opportunities</strong> today. The strongest carries a confidence of <strong style="color:#22d3ee;">${napTip ? napTip.confidence + '/10' : '—'}</strong> with <strong style="color:#22c55e;">${napTip ? ((napTip.edge||0)*100).toFixed(1) + '%' : '—'}</strong> edge. Premium members have full access.</div>
           </div>
           <div style="text-align:center;">
-            <button onclick="App.showTrialOffer()" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;border:none;font-weight:700;font-size:14px;cursor:pointer;">Start 14-Day Free Trial</button>
+            <button onclick="App.showTrialOffer()" style="display:inline-block;background:#22d3ee;color:#0a0e1a;padding:12px 32px;border-radius:8px;border:none;font-weight:700;font-size:14px;cursor:pointer;">Start 14-Day Free Trial</button>
             <div style="font-size:11px;color:#6b7280;margin-top:8px;">Card stored securely. Cancel anytime. 18+ BeGambleAware.org</div>
           </div>
         </div>` : ''}
@@ -3282,7 +3282,7 @@ const App = {
         <!-- 13a. WINNERS WALL — subscriber-submitted wins (admin-moderated) -->
         <div class="section" id="winners-wall-section" style="margin-bottom:24px;">
           <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-            <span><span style="color:#d4a843;">&#127942;</span> Winners Wall</span>
+            <span><span style="color:#22d3ee;">&#127942;</span> Winners Wall</span>
             ${this.user ? `<button class="btn btn-gold btn-sm" onclick="App.showWinnerSubmit()">Share your win</button>` : `<a href="#/pricing" class="btn btn-outline btn-sm">Join to share yours</a>`}
           </div>
           <p style="font-size:12px;color:var(--text-muted);margin:-4px 0 12px;">Real wins from Elite Edge members. 18+ | Please gamble responsibly | BeGambleAware.org</p>
@@ -3300,7 +3300,7 @@ const App = {
         <div id="dashboard-news-section"></div>
 
         ${this.user ? `
-        <div class="card" style="margin-bottom:24px;border-color:rgba(212,168,67,0.2);">
+        <div class="card" style="margin-bottom:24px;border-color:rgba(34, 211, 238,0.2);">
           <div style="display:flex;align-items:flex-start;gap:16px;">
             <div style="font-size:32px;flex-shrink:0;">&#127873;</div>
             <div style="flex:1;">
@@ -3341,10 +3341,10 @@ const App = {
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
               <div style="font-size:28px;">&#127891;</div>
               <div>
-                <div style="font-size:18px;font-weight:800;color:#d4a843;">How Elite Edge Works</div>
+                <div style="font-size:18px;font-weight:800;color:#22d3ee;">How Elite Edge Works</div>
                 <div style="font-size:12px;color:#8a8fa0;">Understanding our system and how to use our tips</div>
               </div>
-              <a href="#/how-it-works" style="font-size:12px;color:#d4a843;text-decoration:none;font-weight:600;margin-left:auto;">Full Guide &rarr;</a>
+              <a href="#/how-it-works" style="font-size:12px;color:#22d3ee;text-decoration:none;font-weight:600;margin-left:auto;">Full Guide &rarr;</a>
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
               <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:16px;">
@@ -3369,7 +3369,7 @@ const App = {
               </div>
             </div>
             <div style="text-align:center;margin-top:16px;">
-              <a href="#/how-it-works" style="color:#d4a843;font-size:13px;font-weight:600;text-decoration:none;">Full Beginner's Guide &rarr;</a>
+              <a href="#/how-it-works" style="color:#22d3ee;font-size:13px;font-weight:600;text-decoration:none;">Full Beginner's Guide &rarr;</a>
             </div>
           </div>
         </div>` : ''}
@@ -3406,7 +3406,7 @@ const App = {
         var h = Math.floor((diff / 3600000) % 24);
         var m = Math.floor((diff / 60000) % 60);
         var s = Math.floor((diff / 1000) % 60);
-        function unit(n, l) { return '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(212,168,67,0.2);border-radius:8px;padding:6px 10px;text-align:center;min-width:48px;"><div style="font-size:18px;font-weight:900;color:#d4a843;">' + n + '</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.4);">' + l + '</div></div>'; }
+        function unit(n, l) { return '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(34, 211, 238,0.2);border-radius:8px;padding:6px 10px;text-align:center;min-width:48px;"><div style="font-size:18px;font-weight:900;color:#22d3ee;">' + n + '</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.4);">' + l + '</div></div>'; }
         wcCountdownEl.innerHTML = unit(d,'Days') + unit(h,'Hrs') + unit(m,'Min') + unit(s,'Sec');
       }
       updateWcCountdown();
@@ -3486,7 +3486,7 @@ const App = {
       container.innerHTML =
         '<div class="section" style="margin-bottom:24px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
-            '<div class="section-title" style="margin:0;"><span style="color:#d4a843;">&#127942;</span> Subscriber Leaderboard</div>' +
+            '<div class="section-title" style="margin:0;"><span style="color:#22d3ee;">&#127942;</span> Subscriber Leaderboard</div>' +
             '<div style="display:flex;gap:4px;">' +
               '<button class="tab' + (data.period === 'week' ? ' active' : '') + '" onclick="App._loadLeaderboard(\'week\')" style="font-size:11px;padding:4px 10px;">Week</button>' +
               '<button class="tab' + (data.period === 'month' ? ' active' : '') + '" onclick="App._loadLeaderboard(\'month\')" style="font-size:11px;padding:4px 10px;">Month</button>' +
@@ -3499,7 +3499,7 @@ const App = {
               '<tbody>' + rows + '</tbody>' +
             '</table>' +
           '</div>' +
-          '<p style="font-size:11px;color:#475569;text-align:center;margin-top:10px;">Minimum 5 settled bets to qualify. Names anonymised. <a href="#/my-roi" style="color:#d4a843;">Track your bets to join &rarr;</a></p>' +
+          '<p style="font-size:11px;color:#475569;text-align:center;margin-top:10px;">Minimum 5 settled bets to qualify. Names anonymised. <a href="#/my-roi" style="color:#22d3ee;">Track your bets to join &rarr;</a></p>' +
         '</div>';
     } catch (e) { /* non-fatal */ }
   },
@@ -3529,13 +3529,13 @@ const App = {
 
     if (!bets || bets.length === 0) {
       container.innerHTML =
-        '<div style="border:2px solid rgba(212,168,67,0.4);border-radius:14px;padding:24px;margin-bottom:20px;background:linear-gradient(135deg,rgba(212,168,67,0.08),rgba(212,168,67,0.02));">' +
+        '<div style="border:2px solid rgba(34, 211, 238,0.4);border-radius:14px;padding:24px;margin-bottom:20px;background:linear-gradient(135deg,rgba(34, 211, 238,0.08),rgba(34, 211, 238,0.02));">' +
           '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
             '<div style="font-size:24px;">&#9733;</div>' +
-            '<div style="font-weight:800;font-size:16px;color:#d4a843;">Your Elite Edge Stats</div>' +
+            '<div style="font-weight:800;font-size:16px;color:#22d3ee;">Your Elite Edge Stats</div>' +
           '</div>' +
           '<div style="font-size:14px;color:var(--text-secondary);line-height:1.6;">' +
-            'Start tracking your bets to see personalised stats. Click <strong style="color:#d4a843;">\'Back This Tip\'</strong> on any selection.' +
+            'Start tracking your bets to see personalised stats. Click <strong style="color:#22d3ee;">\'Back This Tip\'</strong> on any selection.' +
           '</div>' +
         '</div>';
       return;
@@ -3627,11 +3627,11 @@ const App = {
     }
 
     container.innerHTML =
-      '<div style="border:2px solid rgba(212,168,67,0.4);border-radius:14px;padding:24px;margin-bottom:20px;background:linear-gradient(135deg,rgba(212,168,67,0.08),rgba(212,168,67,0.02));box-shadow:0 0 24px rgba(212,168,67,0.06);">' +
+      '<div style="border:2px solid rgba(34, 211, 238,0.4);border-radius:14px;padding:24px;margin-bottom:20px;background:linear-gradient(135deg,rgba(34, 211, 238,0.08),rgba(34, 211, 238,0.02));box-shadow:0 0 24px rgba(34, 211, 238,0.06);">' +
         '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">' +
           '<div style="font-size:24px;">&#9733;</div>' +
           '<div>' +
-            '<div style="font-weight:800;font-size:16px;color:#d4a843;">Your Elite Edge Stats</div>' +
+            '<div style="font-weight:800;font-size:16px;color:#22d3ee;">Your Elite Edge Stats</div>' +
             '<div style="font-size:11px;color:var(--text-muted);">Personalised performance based on your tracked bets</div>' +
           '</div>' +
         '</div>' +
@@ -3653,12 +3653,12 @@ const App = {
           '</div>' : '') +
           (bestAnalyst && bestAnalyst !== 'Unknown' ? '<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;text-align:center;">' +
             '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Your Best Analyst</div>' +
-            '<div style="font-size:16px;font-weight:800;color:#d4a843;">' + bestAnalyst + '</div>' +
+            '<div style="font-size:16px;font-weight:800;color:#22d3ee;">' + bestAnalyst + '</div>' +
             '<div style="font-size:12px;color:var(--text-secondary);">ROI: ' + (bestAnalystROI >= 0 ? '+' : '') + bestAnalystROI.toFixed(1) + '%</div>' +
           '</div>' : '') +
           (memberDays > 0 ? '<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;text-align:center;">' +
             '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Member For</div>' +
-            '<div style="font-size:26px;font-weight:900;color:#d4a843;">' + memberDays + '</div>' +
+            '<div style="font-size:26px;font-weight:900;color:#22d3ee;">' + memberDays + '</div>' +
             '<div style="font-size:11px;color:var(--text-muted);">days</div>' +
           '</div>' : '') +
         '</div>' +
@@ -3934,7 +3934,7 @@ const App = {
       '<div style="flex-shrink:0;width:36px;text-align:center;">' + resultIcon + '</div>' +
       '<div style="flex:1;min-width:0;">' +
         '<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px;">' + (item.event || item.selection || '') + '</div>' +
-        (outcome ? '<div style="font-size:16px;font-weight:900;color:' + (isWon ? '#22c55e' : isLost ? '#ef4444' : '#d4a843') + ';margin-bottom:4px;">' + outcome + '</div>' : '') +
+        (outcome ? '<div style="font-size:16px;font-weight:900;color:' + (isWon ? '#22c55e' : isLost ? '#ef4444' : '#22d3ee') + ';margin-bottom:4px;">' + outcome + '</div>' : '') +
         '<div style="font-size:12px;color:rgba(255,255,255,0.5);">' +
           '<span>Our Pick: <strong style="color:rgba(255,255,255,0.8);">' + (item.selection || '') + '</strong></span>' +
           ' &bull; <span>' + (item.market || '') + '</span>' +
@@ -3964,7 +3964,7 @@ const App = {
     // A visual prediction card (the signature NerdyTips element, our colours).
     var predCard = function (t) {
       var icon = sportIcon(t.sport);
-      var accent = t.sport === 'racing' ? '#d4a843' : '#d4a843';
+      var accent = t.sport === 'racing' ? '#22d3ee' : '#22d3ee';
       var _kd = t.kickoff ? new Date(t.kickoff) : null;
       var when = t.raceTime || (_kd && !isNaN(_kd.getTime()) ? _kd.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
       var league = t.league || t.meeting || '';
@@ -3997,7 +3997,7 @@ const App = {
           '</div>' +
           '<div style="display:flex;align-items:center;justify-content:space-between;">' +
             '<div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Odds</div><div style="font-size:22px;font-weight:900;color:var(--gold);">' + oddsTxt + '</div></div>' +
-            (vr ? '<span style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#fff;font-size:11px;font-weight:800;padding:6px 11px;border-radius:7px;">' + esc(vr) + ' VALUE</span>' : '<span style="background:' + (locked ? 'rgba(212,168,67,0.15);color:var(--gold);border:1px solid ' + accent + '55' : accent + ';color:#0a0e1a') + ';font-size:11px;font-weight:800;padding:6px 11px;border-radius:7px;">' + (locked ? '🔒 PREMIUM' : 'FREE PICK') + '</span>') +
+            (vr ? '<span style="background:linear-gradient(135deg,#22d3ee,#0891b2);color:#fff;font-size:11px;font-weight:800;padding:6px 11px;border-radius:7px;">' + esc(vr) + ' VALUE</span>' : '<span style="background:' + (locked ? 'rgba(34, 211, 238,0.15);color:var(--gold);border:1px solid ' + accent + '55' : accent + ';color:#0a0e1a') + ';font-size:11px;font-weight:800;padding:6px 11px;border-radius:7px;">' + (locked ? '🔒 PREMIUM' : 'FREE PICK') + '</span>') +
           '</div>' +
         '</div>' +
       '</div>';
@@ -4027,7 +4027,7 @@ const App = {
         '<div aria-hidden="true" style="position:absolute;inset:0;background:linear-gradient(90deg,#0a1020 0%,rgba(10,16,32,0.94) 30%,rgba(10,16,32,0.62) 52%,rgba(10,16,32,0.12) 74%,transparent 100%);"></div>' +
         '<div style="position:relative;max-width:1120px;margin:0 auto;width:100%;padding:clamp(36px,7vw,64px) 20px;">' +
           '<div style="max-width:560px;">' +
-            '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:2px;color:var(--gold);background:rgba(212,168,67,0.12);border:1px solid rgba(212,168,67,0.4);border-radius:20px;padding:6px 15px;margin-bottom:20px;">⚡ UK\'S #1 AI TIPPING PLATFORM</div>' +
+            '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:2px;color:var(--gold);background:rgba(34, 211, 238,0.12);border:1px solid rgba(34, 211, 238,0.4);border-radius:20px;padding:6px 15px;margin-bottom:20px;">⚡ UK\'S #1 AI TIPPING PLATFORM</div>' +
             '<h1 style="font-size:clamp(34px,8vw,60px);line-height:1.02;font-weight:900;letter-spacing:-1px;margin:0 0 14px;">' +
               '<span style="color:#fff;display:block;">DATA IN.</span>' +
               '<span style="color:var(--gold);display:block;">EDGE OUT.</span>' +
@@ -4042,7 +4042,7 @@ const App = {
               featIcons.map(function (f) { return '<div style="text-align:center;"><div style="font-size:22px;margin-bottom:5px;">' + f.i + '</div><div style="font-size:10px;font-weight:700;color:#8b97ad;text-transform:uppercase;letter-spacing:0.5px;max-width:80px;">' + f.t + '</div></div>'; }).join('') +
             '</div>' +
             '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
-              '<button class="btn btn-gold" onclick="App.showModal(\'register\')" style="padding:15px 32px;font-size:15px;box-shadow:0 8px 24px rgba(212,168,67,0.28);">Get Started Free →</button>' +
+              '<button class="btn btn-gold" onclick="App.showModal(\'register\')" style="padding:15px 32px;font-size:15px;box-shadow:0 8px 24px rgba(34, 211, 238,0.28);">Get Started Free →</button>' +
               '<a href="javascript:void(0)" onclick="var el=document.getElementById(\'free-tips\');if(el)el.scrollIntoView({behavior:\'smooth\'});" class="btn btn-outline" style="padding:15px 32px;font-size:15px;">See today\'s tips</a>' +
             '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;margin-top:18px;font-size:13px;color:#c7d0e0;"><span style="color:#22c55e;font-size:15px;">&#10003;</span><span>Every pick logged &amp; graded — winners and losers · 18+ · BeGambleAware.org</span></div>' +
@@ -4068,22 +4068,22 @@ const App = {
 
     // 3) WHY ELITE EDGE — bento grid with one highlighted hero card (our colours)
     var heroCard =
-      '<div class="ee-bento-hero" style="background:linear-gradient(150deg,#d4a843,#a87c22);color:#0a0e1a;border-radius:16px;padding:26px;display:flex;flex-direction:column;justify-content:space-between;min-height:220px;">' +
+      '<div class="ee-bento-hero" style="background:linear-gradient(150deg,#22d3ee,#a87c22);color:#0a0e1a;border-radius:16px;padding:26px;display:flex;flex-direction:column;justify-content:space-between;min-height:220px;">' +
         '<div style="font-size:30px;">🏆</div>' +
         '<div><div style="font-size:clamp(20px,3vw,26px);font-weight:900;line-height:1.15;margin-bottom:8px;">A prediction engine, not a tipster.</div>' +
         '<div style="font-size:14px;font-weight:600;line-height:1.55;opacity:0.85;">5 analysts, a 3-AI arbiter panel and our own quant model debate every fixture to a single, most-probable call — and we publish the Closing Line Value to prove it.</div></div>' +
       '</div>';
     var whySection =
-      '<div style="padding:clamp(34px,7vw,52px) 18px;background:radial-gradient(ellipse at 50% 0%,rgba(212,168,67,0.05),transparent 55%);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">' +
+      '<div style="padding:clamp(34px,7vw,52px) 18px;background:radial-gradient(ellipse at 50% 0%,rgba(34, 211, 238,0.05),transparent 55%);border-top:1px solid var(--border);border-bottom:1px solid var(--border);">' +
         '<div style="max-width:1080px;margin:0 auto;">' +
           '<div style="text-align:center;margin-bottom:30px;"><div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:var(--gold);margin-bottom:8px;">ENGINEERED TO WIN</div>' +
           '<h2 style="font-size:clamp(22px,5.5vw,30px);font-weight:900;color:#fff;margin:0;">Why Elite Edge is different</h2></div>' +
           '<div class="ee-bento">' +
             heroCard +
             featureCard('🤖', '3 AI engines verify it', 'A GPT, Gemini and Grok arbiter panel independently reviews each call before it\'s published.', '#3b82f6') +
-            featureCard('📈', 'Proven with CLV', 'Closing Line Value tracked on every tip — mathematical proof we beat the market, win or lose.', '#d4a843') +
+            featureCard('📈', 'Proven with CLV', 'Closing Line Value tracked on every tip — mathematical proof we beat the market, win or lose.', '#22d3ee') +
             featureCard('⚡', '14 live data feeds', 'Form, xG, lineups, going and live market moves across 6 sports, 160+ competitions.', '#3b82f6') +
-            featureCard('🔒', 'Locked before kick-off', 'Every pick frozen pre-match, never changed after the result — total integrity.', '#d4a843') +
+            featureCard('🔒', 'Locked before kick-off', 'Every pick frozen pre-match, never changed after the result — total integrity.', '#22d3ee') +
           '</div>' +
         '</div>' +
       '</div>';
@@ -4098,7 +4098,7 @@ const App = {
       '<div style="padding:clamp(34px,7vw,52px) 18px;max-width:1080px;margin:0 auto;">' +
         '<h2 style="text-align:center;font-size:clamp(22px,5.5vw,30px);font-weight:900;color:#fff;margin:0 0 30px;">How it works</h2>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:18px;">' +
-          steps.map(function (s) { return '<div style="text-align:center;padding:8px;"><div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-weight:900;font-size:22px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">' + s.n + '</div><div style="font-size:17px;font-weight:800;color:#fff;margin-bottom:8px;">' + s.t + '</div><div style="font-size:14px;color:var(--text-secondary);line-height:1.6;max-width:300px;margin:0 auto;">' + s.d + '</div></div>'; }).join('') +
+          steps.map(function (s) { return '<div style="text-align:center;padding:8px;"><div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;font-weight:900;font-size:22px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">' + s.n + '</div><div style="font-size:17px;font-weight:800;color:#fff;margin-bottom:8px;">' + s.t + '</div><div style="font-size:14px;color:var(--text-secondary);line-height:1.6;max-width:300px;margin:0 auto;">' + s.d + '</div></div>'; }).join('') +
         '</div>' +
       '</div>';
 
@@ -4109,7 +4109,7 @@ const App = {
       var sel = String(r.selection || 'Winner');
       var di = sel.indexOf(' - ');
       if (di > -1) sel = sel.slice(di + 3);
-      return '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:8px;padding:9px 14px;white-space:nowrap;font-size:13px;"><span style="color:#d4a843;font-weight:800;">✓ ' + esc(sel) + '</span>' + (r.odds ? ' <span style="color:var(--text-muted);">@ ' + esc(self.formatOdds ? self.formatOdds(r.odds) : String(r.odds)) + '</span>' : '') + '</div>';
+      return '<div style="background:rgba(34, 211, 238,0.08);border:1px solid rgba(34, 211, 238,0.3);border-radius:8px;padding:9px 14px;white-space:nowrap;font-size:13px;"><span style="color:#22d3ee;font-weight:800;">✓ ' + esc(sel) + '</span>' + (r.odds ? ' <span style="color:var(--text-muted);">@ ' + esc(self.formatOdds ? self.formatOdds(r.odds) : String(r.odds)) + '</span>' : '') + '</div>';
     }).join('');
     // "Since <month year>" label from the first real bank-history point, so the
     // proof always carries an honest timeframe (small sample looks credible, not hidden).
@@ -4130,15 +4130,15 @@ const App = {
     var perfTiles = hasProof ?
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;max-width:760px;margin:0 auto 10px;">' +
         (perf.roi ? proofTile((perf.roi > 0 ? '+' : '') + perf.roi + '%', 'Return on investment', '#22c55e') : '') +
-        (perf.strikeRate ? proofTile(perf.strikeRate + '%', 'Strike rate', '#d4a843') : '') +
+        (perf.strikeRate ? proofTile(perf.strikeRate + '%', 'Strike rate', '#22d3ee') : '') +
         (typeof perf.totalPnl === 'number' ? proofTile((perf.totalPnl >= 0 ? '+' : '') + perf.totalPnl.toFixed(1) + ' pts', 'Net profit (level stakes)', perf.totalPnl >= 0 ? '#22c55e' : '#ef4444') : '') +
         (perf.totalTips ? proofTile(perf.totalTips, 'Tips settled & graded', '#fff') : '') +
       '</div>' +
-      '<div style="font-size:12px;color:#6b7280;margin-bottom:20px;">' + sinceLabel + ' · every pick logged, winners and losers · <a href="#/track-record" style="color:#d4a843;">see them all</a></div>'
+      '<div style="font-size:12px;color:#6b7280;margin-bottom:20px;">' + sinceLabel + ' · every pick logged, winners and losers · <a href="#/track-record" style="color:#22d3ee;">see them all</a></div>'
       : '';
     var proofSection = (recentWins.length || hasProof) ?
-      '<div style="padding:clamp(34px,7vw,48px) 18px;background:radial-gradient(ellipse at 50% 120%,rgba(212,168,67,0.08),transparent 60%);border-top:1px solid var(--border);"><div style="max-width:1080px;margin:0 auto;text-align:center;">' +
-        '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:#d4a843;border:1px solid rgba(212,168,67,0.3);border-radius:20px;padding:5px 14px;margin-bottom:14px;">📈 PROVEN, NOT PROMISED</div>' +
+      '<div style="padding:clamp(34px,7vw,48px) 18px;background:radial-gradient(ellipse at 50% 120%,rgba(34, 211, 238,0.08),transparent 60%);border-top:1px solid var(--border);"><div style="max-width:1080px;margin:0 auto;text-align:center;">' +
+        '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:#22d3ee;border:1px solid rgba(34, 211, 238,0.3);border-radius:20px;padding:5px 14px;margin-bottom:14px;">📈 PROVEN, NOT PROMISED</div>' +
         '<h2 style="font-size:clamp(22px,5.5vw,30px);font-weight:900;color:#fff;margin:0 0 12px;">We publish our track record</h2>' +
         perfTiles +
         // CLV proof — filled async by _loadClvProof(). Lights up the moment a
@@ -4162,7 +4162,7 @@ const App = {
         '<p style="text-align:center;color:var(--text-muted);font-size:14px;margin:0 0 30px;">Start free. Upgrade when the results convince you — not before.</p>' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:16px;align-items:start;">' +
           tiers.map(function (t) {
-            return '<div style="background:' + (t.highlight ? 'linear-gradient(160deg,rgba(212,168,67,0.1),var(--bg-card))' : 'var(--bg-card)') + ';border:' + (t.highlight ? '2px solid var(--gold)' : '1px solid var(--border)') + ';border-radius:16px;padding:26px;position:relative;' + (t.highlight ? 'box-shadow:0 0 30px rgba(212,168,67,0.12);' : '') + '">' +
+            return '<div style="background:' + (t.highlight ? 'linear-gradient(160deg,rgba(34, 211, 238,0.1),var(--bg-card))' : 'var(--bg-card)') + ';border:' + (t.highlight ? '2px solid var(--gold)' : '1px solid var(--border)') + ';border-radius:16px;padding:26px;position:relative;' + (t.highlight ? 'box-shadow:0 0 30px rgba(34, 211, 238,0.12);' : '') + '">' +
               (t.highlight ? '<div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--gold);color:#0a0e1a;font-size:11px;font-weight:800;padding:4px 14px;border-radius:20px;white-space:nowrap;">★ MOST POPULAR</div>' : '') +
               '<div style="font-size:15px;font-weight:800;color:#fff;">' + t.name + '</div>' +
               '<div style="margin:10px 0 18px;"><span style="font-size:36px;font-weight:900;color:var(--gold);">' + t.price + '</span> <span style="font-size:13px;color:var(--text-muted);">' + t.sub + '</span></div>' +
@@ -4189,7 +4189,7 @@ const App = {
 
     // 8) FINAL CTA
     var finalCta =
-      '<div style="text-align:center;padding:clamp(38px,8vw,56px) 18px 56px;background:radial-gradient(ellipse at 50% 130%,rgba(212,168,67,0.14),transparent 60%);">' +
+      '<div style="text-align:center;padding:clamp(38px,8vw,56px) 18px 56px;background:radial-gradient(ellipse at 50% 130%,rgba(34, 211, 238,0.14),transparent 60%);">' +
         '<h2 style="font-size:clamp(22px,6vw,32px);font-weight:900;color:#fff;margin:0 0 12px;">Ready to bet with an edge?</h2>' +
         '<p style="color:var(--text-secondary);font-size:16px;margin:0 0 24px;">Join free and get today\'s tips in seconds.</p>' +
         '<button class="btn btn-gold" onclick="App.showModal(\'register\')" style="padding:16px 40px;font-size:17px;">Create your free account →</button>' +
@@ -4244,7 +4244,7 @@ const App = {
             <div class="tip-meta-item">
               <strong>Confidence:</strong> ${tip.confidence}/10
               <div class="confidence-meter" style="margin-top:4px;height:6px;border-radius:3px;background:var(--bg-elevated);overflow:hidden;">
-                <div style="height:100%;border-radius:3px;background:linear-gradient(90deg,#b8902f,#d4a843,#e8c36a);width:${(tip.confidence || 0) * 10}%;transition:width 0.4s ease;"></div>
+                <div style="height:100%;border-radius:3px;background:linear-gradient(90deg,#0891b2,#22d3ee,#67e8f9);width:${(tip.confidence || 0) * 10}%;transition:width 0.4s ease;"></div>
               </div>
             </div>
             <div class="tip-meta-item"><strong>Edge:</strong> ${((tip.edge || 0) * 100).toFixed(1)}%</div>
@@ -4504,11 +4504,11 @@ const App = {
         ? '<div style="text-align:center;margin-bottom:10px;"><span style="display:inline-block;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.4);color:#22c55e;font-weight:800;font-size:12px;padding:4px 12px;border-radius:20px;">&#9650; Cosmo are paying a bigger price · +' + d.betterPct + '%</span></div>'
         : '';
       slot.innerHTML =
-        '<div style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.25);border-radius:10px;padding:14px;">' +
+        '<div style="background:rgba(34, 211, 238,0.06);border:1px solid rgba(34, 211, 238,0.25);border-radius:10px;padding:14px;">' +
           '<div style="font-size:12px;color:var(--text-secondary);text-align:center;margin-bottom:10px;">' + this.escapeHtml(d.selection || tip.selection || 'This pick') + '</div>' +
           priceRow + valueTag +
           '<a href="' + encodeURI(d.betslipLink) + '" target="_blank" rel="noopener sponsored" onclick="event.stopPropagation();" ' +
-          'style="display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-weight:800;font-size:14px;padding:11px 16px;border-radius:8px;text-decoration:none;">&#9889; ' + label + ' &rarr;</a>' +
+          'style="display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;font-weight:800;font-size:14px;padding:11px 16px;border-radius:8px;text-decoration:none;">&#9889; ' + label + ' &rarr;</a>' +
           '<div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:8px;">Official partner · 18+ · Please gamble responsibly · <a href="https://www.begambleaware.org" target="_blank" rel="noopener" style="color:var(--text-muted);">BeGambleAware.org</a></div>' +
         '</div>';
     } catch (e) { /* keep the generic tracked CTA */ }
@@ -5003,22 +5003,22 @@ const App = {
   },
 
   _renderRacingAIPreview(container, preview) {
-    var html = '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.08),rgba(212,168,67,0.02));border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;">';
+    var html = '<div style="background:linear-gradient(135deg,rgba(34, 211, 238,0.08),rgba(34, 211, 238,0.02));border:1px solid rgba(34, 211, 238,0.2);border-radius:12px;padding:20px;">';
     if (preview.headline) {
-      html += '<h4 style="color:#d4a843;margin:0 0 12px 0;font-size:16px;">' + preview.headline + '</h4>';
+      html += '<h4 style="color:#22d3ee;margin:0 0 12px 0;font-size:16px;">' + preview.headline + '</h4>';
     }
     if (preview.preview) {
       html += '<div style="font-size:13px;color:var(--text-secondary);line-height:1.7;white-space:pre-line;">' + preview.preview + '</div>';
     }
     if (preview.keyFactors && preview.keyFactors.length > 0) {
-      html += '<div style="margin-top:14px;"><strong style="color:#d4a843;font-size:12px;">KEY FACTORS:</strong><ul style="margin:6px 0 0 0;padding-left:18px;">';
+      html += '<div style="margin-top:14px;"><strong style="color:#22d3ee;font-size:12px;">KEY FACTORS:</strong><ul style="margin:6px 0 0 0;padding-left:18px;">';
       preview.keyFactors.forEach(function(factor) {
         html += '<li style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">' + factor + '</li>';
       });
       html += '</ul></div>';
     }
     if (preview.verdict) {
-      html += '<div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(212,168,67,0.15);font-weight:700;font-size:13px;color:#d4a843;">' + preview.verdict + '</div>';
+      html += '<div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(34, 211, 238,0.15);font-weight:700;font-size:13px;color:#22d3ee;">' + preview.verdict + '</div>';
     }
     html += '<div style="margin-top:10px;font-size:10px;color:var(--text-muted);">Generated by Claude AI for Elite Edge Sports Tips</div>';
     html += '</div>';
@@ -5124,7 +5124,7 @@ const App = {
               '<p style="color:var(--text-secondary);">' + guide.subtitle + '</p>' +
             '</div>' +
             sectionsHtml +
-            '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.1),rgba(212,168,67,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:24px;text-align:center;margin-top:24px;">' +
+            '<div style="background:linear-gradient(135deg,rgba(34, 211, 238,0.1),rgba(34, 211, 238,0.04));border:2px solid rgba(34, 211, 238,0.3);border-radius:14px;padding:24px;text-align:center;margin-top:24px;">' +
               '<h3 style="color:var(--gold);margin-bottom:8px;">Ready to put theory into practice?</h3>' +
               '<p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Our AI-powered model applies these principles automatically across 6 sports, 14 data sources, and 40+ bookmakers.</p>' +
               '<a href="#/pricing" class="btn btn-gold">Start 14-Day Free Trial &rarr;</a>' +
@@ -5137,7 +5137,7 @@ const App = {
 
     // Guide list page
     var cardsHtml = guides.map(function(g) {
-      return '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;cursor:pointer;transition:border-color 0.2s;" onclick="App._academyGuide=\'' + g.id + '\';App.route();" onmouseover="this.style.borderColor=\'rgba(212,168,67,0.5)\'" onmouseout="this.style.borderColor=\'\'">' +
+      return '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;cursor:pointer;transition:border-color 0.2s;" onclick="App._academyGuide=\'' + g.id + '\';App.route();" onmouseover="this.style.borderColor=\'rgba(34, 211, 238,0.5)\'" onmouseout="this.style.borderColor=\'\'">' +
         '<div style="font-size:36px;margin-bottom:12px;">' + g.icon + '</div>' +
         '<h3 style="color:var(--text-primary);font-size:18px;margin-bottom:6px;">' + g.title + '</h3>' +
         '<p style="color:var(--text-secondary);font-size:13px;line-height:1.5;margin-bottom:12px;">' + g.subtitle + '</p>' +
@@ -5285,7 +5285,7 @@ const App = {
           '</div>' +
 
           // --- Share link + primary share button ---
-          '<div style="background:linear-gradient(160deg,rgba(212,168,67,0.1),var(--bg-card));border:1px solid rgba(212,168,67,0.35);border-radius:16px;padding:22px;margin-bottom:18px;">' +
+          '<div style="background:linear-gradient(160deg,rgba(34, 211, 238,0.1),var(--bg-card));border:1px solid rgba(34, 211, 238,0.35);border-radius:16px;padding:22px;margin-bottom:18px;">' +
             '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Your invite link</div>' +
             '<div style="display:flex;gap:8px;margin-bottom:14px;">' +
               '<input type="text" value="' + referralLink + '" readonly onclick="this.select()" style="flex:1;min-width:0;padding:11px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:13px;" id="referral-link-input">' +
@@ -5307,7 +5307,7 @@ const App = {
               '<span style="font-weight:700;color:#fff;font-size:14px;">Next free month of Premium</span>' +
               '<span style="font-size:13px;color:var(--gold);font-weight:700;">' + toNext + ' more to go</span>' +
             '</div>' +
-            '<div style="background:var(--bg-elevated);border-radius:20px;height:12px;overflow:hidden;"><div style="width:' + progPct + '%;height:100%;background:linear-gradient(90deg,#d4a843,#22c55e);"></div></div>' +
+            '<div style="background:var(--bg-elevated);border-radius:20px;height:12px;overflow:hidden;"><div style="width:' + progPct + '%;height:100%;background:linear-gradient(90deg,#22d3ee,#22c55e);"></div></div>' +
           '</div>' +
 
           // --- Stats ---
@@ -5315,7 +5315,7 @@ const App = {
             '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:18px 10px;text-align:center;">' +
               '<div style="font-size:28px;font-weight:900;color:#22c55e;">' + verified + '</div><div style="font-size:11px;color:var(--text-muted);">Mates joined</div></div>' +
             '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:18px 10px;text-align:center;">' +
-              '<div style="font-size:28px;font-weight:900;color:#d4a843;">' + pending + '</div><div style="font-size:11px;color:var(--text-muted);">Pending verify</div></div>' +
+              '<div style="font-size:28px;font-weight:900;color:#22d3ee;">' + pending + '</div><div style="font-size:11px;color:var(--text-muted);">Pending verify</div></div>' +
             '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:18px 10px;text-align:center;">' +
               '<div style="font-size:28px;font-weight:900;color:var(--gold);">' + creditsEarned + '</div><div style="font-size:11px;color:var(--text-muted);">Credits earned</div></div>' +
           '</div>' +
@@ -5450,7 +5450,7 @@ const App = {
               html += '<div style="font-size:12px;color:#ef4444;margin-top:8px;">' + tip.analysis.riskNotes + '</div>';
             }
           } else {
-            html += '<div style="text-align:center;padding:20px;background:rgba(212,168,67,0.05);border-radius:8px;">';
+            html += '<div style="text-align:center;padding:20px;background:rgba(34, 211, 238,0.05);border-radius:8px;">';
             html += '<div style="font-size:24px;margin-bottom:8px;">&#128274;</div>';
             html += '<div style="color:var(--text-secondary);font-size:13px;margin-bottom:12px;">Full analysis available to Premium members</div>';
             html += '<a href="#/pricing" class="btn btn-gold btn-sm">Unlock Premium</a>';
@@ -6458,7 +6458,7 @@ const App = {
     // Confidence bar (gold = Our Take, muted = market implied). pct is 0-100.
     var confBar = function (pct, gold) {
       pct = Math.max(4, Math.min(99, Math.round(pct || 0)));
-      var col = gold ? 'linear-gradient(90deg,#d4a843,#e8b93a)' : 'linear-gradient(90deg,#3b82f6,#60a5fa)';
+      var col = gold ? 'linear-gradient(90deg,#22d3ee,#e8b93a)' : 'linear-gradient(90deg,#3b82f6,#60a5fa)';
       return '<div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">' +
         '<div style="width:64px;height:5px;border-radius:3px;background:var(--bg-elevated);overflow:hidden;"><div style="width:' + pct + '%;height:100%;background:' + col + ';"></div></div>' +
         '<span style="font-size:12px;font-weight:800;color:' + (gold ? 'var(--gold)' : '#9fb0c9') + ';min-width:34px;text-align:right;">' + pct + '%</span></div>';
@@ -6519,7 +6519,7 @@ const App = {
           ((f.overOdds || f.underOdds || f.bttsOdds) ?
             '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin:2px 0 6px;">Goals</div>' +
             '<div style="display:flex;gap:6px;margin-bottom:10px;">' + oddsCell('Over 2.5', f.overOdds) + oddsCell('Under 2.5', f.underOdds) + oddsCell('BTTS', f.bttsOdds) + '</div>' : '') +
-          (pk ? '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:#e8e6e3;"><strong style="color:var(--gold);">Our Take:</strong> ' + self.escapeHtml(pk.selection || '') + (pk.market ? ' <span style="color:var(--text-muted);">(' + self.escapeHtml(pk.market) + ')</span>' : '') + '</div>' : '') +
+          (pk ? '<div style="background:rgba(34, 211, 238,0.08);border:1px solid rgba(34, 211, 238,0.3);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:#e8e6e3;"><strong style="color:var(--gold);">Our Take:</strong> ' + self.escapeHtml(pk.selection || '') + (pk.market ? ' <span style="color:var(--text-muted);">(' + self.escapeHtml(pk.market) + ')</span>' : '') + '</div>' : '') +
           // Published pick → its tip page (rich analysis by tip id); otherwise open
           // match intelligence by FIXTURE id (openMatchIntelligence hits /match-intelligence/:id).
           ((pk && pk.id) ? '<a href="#/tip/' + pk.id + '" onclick="event.stopPropagation();" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--gold);">Full match intelligence →</a>'
@@ -6879,7 +6879,7 @@ const App = {
     // Recent form (last 5) + win rate.
     var last5 = persp.slice(0, 5);
     var formDots = last5.map(function (p) {
-      var col = p.res === 'W' ? '#22c55e' : p.res === 'L' ? '#ef4444' : '#d4a843';
+      var col = p.res === 'W' ? '#22c55e' : p.res === 'L' ? '#ef4444' : '#22d3ee';
       return '<span style="display:inline-flex;width:26px;height:26px;border-radius:50%;background:' + col + ';color:#0a0e1a;font-weight:900;font-size:12px;align-items:center;justify-content:center;">' + p.res + '</span>';
     }).join('');
     var wins = persp.filter(function (p) { return p.res === 'W'; }).length;
@@ -6953,7 +6953,7 @@ const App = {
     var resultsBody = persp.length
       ? persp.slice(0, 10).map(function (p) {
           var mt = p.mt;
-          var col = p.res === 'W' ? '#22c55e' : p.res === 'L' ? '#ef4444' : '#d4a843';
+          var col = p.res === 'W' ? '#22c55e' : p.res === 'L' ? '#ef4444' : '#22d3ee';
           var d = new Date(mt.kickoff); var ds = !isNaN(d.getTime()) ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
           return '<div style="display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--border);">' +
             '<span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:' + col + ';color:#0a0e1a;font-weight:900;font-size:10px;align-items:center;justify-content:center;">' + p.res + '</span>' +
@@ -7193,7 +7193,7 @@ const App = {
             sectionLabel = 'Live Fixtures';
             showRefresh = true;
           }
-          if (tabFixtures.length === 0) return '<div class="section"><div style="text-align:center;padding:40px 20px;"><div style="font-size:40px;margin-bottom:12px;">&#9917;</div><div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">No Fixtures ' + (dateTab === 'today' ? 'Today' : 'For This Date') + '</div><div style="font-size:13px;color:rgba(255,255,255,0.4);max-width:420px;margin:0 auto;">No games on this date. The domestic season is building back up — our previews and Our Take on every game return with the fixtures. Check the dashboard for the next featured meeting.</div><div style="margin-top:16px;"><a href="#/dashboard" style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;padding:10px 24px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">Back to Dashboard</a></div></div></div>';
+          if (tabFixtures.length === 0) return '<div class="section"><div style="text-align:center;padding:40px 20px;"><div style="font-size:40px;margin-bottom:12px;">&#9917;</div><div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">No Fixtures ' + (dateTab === 'today' ? 'Today' : 'For This Date') + '</div><div style="font-size:13px;color:rgba(255,255,255,0.4);max-width:420px;margin:0 auto;">No games on this date. The domestic season is building back up — our previews and Our Take on every game return with the fixtures. Check the dashboard for the next featured meeting.</div><div style="margin-top:16px;"><a href="#/dashboard" style="background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;padding:10px 24px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">Back to Dashboard</a></div></div></div>';
           // Group by league
           var tabByLeague = {};
           tabFixtures.forEach(function(f) {
@@ -7324,7 +7324,7 @@ const App = {
                       var ko = f.kickoff ? new Date(f.kickoff).toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'}) : '';
                       var clickAttr = f.id ? ' onclick="App.openMatchIntelligence(' + f.id + ', this)" style="cursor:pointer;" title="Click for full match analysis"' : '';
                       return '<div class="fixture-card-clickable"' + clickAttr + ' style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-elevated);border-radius:6px;font-size:13px;cursor:pointer;transition:all 0.15s;border:1px solid transparent;"' +
-                        ' onmouseover="this.style.borderColor=\'var(--gold)\';this.style.background=\'rgba(212,168,67,0.08)\'"' +
+                        ' onmouseover="this.style.borderColor=\'var(--gold)\';this.style.background=\'rgba(34, 211, 238,0.08)\'"' +
                         ' onmouseout="this.style.borderColor=\'transparent\';this.style.background=\'var(--bg-elevated)\'">' +
                         '<span class="text-muted" style="min-width:40px;">' + ko + '</span>' +
                         '<span style="flex:1;font-weight:500;">' + (f.homeTeam || '') + ' vs ' + (f.awayTeam || '') + '</span>' +
@@ -7463,12 +7463,12 @@ const App = {
   // crest when we have one, lettered circle as the last resort. size in px.
   teamBadge(team, logoUrl, size) {
     size = size || 48;
-    var letter = '<div class="match-intel-letter" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:linear-gradient(135deg,#1a2a4a,#0a1a3a);display:flex;align-items:center;justify-content:center;font-size:' + Math.round(size * 0.38) + 'px;font-weight:900;color:#d4a843;">' + ((team || '?')[0] || '?') + '</div>';
+    var letter = '<div class="match-intel-letter" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:linear-gradient(135deg,#1a2a4a,#0a1a3a);display:flex;align-items:center;justify-content:center;font-size:' + Math.round(size * 0.38) + 'px;font-weight:900;color:#22d3ee;">' + ((team || '?')[0] || '?') + '</div>';
     var code = this.countryCode(team);
     if (code) {
       var src = '/flags/' + code + '.png';
       return '<img src="' + src + '" alt="' + (team || '') + '" class="match-intel-team-logo" ' +
-        'style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 2px rgba(212,168,67,0.35);" ' +
+        'style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 2px rgba(34, 211, 238,0.35);" ' +
         'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
         letter.replace('display:flex', 'display:none');
     }
@@ -7580,7 +7580,7 @@ const App = {
         '<div class="match-intel-meter">' +
           '<div class="match-intel-meter-label"><span>Confidence</span><span>' + v.confidence + '/10</span></div>' +
           '<div class="confidence-meter" style="height:8px;border-radius:4px;background:var(--bg-elevated);overflow:hidden;">' +
-            '<div style="height:100%;border-radius:4px;background:linear-gradient(90deg,#b8902f,#d4a843,#e8c36a);width:' + confPct + '%;transition:width 0.4s ease;"></div>' +
+            '<div style="height:100%;border-radius:4px;background:linear-gradient(90deg,#0891b2,#22d3ee,#67e8f9);width:' + confPct + '%;transition:width 0.4s ease;"></div>' +
           '</div>' +
         '</div>' +
         '<div class="match-intel-meter">' +
@@ -7645,7 +7645,7 @@ const App = {
             '<div style="font-size:11px;color:var(--text-muted);">Expected goals</div>' +
             '<div style="font-size:20px;font-weight:900;color:#fff;">' + q.expectedGoals.home + ' – ' + q.expectedGoals.away + '</div>' +
             '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Projected</div>' +
-            '<div style="font-size:16px;font-weight:800;color:#d4a843;">' + (_projScore || q.mostLikelyScore || '-') + '</div>' +
+            '<div style="font-size:16px;font-weight:800;color:#22d3ee;">' + (_projScore || q.mostLikelyScore || '-') + '</div>' +
           '</div>' +
         '</div>' +
         '<div style="font-size:12px;color:var(--text-secondary);margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">Over 2.5: <strong>' + q.over25 + '%</strong> &nbsp;·&nbsp; BTTS: <strong>' + q.btts + '%</strong> &nbsp;·&nbsp; Power rating ' + q.ratings.home + ' v ' + q.ratings.away + '</div>' +
@@ -7666,7 +7666,7 @@ const App = {
       };
       html += '<div class="match-intel-section' + lockedClass + '">' +
         '<h3 class="match-intel-section-title">Model Prediction</h3>' +
-        (wp ? probBar(m.homeTeam + ' win', wp.home, '#22c55e') + probBar('Draw', wp.draw, '#d4a843') + probBar(m.awayTeam + ' win', wp.away, '#3b82f6') : '') +
+        (wp ? probBar(m.homeTeam + ' win', wp.home, '#22c55e') + probBar('Draw', wp.draw, '#22d3ee') + probBar(m.awayTeam + ' win', wp.away, '#3b82f6') : '') +
         '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;">' +
           (data.predictedScore ? '<div><span style="color:var(--text-secondary);font-size:12px;">Most likely score</span><div style="font-size:18px;font-weight:800;color:var(--text-primary);">' + this.escapeHtml(String(data.predictedScore)) + '</div></div>' : '') +
           (data.bttsPercent != null ? '<div><span style="color:var(--text-secondary);font-size:12px;">Both teams to score</span><div style="font-size:18px;font-weight:800;color:var(--text-primary);">' + data.bttsPercent + '%</div></div>' : '') +
@@ -7715,14 +7715,14 @@ const App = {
         var hPct = tot ? Math.round((h / tot) * 100) : 50;
         // Each column: top = home share (gold), bottom = away share (blue).
         return '<div title="' + (t.minute != null ? t.minute + "'" : '') + '" style="flex:1;display:flex;flex-direction:column;height:46px;border-radius:2px;overflow:hidden;background:var(--bg-elevated);">' +
-          '<div style="height:' + hPct + '%;background:#d4a843;"></div>' +
+          '<div style="height:' + hPct + '%;background:#22d3ee;"></div>' +
           '<div style="height:' + (100 - hPct) + '%;background:#3b82f6;"></div>' +
         '</div>';
       }).join('');
       html += '<div class="match-intel-section' + lockedClass + '">' +
         '<h3 class="match-intel-section-title">Match Momentum <span style="font-size:11px;color:var(--text-muted);font-weight:500;">· Pressure Index</span></h3>' +
         '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;">' +
-          '<span style="color:#d4a843;font-weight:700;">' + this.escapeHtml(m.homeTeam) + ' ' + pr.homeShare + '%</span>' +
+          '<span style="color:#22d3ee;font-weight:700;">' + this.escapeHtml(m.homeTeam) + ' ' + pr.homeShare + '%</span>' +
           '<span style="color:#3b82f6;font-weight:700;">' + pr.awayShare + '% ' + this.escapeHtml(m.awayTeam) + '</span>' +
         '</div>' +
         '<div style="display:flex;gap:2px;align-items:stretch;">' + spark + '</div>' +
@@ -7742,7 +7742,7 @@ const App = {
             '<strong style="color:var(--text-primary);">' + r.away + (r.suffix || '') + '</strong>' +
           '</div>' +
           '<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--bg-elevated);">' +
-            '<div style="width:' + hPct + '%;background:#d4a843;"></div>' +
+            '<div style="width:' + hPct + '%;background:#22d3ee;"></div>' +
             '<div style="width:' + (100 - hPct) + '%;background:#3b82f6;"></div>' +
           '</div>' +
         '</div>';
@@ -7757,7 +7757,7 @@ const App = {
     if (data.lineups && ((data.lineups.home && data.lineups.home.length) || (data.lineups.away && data.lineups.away.length))) {
       var ratingChip = function(rating) {
         if (rating == null) return '';
-        var col = rating >= 7.5 ? '#22c55e' : rating >= 6.5 ? '#d4a843' : '#ef4444';
+        var col = rating >= 7.5 ? '#22c55e' : rating >= 6.5 ? '#22d3ee' : '#ef4444';
         return '<span style="margin-left:auto;font-size:11px;font-weight:800;color:#fff;background:' + col + ';border-radius:4px;padding:1px 6px;min-width:34px;text-align:center;">' + rating.toFixed(1) + '</span>';
       };
       var lineupCol = function(players) {
@@ -7837,13 +7837,13 @@ const App = {
         // otherwise it's the tracked link to Cosmo (honest label).
         var label = d.deepLink ? 'Add to Betslip' : 'Back this with Cosmo Bet';
         slot.innerHTML =
-          '<div style="margin-top:12px;background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.25);border-radius:10px;padding:12px 14px;">' +
+          '<div style="margin-top:12px;background:rgba(34, 211, 238,0.06);border:1px solid rgba(34, 211, 238,0.25);border-radius:10px;padding:12px 14px;">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;">' +
               '<span style="font-size:12px;color:var(--text-secondary);">Cosmo Bet price · ' + this.escapeHtml(v.pick) + '</span>' +
               (d.cosmoOdds ? '<span style="font-size:20px;font-weight:900;color:var(--gold);">' + this.formatOdds(d.cosmoOdds) + '</span>' : '') +
             '</div>' +
             '<a href="' + encodeURI(d.betslipLink) + '" target="_blank" rel="noopener sponsored" onclick="event.stopPropagation();" ' +
-            'style="display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-weight:800;font-size:14px;padding:11px 16px;border-radius:8px;text-decoration:none;">⚡ ' + label + ' →</a>' +
+            'style="display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;font-weight:800;font-size:14px;padding:11px 16px;border-radius:8px;text-decoration:none;">⚡ ' + label + ' →</a>' +
             '<div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:6px;">Official partner · 18+ · <a href="https://www.begambleaware.org" target="_blank" rel="noopener" style="color:var(--text-muted);">BeGambleAware.org</a></div>' +
           '</div>';
       }
@@ -7887,22 +7887,22 @@ const App = {
   },
 
   _renderFootballAIPreview(container, preview) {
-    var html = '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.08),rgba(212,168,67,0.02));border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;">';
+    var html = '<div style="background:linear-gradient(135deg,rgba(34, 211, 238,0.08),rgba(34, 211, 238,0.02));border:1px solid rgba(34, 211, 238,0.2);border-radius:12px;padding:20px;">';
     if (preview.headline) {
-      html += '<h4 style="color:#d4a843;margin:0 0 12px 0;font-size:16px;">' + preview.headline + '</h4>';
+      html += '<h4 style="color:#22d3ee;margin:0 0 12px 0;font-size:16px;">' + preview.headline + '</h4>';
     }
     if (preview.preview) {
       html += '<div style="font-size:13px;color:var(--text-secondary);line-height:1.7;white-space:pre-line;">' + preview.preview + '</div>';
     }
     if (preview.keyStats && preview.keyStats.length > 0) {
-      html += '<div style="margin-top:14px;"><strong style="color:#d4a843;font-size:12px;">KEY STATS:</strong><ul style="margin:6px 0 0 0;padding-left:18px;">';
+      html += '<div style="margin-top:14px;"><strong style="color:#22d3ee;font-size:12px;">KEY STATS:</strong><ul style="margin:6px 0 0 0;padding-left:18px;">';
       preview.keyStats.forEach(function(stat) {
         html += '<li style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">' + stat + '</li>';
       });
       html += '</ul></div>';
     }
     if (preview.verdict) {
-      html += '<div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(212,168,67,0.15);font-weight:700;font-size:13px;color:#d4a843;">' + preview.verdict + '</div>';
+      html += '<div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(34, 211, 238,0.15);font-weight:700;font-size:13px;color:#22d3ee;">' + preview.verdict + '</div>';
     }
     html += '<div style="margin-top:10px;font-size:10px;color:var(--text-muted);">Generated by Claude AI for Elite Edge Sports Tips</div>';
     html += '</div>';
@@ -7967,7 +7967,7 @@ const App = {
     // Build race cards
     var raceCardsHtml = '';
     if (day.notice) {
-      raceCardsHtml += '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.25);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;"><div style="font-size:22px;">&#9432;</div><div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">' + day.notice + '</div></div>';
+      raceCardsHtml += '<div style="background:rgba(34, 211, 238,0.08);border:1px solid rgba(34, 211, 238,0.25);border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;"><div style="font-size:22px;">&#9432;</div><div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">' + day.notice + '</div></div>';
     }
     for (var ri = 0; ri < day.races.length; ri++) {
       var race = day.races[ri];
@@ -7980,23 +7980,23 @@ const App = {
           var tip = raceTips[ti];
           var expandId = 'fest-expand-' + tab + '-' + ri + '-' + ti;
           if (isPremium) {
-            tipsHtml += '<div style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:14px 18px;margin-top:10px;">';
+            tipsHtml += '<div style="background:rgba(34, 211, 238,0.06);border:1px solid rgba(34, 211, 238,0.2);border-radius:10px;padding:14px 18px;margin-top:10px;">';
             tipsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
             tipsHtml += '<div>';
-            tipsHtml += '<div style="font-weight:800;font-size:16px;color:#fff;">' + tip.selection + (tip.isNap ? ' <span style="background:#d4a843;color:#0a0e1a;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;vertical-align:middle;">NAP</span>' : '') + '</div>';
+            tipsHtml += '<div style="font-weight:800;font-size:16px;color:#fff;">' + tip.selection + (tip.isNap ? ' <span style="background:#22d3ee;color:#0a0e1a;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;vertical-align:middle;">NAP</span>' : '') + '</div>';
             tipsHtml += '<div style="font-size:12px;color:var(--text-secondary);">' + (tip.market || 'Win') + ' &bull; Confidence: ' + tip.confidence + '/10 &bull; Stake: ' + (tip.staking || '-') + '</div>';
             tipsHtml += '</div>';
-            tipsHtml += '<div style="font-weight:900;font-size:22px;color:#d4a843;">' + self.formatOdds(tip.odds) + '</div>';
+            tipsHtml += '<div style="font-weight:900;font-size:22px;color:#22d3ee;">' + self.formatOdds(tip.odds) + '</div>';
             tipsHtml += '</div>';
             tipsHtml += '<div style="margin-top:8px;font-size:13px;color:var(--text-secondary);line-height:1.6;">' + (tip.analysis ? tip.analysis.summary : '') + '</div>';
-            tipsHtml += '<button onclick="var el=document.getElementById(\'' + expandId + '\');el.style.display=el.style.display===\'none\'?\'block\':\'none\';" style="background:none;border:1px solid rgba(212,168,67,0.3);color:#d4a843;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;margin-top:10px;font-weight:600;">Expand Full Analysis</button>';
+            tipsHtml += '<button onclick="var el=document.getElementById(\'' + expandId + '\');el.style.display=el.style.display===\'none\'?\'block\':\'none\';" style="background:none;border:1px solid rgba(34, 211, 238,0.3);color:#22d3ee;padding:6px 14px;border-radius:6px;font-size:12px;cursor:pointer;margin-top:10px;font-weight:600;">Expand Full Analysis</button>';
             tipsHtml += '<div id="' + expandId + '" style="display:none;margin-top:12px;font-size:12px;color:var(--text-secondary);line-height:1.7;">';
             if (tip.analysis) {
-              if (tip.analysis.form) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Form:</strong> ' + tip.analysis.form + '</div>';
-              if (tip.analysis.goingSuitability) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Going:</strong> ' + tip.analysis.goingSuitability + '</div>';
-              if (tip.analysis.courseRecord) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Course:</strong> ' + tip.analysis.courseRecord + '</div>';
-              if (tip.analysis.trainerForm) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#d4a843;">Trainer:</strong> ' + tip.analysis.trainerForm + '</div>';
-              if (tip.analysis.clockerInsight) tipsHtml += '<div style="margin-top:12px;padding:14px;background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.2);border-radius:8px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#d4a843;font-weight:800;margin-bottom:8px;">The Clocker — Deep Intelligence</div><div style="font-size:13px;color:#cbd5e1;line-height:1.6;">' + tip.analysis.clockerInsight + '</div></div>';
+              if (tip.analysis.form) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#22d3ee;">Form:</strong> ' + tip.analysis.form + '</div>';
+              if (tip.analysis.goingSuitability) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#22d3ee;">Going:</strong> ' + tip.analysis.goingSuitability + '</div>';
+              if (tip.analysis.courseRecord) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#22d3ee;">Course:</strong> ' + tip.analysis.courseRecord + '</div>';
+              if (tip.analysis.trainerForm) tipsHtml += '<div style="margin-bottom:8px;"><strong style="color:#22d3ee;">Trainer:</strong> ' + tip.analysis.trainerForm + '</div>';
+              if (tip.analysis.clockerInsight) tipsHtml += '<div style="margin-top:12px;padding:14px;background:rgba(34, 211, 238,0.06);border:1px solid rgba(34, 211, 238,0.2);border-radius:8px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#22d3ee;font-weight:800;margin-bottom:8px;">The Clocker — Deep Intelligence</div><div style="font-size:13px;color:#cbd5e1;line-height:1.6;">' + tip.analysis.clockerInsight + '</div></div>';
               if (tip.analysis.tacticianInsight) tipsHtml += '<div style="margin-top:12px;padding:14px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.2);border-radius:8px;"><div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#ef4444;font-weight:800;margin-bottom:8px;">The Tactician — Deep Intelligence</div><div style="font-size:13px;color:#cbd5e1;line-height:1.6;">' + tip.analysis.tacticianInsight + '</div></div>';
               if (tip.analysis.oddsMovement) tipsHtml += '<div style="margin-bottom:8px;background:rgba(34,197,94,0.08);border-left:3px solid #22c55e;padding:8px 12px;border-radius:4px;"><strong style="color:#22c55e;">Market Mover:</strong> ' + tip.analysis.oddsMovement + '</div>';
               if (tip.analysis.dualAIVerified) tipsHtml += '<div style="margin-bottom:8px;background:rgba(34,197,94,0.06);border-left:3px solid #22c55e;padding:8px 12px;border-radius:4px;"><strong style="color:#22c55e;">Dual AI Verified:</strong> GPT independently rates this ' + (tip.analysis.gptConfidence || '?') + '/10 confidence. ' + (tip.analysis.gptReasoning || '') + '</div>';
@@ -8006,19 +8006,19 @@ const App = {
             tipsHtml += '</div>';
           } else {
             // Locked / blurred for free users
-            tipsHtml += '<div style="background:rgba(212,168,67,0.04);border:1px solid rgba(212,168,67,0.15);border-radius:10px;padding:14px 18px;margin-top:10px;position:relative;overflow:hidden;">';
+            tipsHtml += '<div style="background:rgba(34, 211, 238,0.04);border:1px solid rgba(34, 211, 238,0.15);border-radius:10px;padding:14px 18px;margin-top:10px;position:relative;overflow:hidden;">';
             tipsHtml += '<div style="filter:blur(8px);pointer-events:none;">';
             tipsHtml += '<div style="display:flex;justify-content:space-between;align-items:center;">';
             tipsHtml += '<div><div style="font-weight:800;font-size:16px;color:#fff;">Premium Selection</div>';
             tipsHtml += '<div style="font-size:12px;color:var(--text-secondary);">Win &bull; Confidence: 8/10</div></div>';
-            tipsHtml += '<div style="font-weight:900;font-size:22px;color:#d4a843;">3/1</div>';
+            tipsHtml += '<div style="font-weight:900;font-size:22px;color:#22d3ee;">3/1</div>';
             tipsHtml += '</div>';
             tipsHtml += '<div style="margin-top:8px;font-size:13px;color:var(--text-secondary);">Elite-level analysis with form, going, course and trainer insights...</div>';
             tipsHtml += '</div>';
             tipsHtml += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,14,26,0.7);backdrop-filter:blur(2px);">';
             tipsHtml += '<div style="font-size:28px;margin-bottom:6px;">&#128274;</div>';
-            tipsHtml += '<div style="font-weight:700;font-size:14px;color:#d4a843;margin-bottom:4px;">Premium Selection</div>';
-            tipsHtml += '<a href="#/pricing" style="background:#d4a843;color:#0a0e1a;padding:8px 20px;border-radius:6px;font-weight:700;font-size:12px;text-decoration:none;">Unlock All Festival Tips</a>';
+            tipsHtml += '<div style="font-weight:700;font-size:14px;color:#22d3ee;margin-bottom:4px;">Premium Selection</div>';
+            tipsHtml += '<a href="#/pricing" style="background:#22d3ee;color:#0a0e1a;padding:8px 20px;border-radius:6px;font-weight:700;font-size:12px;text-decoration:none;">Unlock All Festival Tips</a>';
             tipsHtml += '</div>';
             tipsHtml += '</div>';
           }
@@ -8031,12 +8031,12 @@ const App = {
         }
       }
 
-      var gradeColor = race.grade.indexOf('Grade 1') > -1 ? '#d4a843' : (race.grade.indexOf('Grade') > -1 ? '#a0a0a0' : '#6b7280');
+      var gradeColor = race.grade.indexOf('Grade 1') > -1 ? '#22d3ee' : (race.grade.indexOf('Grade') > -1 ? '#a0a0a0' : '#6b7280');
       var isNational = race.name.indexOf('Grand National') > -1;
 
-      raceCardsHtml += '<div style="background:var(--card-bg);border:1px solid ' + (isNational ? 'rgba(212,168,67,0.4)' : 'var(--border)') + ';border-radius:12px;padding:18px 20px;margin-bottom:14px;' + (isNational ? 'box-shadow:0 0 20px rgba(212,168,67,0.1);' : '') + '">';
+      raceCardsHtml += '<div style="background:var(--card-bg);border:1px solid ' + (isNational ? 'rgba(34, 211, 238,0.4)' : 'var(--border)') + ';border-radius:12px;padding:18px 20px;margin-bottom:14px;' + (isNational ? 'box-shadow:0 0 20px rgba(34, 211, 238,0.1);' : '') + '">';
       raceCardsHtml += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">';
-      raceCardsHtml += '<div style="background:rgba(212,168,67,0.15);color:#d4a843;font-weight:800;font-size:15px;padding:6px 14px;border-radius:8px;min-width:60px;text-align:center;">' + race.time + '</div>';
+      raceCardsHtml += '<div style="background:rgba(34, 211, 238,0.15);color:#22d3ee;font-weight:800;font-size:15px;padding:6px 14px;border-radius:8px;min-width:60px;text-align:center;">' + race.time + '</div>';
       raceCardsHtml += '<div style="flex:1;min-width:200px;">';
       raceCardsHtml += '<div style="font-weight:700;font-size:15px;color:#fff;">' + race.name + (isNational ? ' &#127942;' : '') + '</div>';
       raceCardsHtml += '<div style="font-size:12px;color:' + gradeColor + ';font-weight:600;">' + race.grade + '</div>';
@@ -8052,7 +8052,7 @@ const App = {
     var tabLabels = ['Thursday', 'Friday', 'Saturday'];
     for (var i = 0; i < tabs.length; i++) {
       var isActive = tabs[i] === tab;
-      tabsHtml += '<button onclick="App._festivalTab=\'' + tabs[i] + '\';App.renderFestival();" style="padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;border:' + (isActive ? '2px solid #d4a843' : '1px solid rgba(255,255,255,0.1)') + ';background:' + (isActive ? 'rgba(212,168,67,0.15)' : 'rgba(255,255,255,0.03)') + ';color:' + (isActive ? '#d4a843' : 'var(--text-secondary)') + ';">' + tabLabels[i] + '</button>';
+      tabsHtml += '<button onclick="App._festivalTab=\'' + tabs[i] + '\';App.renderFestival();" style="padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;border:' + (isActive ? '2px solid #22d3ee' : '1px solid rgba(255,255,255,0.1)') + ';background:' + (isActive ? 'rgba(34, 211, 238,0.15)' : 'rgba(255,255,255,0.03)') + ';color:' + (isActive ? '#22d3ee' : 'var(--text-secondary)') + ';">' + tabLabels[i] + '</button>';
     }
 
     // Tip count for this day
@@ -8064,11 +8064,11 @@ const App = {
         '<p style="font-size:15px;color:var(--text-secondary);">Aintree &mdash; 9-11 April &mdash; Elite Analysis For Every Race</p>' +
       '</div>' +
 
-      '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(184,144,47,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:20px;margin-bottom:24px;text-align:center;">' +
+      '<div style="background:linear-gradient(135deg,rgba(34, 211, 238,0.12),rgba(184,144,47,0.04));border:2px solid rgba(34, 211, 238,0.3);border-radius:14px;padding:20px;margin-bottom:24px;text-align:center;">' +
         '<div style="display:flex;justify-content:center;gap:32px;flex-wrap:wrap;">' +
-          '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">18</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Races</div></div>' +
-          '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">3</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Days</div></div>' +
-          '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">15+</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Selections</div></div>' +
+          '<div><div style="font-size:28px;font-weight:900;color:#22d3ee;">18</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Races</div></div>' +
+          '<div><div style="font-size:28px;font-weight:900;color:#22d3ee;">3</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Days</div></div>' +
+          '<div><div style="font-size:28px;font-weight:900;color:#22d3ee;">15+</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Selections</div></div>' +
           '<div><div style="font-size:28px;font-weight:900;color:#22c55e;">Grade 1</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Level Analysis</div></div>' +
         '</div>' +
       '</div>' +
@@ -8076,16 +8076,16 @@ const App = {
       '<div style="display:flex;gap:10px;margin-bottom:20px;margin-top:8px;justify-content:center;flex-wrap:wrap;overflow:visible;">' + tabsHtml + '</div>' +
 
       '<div style="margin-bottom:12px;">' +
-        '<h2 style="font-size:18px;color:#d4a843;margin-bottom:4px;">' + day.label + '</h2>' +
+        '<h2 style="font-size:18px;color:#22d3ee;margin-bottom:4px;">' + day.label + '</h2>' +
         '<p style="font-size:13px;color:var(--text-secondary);">' + day.races.length + ' races &bull; ' + tipCount + ' selection' + (tipCount !== 1 ? 's' : '') + ' published</p>' +
       '</div>' +
 
       raceCardsHtml +
 
       (!isPremium ? '<div style="text-align:center;margin-top:24px;margin-bottom:24px;">' +
-        '<div style="font-size:18px;font-weight:800;color:#d4a843;margin-bottom:8px;">Unlock All 15+ Festival Selections</div>' +
+        '<div style="font-size:18px;font-weight:800;color:#22d3ee;margin-bottom:8px;">Unlock All 15+ Festival Selections</div>' +
         '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Full analysis, staking plans, and live updates for every race across all 3 days.</div>' +
-        '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:14px 36px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">Subscribe Now &mdash; 14-Day Free Trial</a>' +
+        '<a href="#/pricing" style="display:inline-block;background:#22d3ee;color:#0a0e1a;padding:14px 36px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">Subscribe Now &mdash; 14-Day Free Trial</a>' +
         '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;19.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>' +
       '</div>' : '') +
 
@@ -8190,33 +8190,33 @@ const App = {
             '<h1 style="font-size:28px;">&#127942; Festival Hub</h1>' +
             '<p style="font-size:15px;color:var(--text-secondary);">Major Racing Festivals &mdash; Elite Analysis For Every Big Race</p>' +
           '</div>' +
-          '<div style="border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:32px;margin-bottom:24px;background:linear-gradient(135deg,rgba(212,168,67,0.08),rgba(212,168,67,0.02));text-align:center;">' +
+          '<div style="border:2px solid rgba(34, 211, 238,0.3);border-radius:14px;padding:32px;margin-bottom:24px;background:linear-gradient(135deg,rgba(34, 211, 238,0.08),rgba(34, 211, 238,0.02));text-align:center;">' +
             '<div style="font-size:48px;margin-bottom:16px;opacity:0.6;">&#127943;</div>' +
-            '<div style="font-size:18px;font-weight:800;color:#d4a843;margin-bottom:12px;">No Major Festivals This Week</div>' +
+            '<div style="font-size:18px;font-weight:800;color:#22d3ee;margin-bottom:12px;">No Major Festivals This Week</div>' +
             '<div style="font-size:14px;color:var(--text-secondary);line-height:1.8;max-width:500px;margin:0 auto;">' +
               'Check back for the big meetings:<br>' +
-              '<strong style="color:#d4a843;">Cheltenham</strong> (March) &bull; ' +
-              '<strong style="color:#d4a843;">Grand National</strong> (April) &bull; ' +
-              '<strong style="color:#d4a843;">Royal Ascot</strong> (June) &bull; ' +
-              '<strong style="color:#d4a843;">Glorious Goodwood</strong> (July)' +
+              '<strong style="color:#22d3ee;">Cheltenham</strong> (March) &bull; ' +
+              '<strong style="color:#22d3ee;">Grand National</strong> (April) &bull; ' +
+              '<strong style="color:#22d3ee;">Royal Ascot</strong> (June) &bull; ' +
+              '<strong style="color:#22d3ee;">Glorious Goodwood</strong> (July)' +
             '</div>' +
             '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:24px;text-align:center;">' +
-              '<div class="festival-cal-item" style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(212,168,67,0.15);">' +
+              '<div class="festival-cal-item" style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(34, 211, 238,0.15);">' +
                 '<div style="font-size:28px;margin-bottom:6px;">&#127793;</div>' +
                 '<div style="font-weight:700;font-size:14px;color:#fff;">Cheltenham Festival</div>' +
                 '<div style="font-size:12px;color:var(--text-muted);">March &bull; 4 days &bull; 28 races</div>' +
               '</div>' +
-              '<div class="festival-cal-item" style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(212,168,67,0.15);">' +
+              '<div class="festival-cal-item" style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(34, 211, 238,0.15);">' +
                 '<div style="font-size:28px;margin-bottom:6px;">&#127943;</div>' +
                 '<div style="font-weight:700;font-size:14px;color:#fff;">Grand National</div>' +
                 '<div style="font-size:12px;color:var(--text-muted);">April &bull; 3 days &bull; 18 races</div>' +
               '</div>' +
-              '<div class="festival-cal-item" style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(212,168,67,0.15);">' +
+              '<div class="festival-cal-item" style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(34, 211, 238,0.15);">' +
                 '<div style="font-size:28px;margin-bottom:6px;">&#128081;</div>' +
                 '<div style="font-weight:700;font-size:14px;color:#fff;">Royal Ascot</div>' +
                 '<div style="font-size:12px;color:var(--text-muted);">June &bull; 5 days &bull; 35 races</div>' +
               '</div>' +
-              '<div class="festival-cal-item" style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(212,168,67,0.15);">' +
+              '<div class="festival-cal-item" style="background:rgba(255,255,255,0.03);border-radius:10px;padding:16px;border:1px solid rgba(34, 211, 238,0.15);">' +
                 '<div style="font-size:28px;margin-bottom:6px;">&#9728;&#65039;</div>' +
                 '<div style="font-weight:700;font-size:14px;color:#fff;">Glorious Goodwood</div>' +
                 '<div style="font-size:12px;color:var(--text-muted);">July/August &bull; 5 days &bull; 35 races</div>' +
@@ -8224,7 +8224,7 @@ const App = {
             '</div>' +
           '</div>' +
           '<div style="text-align:center;">' +
-            '<a href="#/racing" style="color:#d4a843;font-size:14px;font-weight:600;text-decoration:none;">View Today\'s Racing Cards &rarr;</a>' +
+            '<a href="#/racing" style="color:#22d3ee;font-size:14px;font-weight:600;text-decoration:none;">View Today\'s Racing Cards &rarr;</a>' +
           '</div>' +
         '</div>';
       return;
@@ -8266,30 +8266,30 @@ const App = {
             var tip = raceTips[tIdx];
             if (isPremium) {
               tipsHtml +=
-                '<div class="festival-hub-tip" style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:14px 18px;margin-top:10px;">' +
+                '<div class="festival-hub-tip" style="background:rgba(34, 211, 238,0.06);border:1px solid rgba(34, 211, 238,0.2);border-radius:10px;padding:14px 18px;margin-top:10px;">' +
                   '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
                     '<div>' +
-                      '<div style="font-weight:800;font-size:16px;color:#fff;">' + tip.selection + (tip.isNap ? ' <span style="background:#d4a843;color:#0a0e1a;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;vertical-align:middle;">NAP</span>' : '') + '</div>' +
+                      '<div style="font-weight:800;font-size:16px;color:#fff;">' + tip.selection + (tip.isNap ? ' <span style="background:#22d3ee;color:#0a0e1a;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;vertical-align:middle;">NAP</span>' : '') + '</div>' +
                       '<div style="font-size:12px;color:var(--text-secondary);">' + (tip.market || 'Win') + ' &bull; Confidence: ' + tip.confidence + '/10 &bull; Stake: ' + (tip.staking || '-') + '</div>' +
                     '</div>' +
-                    '<div style="font-weight:900;font-size:22px;color:#d4a843;">' + self.formatOdds(tip.odds) + '</div>' +
+                    '<div style="font-weight:900;font-size:22px;color:#22d3ee;">' + self.formatOdds(tip.odds) + '</div>' +
                   '</div>' +
                   (tip.analysis && tip.analysis.summary ? '<div style="margin-top:8px;font-size:13px;color:var(--text-secondary);line-height:1.6;">' + tip.analysis.summary + '</div>' : '') +
                 '</div>';
             } else {
               tipsHtml +=
-                '<div style="background:rgba(212,168,67,0.04);border:1px solid rgba(212,168,67,0.15);border-radius:10px;padding:14px 18px;margin-top:10px;position:relative;overflow:hidden;">' +
+                '<div style="background:rgba(34, 211, 238,0.04);border:1px solid rgba(34, 211, 238,0.15);border-radius:10px;padding:14px 18px;margin-top:10px;position:relative;overflow:hidden;">' +
                   '<div style="filter:blur(8px);pointer-events:none;">' +
                     '<div style="display:flex;justify-content:space-between;align-items:center;">' +
                       '<div><div style="font-weight:800;font-size:16px;color:#fff;">Premium Selection</div>' +
                       '<div style="font-size:12px;color:var(--text-secondary);">Win &bull; Confidence: 8/10</div></div>' +
-                      '<div style="font-weight:900;font-size:22px;color:#d4a843;">3/1</div>' +
+                      '<div style="font-weight:900;font-size:22px;color:#22d3ee;">3/1</div>' +
                     '</div>' +
                   '</div>' +
                   '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,14,26,0.7);backdrop-filter:blur(2px);">' +
                     '<div style="font-size:28px;margin-bottom:6px;">&#128274;</div>' +
-                    '<div style="font-weight:700;font-size:14px;color:#d4a843;margin-bottom:4px;">Premium Selection</div>' +
-                    '<a href="#/pricing" style="background:#d4a843;color:#0a0e1a;padding:8px 20px;border-radius:6px;font-weight:700;font-size:12px;text-decoration:none;">Unlock Festival Tips</a>' +
+                    '<div style="font-weight:700;font-size:14px;color:#22d3ee;margin-bottom:4px;">Premium Selection</div>' +
+                    '<a href="#/pricing" style="background:#22d3ee;color:#0a0e1a;padding:8px 20px;border-radius:6px;font-weight:700;font-size:12px;text-decoration:none;">Unlock Festival Tips</a>' +
                   '</div>' +
                 '</div>';
             }
@@ -8298,12 +8298,12 @@ const App = {
           tipsHtml = '<div style="background:rgba(100,100,100,0.1);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px 18px;margin-top:10px;font-size:13px;color:var(--text-secondary);">Analysis pending — check back closer to race time.</div>';
         }
 
-        var gradeColor = isGrade1 ? '#d4a843' : (raceClass.toLowerCase().indexOf('grade') !== -1 || raceClass.toLowerCase().indexOf('group') !== -1 ? '#a0a0a0' : '#6b7280');
+        var gradeColor = isGrade1 ? '#22d3ee' : (raceClass.toLowerCase().indexOf('grade') !== -1 || raceClass.toLowerCase().indexOf('group') !== -1 ? '#a0a0a0' : '#6b7280');
 
         raceCardsHtml +=
-          '<div class="festival-hub-race" style="background:var(--card-bg);border:1px solid ' + (isGrade1 ? 'rgba(212,168,67,0.4)' : 'var(--border)') + ';border-radius:12px;padding:18px 20px;margin-bottom:14px;' + (isGrade1 ? 'box-shadow:0 0 20px rgba(212,168,67,0.1);' : '') + '">' +
+          '<div class="festival-hub-race" style="background:var(--card-bg);border:1px solid ' + (isGrade1 ? 'rgba(34, 211, 238,0.4)' : 'var(--border)') + ';border-radius:12px;padding:18px 20px;margin-bottom:14px;' + (isGrade1 ? 'box-shadow:0 0 20px rgba(34, 211, 238,0.1);' : '') + '">' +
             '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
-              '<div style="background:rgba(212,168,67,0.15);color:#d4a843;font-weight:800;font-size:15px;padding:6px 14px;border-radius:8px;min-width:60px;text-align:center;">' + raceTime + '</div>' +
+              '<div style="background:rgba(34, 211, 238,0.15);color:#22d3ee;font-weight:800;font-size:15px;padding:6px 14px;border-radius:8px;min-width:60px;text-align:center;">' + raceTime + '</div>' +
               '<div style="flex:1;min-width:200px;">' +
                 '<div style="font-weight:700;font-size:15px;color:#fff;">' + raceName + '</div>' +
                 '<div style="font-size:12px;color:' + gradeColor + ';font-weight:600;">' + raceClass + (prizeMoney ? ' &bull; ' + prizeMoney : '') + '</div>' +
@@ -8315,7 +8315,7 @@ const App = {
 
       festivalHtml +=
         '<div style="margin-bottom:32px;">' +
-          '<h2 style="font-size:20px;color:#d4a843;margin-bottom:4px;">&#127942; ' + fest.name + '</h2>' +
+          '<h2 style="font-size:20px;color:#22d3ee;margin-bottom:4px;">&#127942; ' + fest.name + '</h2>' +
           '<p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">' + fest.races.length + ' race' + (fest.races.length !== 1 ? 's' : '') + ' &bull; ' + festTips.length + ' selection' + (festTips.length !== 1 ? 's' : '') + ' published</p>' +
           raceCardsHtml +
         '</div>';
@@ -8327,18 +8327,18 @@ const App = {
           '<h1 style="font-size:28px;">&#127942; Festival Hub</h1>' +
           '<p style="font-size:15px;color:var(--text-secondary);">Live Festival Racing &mdash; Elite Analysis For Every Big Race</p>' +
         '</div>' +
-        '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(184,144,47,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:20px;margin-bottom:24px;text-align:center;">' +
+        '<div style="background:linear-gradient(135deg,rgba(34, 211, 238,0.12),rgba(184,144,47,0.04));border:2px solid rgba(34, 211, 238,0.3);border-radius:14px;padding:20px;margin-bottom:24px;text-align:center;">' +
           '<div style="display:flex;justify-content:center;gap:32px;flex-wrap:wrap;">' +
-            '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">' + festivals.length + '</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Festival' + (festivals.length !== 1 ? 's' : '') + ' Detected</div></div>' +
-            '<div><div style="font-size:28px;font-weight:900;color:#d4a843;">' + festivals.reduce(function(s, f) { return s + f.races.length; }, 0) + '</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Races</div></div>' +
+            '<div><div style="font-size:28px;font-weight:900;color:#22d3ee;">' + festivals.length + '</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Festival' + (festivals.length !== 1 ? 's' : '') + ' Detected</div></div>' +
+            '<div><div style="font-size:28px;font-weight:900;color:#22d3ee;">' + festivals.reduce(function(s, f) { return s + f.races.length; }, 0) + '</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Races</div></div>' +
             '<div><div style="font-size:28px;font-weight:900;color:#22c55e;">LIVE</div><div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px;">Auto-Detected</div></div>' +
           '</div>' +
         '</div>' +
         festivalHtml +
         (!isPremium ? '<div style="text-align:center;margin-top:24px;margin-bottom:24px;">' +
-          '<div style="font-size:18px;font-weight:800;color:#d4a843;margin-bottom:8px;">Unlock All Festival Selections</div>' +
+          '<div style="font-size:18px;font-weight:800;color:#22d3ee;margin-bottom:8px;">Unlock All Festival Selections</div>' +
           '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Full analysis, staking plans, and live updates for every festival race.</div>' +
-          '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:14px 36px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">Subscribe Now &mdash; 14-Day Free Trial</a>' +
+          '<a href="#/pricing" style="display:inline-block;background:#22d3ee;color:#0a0e1a;padding:14px 36px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">Subscribe Now &mdash; 14-Day Free Trial</a>' +
           '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;19.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>' +
         '</div>' : '') +
       '</div>';
@@ -8591,7 +8591,7 @@ const App = {
       // Add summary header
       var s = data.summary;
       var summaryHtml = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;">' +
-        '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:900;color:#d4a843;">' + s.strikeRate + '%</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Strike Rate</div></div>' +
+        '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:900;color:#22d3ee;">' + s.strikeRate + '%</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Strike Rate</div></div>' +
         '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:900;color:' + (s.pnl >= 0 ? '#22c55e' : '#ef4444') + ';">' + (s.pnl >= 0 ? '+' : '') + s.pnl.toFixed(2) + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">P&L (units)</div></div>' +
         '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:900;color:#fff;">' + s.totalTips + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Total Tips</div></div>' +
         '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;text-align:center;"><div style="font-size:20px;font-weight:900;color:#fff;">' + s.days + '</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">Days Tracked</div></div>' +
@@ -8690,7 +8690,7 @@ const App = {
       type: 'bar',
       data: {
         labels,
-        datasets: [{ label: 'Strike Rate %', data, backgroundColor: '#d4a843', borderRadius: 4 }]
+        datasets: [{ label: 'Strike Rate %', data, backgroundColor: '#22d3ee', borderRadius: 4 }]
       },
       options: {
         indexAxis: 'y',
@@ -8775,12 +8775,12 @@ const App = {
         datasets: [{
           label: 'Running Bank (units)',
           data,
-          borderColor: '#d4a843',
-          backgroundColor: 'rgba(212,168,67,0.08)',
+          borderColor: '#22d3ee',
+          backgroundColor: 'rgba(34, 211, 238,0.08)',
           fill: true,
           tension: 0.3,
           pointRadius: 3,
-          pointBackgroundColor: '#d4a843',
+          pointBackgroundColor: '#22d3ee',
           pointBorderColor: '#0a0e1a',
           pointBorderWidth: 2,
           borderWidth: 2,
@@ -8832,41 +8832,41 @@ const App = {
           <p>Sign up free in 30 seconds. Card securely stored for credit purchases — you will not be charged.</p>
         </div>
 
-        ${isOnTrial ? '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.15),rgba(212,168,67,0.05));border:2px solid var(--gold);border-radius:14px;padding:24px;margin-bottom:32px;text-align:center;"><div style="font-size:28px;margin-bottom:8px;">&#9201;</div><div style="font-size:20px;font-weight:800;color:var(--gold);margin-bottom:8px;">You\'re on your free trial — ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' left</div><div style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">Subscribe now to continue enjoying full premium access after your trial ends.</div></div>' : ''}
+        ${isOnTrial ? '<div style="background:linear-gradient(135deg,rgba(34, 211, 238,0.15),rgba(34, 211, 238,0.05));border:2px solid var(--gold);border-radius:14px;padding:24px;margin-bottom:32px;text-align:center;"><div style="font-size:28px;margin-bottom:8px;">&#9201;</div><div style="font-size:20px;font-weight:800;color:var(--gold);margin-bottom:8px;">You\'re on your free trial — ' + trialDaysLeft + ' day' + (trialDaysLeft !== 1 ? 's' : '') + ' left</div><div style="font-size:14px;color:var(--text-secondary);margin-bottom:16px;">Subscribe now to continue enjoying full premium access after your trial ends.</div></div>' : ''}
         ${!isLoggedIn ? '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(34,197,94,0.03));border:2px solid rgba(34,197,94,0.3);border-radius:14px;padding:24px;margin-bottom:32px;text-align:center;"><div style="font-size:28px;margin-bottom:8px;">&#127881;</div><div style="font-size:20px;font-weight:800;color:#22c55e;margin-bottom:8px;">Sign Up &amp; Get 5 Free Credits</div><div style="font-size:14px;color:var(--text-secondary);margin-bottom:8px;">Create your account to start using credits on premium tips. Card details stored securely for credit purchases — you will not be charged on the free tier.</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Use credits to unlock tips. Buy more from &pound;1.99 or subscribe for monthly credits.</div><button class="btn btn-gold btn-lg" onclick="App.showModal(\'register\')">Create Free Account</button></div>' : ''}
 
         <!-- Confidence Tier Leaderboard (social proof before plans) -->
         <div id="pricing-confidence-leaderboard"></div>
 
         <!-- CREDIT EXPLAINER — urgency + clarity -->
-        <div style="background:linear-gradient(135deg,rgba(212,168,67,0.08),rgba(212,168,67,0.02));border:2px solid rgba(212,168,67,0.25);border-radius:14px;padding:24px;margin-bottom:28px;">
+        <div style="background:linear-gradient(135deg,rgba(34, 211, 238,0.08),rgba(34, 211, 238,0.02));border:2px solid rgba(34, 211, 238,0.25);border-radius:14px;padding:24px;margin-bottom:28px;">
           <div style="text-align:center;margin-bottom:16px;">
-            <div style="font-size:20px;font-weight:900;color:#d4a843;">1 Credit = 1 Selection</div>
+            <div style="font-size:20px;font-weight:900;color:#22d3ee;">1 Credit = 1 Selection</div>
             <div style="font-size:13px;color:var(--text-secondary);margin-top:6px;">Every tip, every AI preview, every verdict costs just 1 credit. Acca Generator costs 3.</div>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:8px;text-align:center;">
             <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;">
               <div style="font-size:20px;margin-bottom:4px;">&#127919;</div>
               <div style="font-size:11px;font-weight:700;color:#fff;">Tips</div>
-              <div style="font-size:18px;font-weight:900;color:#d4a843;">1</div>
+              <div style="font-size:18px;font-weight:900;color:#22d3ee;">1</div>
               <div style="font-size:9px;color:var(--text-muted);">credit each</div>
             </div>
             <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;">
               <div style="font-size:20px;margin-bottom:4px;">&#129302;</div>
               <div style="font-size:11px;font-weight:700;color:#fff;">AI Previews</div>
-              <div style="font-size:18px;font-weight:900;color:#d4a843;">1</div>
+              <div style="font-size:18px;font-weight:900;color:#22d3ee;">1</div>
               <div style="font-size:9px;color:var(--text-muted);">credit each</div>
             </div>
             <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;">
               <div style="font-size:20px;margin-bottom:4px;">&#9917;</div>
               <div style="font-size:11px;font-weight:700;color:#fff;">Our Take</div>
-              <div style="font-size:18px;font-weight:900;color:#d4a843;">1</div>
+              <div style="font-size:18px;font-weight:900;color:#22d3ee;">1</div>
               <div style="font-size:9px;color:var(--text-muted);">credit each</div>
             </div>
             <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;">
               <div style="font-size:20px;margin-bottom:4px;">&#128200;</div>
               <div style="font-size:11px;font-weight:700;color:#fff;">Acca Builder</div>
-              <div style="font-size:18px;font-weight:900;color:#d4a843;">3</div>
+              <div style="font-size:18px;font-weight:900;color:#22d3ee;">3</div>
               <div style="font-size:9px;color:var(--text-muted);">credits per use</div>
             </div>
           </div>
@@ -8880,7 +8880,7 @@ const App = {
             <h3>Free</h3>
             <p class="text-muted">See what all the fuss is about</p>
             <div class="pricing-price">&pound;<span style="font-size:42px;">0</span><span class="period">/month</span></div>
-            <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);border-radius:8px;padding:14px;margin:8px 0 12px;text-align:center;">
+            <div style="background:rgba(34, 211, 238,0.1);border:1px solid rgba(34, 211, 238,0.25);border-radius:8px;padding:14px;margin:8px 0 12px;text-align:center;">
               <div style="font-size:32px;font-weight:900;color:var(--gold);">10</div>
               <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
               <div style="font-size:11px;color:#22c55e;font-weight:600;margin-top:4px;">&#10003; Auto-renews monthly</div>
@@ -8905,7 +8905,7 @@ const App = {
             <p class="text-muted">The daily NAP + extras</p>
             <div class="pricing-price"><span class="currency">&pound;</span>9<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
             <p class="text-xs text-gold mb-8">&pound;99.99/year (save &pound;20) | Cancel anytime</p>
-            <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);border-radius:8px;padding:14px;margin:0 0 12px;text-align:center;">
+            <div style="background:rgba(34, 211, 238,0.1);border:1px solid rgba(34, 211, 238,0.25);border-radius:8px;padding:14px;margin:0 0 12px;text-align:center;">
               <div style="font-size:32px;font-weight:900;color:var(--gold);">50</div>
               <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
               <div style="font-size:11px;color:#22c55e;font-weight:600;margin-top:4px;">20p per credit &bull; 16x more than Free</div>
@@ -8957,15 +8957,15 @@ const App = {
 
           <!-- VIP CARD -->
           <div class="pricing-card vip${isVIP ? ' featured' : ''}">
-            <div class="featured-badge" style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">ELITE</div>
+            <div class="featured-badge" style="background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">ELITE</div>
             <h3>VIP</h3>
             <p class="text-muted">Zero limits. Zero thinking.</p>
             <div class="pricing-price"><span class="currency">&pound;</span>39<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
             <p class="text-xs text-gold mb-8">&pound;399.99/year (save &pound;80) | Cancel anytime</p>
-            <div style="background:linear-gradient(135deg,rgba(212,168,67,0.15),rgba(212,168,67,0.05));border:2px solid rgba(212,168,67,0.4);border-radius:8px;padding:14px;margin:0 0 12px;text-align:center;">
+            <div style="background:linear-gradient(135deg,rgba(34, 211, 238,0.15),rgba(34, 211, 238,0.05));border:2px solid rgba(34, 211, 238,0.4);border-radius:8px;padding:14px;margin:0 0 12px;text-align:center;">
               <div style="font-size:28px;font-weight:900;color:var(--gold);">UNLIMITED</div>
               <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits Forever</div>
-              <div style="font-size:11px;color:#d4a843;font-weight:600;margin-top:4px;">Never count. Never run out. Never miss.</div>
+              <div style="font-size:11px;color:#22d3ee;font-weight:600;margin-top:4px;">Never count. Never run out. Never miss.</div>
             </div>
             <ul class="pricing-features">
               <li><strong>Everything in Premium, plus:</strong></li>
@@ -9305,7 +9305,7 @@ const App = {
                     <td>${u.name} ${isFlagged ? '<span title="Suspicious: 3+ IPs in 24h" style="color:#f59e0b;cursor:help;">&#9888;</span>' : ''}</td>
                     <td class="text-xs">${u.email}</td>
                     <td>${u.role}</td>
-                    <td>${u.subscription === 'vip' ? '<span style="color:#d4a843;font-weight:700;">VIP</span>' : u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : u.subscription === 'starter' ? '<span style="color:#22c55e;font-weight:600;">Starter</span>' : 'Free'}</td>
+                    <td>${u.subscription === 'vip' ? '<span style="color:#22d3ee;font-weight:700;">VIP</span>' : u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : u.subscription === 'starter' ? '<span style="color:#22c55e;font-weight:600;">Starter</span>' : 'Free'}</td>
                     <td>${statusBadge}</td>
                     <td class="text-xs">${lastTime}</td>
                     <td class="text-xs">${lastIP}</td>
@@ -9558,7 +9558,7 @@ const App = {
       this._adminEventsCache = evs; // safe lookup for Edit (no inline JSON injection)
       if (!evs.length) { box.innerHTML = '<p class="text-muted">No events yet. Click "Seed big meetings" or add one above.</p>'; return; }
       box.innerHTML = evs.map(function (e) {
-        var col = e.status === 'live' ? '#22c55e' : e.status === 'upcoming' ? '#d4a843' : '#64748b';
+        var col = e.status === 'live' ? '#22c55e' : e.status === 'upcoming' ? '#22d3ee' : '#64748b';
         return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;flex-wrap:wrap;">' +
           '<span style="font-size:11px;font-weight:800;color:' + col + ';border:1px solid ' + col + ';border-radius:4px;padding:1px 6px;">' + e.status.toUpperCase() + '</span>' +
           '<strong style="color:#fff;">' + App.escapeHtml(e.emoji || '') + ' ' + App.escapeHtml(e.name) + '</strong>' +
@@ -9669,7 +9669,7 @@ const App = {
     }
     var k = d.kpis || {};
     var rate = function (r) { return (r === null || r === undefined) ? '—' : r + '%'; };
-    var col = function (r) { return (r >= 60) ? '#22c55e' : (r >= 25) ? '#d4a843' : '#ef4444'; };
+    var col = function (r) { return (r >= 60) ? '#22c55e' : (r >= 25) ? '#22d3ee' : '#ef4444'; };
     var kpi = function (label, value, colour) {
       return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:14px 18px;min-width:140px;">' +
         '<div style="color:var(--text-muted);font-size:12px;margin-bottom:4px;">' + label + '</div>' +
@@ -9683,7 +9683,7 @@ const App = {
         var step = s.stepRate === null ? '' : '<span style="font-weight:700;color:' + col(s.stepRate) + ';">' + s.stepRate + '%</span><span style="color:var(--text-muted);font-size:11px;"> of prev</span>';
         return '<div style="margin-bottom:12px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;"><span style="font-weight:600;color:#e5e9f0;font-size:13px;">' + s.label + '</span><span>' + step + '</span></div>' +
-          '<div style="background:rgba(255,255,255,0.05);border-radius:6px;overflow:hidden;height:34px;"><div style="width:' + w + '%;height:100%;background:linear-gradient(90deg,#d4a843,#b8902f);display:flex;align-items:center;padding:0 12px;box-sizing:border-box;min-width:52px;"><span style="font-weight:800;color:#0a0e1a;font-size:14px;">' + (s.count || 0).toLocaleString() + '</span></div></div>' +
+          '<div style="background:rgba(255,255,255,0.05);border-radius:6px;overflow:hidden;height:34px;"><div style="width:' + w + '%;height:100%;background:linear-gradient(90deg,#22d3ee,#0891b2);display:flex;align-items:center;padding:0 12px;box-sizing:border-box;min-width:52px;"><span style="font-weight:800;color:#0a0e1a;font-size:14px;">' + (s.count || 0).toLocaleString() + '</span></div></div>' +
         '</div>';
       }).join('');
       return '<div><div style="font-weight:700;color:#e5e9f0;margin-bottom:10px;">' + title + '</div>' + bars + '<div style="color:var(--text-muted);font-size:11px;line-height:1.5;margin-top:6px;">' + note + '</div></div>';
@@ -9692,8 +9692,8 @@ const App = {
       '<div style="display:flex;gap:14px;margin-bottom:20px;flex-wrap:wrap;">' +
         kpi('New accounts', (k.newAccounts || 0).toLocaleString(), '#2563eb') +
         kpi('New paid subs', (k.newPaid || 0).toLocaleString(), '#22c55e') +
-        kpi('Signup → Paid', rate(k.signupToPaid), '#d4a843') +
-        kpi('Trial → Paid', rate(k.trialToPaid), '#d4a843') +
+        kpi('Signup → Paid', rate(k.signupToPaid), '#22d3ee') +
+        kpi('Trial → Paid', rate(k.trialToPaid), '#22d3ee') +
       '</div>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:26px;">' +
         block('Accounts (exact)', d.accountFunnel, 'Everyone who signs up — exact database counts.') +
@@ -9715,14 +9715,14 @@ const App = {
     var topHtml = top.length
       ? '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
           '<tr style="text-align:left;color:var(--text-muted);"><th style="padding:6px 8px;">Question</th><th style="padding:6px 8px;width:60px;">Asked</th></tr>' +
-          top.map(function (t) { return '<tr style="border-top:1px solid var(--border);"><td style="padding:6px 8px;color:#fff;">' + esc(t.question) + '</td><td style="padding:6px 8px;color:#d4a843;font-weight:700;">' + t.n + '&times;</td></tr>'; }).join('') +
+          top.map(function (t) { return '<tr style="border-top:1px solid var(--border);"><td style="padding:6px 8px;color:#fff;">' + esc(t.question) + '</td><td style="padding:6px 8px;color:#22d3ee;font-weight:700;">' + t.n + '&times;</td></tr>'; }).join('') +
         '</table>'
       : '<p class="text-muted">No questions logged yet.</p>';
     var recentHtml = recent.length
       ? recent.slice(0, 40).map(function (r) { return '<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;color:#cbd5e1;">' + esc(r.question) + ' <span style="color:var(--text-muted);font-size:11px;">· ' + (r.created_at ? formatDateUK(r.created_at) : '') + '</span></div>'; }).join('')
       : '<p class="text-muted">Nothing yet.</p>';
     box.innerHTML =
-      '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;"><div style="font-size:12px;color:var(--text-muted);">Questions asked (last 7 days)</div><div style="font-size:28px;font-weight:900;color:#d4a843;">' + ((data && data.last7days) || 0) + '</div></div>' +
+      '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;"><div style="font-size:12px;color:var(--text-muted);">Questions asked (last 7 days)</div><div style="font-size:28px;font-weight:900;color:#22d3ee;">' + ((data && data.last7days) || 0) + '</div></div>' +
       '<h4 style="margin:8px 0;">Most asked (30 days)</h4>' + topHtml +
       '<h4 style="margin:16px 0 8px;">Recent questions</h4>' + recentHtml;
   },
@@ -9807,7 +9807,7 @@ const App = {
     }).join('');
 
     box.innerHTML =
-      '<div class="card mb-16" style="border-color:rgba(212,168,67,0.35);">' +
+      '<div class="card mb-16" style="border-color:rgba(34, 211, 238,0.35);">' +
         '<h4 class="mb-8">&#127937; Racecard feed (The Racing API)</h4>' +
         '<p class="text-sm text-muted mb-8">Confirms whether today\'s racecards are actually reaching the system. Run this if Ask the Edge can\'t see a race.</p>' +
         '<button class="btn btn-gold btn-sm" onclick="App.racingDiagnose()">Diagnose racecard feed</button>' +
@@ -9828,7 +9828,7 @@ const App = {
         '<button class="btn btn-outline btn-sm" onclick="App.wcBroadcastTelegram()">Resend to Telegram only</button>' +
         '<pre id="lms-wc-feed-out" style="display:none;white-space:pre-wrap;background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;margin-top:10px;font-size:11px;max-height:240px;overflow:auto;"></pre>' +
       '</div>' +
-      '<div class="card mb-16" style="border-color:rgba(212,168,67,0.35);">' +
+      '<div class="card mb-16" style="border-color:rgba(34, 211, 238,0.35);">' +
         '<h4 class="mb-8">Lock a match verdict (Our Take)</h4>' +
         '<p class="text-sm text-muted mb-8">Set/restore the verdict shown on a World Cup match — it then stays put before and after the game. Use to fix a match whose take wasn\'t auto-locked.</p>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">' +
@@ -10278,7 +10278,7 @@ const App = {
       var pub = null; try { pub = await this.api('/analytics/clv-public'); } catch (e) {}
       var status = pub && pub.ready
         ? '<span style="color:#22c55e;font-weight:800;">Proof of Edge is LIVE</span> — ' + pub.beatRate + '% beat the close, avg ' + (pub.avgClv >= 0 ? '+' : '') + pub.avgClv + '% CLV over ' + pub.sample + ' tips.'
-        : '<span style="color:#d4a843;font-weight:700;">Not live yet</span> — ' + (pub ? pub.sample : '?') + '/' + (pub ? pub.minSample : 15) + ' tips with CLV. Builds as more tips settle.';
+        : '<span style="color:#22d3ee;font-weight:700;">Not live yet</span> — ' + (pub ? pub.sample : '?') + '/' + (pub ? pub.minSample : 15) + ' tips with CLV. Builds as more tips settle.';
       box.innerHTML = '<div class="card" style="padding:14px;font-size:13px;">' +
         '<strong>CLV backfill complete.</strong><br>' +
         'Updated ' + (r.updated || 0) + ' of ' + (r.candidates || 0) + ' settled tips (' + (r.noPriceHistory || 0) + ' had no captured price history).<br>' +
@@ -10300,9 +10300,9 @@ const App = {
     try {
       var c = await this.api('/analytics/calibration');
       if (!c.ready) { box.innerHTML = '<div class="card" style="padding:14px;">Not enough settled tips yet for calibration (' + (c.sample || 0) + '/' + (c.minSample || 10) + ').</div>'; return; }
-      var gradeColor = c.grade === 'Excellent' ? '#22c55e' : c.grade === 'Good' ? '#84cc16' : c.grade === 'Fair' ? '#d4a843' : '#ef4444';
+      var gradeColor = c.grade === 'Excellent' ? '#22c55e' : c.grade === 'Good' ? '#84cc16' : c.grade === 'Fair' ? '#22d3ee' : '#ef4444';
       var relRows = (c.reliability || []).map(function (r) {
-        var gc = Math.abs(r.gap) <= 5 ? '#22c55e' : Math.abs(r.gap) <= 12 ? '#d4a843' : '#ef4444';
+        var gc = Math.abs(r.gap) <= 5 ? '#22c55e' : Math.abs(r.gap) <= 12 ? '#22d3ee' : '#ef4444';
         return '<tr><td>' + r.band + '</td><td>' + r.sample + '</td><td>' + r.predicted + '%</td><td>' + r.actual + '%</td><td style="color:' + gc + ';font-weight:700;">' + (r.gap > 0 ? '+' : '') + r.gap + '</td></tr>';
       }).join('');
       var confRows = (c.confidenceOrdering.bands || []).map(function (b) { return '<tr><td>' + b.confidence + '/10</td><td>' + b.sample + '</td><td>' + b.winRate + '%</td></tr>'; }).join('');
@@ -10712,26 +10712,26 @@ const App = {
       var isWeekend = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0;
 
       container.innerHTML =
-        '<div style="background:linear-gradient(135deg,rgba(212,168,67,0.1),rgba(212,168,67,0.03));border:2px solid rgba(212,168,67,0.4);border-radius:14px;padding:24px;margin-bottom:24px;">' +
+        '<div style="background:linear-gradient(135deg,rgba(34, 211, 238,0.1),rgba(34, 211, 238,0.03));border:2px solid rgba(34, 211, 238,0.4);border-radius:14px;padding:24px;margin-bottom:24px;">' +
           '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">' +
             '<div style="font-size:28px;">&#9917;</div>' +
             '<div style="flex:1;">' +
-              '<div style="font-size:16px;font-weight:800;color:#d4a843;">Premium Weekend Value Accumulator</div>' +
+              '<div style="font-size:16px;font-weight:800;color:#22d3ee;">Premium Weekend Value Accumulator</div>' +
               '<div style="font-size:12px;color:#8a8fa0;">Analyst-driven selections — no short prices, only value</div>' +
             '</div>' +
             '<div style="text-align:right;">' +
-              '<div style="font-size:20px;font-weight:800;color:#d4a843;">' + self.formatOdds(acca.odds) + '</div>' +
+              '<div style="font-size:20px;font-weight:800;color:#22d3ee;">' + self.formatOdds(acca.odds) + '</div>' +
               '<div style="font-size:10px;color:#8a8fa0;">COMBINED ODDS</div>' +
             '</div>' +
           '</div>' +
           '<div style="display:grid;gap:8px;margin-bottom:16px;">' +
           acca.accaSelections.map(function(s, idx) {
-            return '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(255,255,255,0.03);border-radius:8px;border-left:3px solid ' + (idx % 3 === 0 ? '#a855f7' : idx % 3 === 1 ? '#22c55e' : '#d4a843') + ';">' +
-              '<div style="font-size:18px;font-weight:800;color:#d4a843;min-width:24px;">' + (idx + 1) + '</div>' +
+            return '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(255,255,255,0.03);border-radius:8px;border-left:3px solid ' + (idx % 3 === 0 ? '#a855f7' : idx % 3 === 1 ? '#22c55e' : '#22d3ee') + ';">' +
+              '<div style="font-size:18px;font-weight:800;color:#22d3ee;min-width:24px;">' + (idx + 1) + '</div>' +
               '<div style="flex:1;">' +
                 '<div style="font-weight:700;font-size:14px;color:#e8e6e3;">' + (s.match || '') + '</div>' +
                 '<div style="font-size:12px;color:#8a8fa0;margin-bottom:4px;">' + (s.league || '') + '</div>' +
-                '<div style="font-size:13px;font-weight:600;color:#d4a843;">' + (s.selection || '') + '</div>' +
+                '<div style="font-size:13px;font-weight:600;color:#22d3ee;">' + (s.selection || '') + '</div>' +
                 '<div style="font-size:11px;color:#94a3b8;margin-top:4px;font-style:italic;">' + (s.reasoning || '') + '</div>' +
               '</div>' +
               '<div style="text-align:right;min-width:50px;">' +
@@ -10740,14 +10740,14 @@ const App = {
             '</div>';
           }).join('') +
           '</div>' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(212,168,67,0.1);border-radius:8px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(34, 211, 238,0.1);border-radius:8px;">' +
             '<div>' +
               '<div style="font-size:12px;color:#8a8fa0;">£10 Stake Returns</div>' +
               '<div style="font-size:22px;font-weight:800;color:#22c55e;">£' + (acca.odds * 10).toFixed(2) + '</div>' +
             '</div>' +
             '<div style="text-align:right;">' +
               '<div style="font-size:12px;color:#8a8fa0;">Selections</div>' +
-              '<div style="font-size:22px;font-weight:800;color:#d4a843;">' + acca.accaSelections.length + '-fold</div>' +
+              '<div style="font-size:22px;font-weight:800;color:#22d3ee;">' + acca.accaSelections.length + '-fold</div>' +
             '</div>' +
           '</div>' +
           '<p style="font-size:11px;color:#64748b;text-align:center;margin-top:12px;">Premium analyst selections. Min odds per leg: 1.6. Entertainment purposes only. Please gamble responsibly. 18+.</p>' +
@@ -10787,11 +10787,11 @@ const App = {
       var dateLabel = dateObj.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
 
       container.innerHTML =
-        '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.08),rgba(212,168,67,0.05));border:1px solid rgba(34,197,94,0.25);border-radius:14px;padding:24px;margin-bottom:24px;">' +
+        '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.08),rgba(34, 211, 238,0.05));border:1px solid rgba(34,197,94,0.25);border-radius:14px;padding:24px;margin-bottom:24px;">' +
           '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">' +
             '<div style="font-size:28px;">&#128270;</div>' +
             '<div>' +
-              '<div style="font-size:16px;font-weight:800;color:#d4a843;">What Premium Members Got Yesterday</div>' +
+              '<div style="font-size:16px;font-weight:800;color:#22d3ee;">What Premium Members Got Yesterday</div>' +
               '<div style="font-size:12px;color:#8a8fa0;">' + dateLabel + ' — Full analysis was available before kick-off</div>' +
             '</div>' +
           '</div>' +
@@ -10829,7 +10829,7 @@ const App = {
               '<span style="font-size:11px;padding:3px 8px;border-radius:4px;font-weight:700;background:' + resultColor + '20;color:' + resultColor + ';">' + resultLabel + '</span>' +
               '<span style="flex:1;font-weight:600;font-size:13px;color:#e8e6e3;">' + (r.selection || '') + '</span>' +
               '<span style="font-size:13px;color:#8a8fa0;">' + (r.event || '').substring(0, 40) + '</span>' +
-              (isPremium ? '<span style="font-weight:700;font-size:14px;color:' + resultColor + ';">' + oddsDisplay + '</span>' : '<span style="font-size:12px;color:#d4a843;">&#128274;</span>') +
+              (isPremium ? '<span style="font-weight:700;font-size:14px;color:' + resultColor + ';">' + oddsDisplay + '</span>' : '<span style="font-size:12px;color:#22d3ee;">&#128274;</span>') +
             '</div>';
           }).join('') +
           '</div>' +
@@ -10846,8 +10846,8 @@ const App = {
 
           // CTA for free users
           (!isPremium ? '<div style="text-align:center;padding-top:8px;">' +
-            '<p style="font-size:13px;color:#c0c4d0;margin-bottom:12px;">Premium members received these selections <strong style="color:#d4a843;">before kick-off</strong> with full analysis, staking plans, and AI previews.</p>' +
-            '<a href="#/pricing" style="display:inline-block;background:#d4a843;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;">Start Your 14-Day Free Trial</a>' +
+            '<p style="font-size:13px;color:#c0c4d0;margin-bottom:12px;">Premium members received these selections <strong style="color:#22d3ee;">before kick-off</strong> with full analysis, staking plans, and AI previews.</p>' +
+            '<a href="#/pricing" style="display:inline-block;background:#22d3ee;color:#0a0e1a;padding:12px 32px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;">Start Your 14-Day Free Trial</a>' +
             '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Card stored securely. No charges on free tier. Cancel anytime. 18+</div>' +
           '</div>' : '') +
         '</div>';
@@ -10868,7 +10868,7 @@ const App = {
 
           <div class="legal-disclaimer-box" style="border:2px solid #ef4444;background:rgba(239,68,68,0.1);padding:20px;border-radius:8px;margin-bottom:24px;">
             <p style="font-weight:700;font-size:16px;color:#ef4444;margin-bottom:8px;">⚠️ IMPORTANT — PLEASE READ CAREFULLY</p>
-            <p style="font-weight:600;">Elite Edge Sports Tips is an ENTERTAINMENT and STATISTICAL ANALYSIS service ONLY. We are NOT a licensed betting operator, financial adviser, or regulated tipster. ALL content on this platform represents OPINION and STATISTICAL MODELLING ONLY. NOTHING on this site constitutes financial advice, betting advice, investment advice, or a recommendation or inducement to place any bet or wager. There is absolutely NO GUARANTEE of profit or positive returns. Past performance does NOT guarantee future results. Any decision to place bets is made ENTIRELY at your own risk. We accept NO LIABILITY WHATSOEVER for any financial losses incurred. If you choose to gamble, please do so responsibly and only with money you can afford to lose. If you or someone you know has a gambling problem, please contact the National Gambling Helpline on 0808 8020 133 or visit <a href="https://www.begambleaware.org" target="_blank" style="color:#d4a843;">BeGambleAware.org</a>.</p>
+            <p style="font-weight:600;">Elite Edge Sports Tips is an ENTERTAINMENT and STATISTICAL ANALYSIS service ONLY. We are NOT a licensed betting operator, financial adviser, or regulated tipster. ALL content on this platform represents OPINION and STATISTICAL MODELLING ONLY. NOTHING on this site constitutes financial advice, betting advice, investment advice, or a recommendation or inducement to place any bet or wager. There is absolutely NO GUARANTEE of profit or positive returns. Past performance does NOT guarantee future results. Any decision to place bets is made ENTIRELY at your own risk. We accept NO LIABILITY WHATSOEVER for any financial losses incurred. If you choose to gamble, please do so responsibly and only with money you can afford to lose. If you or someone you know has a gambling problem, please contact the National Gambling Helpline on 0808 8020 133 or visit <a href="https://www.begambleaware.org" target="_blank" style="color:#22d3ee;">BeGambleAware.org</a>.</p>
           </div>
 
           <h2>1. Service Description — Entertainment Only</h2>
@@ -10936,7 +10936,7 @@ const App = {
           <p>Elite Edge Sports Tips is <strong>not affiliated with, endorsed by, or in any partnership with</strong> any bookmaker, betting exchange, or licensed gambling operator unless explicitly stated. Any references to bookmaker odds, prices, or promotions are provided for informational and comparison purposes only. If we display affiliate links, we may receive a commission from the bookmaker at no additional cost to you. This does not influence our analysis or selections. You are under no obligation to use any particular bookmaker.</p>
 
           <h2>11. Age Verification &amp; Self-Exclusion</h2>
-          <p>This Service is strictly for persons aged 18 years or over. By using this Service, you confirm that you are at least 18 years old. We support responsible gambling and encourage anyone who may have a gambling problem to register with <a href="https://www.gamstop.co.uk" target="_blank" style="color:#d4a843;">GamStop</a> for self-exclusion from all UK-licensed online gambling operators. If you are registered with GamStop or any self-exclusion scheme, the analysis content on this platform may not be suitable for you and we advise you to discontinue use.</p>
+          <p>This Service is strictly for persons aged 18 years or over. By using this Service, you confirm that you are at least 18 years old. We support responsible gambling and encourage anyone who may have a gambling problem to register with <a href="https://www.gamstop.co.uk" target="_blank" style="color:#22d3ee;">GamStop</a> for self-exclusion from all UK-licensed online gambling operators. If you are registered with GamStop or any self-exclusion scheme, the analysis content on this platform may not be suitable for you and we advise you to discontinue use.</p>
 
           <h2>12. Severability</h2>
           <p>If any provision of these Terms is found to be invalid or unenforceable by a court of competent jurisdiction, the remaining provisions shall continue in full force and effect.</p>
@@ -11599,18 +11599,18 @@ const App = {
     var self = this;
     var pnlClass = roi.totalPnl > 0 ? 'color:#22c55e;' : roi.totalPnl < 0 ? 'color:#ef4444;' : '';
     var roiClass = roi.roi > 0 ? 'color:#22c55e;' : roi.roi < 0 ? 'color:#ef4444;' : '';
-    var srClass = roi.strikeRate >= 50 ? 'color:#22c55e;' : roi.strikeRate >= 30 ? 'color:#d4a843;' : 'color:#ef4444;';
+    var srClass = roi.strikeRate >= 50 ? 'color:#22c55e;' : roi.strikeRate >= 30 ? 'color:#22d3ee;' : 'color:#ef4444;';
 
     // Analyst performance cards
     var analystCards = '';
     var analystNames = ['The Professor', 'The Scout', 'The Clocker', 'The Tactician', 'The Edge'];
-    var analystColors = { 'The Professor': '#3b82f6', 'The Scout': '#22c55e', 'The Clocker': '#a855f7', 'The Tactician': '#ef4444', 'The Edge': '#d4a843' };
+    var analystColors = { 'The Professor': '#3b82f6', 'The Scout': '#22c55e', 'The Clocker': '#a855f7', 'The Tactician': '#ef4444', 'The Edge': '#22d3ee' };
     analystNames.forEach(function(name) {
       var a = roi.byAnalyst[name] || { total: 0, wins: 0, pnl: 0 };
       if (a.total === 0) return;
       var aSR = a.total > 0 ? Math.round((a.wins / a.total) * 100) : 0;
       var aROI = a.total > 0 ? Math.round((a.pnl / a.total) * 100) : 0;
-      var col = analystColors[name] || '#d4a843';
+      var col = analystColors[name] || '#22d3ee';
       analystCards += '<div style="background:rgba(255,255,255,0.03);border:1px solid ' + col + '33;border-radius:10px;padding:16px;flex:1;min-width:140px;">' +
         '<div style="font-size:13px;font-weight:800;color:' + col + ';margin-bottom:8px;">' + name + '</div>' +
         '<div style="font-size:24px;font-weight:900;' + (a.pnl > 0 ? 'color:#22c55e;' : a.pnl < 0 ? 'color:#ef4444;' : '') + '">' + (a.pnl > 0 ? '+' : '') + a.pnl.toFixed(2) + 'u</div>' +
@@ -11622,7 +11622,7 @@ const App = {
     var confCards = '';
     var confTiers = [
       { key: 'elite', label: 'Elite (9-10)', col: '#22c55e' },
-      { key: 'strong', label: 'Strong (7-8)', col: '#d4a843' },
+      { key: 'strong', label: 'Strong (7-8)', col: '#22d3ee' },
       { key: 'other', label: 'Other (<7)', col: '#94a3b8' },
     ];
     confTiers.forEach(function(tier) {
@@ -11659,13 +11659,13 @@ const App = {
       streakHtml = '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
         '<span style="font-size:24px;">&#128293;</span>' +
         '<span style="font-size:15px;font-weight:700;color:#22c55e;">' + roi.streak.count + '-bet win streak</span>' +
-        (bestRun > roi.streak.count ? '<span style="font-size:12px;color:#94a3b8;margin-left:auto;">Best ever: ' + bestRun + ' winners</span>' : '<span style="font-size:12px;color:#d4a843;margin-left:auto;">Personal best!</span>') +
+        (bestRun > roi.streak.count ? '<span style="font-size:12px;color:#94a3b8;margin-left:auto;">Best ever: ' + bestRun + ' winners</span>' : '<span style="font-size:12px;color:#22d3ee;margin-left:auto;">Personal best!</span>') +
       '</div>';
     } else if (bestRun >= 2) {
       // Not on a win streak — show best run as motivation
-      streakHtml = '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
+      streakHtml = '<div style="background:rgba(34, 211, 238,0.08);border:1px solid rgba(34, 211, 238,0.2);border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
         '<span style="font-size:24px;">&#127942;</span>' +
-        '<span style="font-size:15px;font-weight:700;color:#d4a843;">Best run: ' + bestRun + ' consecutive winners</span>' +
+        '<span style="font-size:15px;font-weight:700;color:#22d3ee;">Best run: ' + bestRun + ' consecutive winners</span>' +
       '</div>';
     }
 
@@ -11673,22 +11673,22 @@ const App = {
     var recentBets = '';
     if (roi.chart && roi.chart.length > 0) {
       var rows = roi.chart.slice(-15).reverse().map(function(b) {
-        var rBadge = b.result === 'won' ? '<span style="color:#22c55e;font-weight:700;">Won</span>' : b.result === 'placed' ? '<span style="color:#d4a843;font-weight:700;">Placed</span>' : '<span style="color:#ef4444;font-weight:700;">Lost</span>';
+        var rBadge = b.result === 'won' ? '<span style="color:#22c55e;font-weight:700;">Won</span>' : b.result === 'placed' ? '<span style="color:#22d3ee;font-weight:700;">Placed</span>' : '<span style="color:#ef4444;font-weight:700;">Lost</span>';
         return '<tr><td style="font-size:12px;color:#94a3b8;">' + (b.date || '') + '</td><td>' + (b.selection || '') + '</td><td>' + rBadge + '</td><td style="font-weight:700;' + (b.pnl >= 0 ? 'color:#22c55e;' : 'color:#ef4444;') + '">' + (b.pnl >= 0 ? '+' : '') + b.pnl.toFixed(2) + '</td></tr>';
       }).join('');
-      recentBets = '<div style="margin-top:24px;"><div style="font-size:14px;font-weight:800;color:#d4a843;margin-bottom:12px;">Recent Bet History</div>' +
+      recentBets = '<div style="margin-top:24px;"><div style="font-size:14px;font-weight:800;color:#22d3ee;margin-bottom:12px;">Recent Bet History</div>' +
         '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;"><thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Date</th><th style="text-align:left;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Selection</th><th style="text-align:left;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Result</th><th style="text-align:left;padding:8px;border-bottom:1px solid #2a2e3d;font-size:11px;color:#64748b;">Running P/L</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
     }
 
     app.innerHTML = '<div class="container" style="padding-top:40px;">' +
       '<div style="text-align:center;margin-bottom:24px;">' +
-        '<h1>Your <span style="color:#d4a843;">Personal ROI</span> Dashboard</h1>' +
+        '<h1>Your <span style="color:#22d3ee;">Personal ROI</span> Dashboard</h1>' +
         '<p style="color:#94a3b8;">Every bet you\'ve backed, tracked and analysed. This data is yours — it stays as long as you do.</p>' +
       '</div>' +
 
       // Hero stats
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;">' +
-        '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;text-align:center;">' +
+        '<div style="background:rgba(34, 211, 238,0.08);border:1px solid rgba(34, 211, 238,0.2);border-radius:12px;padding:20px;text-align:center;">' +
           '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:6px;">Your P/L</div>' +
           '<div style="font-size:32px;font-weight:900;' + pnlClass + '">' + (roi.totalPnl > 0 ? '+' : '') + roi.totalPnl.toFixed(2) + '</div>' +
           '<div style="font-size:11px;color:#64748b;">units</div>' +
@@ -11715,10 +11715,10 @@ const App = {
       whatIfHtml +
 
       // Analyst breakdown
-      (analystCards ? '<div style="margin-bottom:24px;"><div style="font-size:14px;font-weight:800;color:#d4a843;margin-bottom:12px;">Your Results by Analyst</div><div style="display:flex;gap:12px;flex-wrap:wrap;">' + analystCards + '</div></div>' : '') +
+      (analystCards ? '<div style="margin-bottom:24px;"><div style="font-size:14px;font-weight:800;color:#22d3ee;margin-bottom:12px;">Your Results by Analyst</div><div style="display:flex;gap:12px;flex-wrap:wrap;">' + analystCards + '</div></div>' : '') +
 
       // Confidence breakdown
-      (confCards ? '<div style="margin-bottom:24px;"><div style="font-size:14px;font-weight:800;color:#d4a843;margin-bottom:12px;">Your Results by Confidence</div><div style="display:flex;gap:12px;flex-wrap:wrap;">' + confCards + '</div></div>' : '') +
+      (confCards ? '<div style="margin-bottom:24px;"><div style="font-size:14px;font-weight:800;color:#22d3ee;margin-bottom:12px;">Your Results by Confidence</div><div style="display:flex;gap:12px;flex-wrap:wrap;">' + confCards + '</div></div>' : '') +
 
       // Recent bets
       recentBets +
@@ -11755,13 +11755,13 @@ const App = {
       var sportsLine = (clv.bySport || []).map(function (s) {
         return s.sport.charAt(0).toUpperCase() + s.sport.slice(1) + ' ' + s.beatRate + '%';
       }).join(' · ');
-      clvCard = '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.10),rgba(212,168,67,0.06));border:1px solid rgba(34,197,94,0.3);border-radius:12px;padding:22px;margin-bottom:28px;">' +
+      clvCard = '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.10),rgba(34, 211, 238,0.06));border:1px solid rgba(34,197,94,0.3);border-radius:12px;padding:22px;margin-bottom:28px;">' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:18px;">📈</span><h2 style="font-size:18px;font-weight:800;margin:0;">Proven Edge — Closing Line Value</h2></div>' +
         '<p style="font-size:13px;color:#94a3b8;margin:0 0 16px;">Beating the closing line is how professionals prove genuine edge — not luck. Measured on every settled tip.</p>' +
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">' +
           '<div style="text-align:center;"><div style="font-size:30px;font-weight:900;color:#22c55e;">' + clv.beatRate + '%</div><div style="font-size:11px;color:#94a3b8;">beat the closing line</div></div>' +
           '<div style="text-align:center;"><div style="font-size:30px;font-weight:900;color:' + (clvPos ? '#22c55e' : '#ef4444') + ';">' + (clvPos ? '+' : '') + clv.avgClv + '%</div><div style="font-size:11px;color:#94a3b8;">average CLV</div></div>' +
-          '<div style="text-align:center;"><div style="font-size:30px;font-weight:900;color:#d4a843;">' + clv.sample + '</div><div style="font-size:11px;color:#94a3b8;">tips measured</div></div>' +
+          '<div style="text-align:center;"><div style="font-size:30px;font-weight:900;color:#22d3ee;">' + clv.sample + '</div><div style="font-size:11px;color:#94a3b8;">tips measured</div></div>' +
         '</div>' +
         (sportsLine ? '<div style="font-size:12px;color:#64748b;margin-top:14px;text-align:center;">Beat-rate by sport: ' + sportsLine + '</div>' : '') +
       '</div>';
@@ -11776,7 +11776,7 @@ const App = {
     var self = this;
     var pnlClass = o.totalPnl > 0 ? 'color:#22c55e;' : 'color:#ef4444;';
     var roiClass = o.roi > 0 ? 'color:#22c55e;' : 'color:#ef4444;';
-    var srClass = o.strikeRate >= 50 ? 'color:#22c55e;' : o.strikeRate >= 30 ? 'color:#d4a843;' : 'color:#ef4444;';
+    var srClass = o.strikeRate >= 50 ? 'color:#22c55e;' : o.strikeRate >= 30 ? 'color:#22d3ee;' : 'color:#ef4444;';
 
     // Sport cards
     var sportCards = Object.keys(data.bySport || {}).map(function(s) {
@@ -11793,7 +11793,7 @@ const App = {
     // Analyst cards
     var analystCards = Object.keys(data.byAnalyst || {}).map(function(a) {
       var d = data.byAnalyst[a];
-      var col = a === 'The Professor' ? '#3b82f6' : a === 'The Scout' ? '#22c55e' : a === 'The Clocker' ? '#a855f7' : a === 'The Tactician' ? '#ef4444' : '#d4a843';
+      var col = a === 'The Professor' ? '#3b82f6' : a === 'The Scout' ? '#22c55e' : a === 'The Clocker' ? '#a855f7' : a === 'The Tactician' ? '#ef4444' : '#22d3ee';
       return '<div style="background:rgba(255,255,255,0.03);border-left:3px solid ' + col + ';border-radius:8px;padding:14px 16px;">' +
         '<div style="font-size:13px;font-weight:800;color:' + col + ';">' + a + '</div>' +
         '<div style="font-size:18px;font-weight:900;' + (d.pnl > 0 ? 'color:#22c55e;' : 'color:#ef4444;') + '">' + (d.pnl > 0 ? '+' : '') + d.pnl.toFixed(2) + 'u</div>' +
@@ -11807,7 +11807,7 @@ const App = {
       var d = data.byConfidence[t];
       if (d.total === 0) return '';
       return '<div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:14px 16px;flex:1;min-width:140px;text-align:center;">' +
-        '<div style="font-size:13px;font-weight:700;color:#d4a843;">' + (confLabels[t] || t) + '</div>' +
+        '<div style="font-size:13px;font-weight:700;color:#22d3ee;">' + (confLabels[t] || t) + '</div>' +
         '<div style="font-size:18px;font-weight:900;' + (d.pnl > 0 ? 'color:#22c55e;' : 'color:#ef4444;') + '">' + (d.pnl > 0 ? '+' : '') + d.pnl.toFixed(2) + 'u</div>' +
         '<div style="font-size:11px;color:#94a3b8;">' + d.wins + '/' + d.total + ' (' + d.strikeRate + '%)</div>' +
       '</div>';
@@ -11834,7 +11834,7 @@ const App = {
       return '<tr>' +
         '<td>' + (w.selection || '') + '</td>' +
         '<td style="font-size:12px;color:#94a3b8;">' + (w.event || '') + '</td>' +
-        '<td style="font-weight:700;color:#d4a843;">' + self.formatOdds(w.odds) + '</td>' +
+        '<td style="font-weight:700;color:#22d3ee;">' + self.formatOdds(w.odds) + '</td>' +
         '<td style="font-weight:700;color:#22c55e;">+' + w.pnl.toFixed(2) + '</td>' +
         '<td style="font-size:12px;color:#94a3b8;">' + formatDateUK(w.date) + '</td>' +
       '</tr>';
@@ -11844,14 +11844,14 @@ const App = {
 
       // Header
       '<div style="text-align:center;margin-bottom:32px;">' +
-        '<h1 style="font-size:28px;">Verified <span style="color:#d4a843;">Track Record</span></h1>' +
+        '<h1 style="font-size:28px;">Verified <span style="color:#22d3ee;">Track Record</span></h1>' +
         '<p style="color:#94a3b8;font-size:14px;">Every tip. Every result. Full transparency. Auto-verified via live API data.</p>' +
         '<p style="font-size:12px;color:#475569;margin-top:8px;">Tracking since ' + (o.firstTipDate || '—') + ' | Last updated: ' + (data.generatedAt ? new Date(data.generatedAt).toLocaleString('en-GB') : '—') + '</p>' +
       '</div>' +
 
       // Hero stats
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;">' +
-        '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;text-align:center;">' +
+        '<div style="background:rgba(34, 211, 238,0.08);border:1px solid rgba(34, 211, 238,0.2);border-radius:12px;padding:20px;text-align:center;">' +
           '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin-bottom:6px;">Total P/L</div>' +
           '<div style="font-size:28px;font-weight:900;' + pnlClass + '">' + (o.totalPnl > 0 ? '+' : '') + o.totalPnl.toFixed(2) + '</div>' +
           '<div style="font-size:11px;color:#64748b;">units</div>' +
@@ -12179,7 +12179,7 @@ const App = {
     const u = accountData.user || {};
     const loginHistory = u.loginHistory || [];
     const lastLogin = u.lastLogin || {};
-    const subLabel = u.subscription === 'vip' ? '<span style="color:#d4a843;font-weight:700;">VIP</span>' : u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : u.subscription === 'starter' ? '<span style="color:#22c55e;font-weight:600;">Starter</span>' : 'Free';
+    const subLabel = u.subscription === 'vip' ? '<span style="color:#22d3ee;font-weight:700;">VIP</span>' : u.subscription === 'premium' ? '<span class="text-gold">Premium</span>' : u.subscription === 'starter' ? '<span style="color:#22c55e;font-weight:600;">Starter</span>' : 'Free';
     const expiryLabel = u.subscriptionExpiry ? formatDateUK(u.subscriptionExpiry) : 'N/A';
 
     function parseUA(ua) {
@@ -12222,7 +12222,7 @@ const App = {
           <h3 class="mb-16">Subscription</h3>
           ${u.subscription === 'vip' ? `
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-              <span style="background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;padding:4px 12px;border-radius:20px;font-weight:700;font-size:13px;">\uD83D\uDC51 VIP Active</span>
+              <span style="background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;padding:4px 12px;border-radius:20px;font-weight:700;font-size:13px;">\uD83D\uDC51 VIP Active</span>
             </div>
             <p class="text-sm text-muted mb-8">Next billing date: <strong>${expiryLabel}</strong></p>
             <div id="stripe-sub-details"></div>
@@ -12301,19 +12301,19 @@ const App = {
           <div id="email-prefs-container" style="display:none;">
             <div style="display:flex;flex-direction:column;gap:12px;">
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-                <input type="checkbox" id="epref-dailyBulletin" onchange="App.saveEmailPref('dailyBulletin',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <input type="checkbox" id="epref-dailyBulletin" onchange="App.saveEmailPref('dailyBulletin',this.checked)" style="width:18px;height:18px;accent-color:#22d3ee;">
                 <span style="color:#cbd5e1;font-size:14px;"><strong>Daily Tip Bulletin</strong> <span class="text-muted text-sm">(Premium only - morning selections before 9am)</span></span>
               </label>
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-                <input type="checkbox" id="epref-weeklySummary" onchange="App.saveEmailPref('weeklySummary',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <input type="checkbox" id="epref-weeklySummary" onchange="App.saveEmailPref('weeklySummary',this.checked)" style="width:18px;height:18px;accent-color:#22d3ee;">
                 <span style="color:#cbd5e1;font-size:14px;"><strong>Weekly Results Summary</strong> <span class="text-muted text-sm">(Sunday evening performance report)</span></span>
               </label>
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-                <input type="checkbox" id="epref-bigWins" onchange="App.saveEmailPref('bigWins',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <input type="checkbox" id="epref-bigWins" onchange="App.saveEmailPref('bigWins',this.checked)" style="width:18px;height:18px;accent-color:#22d3ee;">
                 <span style="color:#cbd5e1;font-size:14px;"><strong>Big Win Alerts</strong> <span class="text-muted text-sm">(Celebration emails when tips win at 5/1+)</span></span>
               </label>
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-                <input type="checkbox" id="epref-marketing" onchange="App.saveEmailPref('marketing',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <input type="checkbox" id="epref-marketing" onchange="App.saveEmailPref('marketing',this.checked)" style="width:18px;height:18px;accent-color:#22d3ee;">
                 <span style="color:#cbd5e1;font-size:14px;"><strong>Re-engagement &amp; Marketing</strong> <span class="text-muted text-sm">(Periodic updates if you haven't visited)</span></span>
               </label>
             </div>
@@ -12328,23 +12328,23 @@ const App = {
           <div id="alert-prefs-container" style="display:none;">
             <div style="display:flex;flex-direction:column;gap:12px;">
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-                <input type="checkbox" id="apref-highConfidence" onchange="App.saveAlertPref('highConfidence',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <input type="checkbox" id="apref-highConfidence" onchange="App.saveAlertPref('highConfidence',this.checked)" style="width:18px;height:18px;accent-color:#22d3ee;">
                 <span style="color:#cbd5e1;font-size:14px;"><strong>Elite Confidence (9+)</strong> <span class="text-muted text-sm">Get notified when a top-rated tip is published</span></span>
               </label>
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-                <input type="checkbox" id="apref-steamers" onchange="App.saveAlertPref('steamers',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <input type="checkbox" id="apref-steamers" onchange="App.saveAlertPref('steamers',this.checked)" style="width:18px;height:18px;accent-color:#22d3ee;">
                 <span style="color:#cbd5e1;font-size:14px;"><strong>Steamer Alerts</strong> <span class="text-muted text-sm">Know when the market is moving fast on a selection</span></span>
               </label>
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-                <input type="checkbox" id="apref-preRace" onchange="App.saveAlertPref('preRace',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <input type="checkbox" id="apref-preRace" onchange="App.saveAlertPref('preRace',this.checked)" style="width:18px;height:18px;accent-color:#22d3ee;">
                 <span style="color:#cbd5e1;font-size:14px;"><strong>Pre-Race Reminder</strong> <span class="text-muted text-sm">30-minute warning before our tipped races</span></span>
               </label>
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-                <input type="checkbox" id="apref-bigOdds" onchange="App.saveAlertPref('bigOdds',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <input type="checkbox" id="apref-bigOdds" onchange="App.saveAlertPref('bigOdds',this.checked)" style="width:18px;height:18px;accent-color:#22d3ee;">
                 <span style="color:#cbd5e1;font-size:14px;"><strong>Big Price Alerts</strong> <span class="text-muted text-sm">Selections at 6/1 or bigger with strong edge</span></span>
               </label>
               <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-                <input type="checkbox" id="apref-newTips" onchange="App.saveAlertPref('newTips',this.checked)" style="width:18px;height:18px;accent-color:#d4a843;">
+                <input type="checkbox" id="apref-newTips" onchange="App.saveAlertPref('newTips',this.checked)" style="width:18px;height:18px;accent-color:#22d3ee;">
                 <span style="color:#cbd5e1;font-size:14px;"><strong>All New Tips</strong> <span class="text-muted text-sm">Notification for every new tip published</span></span>
               </label>
             </div>
@@ -12555,7 +12555,7 @@ const App = {
     var app = document.getElementById('app');
     app.innerHTML =
       '<div class="container" style="padding-top:32px;max-width:1000px;">' +
-        '<div style="text-align:center;margin-bottom:8px;"><span style="display:inline-block;background:rgba(212,168,67,0.12);border:1px solid rgba(212,168,67,0.3);color:#d4a843;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:5px 14px;border-radius:6px;">Real Member Wins</span></div>' +
+        '<div style="text-align:center;margin-bottom:8px;"><span style="display:inline-block;background:rgba(34, 211, 238,0.12);border:1px solid rgba(34, 211, 238,0.3);color:#22d3ee;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:5px 14px;border-radius:6px;">Real Member Wins</span></div>' +
         '<h1 style="text-align:center;font-size:30px;font-weight:900;margin:8px 0 4px;">&#127942; Winners Wall</h1>' +
         '<p style="text-align:center;color:var(--text-muted);font-size:14px;margin-bottom:8px;">Genuine wins shared by Elite Edge members. Every entry is reviewed before it appears here.</p>' +
         '<p style="text-align:center;color:var(--text-muted);font-size:11px;margin-bottom:20px;">18+ | Please gamble responsibly | BeGambleAware.org</p>' +
@@ -12604,9 +12604,9 @@ const App = {
     var ov = document.createElement('div');
     ov.id = 'winner-submit-overlay';
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;';
-    ov.innerHTML = '<div style="background:#11162a;border:1px solid rgba(212,168,67,0.3);border-radius:16px;max-width:440px;width:100%;padding:24px;position:relative;">' +
+    ov.innerHTML = '<div style="background:#11162a;border:1px solid rgba(34, 211, 238,0.3);border-radius:16px;max-width:440px;width:100%;padding:24px;position:relative;">' +
       '<button onclick="document.getElementById(\'winner-submit-overlay\').remove()" style="position:absolute;top:10px;right:14px;background:none;border:none;color:#888;font-size:26px;cursor:pointer;line-height:1;">&times;</button>' +
-      '<h3 style="font-size:20px;font-weight:900;color:#d4a843;margin-bottom:4px;">Share Your Win</h3>' +
+      '<h3 style="font-size:20px;font-weight:900;color:#22d3ee;margin-bottom:4px;">Share Your Win</h3>' +
       '<p style="font-size:13px;color:#9aa3b2;margin-bottom:16px;">Upload a screenshot and tell us about it. We review every entry before it goes on the Winners Wall.</p>' +
       '<label style="display:block;font-size:12px;color:#9aa3b2;margin-bottom:6px;font-weight:600;">Screenshot</label>' +
       '<input type="file" id="winner-image" accept="image/*" style="width:100%;margin-bottom:6px;color:#ccc;font-size:13px;">' +
@@ -12715,8 +12715,8 @@ const App = {
           <button class="share-social-btn whatsapp" onclick="window.open('https://wa.me/?text=${encodeURIComponent('Check out Elite Edge Sports Tips - data-driven betting intelligence! ' + link)}','_blank')">WhatsApp</button>
           <button class="share-social-btn email-share" onclick="window.open('mailto:?subject=Elite Edge Sports Tips&body=${encodeURIComponent('Join me on Elite Edge Sports Tips! ' + link)}')">Email</button>
         </div>
-        ${pending > 0 ? `<div style="margin-top:16px;padding:12px 14px;background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.25);border-radius:8px;text-align:left;">
-          <p style="font-size:13px;color:#d4a843;font-weight:700;margin:0 0 4px;">&#8987; ${pending} friend${pending > 1 ? 's' : ''} joined but haven't verified yet</p>
+        ${pending > 0 ? `<div style="margin-top:16px;padding:12px 14px;background:rgba(34, 211, 238,0.08);border:1px solid rgba(34, 211, 238,0.25);border-radius:8px;text-align:left;">
+          <p style="font-size:13px;color:#22d3ee;font-weight:700;margin:0 0 4px;">&#8987; ${pending} friend${pending > 1 ? 's' : ''} joined but haven't verified yet</p>
           <p style="font-size:12px;color:var(--text-muted);margin:0;">Referrals only count once your friend verifies their email. Give them a nudge to check their inbox (and spam) for the verification link — then your reward lands automatically.</p>
         </div>` : ''}
         <div style="margin-top:20px;padding:16px;background:var(--bg-elevated);border-radius:var(--radius-sm);">
@@ -12748,7 +12748,7 @@ const App = {
     };
     return `<div class="odds-comparison" onclick="event.stopPropagation();">
       ${entries.map(([k, v]) => `
-        <a href="${urls[k] || '#'}" target="_blank" rel="noopener nofollow" class="affiliate-btn ${v === bestOdds ? 'best-price' : ''}" title="Place bet at ${names[k] || k}" style="${v === bestOdds ? 'border-color:var(--gold);box-shadow:0 0 8px rgba(212,168,67,.2);' : ''}">
+        <a href="${urls[k] || '#'}" target="_blank" rel="noopener nofollow" class="affiliate-btn ${v === bestOdds ? 'best-price' : ''}" title="Place bet at ${names[k] || k}" style="${v === bestOdds ? 'border-color:var(--gold);box-shadow:0 0 8px rgba(34, 211, 238,.2);' : ''}">
           <span style="font-size:9px;text-transform:uppercase;letter-spacing:.5px;">${names[k] || k}</span>
           <span style="font-weight:800;font-size:13px;${v === bestOdds ? 'color:var(--gold);' : ''}">${this.formatOdds(v)}</span>
           ${v === bestOdds ? '<span style="font-size:8px;color:var(--gold);">BEST</span>' : ''}
@@ -12886,11 +12886,11 @@ const App = {
       var pnlDisplay = '+' + win.pnl.toFixed(2);
 
       container.innerHTML =
-        '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(212,168,67,0.08));border:2px solid rgba(34,197,94,0.4);border-radius:14px;padding:20px 24px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;" onclick="window.location.hash=\'#/results\'">' +
+        '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.12),rgba(34, 211, 238,0.08));border:2px solid rgba(34,197,94,0.4);border-radius:14px;padding:20px 24px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;" onclick="window.location.hash=\'#/results\'">' +
           '<div style="display:flex;align-items:center;gap:16px;">' +
             '<div style="font-size:36px;">&#127942;</div>' +
             '<div style="flex:1;">' +
-              '<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#d4a843;margin-bottom:4px;">Latest Big Winner</div>' +
+              '<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#22d3ee;margin-bottom:4px;">Latest Big Winner</div>' +
               '<div style="font-weight:900;font-size:18px;color:#22c55e;margin-bottom:4px;">' + sportIcon + ' ' + (win.selection || 'Winner') + ' WINS at ' + oddsDisplay + '</div>' +
               '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">' + (win.event || '') + ' — ' + dateDisplay + ' — <strong style="color:#22c55e;">' + pnlDisplay + ' units profit</strong></div>' +
               '<div style="display:inline-block;background:#22c55e;color:#0a0e1a;padding:8px 20px;border-radius:8px;font-weight:700;font-size:13px;">View Full Results &rarr;</div>' +
@@ -12911,9 +12911,9 @@ const App = {
     overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);';
 
     overlay.innerHTML =
-      '<div style="background:var(--bg-card,#141828);border:2px solid #d4a843;border-radius:16px;padding:40px;max-width:440px;width:90%;text-align:center;animation:celebrateIn 0.4s ease-out;box-shadow:0 0 60px rgba(212,168,67,0.2);">' +
+      '<div style="background:var(--bg-card,#141828);border:2px solid #22d3ee;border-radius:16px;padding:40px;max-width:440px;width:90%;text-align:center;animation:celebrateIn 0.4s ease-out;box-shadow:0 0 60px rgba(34, 211, 238,0.2);">' +
         '<div style="font-size:48px;margin-bottom:12px;">&#127775;</div>' +
-        '<h2 style="color:#d4a843;margin-bottom:8px;font-size:22px;">Start Your 14-Day Free Trial</h2>' +
+        '<h2 style="color:#22d3ee;margin-bottom:8px;font-size:22px;">Start Your 14-Day Free Trial</h2>' +
         '<p style="color:#8b8d93;font-size:14px;margin-bottom:20px;">Get full access to all premium tips across 6 sports, AI analysis, value bets, and expert selections for 14 days free.</p>' +
         '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:12px;margin-bottom:20px;">' +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:#e8e6e3;">' +
@@ -12925,7 +12925,7 @@ const App = {
             '<div>&#10003; Expert analysis</div>' +
           '</div>' +
         '</div>' +
-        '<button onclick="App.startFreeTrial()" style="width:100%;padding:14px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:12px;">Start 14-Day Free Trial</button>' +
+        '<button onclick="App.startFreeTrial()" style="width:100%;padding:14px;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:12px;">Start 14-Day Free Trial</button>' +
         '<button onclick="document.getElementById(\'trial-offer-overlay\').remove()" style="width:100%;padding:10px;background:transparent;color:#8b8d93;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:13px;cursor:pointer;">Maybe Later</button>' +
         '<p style="font-size:11px;color:#64748b;margin-top:12px;">Card details required. You will not be charged during the 14-day trial. Cancel anytime before the trial ends — no obligation.</p>' +
       '</div>';
@@ -12967,9 +12967,9 @@ const App = {
     overlay.id = 'trial-expired-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);backdrop-filter:blur(4px);';
     overlay.innerHTML =
-      '<div style="background:var(--bg-card,#141828);border:2px solid #d4a843;border-radius:16px;padding:40px;max-width:480px;width:90%;text-align:center;box-shadow:0 0 60px rgba(212,168,67,0.2);">' +
+      '<div style="background:var(--bg-card,#141828);border:2px solid #22d3ee;border-radius:16px;padding:40px;max-width:480px;width:90%;text-align:center;box-shadow:0 0 60px rgba(34, 211, 238,0.2);">' +
         '<div style="font-size:48px;margin-bottom:12px;">&#9203;</div>' +
-        '<h2 style="color:#d4a843;margin-bottom:8px;font-size:22px;">Your Free Trial Has Ended</h2>' +
+        '<h2 style="color:#22d3ee;margin-bottom:8px;font-size:22px;">Your Free Trial Has Ended</h2>' +
         '<p style="color:#8b8d93;font-size:14px;margin-bottom:16px;">You\'ve experienced what Elite Edge can do. Don\'t miss another winning selection.</p>' +
         '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:16px;margin-bottom:20px;text-align:left;">' +
           '<div style="color:#22c55e;font-size:13px;font-weight:700;margin-bottom:8px;">During your trial you had access to:</div>' +
@@ -12980,7 +12980,7 @@ const App = {
             '<div>&#10003; Expert staking advice</div>' +
           '</div>' +
         '</div>' +
-        '<a href="#/pricing" onclick="document.getElementById(\'trial-expired-overlay\').remove()" style="display:block;width:100%;padding:14px;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;text-decoration:none;text-align:center;margin-bottom:12px;">View Plans — From &pound;19.99/month</a>' +
+        '<a href="#/pricing" onclick="document.getElementById(\'trial-expired-overlay\').remove()" style="display:block;width:100%;padding:14px;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;text-decoration:none;text-align:center;margin-bottom:12px;">View Plans — From &pound;19.99/month</a>' +
         '<button onclick="document.getElementById(\'trial-expired-overlay\').remove()" style="width:100%;padding:10px;background:transparent;color:#8b8d93;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:13px;cursor:pointer;">Continue on Free Plan</button>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -13011,14 +13011,14 @@ const App = {
 
     var bar = document.createElement('div');
     bar.id = 'push-prompt';
-    bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,#141828,#1a1f35);border-top:2px solid rgba(212,168,67,0.3);padding:16px 20px;z-index:9998;display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;';
+    bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:linear-gradient(135deg,#141828,#1a1f35);border-top:2px solid rgba(34, 211, 238,0.3);padding:16px 20px;z-index:9998;display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;';
     bar.innerHTML =
       '<div style="display:flex;align-items:center;gap:10px;">' +
         '<span style="font-size:24px;">&#128276;</span>' +
         '<div><div style="font-weight:700;color:#fff;font-size:14px;">Never miss a winner</div><div style="font-size:12px;color:#94a3b8;">Get instant alerts when tips publish and when your backed tips win.</div></div>' +
       '</div>' +
       '<div style="display:flex;gap:8px;">' +
-        '<button onclick="App._subscribeToPush()" style="background:#d4a843;color:#0a0e1a;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">Enable Notifications</button>' +
+        '<button onclick="App._subscribeToPush()" style="background:#22d3ee;color:#0a0e1a;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">Enable Notifications</button>' +
         '<button onclick="document.getElementById(\'push-prompt\').remove();localStorage.setItem(\'ee_push_asked\',\'later\');" style="background:none;border:1px solid #2a2d45;color:#64748b;padding:10px 14px;border-radius:8px;font-size:13px;cursor:pointer;">Not now</button>' +
       '</div>';
 
@@ -13079,19 +13079,19 @@ const App = {
     var daysToNext = typeof nextMilestone === 'number' ? (nextMilestone - streak) : 0;
 
     overlay.innerHTML =
-      '<div style="background:#141828;border:2px solid rgba(212,168,67,0.5);border-radius:16px;padding:36px;max-width:400px;width:100%;text-align:center;animation:celebrateIn 0.4s ease-out;box-shadow:0 0 60px rgba(212,168,67,0.2);">' +
+      '<div style="background:#141828;border:2px solid rgba(34, 211, 238,0.5);border-radius:16px;padding:36px;max-width:400px;width:100%;text-align:center;animation:celebrateIn 0.4s ease-out;box-shadow:0 0 60px rgba(34, 211, 238,0.2);">' +
         '<div style="font-size:56px;margin-bottom:12px;">&#128293;</div>' +
-        '<h3 style="color:#d4a843;font-size:22px;margin-bottom:8px;">' + streak + '-Day Streak!</h3>' +
+        '<h3 style="color:#22d3ee;font-size:22px;margin-bottom:8px;">' + streak + '-Day Streak!</h3>' +
         '<p style="color:#22c55e;font-size:18px;font-weight:800;margin-bottom:4px;">+' + reward.credits + ' Free Credit' + (reward.credits !== 1 ? 's' : '') + ' Earned!</p>' +
         '<p style="color:#94a3b8;font-size:14px;margin-bottom:20px;">You\'ve logged in ' + streak + ' days in a row. Don\'t break the streak!</p>' +
-        (daysToNext > 0 ? '<div style="background:rgba(212,168,67,0.08);border-radius:8px;padding:12px;margin-bottom:16px;"><div style="font-size:12px;color:#94a3b8;">Next reward at <strong style="color:#d4a843;">' + nextMilestone + ' days</strong> — only ' + daysToNext + ' more day' + (daysToNext !== 1 ? 's' : '') + '!</div></div>' : '') +
+        (daysToNext > 0 ? '<div style="background:rgba(34, 211, 238,0.08);border-radius:8px;padding:12px;margin-bottom:16px;"><div style="font-size:12px;color:#94a3b8;">Next reward at <strong style="color:#22d3ee;">' + nextMilestone + ' days</strong> — only ' + daysToNext + ' more day' + (daysToNext !== 1 ? 's' : '') + '!</div></div>' : '') +
         '<div style="display:flex;gap:6px;justify-content:center;margin-bottom:8px;">' +
           milestones.map(function(m) {
             var reached = streak >= m;
-            return '<div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;' + (reached ? 'background:#d4a843;color:#0a0e1a;' : 'background:rgba(255,255,255,0.05);color:#475569;border:1px solid #2a2d45;') + '">' + m + '</div>';
+            return '<div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;' + (reached ? 'background:#22d3ee;color:#0a0e1a;' : 'background:rgba(255,255,255,0.05);color:#475569;border:1px solid #2a2d45;') + '">' + m + '</div>';
           }).join('') +
         '</div>' +
-        '<button onclick="document.getElementById(\'streak-reward-popup\').remove();" style="margin-top:12px;background:#d4a843;color:#0a0e1a;border:none;padding:10px 28px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">Awesome!</button>' +
+        '<button onclick="document.getElementById(\'streak-reward-popup\').remove();" style="margin-top:12px;background:#22d3ee;color:#0a0e1a;border:none;padding:10px 28px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">Awesome!</button>' +
       '</div>';
 
     document.body.appendChild(overlay);
@@ -13138,7 +13138,7 @@ const App = {
     const app = document.getElementById('app');
     const notice = document.createElement('div');
     notice.id = 'welcome-email-notice';
-    notice.style.cssText = 'background:rgba(212,168,67,.12);border:1px solid rgba(212,168,67,.3);color:#d4a843;padding:12px 20px;text-align:center;font-size:14px;border-radius:8px;margin:12px auto;max-width:600px;';
+    notice.style.cssText = 'background:rgba(34, 211, 238,.12);border:1px solid rgba(34, 211, 238,.3);color:#22d3ee;padding:12px 20px;text-align:center;font-size:14px;border-radius:8px;margin:12px auto;max-width:600px;';
     notice.innerHTML = '&#9993; Check your email for a welcome message! We\'ve sent you everything you need to get started.';
     app.parentNode.insertBefore(notice, app);
     setTimeout(function() { var n = document.getElementById('welcome-email-notice'); if (n) n.remove(); }, 8000);
@@ -13238,11 +13238,11 @@ const App = {
       var eliteVal = f.elite;
       var eliteCell;
       if (f.key === 'price') {
-        eliteCell = '<td style="background:rgba(212,168,67,0.04);font-weight:800;font-size:16px;color:#d4a843;">' + eliteVal + '</td>';
+        eliteCell = '<td style="background:rgba(34, 211, 238,0.04);font-weight:800;font-size:16px;color:#22d3ee;">' + eliteVal + '</td>';
       } else if (f.key === 'apis' || f.key === 'tiers') {
-        eliteCell = '<td style="background:rgba(212,168,67,0.04);font-weight:800;font-size:16px;color:#d4a843;">' + eliteVal + '</td>';
+        eliteCell = '<td style="background:rgba(34, 211, 238,0.04);font-weight:800;font-size:16px;color:#22d3ee;">' + eliteVal + '</td>';
       } else {
-        eliteCell = '<td style="background:rgba(212,168,67,0.04);">' + renderCell(eliteVal) + '</td>';
+        eliteCell = '<td style="background:rgba(34, 211, 238,0.04);">' + renderCell(eliteVal) + '</td>';
       }
       var compCells = competitors.map(function(c) {
         if (f.key === 'price') return '<td style="font-weight:800;">' + c.price + '</td>';
@@ -13274,14 +13274,14 @@ const App = {
     document.getElementById('app').innerHTML =
       '<div class="container" style="max-width:1100px;">' +
         '<div style="text-align:center;margin-bottom:20px;">' +
-          '<h1 style="font-size:32px;font-weight:900;">Why <span style="color:#d4a843;">Elite Edge</span> Is Different</h1>' +
+          '<h1 style="font-size:32px;font-weight:900;">Why <span style="color:#22d3ee;">Elite Edge</span> Is Different</h1>' +
           '<p style="color:#8b8d93;font-size:16px;margin-bottom:24px;">The UK\'s most advanced multi-sport analysis platform — 14 live APIs, 6 sports, 3 AI engines, 4 analyst profiles, self-learning model</p>' +
         '</div>' +
 
         // Stats bar
         '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:32px;">' +
-          '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:16px;text-align:center;">' +
-            '<div style="font-size:28px;font-weight:900;color:#d4a843;">14</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Live APIs</div>' +
+          '<div style="background:rgba(34, 211, 238,0.08);border:1px solid rgba(34, 211, 238,0.2);border-radius:10px;padding:16px;text-align:center;">' +
+            '<div style="font-size:28px;font-weight:900;color:#22d3ee;">14</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Live APIs</div>' +
           '</div>' +
           '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:16px;text-align:center;">' +
             '<div style="font-size:28px;font-weight:900;color:#22c55e;">6</div><div style="font-size:11px;color:#8b8d93;text-transform:uppercase;">Sports</div>' +
@@ -13297,23 +13297,23 @@ const App = {
         '<div style="overflow-x:auto;margin-bottom:40px;">' +
         '<table style="width:100%;border-collapse:collapse;min-width:700px;">' +
           '<thead><tr>' +
-            '<th style="padding:14px 12px;text-align:left;width:220px;border-bottom:2px solid rgba(212,168,67,0.3);font-size:13px;"></th>' +
-            '<th style="padding:14px 12px;text-align:center;color:#d4a843;font-size:15px;font-weight:800;border-bottom:2px solid rgba(212,168,67,0.3);background:rgba(212,168,67,0.08);border-radius:8px 8px 0 0;">Elite Edge</th>' +
-            competitors.map(function(c) { return '<th style="padding:14px 12px;text-align:center;color:#8b8d93;font-size:13px;font-weight:700;border-bottom:2px solid rgba(212,168,67,0.3);">' + c.name + '</th>'; }).join('') +
+            '<th style="padding:14px 12px;text-align:left;width:220px;border-bottom:2px solid rgba(34, 211, 238,0.3);font-size:13px;"></th>' +
+            '<th style="padding:14px 12px;text-align:center;color:#22d3ee;font-size:15px;font-weight:800;border-bottom:2px solid rgba(34, 211, 238,0.3);background:rgba(34, 211, 238,0.08);border-radius:8px 8px 0 0;">Elite Edge</th>' +
+            competitors.map(function(c) { return '<th style="padding:14px 12px;text-align:center;color:#8b8d93;font-size:13px;font-weight:700;border-bottom:2px solid rgba(34, 211, 238,0.3);">' + c.name + '</th>'; }).join('') +
           '</tr></thead>' +
           '<tbody>' + tableRows + '</tbody>' +
         '</table>' +
         '</div>' +
 
         '<div style="text-align:center;margin-bottom:24px;">' +
-          '<h2 style="font-size:24px;font-weight:800;">Features <span style="color:#d4a843;">Only We</span> Offer</h2>' +
+          '<h2 style="font-size:24px;font-weight:800;">Features <span style="color:#22d3ee;">Only We</span> Offer</h2>' +
           '<p style="color:#8b8d93;font-size:14px;">Technology that no other UK tipping service can match</p>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:40px;">' +
           exclusives.map(function(e) {
-            return '<div style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.2);border-radius:12px;padding:20px;text-align:center;">' +
+            return '<div style="background:rgba(34, 211, 238,0.06);border:1px solid rgba(34, 211, 238,0.2);border-radius:12px;padding:20px;text-align:center;">' +
               '<div style="font-size:28px;margin-bottom:8px;">' + e.icon + '</div>' +
-              '<h3 style="font-size:14px;font-weight:700;color:#d4a843;margin-bottom:4px;">' + e.title + '</h3>' +
+              '<h3 style="font-size:14px;font-weight:700;color:#22d3ee;margin-bottom:4px;">' + e.title + '</h3>' +
               '<p style="font-size:12px;color:#8b8d93;line-height:1.4;">' + e.desc + '</p>' +
             '</div>';
           }).join('') +
@@ -13321,7 +13321,7 @@ const App = {
 
         // 4 ANALYST PROFILES
         '<div style="text-align:center;margin-bottom:24px;">' +
-          '<h2 style="font-size:24px;font-weight:800;">5 AI Analysts. <span style="color:#d4a843;">5 Strategies.</span></h2>' +
+          '<h2 style="font-size:24px;font-weight:800;">5 AI Analysts. <span style="color:#22d3ee;">5 Strategies.</span></h2>' +
           '<p style="color:#8b8d93;font-size:14px;">Every tip is assigned to the analyst best suited for that selection — then independently verified by GPT-4o</p>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:40px;">' +
@@ -13349,7 +13349,7 @@ const App = {
             '<p style="font-size:13px;color:#94a3b8;line-height:1.6;">Racing-only specialist. Reads trainer intent (first-time headgear, jockey bookings), analyses pace scenarios, identifies going specialists, and tracks stable form. Powered by Perplexity live research.</p>' +
             '<div style="font-size:11px;color:#a855f7;font-weight:700;margin-top:8px;">SPORTS: Racing only &bull; ODDS: Evens to 25/1</div>' +
           '</div>' +
-          '<div style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.25);border-radius:12px;padding:24px;">' +
+          '<div style="background:rgba(34, 211, 238,0.06);border:1px solid rgba(34, 211, 238,0.25);border-radius:12px;padding:24px;">' +
             '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
               '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#ef4444,#dc2626);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;color:#fff;">TT</div>' +
               '<div><div style="font-size:16px;font-weight:800;color:#ef4444;">The Tactician</div><div style="font-size:11px;color:#8b8d93;">Deep Football Intelligence</div></div>' +
@@ -13357,13 +13357,13 @@ const App = {
             '<p style="font-size:13px;color:#94a3b8;line-height:1.6;">Football-only specialist. Manager press conference analysis, tactical setup changes, injury impact, motivation context, referee tendencies, and xG trend analysis. Powered by live Perplexity research.</p>' +
             '<div style="font-size:11px;color:#ef4444;font-weight:700;margin-top:8px;">SPORTS: Football only &bull; ODDS: 1/2 to 12/1</div>' +
           '</div>' +
-          '<div style="background:rgba(212,168,67,0.06);border:1px solid rgba(212,168,67,0.25);border-radius:12px;padding:24px;">' +
+          '<div style="background:rgba(34, 211, 238,0.06);border:1px solid rgba(34, 211, 238,0.25);border-radius:12px;padding:24px;">' +
             '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
-              '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#d4a843,#b8902f);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;color:#0a0e1a;">TE</div>' +
-              '<div><div style="font-size:16px;font-weight:800;color:#d4a843;">The Edge</div><div style="font-size:11px;color:#8b8d93;">Balanced Analysis</div></div>' +
+              '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#22d3ee,#0891b2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;color:#0a0e1a;">TE</div>' +
+              '<div><div style="font-size:16px;font-weight:800;color:#22d3ee;">The Edge</div><div style="font-size:11px;color:#8b8d93;">Balanced Analysis</div></div>' +
             '</div>' +
             '<p style="font-size:13px;color:#94a3b8;line-height:1.6;">Weighs all factors equally. No bias. Looks for the clearest overall edge across every metric. The generalist who catches what the specialists miss.</p>' +
-            '<div style="font-size:11px;color:#d4a843;font-weight:700;margin-top:8px;">SPORTS: All 6 &bull; ODDS: 2/1 to 10/1</div>' +
+            '<div style="font-size:11px;color:#22d3ee;font-weight:700;margin-top:8px;">SPORTS: All 6 &bull; ODDS: 2/1 to 10/1</div>' +
           '</div>' +
         '</div>' +
 
@@ -13375,7 +13375,7 @@ const App = {
         '</div>' +
 
         '<div style="text-align:center;margin:48px 0 20px;">' +
-          '<a href="#/pricing" style="display:inline-block;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;padding:16px 48px;border-radius:10px;font-size:18px;font-weight:800;text-decoration:none;">Start Your 14-Day Free Trial</a>' +
+          '<a href="#/pricing" style="display:inline-block;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;padding:16px 48px;border-radius:10px;font-size:18px;font-weight:800;text-decoration:none;">Start Your 14-Day Free Trial</a>' +
           '<p style="color:#8b8d93;font-size:13px;margin-top:12px;">Card stored securely. No charges on free tier. Full premium access. Cancel anytime.</p>' +
         '</div>' +
 
@@ -13402,24 +13402,24 @@ const App = {
               <div style="font-size:18px;font-weight:700;color:#fff;">Quick Start Guide</div>
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
-              <div style="background:rgba(212,168,67,0.08);border-radius:10px;padding:16px;text-align:center;">
+              <div style="background:rgba(34, 211, 238,0.08);border-radius:10px;padding:16px;text-align:center;">
                 <div style="font-size:24px;margin-bottom:6px;">1&#65039;&#8419;</div>
-                <div style="font-weight:700;color:#d4a843;font-size:13px;margin-bottom:4px;">Check Daily Tips</div>
+                <div style="font-weight:700;color:#22d3ee;font-size:13px;margin-bottom:4px;">Check Daily Tips</div>
                 <div style="font-size:12px;color:#8a8fa0;">Published by 7:30am UK. Racing &amp; football selections with full analysis.</div>
               </div>
-              <div style="background:rgba(212,168,67,0.08);border-radius:10px;padding:16px;text-align:center;">
+              <div style="background:rgba(34, 211, 238,0.08);border-radius:10px;padding:16px;text-align:center;">
                 <div style="font-size:24px;margin-bottom:6px;">2&#65039;&#8419;</div>
-                <div style="font-weight:700;color:#d4a843;font-size:13px;margin-bottom:4px;">Read The Edge Score</div>
+                <div style="font-weight:700;color:#22d3ee;font-size:13px;margin-bottom:4px;">Read The Edge Score</div>
                 <div style="font-size:12px;color:#8a8fa0;">Our model calculates the probability edge — only selections with real value are published.</div>
               </div>
-              <div style="background:rgba(212,168,67,0.08);border-radius:10px;padding:16px;text-align:center;">
+              <div style="background:rgba(34, 211, 238,0.08);border-radius:10px;padding:16px;text-align:center;">
                 <div style="font-size:24px;margin-bottom:6px;">3&#65039;&#8419;</div>
-                <div style="font-weight:700;color:#d4a843;font-size:13px;margin-bottom:4px;">Follow The Staking</div>
+                <div style="font-weight:700;color:#22d3ee;font-size:13px;margin-bottom:4px;">Follow The Staking</div>
                 <div style="font-size:12px;color:#8a8fa0;">Each tip has a recommended unit stake based on confidence and edge size.</div>
               </div>
-              <div style="background:rgba(212,168,67,0.08);border-radius:10px;padding:16px;text-align:center;">
+              <div style="background:rgba(34, 211, 238,0.08);border-radius:10px;padding:16px;text-align:center;">
                 <div style="font-size:24px;margin-bottom:6px;">4&#65039;&#8419;</div>
-                <div style="font-weight:700;color:#d4a843;font-size:13px;margin-bottom:4px;">Track Results</div>
+                <div style="font-weight:700;color:#22d3ee;font-size:13px;margin-bottom:4px;">Track Results</div>
                 <div style="font-size:12px;color:#8a8fa0;">Results auto-settle every 5 minutes. Full P/L tracked in your results dashboard.</div>
               </div>
             </div>
@@ -13431,7 +13431,7 @@ const App = {
             <tr style="border-bottom:1px solid var(--border);"><td style="padding:8px;font-weight:700;color:#ef4444;">1-4</td><td style="padding:8px;">Low confidence — we would never publish these</td></tr>
             <tr style="border-bottom:1px solid var(--border);"><td style="padding:8px;font-weight:700;color:#f59e0b;">5-6</td><td style="padding:8px;">Moderate — only published if edge is very strong</td></tr>
             <tr style="border-bottom:1px solid var(--border);"><td style="padding:8px;font-weight:700;color:#22c55e;">7-8</td><td style="padding:8px;">Strong — the majority of our selections</td></tr>
-            <tr><td style="padding:8px;font-weight:700;color:#d4a843;">9-10</td><td style="padding:8px;">Elite — our strongest conviction picks (NAP territory)</td></tr>
+            <tr><td style="padding:8px;font-weight:700;color:#22d3ee;">9-10</td><td style="padding:8px;">Elite — our strongest conviction picks (NAP territory)</td></tr>
           </table>
           <p>We only publish tips with a confidence of <strong>6 or higher</strong>. Our NAP of the Day must be <strong>7+</strong>.</p>
 
@@ -13440,7 +13440,7 @@ const App = {
           <div style="background:#0a0e1a;border-radius:8px;padding:20px;margin:16px 0;font-family:monospace;font-size:14px;color:#22c55e;">
             Edge = Our Model Probability - Bookmaker Implied Probability<br><br>
             <span style="color:#8a8fa0;">Example:</span><br>
-            Our model says a horse has a <span style="color:#d4a843;">35%</span> chance of winning<br>
+            Our model says a horse has a <span style="color:#22d3ee;">35%</span> chance of winning<br>
             The bookmaker's odds of 4/1 imply a <span style="color:#fff;">20%</span> chance<br>
             Edge = 35% - 20% = <span style="color:#22c55e;font-weight:700;">+15% edge</span> ← this is a strong bet
           </div>
@@ -13451,7 +13451,7 @@ const App = {
           <div style="background:#0a0e1a;border-radius:8px;padding:20px;margin:16px 0;">
             <div style="font-size:14px;color:#fff;margin-bottom:12px;"><strong>What is 1 unit?</strong></div>
             <div style="font-size:13px;color:#8a8fa0;line-height:1.7;">
-              1 unit = <strong style="color:#d4a843;">1% of your total bankroll</strong><br><br>
+              1 unit = <strong style="color:#22d3ee;">1% of your total bankroll</strong><br><br>
               If your bankroll is &pound;500 → 1 unit = &pound;5<br>
               If your bankroll is &pound;1,000 → 1 unit = &pound;10<br>
               If your bankroll is &pound;200 → 1 unit = &pound;2<br><br>
@@ -13472,7 +13472,7 @@ const App = {
             Total staked: 100 units<br>
             Total returned: 223 units<br>
             Profit: 123 units<br>
-            ROI = 123 / 100 = <span style="color:#d4a843;font-weight:700;">+123% ROI</span>
+            ROI = 123 / 100 = <span style="color:#22d3ee;font-weight:700;">+123% ROI</span>
           </div>
           <p>Our full results are <strong>publicly verifiable</strong> on the Results page — every tip, every outcome, no hiding losses.</p>
 
@@ -13502,10 +13502,10 @@ const App = {
           </ul>
           <p><strong>Common markets explained:</strong></p>
           <ul style="font-size:14px;line-height:2;color:var(--text-secondary);">
-            <li><strong style="color:#d4a843;">BTTS</strong> — Both Teams to Score. Wins if both sides score at least 1 goal.</li>
-            <li><strong style="color:#d4a843;">Over 2.5 Goals</strong> — Wins if the match has 3 or more total goals.</li>
-            <li><strong style="color:#d4a843;">Asian Handicap -1.5</strong> — Your team must win by 2+ goals for the bet to win.</li>
-            <li><strong style="color:#d4a843;">Double Chance (1X)</strong> — Wins if the home team wins OR draws. Only loses if the away team wins.</li>
+            <li><strong style="color:#22d3ee;">BTTS</strong> — Both Teams to Score. Wins if both sides score at least 1 goal.</li>
+            <li><strong style="color:#22d3ee;">Over 2.5 Goals</strong> — Wins if the match has 3 or more total goals.</li>
+            <li><strong style="color:#22d3ee;">Asian Handicap -1.5</strong> — Your team must win by 2+ goals for the bet to win.</li>
+            <li><strong style="color:#22d3ee;">Double Chance (1X)</strong> — Wins if the home team wins OR draws. Only loses if the away team wins.</li>
           </ul>
 
           <h2>&#128202; Our 4 AI Analysts</h2>
@@ -13514,7 +13514,7 @@ const App = {
             <li><strong style="color:#3b82f6;">The Professor</strong> — Data-driven. Trusts xG, speed ratings, and form figures. Prefers shorter prices.</li>
             <li><strong style="color:#22c55e;">The Scout</strong> — Value hunter. Finds overlooked prices. Class droppers, course specialists, motivation plays.</li>
             <li><strong style="color:#a855f7;">The Clocker</strong> — Racing-only deep intelligence. Trainer intent, pace analysis, going expertise, stable form. Powered by live Perplexity research.</li>
-            <li><strong style="color:#d4a843;">The Edge</strong> — Balanced. Weighs all factors equally. Catches what the specialists miss.</li>
+            <li><strong style="color:#22d3ee;">The Edge</strong> — Balanced. Weighs all factors equally. Catches what the specialists miss.</li>
           </ul>
           <p>Every Monday, the system reviews each analyst's performance and <strong style="color:#fff;">auto-adjusts</strong> their odds ranges and preferred markets based on what's winning and losing.</p>
 
@@ -13524,15 +13524,15 @@ const App = {
             <li>Your <strong style="color:#fff;">daily staking plan</strong> auto-calculates on the dashboard — shows exact &pound; amounts per tip</li>
             <li>Set your <strong style="color:#fff;">confidence filter</strong> — only see tips rated 7+ or 8+ if you want fewer, stronger picks</li>
             <li>Check the <strong style="color:#fff;">dashboard every morning</strong> for today's selections</li>
-            <li>Click <strong style="color:#fff;">"Back This Tip"</strong> on any selection to track it in your <a href="#/my-roi" style="color:#d4a843;">Personal ROI Dashboard</a></li>
+            <li>Click <strong style="color:#fff;">"Back This Tip"</strong> on any selection to track it in your <a href="#/my-roi" style="color:#22d3ee;">Personal ROI Dashboard</a></li>
             <li>Read the <strong style="color:#fff;">full analysis</strong> — especially The Clocker's deep intelligence on racing tips</li>
             <li>Your <strong style="color:#fff;">ROI Dashboard</strong> shows your personal strike rate, P/L by analyst, and what you'd have made following all tips</li>
             <li><strong style="color:#ef4444;">Never chase losses</strong> — the staking plan does the thinking for you</li>
           </ol>
 
-          <div style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.2);border-radius:10px;padding:20px;margin:24px 0;">
-            <div style="font-size:14px;font-weight:700;color:#d4a843;margin-bottom:8px;">&#9888; Important Reminder</div>
-            <div style="font-size:13px;color:#8a8fa0;line-height:1.6;">Elite Edge provides statistical analysis and entertainment content only. We do not guarantee profits. All betting carries risk — you can and may lose money. Only bet what you can afford to lose. If you feel you have a gambling problem, visit <a href="https://www.begambleaware.org" target="_blank" style="color:#d4a843;">BeGambleAware.org</a> or call the National Gambling Helpline on <strong style="color:#fff;">0808 8020 133</strong>.</div>
+          <div style="background:rgba(34, 211, 238,0.1);border:1px solid rgba(34, 211, 238,0.2);border-radius:10px;padding:20px;margin:24px 0;">
+            <div style="font-size:14px;font-weight:700;color:#22d3ee;margin-bottom:8px;">&#9888; Important Reminder</div>
+            <div style="font-size:13px;color:#8a8fa0;line-height:1.6;">Elite Edge provides statistical analysis and entertainment content only. We do not guarantee profits. All betting carries risk — you can and may lose money. Only bet what you can afford to lose. If you feel you have a gambling problem, visit <a href="https://www.begambleaware.org" target="_blank" style="color:#22d3ee;">BeGambleAware.org</a> or call the National Gambling Helpline on <strong style="color:#fff;">0808 8020 133</strong>.</div>
           </div>
 
           <p style="margin-top:24px;"><a href="#/" class="text-gold">&larr; Back to Dashboard</a></p>
@@ -13554,7 +13554,7 @@ const App = {
           var ytId = videoUrl.indexOf('youtu.be') !== -1 ? videoUrl.split('/').pop().split('?')[0] : (videoUrl.match(/[?&]v=([^&]+)/) || [])[1];
           if (ytId) embedHtml = '<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:12px;overflow:hidden;border:1px solid #2a2d45;"><iframe src="https://www.youtube.com/embed/' + ytId + '" frameborder="0" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe></div>';
         }
-        if (embedHtml) container.innerHTML = '<div style="margin-bottom:12px;font-size:14px;font-weight:700;color:#d4a843;">Watch: How to Use Elite Edge</div>' + embedHtml;
+        if (embedHtml) container.innerHTML = '<div style="margin-bottom:12px;font-size:14px;font-weight:700;color:#22d3ee;">Watch: How to Use Elite Edge</div>' + embedHtml;
       } else {
         container.innerHTML = '<div style="background:#0a0e1a;border-radius:12px;padding:40px 20px;text-align:center;border:1px solid #2a2d45;"><div style="font-size:48px;margin-bottom:12px;">&#9654;</div><div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:6px;">Video Walkthrough Coming Soon</div><div style="font-size:13px;color:#8a8fa0;">3 minute guide showing how to use Elite Edge</div></div>';
       }
@@ -14320,7 +14320,7 @@ const App = {
 
     // More confetti for personal wins
     var confettiCount = isPersonal ? 60 : 30;
-    var confettiColors = ['#d4a843', '#22c55e', '#ffffff', '#f5d77a', '#4ade80', '#3b82f6'];
+    var confettiColors = ['#22d3ee', '#22c55e', '#ffffff', '#f5d77a', '#4ade80', '#3b82f6'];
     for (var i = 0; i < confettiCount; i++) {
       var particle = document.createElement('div');
       particle.className = 'confetti-particle';
@@ -14349,10 +14349,10 @@ const App = {
       '<div class="win-celebration-title">' + (isPersonal ? 'YOUR TIP WON!' : 'WINNER!') + '</div>' +
       '<div class="win-celebration-selection">' + (tipData.selection || '') + '</div>' +
       '<div class="win-celebration-odds">' + (tipData.event || '') + ' &mdash; ' + oddsStr + '</div>' +
-      (analystName ? '<div style="font-size:12px;margin:6px 0;"><span style="background:rgba(212,168,67,0.15);color:#d4a843;padding:2px 8px;border-radius:4px;font-weight:700;">' + analystName + '</span></div>' : '') +
+      (analystName ? '<div style="font-size:12px;margin:6px 0;"><span style="background:rgba(34, 211, 238,0.15);color:#22d3ee;padding:2px 8px;border-radius:4px;font-weight:700;">' + analystName + '</span></div>' : '') +
       '<div class="win-celebration-pnl">' + pnlStr + ' units' + (pnlMoney ? ' (&pound;' + pnlMoney + ')' : '') + '</div>' +
       (isPersonal ? '<div style="margin-top:16px;display:flex;gap:8px;justify-content:center;">' +
-        '<button onclick="event.stopPropagation();App.generateShareCard({selection:\'' + (tipData.selection || '').replace(/'/g, "\\'") + '\',odds:' + (tipData.odds || 0) + ',pnl:' + pnl + ',sport:\'' + (tipData.sport || 'racing') + '\',event:\'' + (tipData.event || '').replace(/'/g, "\\'") + '\'});" style="background:#d4a843;color:#0a0e1a;border:none;padding:8px 20px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">Share This Win</button>' +
+        '<button onclick="event.stopPropagation();App.generateShareCard({selection:\'' + (tipData.selection || '').replace(/'/g, "\\'") + '\',odds:' + (tipData.odds || 0) + ',pnl:' + pnl + ',sport:\'' + (tipData.sport || 'racing') + '\',event:\'' + (tipData.event || '').replace(/'/g, "\\'") + '\'});" style="background:#22d3ee;color:#0a0e1a;border:none;padding:8px 20px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">Share This Win</button>' +
         '<button onclick="event.stopPropagation();window.location.hash=\'#/my-roi\';" style="background:rgba(255,255,255,0.1);color:#fff;border:1px solid #2a2d45;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;">My ROI</button>' +
       '</div>' : '') +
       '<div style="font-size:11px;color:#475569;margin-top:12px;">Tap to close</div>';
@@ -14605,7 +14605,7 @@ const App = {
         '<p style="color:var(--text-muted);font-size:13px;">' + satLabel + ' \u2014 ' + sunLabel + '</p>' +
       '</div>' +
       (plFixtures.length > 0 ? '<div style="text-align:center;margin-bottom:24px;">' +
-        '<span style="background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.3);border-radius:20px;padding:8px 20px;font-size:13px;color:var(--text-secondary);">' +
+        '<span style="background:rgba(34, 211, 238,0.1);border:1px solid rgba(34, 211, 238,0.3);border-radius:20px;padding:8px 20px;font-size:13px;color:var(--text-secondary);">' +
         plFixtures.length + ' fixtures this weekend' + (edgeCount > 0 ? ', our model has <strong style="color:var(--gold);">' + edgeCount + ' edge opportunities</strong>' : '') +
         '</span></div>' : '') +
       (plFixtures.length > 0 ? fixtureCards : '<div style="text-align:center;padding:60px 0;color:var(--text-muted);"><p>No Premier League fixtures found for this weekend.</p><p style="font-size:13px;margin-top:8px;">Fixtures typically appear 2\u20133 days before the weekend.</p></div>') +
@@ -14706,7 +14706,7 @@ const App = {
         app.innerHTML = '<div class="container" style="padding-top:60px;text-align:center;">' +
           '<div style="font-size:48px;margin-bottom:16px;">&#128176;</div>' +
           '<h2 style="color:var(--gold);">Smart Acca Generator</h2>' +
-          '<p style="color:var(--text-secondary);margin:12px 0;">Costs <strong style="color:#d4a843;">3 credits</strong> per use. You have <strong style="color:#ef4444;">' + userCredits + ' credits</strong>.</p>' +
+          '<p style="color:var(--text-secondary);margin:12px 0;">Costs <strong style="color:#22d3ee;">3 credits</strong> per use. You have <strong style="color:#ef4444;">' + userCredits + ' credits</strong>.</p>' +
           '<div style="display:flex;gap:10px;justify-content:center;margin-top:20px;">' +
             '<a href="#/buy-credits" class="btn btn-gold">Buy Credits</a>' +
             '<a href="#/pricing" class="btn btn-outline">Upgrade Plan</a>' +
@@ -15038,7 +15038,7 @@ const App = {
         '<div class="acca-leg" style="' + legBorderStyle + '">' +
           '<div class="acca-leg-number">' + (i + 1) + '</div>' +
           '<div class="acca-leg-info">' +
-            (fixtureName ? '<div style="font-size:13px;font-weight:700;color:#d4a843;margin-bottom:2px;">' + homeLogo + fixtureName + awayLogo + '</div>' : '') +
+            (fixtureName ? '<div style="font-size:13px;font-weight:700;color:#22d3ee;margin-bottom:2px;">' + homeLogo + fixtureName + awayLogo + '</div>' : '') +
             '<div class="acca-leg-selection">' + (tip.selection || 'Selection') + '</div>' +
             '<div class="acca-leg-event">' + (leagueInfo ? leagueInfo : '') + (kickoffInfo ? ' &bull; ' + kickoffInfo : '') + '</div>' +
             '<div style="font-size:11px;color:#94a3b8;font-style:italic;margin-top:4px;line-height:1.4;">' + reasoning + '</div>' +
@@ -15075,14 +15075,14 @@ const App = {
     var summaryHtml = '';
     if (selected.length > 0) {
       summaryHtml =
-        '<div class="acca-gen-summary" style="display:block !important;flex-direction:unset !important;align-items:unset !important;background:linear-gradient(135deg,rgba(212,168,67,0.12),rgba(212,168,67,0.04));border:2px solid rgba(212,168,67,0.3);border-radius:14px;padding:24px;margin-top:24px;width:100%;max-width:100%;box-sizing:border-box;overflow:hidden;">' +
+        '<div class="acca-gen-summary" style="display:block !important;flex-direction:unset !important;align-items:unset !important;background:linear-gradient(135deg,rgba(34, 211, 238,0.12),rgba(34, 211, 238,0.04));border:2px solid rgba(34, 211, 238,0.3);border-radius:14px;padding:24px;margin-top:24px;width:100%;max-width:100%;box-sizing:border-box;overflow:hidden;">' +
           '<h3 style="margin:0 0 20px;color:var(--gold);font-size:18px;text-align:center;">' + (notEnough ? selected.length + '-Fold Accumulator (Best Available)' : 'Accumulator Summary') + '</h3>' +
 
           // Main stats row — 3 cards
           '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">' +
-            '<div style="text-align:center;padding:14px 8px;background:rgba(212,168,67,0.08);border-radius:10px;">' +
+            '<div style="text-align:center;padding:14px 8px;background:rgba(34, 211, 238,0.08);border-radius:10px;">' +
               '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted,#888);margin-bottom:6px;">Combined Odds</div>' +
-              '<div style="font-size:24px;font-weight:900;color:var(--gold,#d4a843);">' + self.formatOdds(combinedDecimalOdds) + '</div>' +
+              '<div style="font-size:24px;font-weight:900;color:var(--gold,#22d3ee);">' + self.formatOdds(combinedDecimalOdds) + '</div>' +
             '</div>' +
             '<div style="text-align:center;padding:14px 8px;background:rgba(34,197,94,0.08);border-radius:10px;">' +
               '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted,#888);margin-bottom:6px;">Edge</div>' +
@@ -15119,7 +15119,7 @@ const App = {
     var notEnoughMsg = '';
     if (notEnough) {
       notEnoughMsg =
-        '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.25);border-radius:10px;padding:20px;text-align:center;margin-top:16px;">' +
+        '<div style="background:rgba(34, 211, 238,0.08);border:1px solid rgba(34, 211, 238,0.25);border-radius:10px;padding:20px;text-align:center;margin-top:16px;">' +
           '<p style="color:var(--text-secondary);margin:0;">Only <strong>' + selected.length + '</strong> selection' + (selected.length !== 1 ? 's' : '') + ' available today for a ' + foldCount + '-fold. Try a lower fold count or check back when more tips are published.</p>' +
         '</div>';
     }
@@ -15168,7 +15168,7 @@ const App = {
             displayMarket = chosenMkt.market;
           }
 
-          manualPickerHtml += '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:' + (manualPicks[t.id] ? 'rgba(212,168,67,0.08)' : 'var(--bg-card)') + ';border:1px solid ' + (manualPicks[t.id] ? 'rgba(212,168,67,0.3)' : 'var(--border)') + ';border-radius:8px;margin-bottom:4px;cursor:pointer;" onclick="event.preventDefault();App._toggleManualPick(\'' + t.id + '\');App._renderAccaPage();">' +
+          manualPickerHtml += '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:' + (manualPicks[t.id] ? 'rgba(34, 211, 238,0.08)' : 'var(--bg-card)') + ';border:1px solid ' + (manualPicks[t.id] ? 'rgba(34, 211, 238,0.3)' : 'var(--border)') + ';border-radius:8px;margin-bottom:4px;cursor:pointer;" onclick="event.preventDefault();App._toggleManualPick(\'' + t.id + '\');App._renderAccaPage();">' +
             '<input type="checkbox" ' + checked + ' style="pointer-events:none;" />' +
             '<div style="flex:1;">' +
               '<div style="font-size:12px;color:var(--gold);margin-bottom:2px;">' + eventName + '</div>' +
@@ -15652,8 +15652,8 @@ const App = {
           '<h2>The 30-Day Challenge</h2>' +
           '<p>Start with a virtual \u00a3100 bankroll and follow our tips for 30 days. Track your daily P/L, see your growth, and share your progress. No real money needed \u2014 just skill and strategy.</p>' +
           '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:400px;margin:0 auto 24px;">' +
-            '<div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#d4a843;">\u00a3100</div><div style="font-size:11px;color:var(--text-muted);">Starting Bank</div></div>' +
-            '<div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#d4a843;">30</div><div style="font-size:11px;color:var(--text-muted);">Days</div></div>' +
+            '<div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#22d3ee;">\u00a3100</div><div style="font-size:11px;color:var(--text-muted);">Starting Bank</div></div>' +
+            '<div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#22d3ee;">30</div><div style="font-size:11px;color:var(--text-muted);">Days</div></div>' +
             '<div style="text-align:center;"><div style="font-size:24px;font-weight:800;color:#22c55e;">Free</div><div style="font-size:11px;color:var(--text-muted);">To Join</div></div>' +
           '</div>' +
           '<button class="btn btn-gold btn-lg" onclick="App.startChallenge()">Start Challenge</button>' +
@@ -15739,7 +15739,7 @@ const App = {
         '<h3 style="font-size:16px;font-weight:700;margin-bottom:14px;">Daily P/L Log</h3>' +
         (dailyLog.length > 0 ? '<div class="challenge-daily-log">' + dailyLogHtml + '</div>' : '<p class="text-muted">No data yet. Results will appear as tips settle.</p>') +
       '</div>' +
-      (daysPassed >= 30 ? '<div class="card text-center" style="padding:32px;margin-top:20px;border-color:rgba(212,168,67,0.3);">' +
+      (daysPassed >= 30 ? '<div class="card text-center" style="padding:32px;margin-top:20px;border-color:rgba(34, 211, 238,0.3);">' +
         '<div style="font-size:48px;margin-bottom:12px;">&#127942;</div>' +
         '<h2 style="color:var(--gold);margin-bottom:8px;">Challenge Complete!</h2>' +
         '<p style="color:var(--text-secondary);font-size:15px;">You finished with \u00a3' + bankroll.toFixed(2) + ' (' + growthSign + growth + '% growth)</p>' +
@@ -16000,10 +16000,10 @@ const App = {
           sources.slice(0, 4).map(function (u, i) {
             var host = '';
             try { host = new URL(u).hostname.replace('www.', ''); } catch (e) { host = 'source ' + (i + 1); }
-            return '<a href="' + App.escapeHtml(u) + '" target="_blank" rel="noopener" style="color:#d4a843;">' + App.escapeHtml(host) + '</a>';
+            return '<a href="' + App.escapeHtml(u) + '" target="_blank" rel="noopener" style="color:#22d3ee;">' + App.escapeHtml(host) + '</a>';
           }).join(' · ') + '</div>';
       }
-      if (out) out.innerHTML = '<div style="font-size:11px;font-weight:700;color:#d4a843;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#128173; Elite Edge says</div>' +
+      if (out) out.innerHTML = '<div style="font-size:11px;font-weight:700;color:#22d3ee;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">&#128173; Elite Edge says</div>' +
         '<div style="line-height:1.6;">' + reply + '</div>' + srcHtml +
         '<div style="margin-top:10px;font-size:11px;color:var(--text-muted);">Statistical prediction for entertainment. 18+ · Please gamble responsibly.</div>';
     } catch (e) {
@@ -16018,18 +16018,18 @@ const App = {
       var st = document.createElement('style');
       st.id = 'ee-fab-style';
       st.textContent =
-        '#ee-fab{position:fixed;bottom:20px;right:20px;z-index:9998;width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(135deg,#d4a843,#b8902f);color:#0a0e1a;font-size:26px;box-shadow:0 8px 24px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;transition:transform .15s;}' +
+        '#ee-fab{position:fixed;bottom:20px;right:20px;z-index:9998;width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;font-size:26px;box-shadow:0 8px 24px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;transition:transform .15s;}' +
         '#ee-fab:hover{transform:scale(1.08);}' +
-        '#ee-fab::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid #d4a843;animation:ee-fab-pulse 2.4s ease-out infinite;}' +
+        '#ee-fab::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid #22d3ee;animation:ee-fab-pulse 2.4s ease-out infinite;}' +
         '@keyframes ee-fab-pulse{0%{transform:scale(1);opacity:.6}100%{transform:scale(1.7);opacity:0}}' +
-        '#ee-fab-panel{position:fixed;bottom:88px;right:20px;z-index:9999;width:min(380px,calc(100vw - 32px));max-height:min(560px,calc(100vh - 120px));background:#0f1426;border:1px solid rgba(212,168,67,0.3);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.55);display:none;flex-direction:column;overflow:hidden;}' +
-        '.ee-fab-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:linear-gradient(135deg,rgba(212,168,67,0.14),rgba(212,168,67,0.02));border-bottom:1px solid rgba(255,255,255,0.07);}' +
+        '#ee-fab-panel{position:fixed;bottom:88px;right:20px;z-index:9999;width:min(380px,calc(100vw - 32px));max-height:min(560px,calc(100vh - 120px));background:#0f1426;border:1px solid rgba(34, 211, 238,0.3);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.55);display:none;flex-direction:column;overflow:hidden;}' +
+        '.ee-fab-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:linear-gradient(135deg,rgba(34, 211, 238,0.14),rgba(34, 211, 238,0.02));border-bottom:1px solid rgba(255,255,255,0.07);}' +
         '.ee-fab-msgs{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px;}' +
         '.ee-fab-bubble{font-size:13.5px;line-height:1.55;padding:10px 12px;border-radius:12px;max-width:92%;}' +
-        '.ee-fab-user{align-self:flex-end;background:#d4a843;color:#0a0e1a;font-weight:600;}' +
+        '.ee-fab-user{align-self:flex-end;background:#22d3ee;color:#0a0e1a;font-weight:600;}' +
         '.ee-fab-bot{align-self:flex-start;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);color:#e8e8ec;}' +
         '.ee-fab-bot strong{color:#fff;}' +
-        '.ee-fab-chip{background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.25);color:#d4a843;font-size:11px;padding:5px 10px;border-radius:14px;cursor:pointer;}' +
+        '.ee-fab-chip{background:rgba(34, 211, 238,0.1);border:1px solid rgba(34, 211, 238,0.25);color:#22d3ee;font-size:11px;padding:5px 10px;border-radius:14px;cursor:pointer;}' +
         '.ee-fab-input-row{display:flex;gap:8px;padding:12px;border-top:1px solid rgba(255,255,255,0.07);}' +
         '.ee-fab-input-row input{flex:1;min-width:0;padding:10px 12px;background:#0a0e1a;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-size:14px;}';
       document.head.appendChild(st);
@@ -16106,7 +16106,7 @@ const App = {
       if (sources.length) {
         src = '<div style="margin-top:8px;font-size:11px;color:#7a8295;">Sources: ' + sources.slice(0, 3).map(function (u) {
           var host = ''; try { host = new URL(u).hostname.replace('www.', ''); } catch (e) { host = 'source'; }
-          return '<a href="' + App.escapeHtml(u) + '" target="_blank" rel="noopener" style="color:#d4a843;">' + App.escapeHtml(host) + '</a>';
+          return '<a href="' + App.escapeHtml(u) + '" target="_blank" rel="noopener" style="color:#22d3ee;">' + App.escapeHtml(host) + '</a>';
         }).join(' · ') + '</div>';
       }
       thinking.innerHTML = reply + src;
@@ -16164,7 +16164,7 @@ const App = {
           name + ' · ' + s.beatRate + '% beat close</span>';
       }).join('');
       slot.innerHTML =
-        '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.08),rgba(212,168,67,0.06));border:1px solid rgba(34,197,94,0.3);border-radius:16px;padding:22px 20px;max-width:760px;margin:0 auto 22px;">' +
+        '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.08),rgba(34, 211, 238,0.06));border:1px solid rgba(34,197,94,0.3);border-radius:16px;padding:22px 20px;max-width:760px;margin:0 auto 22px;">' +
           '<div style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#22c55e;border:1px solid rgba(34,197,94,0.4);border-radius:5px;padding:2px 8px;margin-bottom:14px;">✓ PROOF OF EDGE · LIVE</div>' +
           '<div style="display:flex;gap:28px;justify-content:center;flex-wrap:wrap;">' +
             '<div><div style="font-size:clamp(28px,7vw,38px);font-weight:900;color:#22c55e;line-height:1;">' + clv.beatRate + '%</div><div style="font-size:11px;color:#8b97ad;text-transform:uppercase;letter-spacing:1px;margin-top:5px;">Beat the closing line</div></div>' +
@@ -16179,7 +16179,7 @@ const App = {
       var need = (clv && clv.minSample) || 15;
       slot.innerHTML =
         '<div style="background:rgba(255,255,255,0.03);border:1px dashed var(--border);border-radius:14px;padding:16px 18px;max-width:620px;margin:0 auto 22px;font-size:13px;color:#8b97ad;">' +
-          '<span style="color:#d4a843;font-weight:700;">Proof of Edge — tracking live.</span> We\'re capturing the closing price on every pick and will publish our CLV once the sample is meaningful (' + have + '/' + need + ' bets measured).' +
+          '<span style="color:#22d3ee;font-weight:700;">Proof of Edge — tracking live.</span> We\'re capturing the closing price on every pick and will publish our CLV once the sample is meaningful (' + have + '/' + need + ' bets measured).' +
         '</div>';
     }
   },
@@ -16253,7 +16253,7 @@ const App = {
 
   // Only ever emit a hex colour into style/attribute contexts (defence-in-depth;
   // the server already validates, but never trust stored data on render).
-  _safeAccent(a) { return /^#[0-9a-fA-F]{3,8}$/.test(String(a || '')) ? a : '#d4a843'; },
+  _safeAccent(a) { return /^#[0-9a-fA-F]{3,8}$/.test(String(a || '')) ? a : '#22d3ee'; },
 
   _eventDateLabel(start, end) {
     try {
@@ -16275,7 +16275,7 @@ const App = {
       var c = data && data.competition;
       if (!c) { slot.innerHTML = ''; return; }
       var b = c.banner || {};
-      var accent = b.accent || '#d4a843';
+      var accent = b.accent || '#22d3ee';
       var pot = '£' + Math.round(c.prizePot || 0);
       var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (m) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]; }); };
       slot.innerHTML =
@@ -16286,13 +16286,13 @@ const App = {
               '<span style="font-size:40px;line-height:1;">' + (b.emoji || '🏆') + '</span>' +
               '<div>' +
                 '<div style="font-size:13px;font-weight:800;letter-spacing:2px;color:rgba(255,255,255,0.65);text-transform:uppercase;">' + esc(b.eyebrow || c.name) + '</div>' +
-                '<div style="font-size:24px;font-weight:900;letter-spacing:0.5px;background:linear-gradient(135deg,#f0d078,' + accent + ');-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1;">' + esc(b.title || 'LAST MAN STANDING') + '</div>' +
+                '<div style="font-size:24px;font-weight:900;letter-spacing:0.5px;background:linear-gradient(135deg,#a5f3fc,' + accent + ');-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1;">' + esc(b.title || 'LAST MAN STANDING') + '</div>' +
                 '<div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:3px;">' + esc(b.tagline || '') + '</div>' +
               '</div>' +
             '</div>' +
             '<div style="display:flex;align-items:center;gap:14px;">' +
               (c.prizePot ? '<div style="text-align:center;"><div style="font-size:28px;font-weight:900;color:' + accent + ';line-height:1;">' + pot + '</div><div style="font-size:10px;font-weight:700;letter-spacing:1px;color:rgba(255,255,255,0.6);text-transform:uppercase;">For the winner</div></div>' : '') +
-              '<span style="background:linear-gradient(135deg,' + accent + ',#b8902f);color:#0a0e1a;font-weight:800;font-size:13px;padding:10px 20px;border-radius:8px;white-space:nowrap;">' + esc(b.cta || 'Play Now') + ' &rarr;</span>' +
+              '<span style="background:linear-gradient(135deg,' + accent + ',#0891b2);color:#0a0e1a;font-weight:800;font-size:13px;padding:10px 20px;border-radius:8px;white-space:nowrap;">' + esc(b.cta || 'Play Now') + ' &rarr;</span>' +
             '</div>' +
           '</div>' +
         '</div>';
