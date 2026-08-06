@@ -288,8 +288,8 @@ const App = {
 
   async _rtCheckForUpdates() {
     try {
-      // Check if tips count changed (new tips published)
-      var tips = await this.api('/tips');
+      // Check if tips count changed (new tips published). Silent — background poll.
+      var tips = await this.api('/tips', { silent: true, cacheTtl: 20000 });
       if (Array.isArray(tips)) {
         var footballToday = tips.filter(function(t) {
           return t.sport === 'football' && t.status === 'active' && !t.isWeeklyAcca;
@@ -302,8 +302,8 @@ const App = {
         this.tips = tips;
       }
 
-      // Check if results changed (new settlements)
-      var results = await this.api('/results?sport=football&days=1');
+      // Check if results changed (new settlements). Silent — background poll.
+      var results = await this.api('/results?sport=football&days=1', { silent: true, cacheTtl: 20000 });
       if (Array.isArray(results)) {
         if (results.length > this._rtLastResultCount && this._rtLastResultCount > 0) {
           var newResults = results.length - this._rtLastResultCount;
@@ -539,7 +539,9 @@ const App = {
     }
     try {
       var url = '/football/live-fixtures' + (date ? '?date=' + date : '');
-      var data = await this.api(url);
+      // Silent — this is polled every 30s by the real-time engine and must not
+      // drive the global spinner.
+      var data = await this.api(url, { silent: true });
       if (data) this._setCache(cacheKey, data);
       return data;
     } catch (e) { return { live: false, fixtures: [] }; }
@@ -3743,7 +3745,9 @@ const App = {
     var strip = document.getElementById('live-strip');
     if (!strip) return;
     try {
-      var d = await this.api('/live-now');
+      // Silent + cached: this polls every 60s, so it must never drive the global
+      // spinner (that was the loading circle flashing every minute).
+      var d = await this.api('/live-now', { silent: true, cacheTtl: 30000 });
       strip = document.getElementById('live-strip');
       if (!strip) return;
       var items = [];

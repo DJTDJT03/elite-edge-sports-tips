@@ -1712,13 +1712,25 @@ module.exports = function(deps) {
       var key = req.params.key;
       var teamId = /^\d+$/.test(key) ? parseInt(key, 10) : null;
 
-      // Resolve a name to an id via search (closest name match wins).
+      // Resolve a name to an id via search. SportMonks names clubs "Arsenal", not
+      // "Arsenal FC", so try the raw query, then with common club suffixes stripped,
+      // then a first-two-words fallback — and match tolerantly.
       if (!teamId) {
-        var q = decodeURIComponent(key).replace(/-/g, ' ');
-        var found = await sportMonks.searchTeams(q);
-        if (found && found.length) {
-          var ql = q.toLowerCase();
-          var exact = found.find(function (t) { return (t.name || '').toLowerCase() === ql; });
+        var q = decodeURIComponent(key).replace(/-/g, ' ').trim();
+        var stripSuffix = function (s) { return String(s).replace(/\b(fc|afc|cf|sc|ac|fk|sk|bk|if|cd|ud|sv)\b/gi, '').replace(/\s+/g, ' ').trim(); };
+        var variants = [q];
+        var qs = stripSuffix(q);
+        if (qs && qs !== q) variants.push(qs);
+        var firstTwo = q.split(' ').slice(0, 2).join(' ');
+        if (firstTwo && variants.indexOf(firstTwo) === -1) variants.push(firstTwo);
+        var found = [];
+        for (var vi = 0; vi < variants.length && !found.length; vi++) {
+          try { found = (await sportMonks.searchTeams(variants[vi])) || []; } catch (e) { found = []; }
+        }
+        if (found.length) {
+          var norm = function (s) { return stripSuffix(String(s || '').toLowerCase()).replace(/[^a-z0-9]/g, ''); };
+          var qn = norm(q);
+          var exact = found.find(function (t) { return norm(t.name) === qn; });
           teamId = (exact || found[0]).id;
         }
       }
