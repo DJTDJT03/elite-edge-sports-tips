@@ -531,14 +531,17 @@ const App = {
     } catch (e) { return { live: false, races: [] }; }
   },
 
-  async fetchLiveFootball(forceRefresh, date) {
-    var cacheKey = 'football' + (date ? '_' + date : '');
+  async fetchLiveFootball(forceRefresh, date, withOdds) {
+    var cacheKey = 'football' + (date ? '_' + date : '') + (withOdds ? '_odds' : '');
     if (!forceRefresh) {
       var cached = this._getCached(cacheKey, 600000); // 10 min
       if (cached) return cached;
     }
     try {
-      var url = '/football/live-fixtures' + (date ? '?date=' + date : '');
+      var q = [];
+      if (date) q.push('date=' + date);
+      if (withOdds) q.push('odds=1'); // enrich every fixture with real prices (acca/matches)
+      var url = '/football/live-fixtures' + (q.length ? '?' + q.join('&') : '');
       // Silent — this is polled every 30s by the real-time engine and must not
       // drive the global spinner.
       var data = await this.api(url, { silent: true });
@@ -14806,7 +14809,7 @@ const App = {
       // 2. Live football fixtures (upcoming games not yet published as tips)
       // Also store all fixtures for result checking on acca legs
       try {
-        var liveData = await this.fetchLiveFootball(true); // Force fresh — no cache
+        var liveData = await this.fetchLiveFootball(true, null, true); // fresh + real odds on every fixture
         var fixtures = liveData && liveData.fixtures ? liveData.fixtures : [];
         this._accaFixtures = fixtures;
         fixtures.forEach(function(f) {
@@ -14825,60 +14828,44 @@ const App = {
           var kickoff = f.kickoff ? new Date(f.kickoff).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
           if (kickoff && !isUpcoming(kickoff, todayStr)) return;
 
-          // Build all possible markets for this fixture, pick the best value
+          // Build EVERY playable market on this fixture as its own candidate. The
+          // optimiser dedups to one leg per fixture (best-scoring that fits the
+          // user's rules), so offering all markets lets it pick the right one —
+          // e.g. keep the Match Result leg when the user turns BTTS off. Ranges are
+          // wide (short favourites are the backbone of a target-odds acca); the
+          // user's own min/max odds sliders do the final filtering.
           var fxId = f.fixtureId || Math.random().toString(36).slice(2);
           var markets = [];
-
-          // Home Win
-          var homeOdds = parseFloat(f.homeOdds) || 0;
-          if (homeOdds >= 1.8 && homeOdds <= 8.0) {
-            markets.push({ sel: f.homeTeam + ' Win', market: 'Match Result', odds: homeOdds, prob: 1 / homeOdds });
-          }
-          // Away Win
-          var awayOdds = parseFloat(f.awayOdds) || 0;
-          if (awayOdds >= 1.8 && awayOdds <= 8.0) {
-            markets.push({ sel: f.awayTeam + ' Win', market: 'Match Result', odds: awayOdds, prob: 1 / awayOdds });
-          }
-          // Draw
-          var drawOdds = parseFloat(f.drawOdds) || 0;
-          if (drawOdds >= 2.5 && drawOdds <= 6.0) {
-            markets.push({ sel: 'Draw', market: 'Match Result', odds: drawOdds, prob: 1 / drawOdds });
-          }
-          // Over 2.5
-          var overOdds = parseFloat(f.overOdds) || 0;
-          if (overOdds >= 1.5 && overOdds <= 4.0) {
-            markets.push({ sel: 'Over 2.5 Goals', market: 'Over/Under', odds: overOdds, prob: 1 / overOdds });
-          }
-          // BTTS
-          var bttsOdds = parseFloat(f.bttsOdds) || 0;
-          if (bttsOdds >= 1.5 && bttsOdds <= 3.0) {
-            markets.push({ sel: 'Both Teams to Score — Yes', market: 'BTTS', odds: bttsOdds, prob: 1 / bttsOdds });
-          }
+          var addM = function(sel, market, odds, lo, hi) {
+            odds = parseFloat(odds) || 0;
+            if (odds >= lo && odds <= hi) markets.push({ sel: sel, market: market, odds: odds });
+          };
+          addM(f.homeTeam + ' Win', 'Match Result', f.homeOdds, 1.1, 15);
+          addM(f.awayTeam + ' Win', 'Match Result', f.awayOdds, 1.1, 26);
+          addM('Draw', 'Match Result', f.drawOdds, 2.6, 8);
+          addM('Over 2.5 Goals', 'Over/Under', f.overOdds, 1.3, 6);
+          addM('Under 2.5 Goals', 'Over/Under', f.underOdds, 1.3, 6);
+          addM('Both Teams to Score — Yes', 'BTTS', f.bttsOdds, 1.3, 4);
 
           // Skip fixtures with no real odds — never show fake prices
           if (markets.length === 0) return;
 
-          // Sort by edge (model prob vs implied) — pick the market with the best value, not just the most likely
-          markets.forEach(function(m) {
-            m.impliedProb = 1 / m.odds;
-            m.modelProb = Math.min(m.prob * 1.08, 0.85);
-            m.edge = m.modelProb - m.impliedProb;
-          });
-          markets.sort(function(a, b) { return b.edge - a.edge; });
-          var bestMarket = markets[0];
-
-          selections.push({
-            id: 'live_' + fxId,
-            selection: bestMarket.sel, event: matchName,
-            match: matchName, league: league, kickoff: kickoff,
-            market: bestMarket.market, odds: bestMarket.odds,
-            modelProbability: bestMarket.modelProb,
-            confidence: 6, edge: Math.max(0.03, bestMarket.edge),
-            analyst: 'Elite Edge', sport: 'football', isPublishedTip: false,
-            homeTeamLogo: f.homeTeamLogo || '', awayTeamLogo: f.awayTeamLogo || '',
-            _allMarkets: markets.map(function(m) {
-              return { sel: m.sel, market: m.market, odds: m.odds, modelProb: m.modelProb, edge: m.edge };
-            }),
+          markets.forEach(function(m, mi) {
+            var impliedProb = 1 / m.odds;
+            // Light model tilt toward the priced outcome; capped so we never claim
+            // an implausible edge. Real book price is the anchor.
+            var modelProb = Math.min(impliedProb * 1.08, 0.9);
+            var edge = modelProb - impliedProb;
+            selections.push({
+              id: 'live_' + fxId + '_' + mi,
+              selection: m.sel, event: matchName,
+              match: matchName, league: league, kickoff: kickoff,
+              market: m.market, odds: m.odds,
+              modelProbability: modelProb,
+              confidence: 6, edge: Math.max(0.02, edge),
+              analyst: 'Elite Edge', sport: 'football', isPublishedTip: false,
+              homeTeamLogo: f.homeTeamLogo || '', awayTeamLogo: f.awayTeamLogo || '',
+            });
           });
         });
       } catch (liveErr) { /* non-fatal — published tips still available */ }
@@ -14905,7 +14892,13 @@ const App = {
       targetOdds: 10, maxLegs: 5, minOdd: 1.2, maxOdd: 6, minConf: 6,
       markets: { mr: true, ou: true, btts: true, dc: true },
     });
-    var poolCount = (this._accaAllTips || []).length;
+    // Count unique fixtures, not raw candidates (each fixture now offers several
+    // markets), so "N analysed picks" reflects real games available.
+    var _seenFx = {};
+    (this._accaAllTips || []).forEach(function (c) {
+      _seenFx[String(c.event || c.match || c.id).toLowerCase().replace(/[^a-z0-9]/g, '')] = 1;
+    });
+    var poolCount = Object.keys(_seenFx).length;
     var chip = function (label, on, onclick) {
       return '<button onclick="' + onclick + '" class="acca-mk' + (on ? ' on' : '') + '">' + (on ? '✓ ' : '') + label + '</button>';
     };

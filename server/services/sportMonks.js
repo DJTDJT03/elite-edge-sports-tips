@@ -22,6 +22,7 @@ function SportMonks() {
   this.name = 'SportMonks';
   this.requestCount = 0;
   this.lastError = null;
+  this._oddsCache = {}; // fixtureId -> { at, val } market odds, short-TTL
 }
 
 SportMonks.prototype.isAvailable = function() {
@@ -183,6 +184,60 @@ SportMonks.prototype.getMarketOdds = function(fixtureId) {
       books: acc.home.length || acc.away.length,
     };
   }).catch(function() { return null; });
+};
+
+// Cached wrapper around getMarketOdds — pre-match prices move slowly, so a 5-min
+// cache per fixture lets us enrich a whole fixture list cheaply (and repeatedly)
+// without hammering the odds endpoint. Returns null (and caches the miss) when a
+// fixture has no odds yet, so we don't re-request empty markets every poll.
+SportMonks.prototype.getMarketOddsCached = function(fixtureId) {
+  var self = this;
+  var now = Date.now();
+  var hit = this._oddsCache[fixtureId];
+  if (hit && (now - hit.at) < 300000) return Promise.resolve(hit.val);
+  return this.getMarketOdds(fixtureId).then(function(od) {
+    self._oddsCache[fixtureId] = { at: now, val: od || null };
+    return od || null;
+  }).catch(function() {
+    self._oddsCache[fixtureId] = { at: now, val: null };
+    return null;
+  });
+};
+
+// Enrich a fixture list (from getFixturesByDate, which omits odds) with real
+// SportMonks market odds, joined by the fixture's own id — an EXACT join, no
+// fuzzy name matching. Only fixtures missing odds and not finished are fetched;
+// runs in small concurrent batches with a hard cap so a busy day can't fan out
+// into hundreds of calls. Mutates fixtures in place and returns them.
+SportMonks.prototype.enrichFixturesWithOdds = function(fixtures, opts) {
+  opts = opts || {};
+  var self = this;
+  var cap = opts.cap || 60;      // never price more than this many fixtures/call
+  var conc = opts.concurrency || 6;
+  var FIN = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
+  var targets = (fixtures || []).filter(function(f) {
+    return f && f.id && !f.homeOdds && !FIN[f.status];
+  }).slice(0, cap);
+  if (!targets.length) return Promise.resolve(fixtures);
+  var i = 0;
+  var worker = function() {
+    if (i >= targets.length) return Promise.resolve();
+    var f = targets[i++];
+    return self.getMarketOddsCached(f.id).then(function(od) {
+      if (od) {
+        if (od.home) f.homeOdds = od.home;
+        if (od.draw) f.drawOdds = od.draw;
+        if (od.away) f.awayOdds = od.away;
+        if (od.over25) f.overOdds = od.over25;
+        if (od.under25) f.underOdds = od.under25;
+        if (od.bttsYes) f.bttsOdds = od.bttsYes;
+      }
+      return worker();
+    }).catch(function() { return worker(); });
+  };
+  var runners = [];
+  for (var w = 0; w < conc; w++) runners.push(worker());
+  return Promise.all(runners).then(function() { return fixtures; });
 };
 
 // =========================================================================

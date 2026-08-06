@@ -232,6 +232,13 @@ module.exports = function(deps) {
                 // Non-fatal — fixtures still show, just without odds
               }
             }
+            // Odds enrichment for tools that need prices on EVERY fixture (acca
+            // builder, All Matches). The Odds API above only covers major leagues,
+            // so cups/qualifiers arrive priceless. SportMonks prices these by exact
+            // fixture id. Gated behind ?odds=1 so the 30s live poller stays cheap.
+            if (req.query.odds === '1') {
+              try { await sportMonks.enrichFixturesWithOdds(smFixtures, { cap: 60 }); } catch (e) {}
+            }
             return res.json({ live: true, fixtures: smFixtures, source: 'sportmonks', fetchedAt: new Date().toISOString() });
           }
         } catch(smErr) {
