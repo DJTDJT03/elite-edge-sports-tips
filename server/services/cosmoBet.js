@@ -316,6 +316,52 @@ CosmoBet.prototype.selectionOutcome = function(odds, selection, gameHome, gameAw
   return null;
 };
 
+// Enrich a fixture list with Cosmo Bet's REAL 1X2 prices — used as a backup odds
+// source (our partner book) for fixtures the major-league Odds API and SportMonks
+// don't price. Matches each fixture to a Cosmo game in memory first (unambiguous
+// only, so never a wrong-side price), then fetches odds only for matched games in
+// small concurrent batches (capped). Mutates fixtures in place; sets oddsSource:
+// 'cosmo'. Straight 1X2 only — the market we have cleanly wired.
+CosmoBet.prototype.enrichFixturesWithOdds = async function(fixtures, opts) {
+  opts = opts || {};
+  var self = this;
+  var cap = opts.cap || 40;
+  var FIN = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
+  await this.ensureTeamMap();
+  if (!this.hasTeamMap()) return fixtures;
+  // In-memory match pass (cheap — getSoccerGames is cached): collect fixtures we
+  // can tie to a Cosmo game id, so we only spend odds calls on real matches.
+  var jobs = [];
+  for (var i = 0; i < (fixtures || []).length && jobs.length < cap; i++) {
+    var f = fixtures[i];
+    if (!f || f.homeOdds || !f.homeTeam || !f.awayTeam || FIN[f.status]) continue;
+    try {
+      var game = await this.matchFixture(f.homeTeam, f.awayTeam, f.kickoff);
+      if (game && game.gameId) jobs.push({ f: f, gameId: game.gameId });
+    } catch (e) { /* skip unmatched */ }
+  }
+  if (!jobs.length) return fixtures;
+  // Fetch odds for matched games with limited concurrency.
+  var idx = 0, conc = opts.concurrency || 5;
+  var worker = function() {
+    if (idx >= jobs.length) return Promise.resolve();
+    var job = jobs[idx++];
+    return self.getGameOdds(job.gameId).then(function(od) {
+      if (od && od.matchResult) {
+        var mr = od.matchResult;
+        if (mr.home) job.f.homeOdds = mr.home;
+        if (mr.draw) job.f.drawOdds = mr.draw;
+        if (mr.away) job.f.awayOdds = mr.away;
+        job.f.oddsSource = 'cosmo';
+      }
+      return worker();
+    }).catch(function() { return worker(); });
+  };
+  var runners = [];
+  for (var w = 0; w < conc; w++) runners.push(worker());
+  return Promise.all(runners).then(function() { return fixtures; });
+};
+
 // Whether the "add to betslip" deep-link is genuinely wired (Cosmo have confirmed
 // attribution). Until then the CTA must not promise a pre-filled slip.
 CosmoBet.prototype.isDeepLinkReady = function() {

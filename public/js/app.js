@@ -14904,6 +14904,7 @@ const App = {
               modelProbability: modelProb,
               confidence: 6, edge: Math.max(0.02, edge),
               analyst: 'Elite Edge', sport: 'football', isPublishedTip: false,
+              oddsSource: f.oddsSource || 'book', // 'book' | 'cosmo' | 'model'
               homeTeamLogo: f.homeTeamLogo || '', awayTeamLogo: f.awayTeamLogo || '',
             });
           });
@@ -15105,7 +15106,9 @@ const App = {
           '</div>' +
           '<div style="text-align:right;flex-shrink:0;">' +
             '<div style="font-size:16px;font-weight:800;color:var(--accent);">' + self.formatOdds(l.odds) + '</div>' +
-            (edgePct > 0 ? '<div style="font-size:10px;color:#22c55e;font-weight:700;">+' + edgePct + '% edge</div>' : '') +
+            (l.oddsSource === 'model'
+              ? '<div style="font-size:10px;color:var(--text-muted);font-weight:600;" title="Elite Edge model price — no bookmaker odds published yet">est. price</div>'
+              : (edgePct > 0 ? '<div style="font-size:10px;color:#22c55e;font-weight:700;">+' + edgePct + '% edge</div>' : '')) +
           '</div>' +
         '</div>';
     }).join('');

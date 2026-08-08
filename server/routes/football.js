@@ -238,6 +238,38 @@ module.exports = function(deps) {
             // fixture id. Gated behind ?odds=1 so the 30s live poller stays cheap.
             if (req.query.odds === '1') {
               try { await sportMonks.enrichFixturesWithOdds(smFixtures, { cap: 60 }); } catch (e) {}
+              // Cosmo Bet backup — real prices from our partner book for fixtures the
+              // Odds API + SportMonks miss. Real bookmaker odds, so ranked ABOVE the
+              // model estimate below (and matches the "Back with Cosmo Bet" CTA).
+              if (cosmoBet && cosmoBet.enrichFixturesWithOdds) {
+                try { await cosmoBet.enrichFixturesWithOdds(smFixtures, { cap: 40 }); } catch (e) {}
+              }
+              // Model-price fallback: lower-league / cup fixtures (e.g. League Cup R1)
+              // have NO bookmaker odds from ANY source, which starves the acca builder.
+              // Derive fair 1X2 / O-U / BTTS prices from our in-house quant model
+              // (Elo + Dixon-Coles) so every real fixture is priceable. Flagged
+              // oddsSource:'model' so the UI can label an estimated price. Skip when
+              // ?model=0 (tools that must show bookmaker prices only).
+              if (req.query.model !== '0' && deps.quantModel && deps.quantModel.predictAsync) {
+                var FINQ = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
+                var fairOdds = function (pctv) { var p = (pctv || 0) / 100; return p > 0.02 ? Math.round((1 / p) * 100) / 100 : null; };
+                for (var qi = 0; qi < smFixtures.length; qi++) {
+                  var qf = smFixtures[qi];
+                  if (qf.homeOdds || !qf.homeTeam || !qf.awayTeam || FINQ[qf.status]) continue;
+                  try {
+                    var pr = await deps.quantModel.predictAsync(qf.homeTeam, qf.awayTeam);
+                    if (pr && pr.winProb) {
+                      qf.homeOdds = fairOdds(pr.winProb.home);
+                      qf.drawOdds = fairOdds(pr.winProb.draw);
+                      qf.awayOdds = fairOdds(pr.winProb.away);
+                      qf.overOdds = fairOdds(pr.over25);
+                      qf.underOdds = fairOdds(pr.under25);
+                      qf.bttsOdds = fairOdds(pr.btts);
+                      qf.oddsSource = 'model';
+                    }
+                  } catch (e) { /* non-fatal — fixture just stays priceless */ }
+                }
+              }
             }
             return res.json({ live: true, fixtures: smFixtures, source: 'sportmonks', fetchedAt: new Date().toISOString() });
           }
