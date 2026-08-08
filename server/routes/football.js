@@ -172,6 +172,26 @@ module.exports = function(deps) {
     } catch (e) { /* non-fatal */ }
   }
 
+  // Build an "Our Take" from the quant model's OWN prediction (Elo + Dixon-Coles).
+  // Deterministic, transparent, and identical to the model panel shown alongside
+  // it — used both to proactively LOCK a pre-match take for every fixture and as
+  // the shown take when no editorial tip / locked analyst verdict exists. This is
+  // the model's call, never a retrofitted editorial narrative.
+  function modelVerdict(pred, homeName, awayName) {
+    if (!pred || !pred.pick || !pred.winProb) return null;
+    var wp = pred.winProb, eg = pred.expectedGoals || {};
+    var reason = 'Our Elo + Dixon-Coles model makes it ' + homeName + ' ' + wp.home + '% · Draw ' +
+      wp.draw + '% · ' + awayName + ' ' + wp.away + '%' +
+      (eg.home != null ? ', on a projected ' + eg.home + '–' + eg.away + ' expected-goals line' : '') +
+      '. ' + pred.pick.selection + ' is the model’s value call.';
+    var conf = Math.max(6, Math.min(9, pred.pick.confidence || 6));
+    return {
+      market: pred.pick.market || 'Match Result', pick: pred.pick.selection, reason: reason,
+      confidence: conf, riskLevel: conf >= 8 ? 'Low' : conf >= 7 ? 'Low-Medium' : 'Medium',
+      riskText: 'Elite Edge model call.', source: 'model',
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // LIVE FOOTBALL DATA — SportMonks primary, API-Football fallback
   // ---------------------------------------------------------------------------
@@ -661,9 +681,20 @@ module.exports = function(deps) {
               if (_locked) {
                 _finalVerdict = _locked; // serve the exact pick the subscriber saw pre-match
               } else if (_hasStarted(smF.status, smF.kickoff)) {
-                // First ever view is post-kick-off → we have no pre-match pick on
-                // record, and we will NOT compute a result-aware one.
-                _finalVerdict = {
+                // First ever view is post-kick-off → no locked pre-match analyst
+                // take exists. Rather than a dead "no take", surface our
+                // deterministic model's read (Elo + Dixon-Coles — the same engine
+                // shown in the model panel below), clearly badged as the model's
+                // call. We still never retrofit an editorial/analyst narrative.
+                var _smMv = null;
+                try {
+                  if (deps.quantModel) {
+                    var _smNeutral = /world cup|world championship|friendl/i.test((smF.league) || '');
+                    var _smPred = deps.quantModel.predict(smF.homeTeam || '', smF.awayTeam || '', { neutral: _smNeutral });
+                    _smMv = modelVerdict(_smPred, smF.homeTeam || 'Home', smF.awayTeam || 'Away');
+                  }
+                } catch (e) { /* fall through */ }
+                _finalVerdict = _smMv || {
                   market: 'Match Result', pick: 'No pre-match take on record',
                   reason: 'We lock our verdict in before kick-off and never publish one after the result is known — so there is no pre-match take on record for this game.',
                   confidence: 0, riskLevel: 'n/a', riskText: 'Integrity: we only publish pre-kick-off.', source: 'none',
@@ -850,6 +881,7 @@ module.exports = function(deps) {
       var verdictReason = '';
       var confidence = 5;
       var riskLevel = 'Medium';
+      var verdictSource = ''; // '', 'model' — lets the UI badge a model-derived take
       var fromPublishedTip = false;
 
       // PRIORITY: Use our actual published tip as the verdict (consistency with NAP/dashboard)
@@ -1021,10 +1053,29 @@ module.exports = function(deps) {
           verdictMarket = _lockedAf.market; verdictPick = _lockedAf.pick; verdictReason = _lockedAf.reason;
           confidence = _lockedAf.confidence || confidence; riskLevel = _lockedAf.riskLevel || riskLevel;
         } else if (_hasStarted(_afStatus, kickoff)) {
-          verdictMarket = 'Match Result';
-          verdictPick = 'No pre-match take on record';
-          verdictReason = 'We lock our verdict in before kick-off and never publish one after the result is known — so there is no pre-match take on record for this game.';
-          confidence = 0; riskLevel = 'n/a';
+          // No locked pre-match take (nobody opened this game before kick-off).
+          // Rather than a dead "no take", surface our deterministic model's read —
+          // the SAME Elo + Dixon-Coles numbers shown in the model panel below,
+          // clearly framed as the model's call. We never retrofit an editorial
+          // analyst narrative to a known result.
+          var _mv = null;
+          try {
+            if (deps.quantModel) {
+              var _mvNeutral = /world cup|world championship|friendl/i.test(league.name || '');
+              var _mvPred = deps.quantModel.predict(homeTeam.name || '', awayTeam.name || '', { neutral: _mvNeutral });
+              _mv = modelVerdict(_mvPred, homeTeam.name || 'Home', awayTeam.name || 'Away');
+            }
+          } catch (e) { /* fall through */ }
+          if (_mv) {
+            verdictMarket = _mv.market; verdictPick = _mv.pick; verdictReason = _mv.reason;
+            confidence = _mv.confidence; riskLevel = _mv.riskLevel; riskText = _mv.riskText;
+            verdictSource = 'model';
+          } else {
+            verdictMarket = 'Match Result';
+            verdictPick = 'No pre-match take on record';
+            verdictReason = 'We lock our verdict in before kick-off and never publish one after the result is known — so there is no pre-match take on record for this game.';
+            confidence = 0; riskLevel = 'n/a';
+          }
         } else {
           await saveLockedVerdict(fixtureId, { market: verdictMarket, pick: verdictPick, reason: verdictReason, confidence: confidence, riskLevel: riskLevel, riskText: riskText }, kickoff, _afStatus);
         }
@@ -1111,15 +1162,20 @@ module.exports = function(deps) {
           '(Home: ' + predHomePct + ', Draw: ' + predDrawPct + ', Away: ' + predAwayPct + ')';
       }
 
-      var riskText = '';
-      if (riskLevel === 'Low') {
-        riskText = 'The data signals are clear and consistent across form, head-to-head, and statistical trends. This represents one of the stronger opportunities on the card.';
-      } else if (riskLevel === 'Low-Medium') {
-        riskText = 'There is a reasonable degree of certainty here, though one or two factors introduce minor uncertainty. A solid proposition overall.';
-      } else if (riskLevel === 'Medium') {
-        riskText = 'There are competing signals in the data. While the overall direction is clear, this is not a standout selection. Stake accordingly.';
-      } else {
-        riskText = 'The data is inconclusive or contradictory. This selection carries above-average risk and should be approached with caution.';
+      // A model-derived take carries its own risk text — don't overwrite it with
+      // the analyst-narrative version (that would dress a transparent model read
+      // in editorial framing it never claimed).
+      var riskText = 'Elite Edge model call.';
+      if (verdictSource !== 'model') {
+        if (riskLevel === 'Low') {
+          riskText = 'The data signals are clear and consistent across form, head-to-head, and statistical trends. This represents one of the stronger opportunities on the card.';
+        } else if (riskLevel === 'Low-Medium') {
+          riskText = 'There is a reasonable degree of certainty here, though one or two factors introduce minor uncertainty. A solid proposition overall.';
+        } else if (riskLevel === 'Medium') {
+          riskText = 'There are competing signals in the data. While the overall direction is clear, this is not a standout selection. Stake accordingly.';
+        } else {
+          riskText = 'The data is inconclusive or contradictory. This selection carries above-average risk and should be approached with caution.';
+        }
       }
 
       // --- Betfair Exchange enrichment for football ---
@@ -1377,7 +1433,8 @@ module.exports = function(deps) {
           reason: verdictReason,
           confidence: confidence,
           riskLevel: riskLevel,
-          riskText: riskText
+          riskText: riskText,
+          source: verdictSource
         },
         oddsMovement: oddsMovementData,
         exchangeData: matchExchangeData,

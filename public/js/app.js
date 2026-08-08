@@ -7578,8 +7578,13 @@ const App = {
     var lockedClass = isPremium ? '' : ' match-intel-locked';
 
     // --- OUR TAKE verdict ---
+    // A model-derived take (no locked pre-match analyst verdict existed) gets a
+    // small badge so it's clear this is the deterministic engine's read.
+    var takeBadge = (v.source === 'model')
+      ? ' <span style="font-size:9px;font-weight:800;letter-spacing:0.5px;color:#22d3ee;border:1px solid rgba(34,211,238,0.4);border-radius:10px;padding:1px 7px;vertical-align:middle;">MODEL READ</span>'
+      : '';
     html += '<div class="match-intel-verdict' + lockedClass + '">' +
-      '<div class="match-intel-verdict-label">OUR TAKE</div>' +
+      '<div class="match-intel-verdict-label">OUR TAKE' + takeBadge + '</div>' +
       '<div class="match-intel-verdict-pick">' + v.pick + '</div>' +
       '<div class="match-intel-verdict-market">' + v.market + '</div>' +
       '<div class="match-intel-verdict-reason">' + v.reason + '</div>' +
