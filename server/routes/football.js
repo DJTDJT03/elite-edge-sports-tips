@@ -342,9 +342,13 @@ module.exports = function(deps) {
         return s > 0 ? inv.map(function (x) { return x / s; }) : null;
       };
       var out = [];
+      var dbg = { has1x2: 0, hasOU: 0, inBandStrong: 0, sample: null };
       fixtures.forEach(function (f) {
         if (!f.homeTeam || !f.awayTeam || FIN[f.status]) return;
         if (f.oddsSource === 'model') return; // need a REAL market (not our fair-price fallback)
+        if (f.homeOdds && f.drawOdds && f.awayOdds) dbg.has1x2++;
+        if (f.overOdds && f.underOdds) dbg.hasOU++;
+        if (!dbg.sample && f.homeOdds) dbg.sample = { ev: f.homeTeam + ' v ' + f.awayTeam, H: f.homeOdds, D: f.drawOdds, A: f.awayOdds, O: f.overOdds, U: f.underOdds, src: f.oddsSource || 'book' };
         // Fair (de-vigged consensus) probability for each selection.
         var f1 = devig([f.homeOdds, f.drawOdds, f.awayOdds]);      // 1X2
         var fou = devig([f.overOdds, f.underOdds]);                 // Over/Under 2.5
@@ -364,6 +368,7 @@ module.exports = function(deps) {
         cands.forEach(function (c) {
           var o = parseFloat(c.odds) || 0;
           if (o < band.min || o > band.max || !c.fair) return;
+          if (c.fair >= 0.50) dbg.inBandStrong++;
           if (c.fair < 0.50) return; // a banker must be the market's genuine favourite
           // Optional genuine value: our model rates it higher than the consensus.
           var modelEdge = (c.model != null) ? Math.round((c.model - c.fair) * 1000) / 10 : null;
@@ -385,7 +390,7 @@ module.exports = function(deps) {
         var av = (a.modelEdge || 0), bv = (b.modelEdge || 0);
         return (bv - av) || (b.marketProb - a.marketProb);
       });
-      res.json({ bankers: out.slice(0, 6), scanned: fixtures.length });
+      res.json({ bankers: out.slice(0, 6), scanned: fixtures.length, debug: req.query.debug === '1' ? dbg : undefined });
     } catch (err) { res.json({ bankers: [], error: err.message }); }
   });
 
