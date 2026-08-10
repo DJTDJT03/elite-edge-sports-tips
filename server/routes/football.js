@@ -333,7 +333,11 @@ module.exports = function(deps) {
       var FIN = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
       var qm = deps.quantModel;
       var out = [];
+      var dbg = { withSmPred: 0, withOdds: 0, withProb: 0, inBand: 0, sample: null };
       fixtures.forEach(function (f) {
+        if (f.smPred && f.smPred.home != null) dbg.withSmPred++;
+        if (f.homeOdds) dbg.withOdds++;
+        if (!dbg.sample && f.homeTeam) dbg.sample = { ev: f.homeTeam + ' v ' + f.awayTeam, smPred: f.smPred || null, homeOdds: f.homeOdds || null, src: f.oddsSource || 'book' };
         if (!f.homeTeam || !f.awayTeam || FIN[f.status]) return;
         // Informed probabilities only: SportMonks predictions, else our quant model
         // ONLY when it knows BOTH teams (its default-rating output is uniform and
@@ -349,6 +353,7 @@ module.exports = function(deps) {
             if (pr && pr.winProb) { prob = { home: pr.winProb.home, draw: pr.winProb.draw, away: pr.winProb.away, over25: pr.over25, under25: pr.under25, btts: pr.btts }; psrc = 'quant'; }
           } catch (e) {}
         }
+        if (prob) dbg.withProb++;
         if (!prob) return; // no informed model → never fabricate value
         var cands = [
           { sel: f.homeTeam + ' Win', market: 'Match Result', odds: f.homeOdds, prob: prob.home, side: 'home' },
@@ -379,7 +384,7 @@ module.exports = function(deps) {
         if (best) out.push(best);
       });
       out.sort(function (a, b) { return (b.edge - a.edge) || (b.modelProb - a.modelProb); });
-      res.json({ bankers: out.slice(0, 6), scanned: fixtures.length });
+      res.json({ bankers: out.slice(0, 6), scanned: fixtures.length, debug: req.query.debug === '1' ? dbg : undefined });
     } catch (err) { res.json({ bankers: [], error: err.message }); }
   });
 
