@@ -329,74 +329,63 @@ module.exports = function(deps) {
       if (cosmoBet && cosmoBet.enrichFixturesWithOdds) { try { await cosmoBet.enrichFixturesWithOdds(fixtures, { cap: 40 }); } catch (e) {} }
       try { await sportMonks.enrichFixturesWithPredictions(fixtures, { cap: 60 }); } catch (e) {}
 
-      var band = { min: 1.60, max: 2.40 };
+      // Band tuned to "around evens / 5-6" (~4/6 to 11/10). A banker is a strong,
+      // fairly-priced pick — not a sub-1.5 no-value shortie, not a longshot.
+      var band = { min: 1.57, max: 2.15 };
       var FIN = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
       var qm = deps.quantModel;
+      // De-vig a set of prices in one market → fair probabilities (strips the
+      // bookmaker overround). The multi-book consensus is a sharp, informed signal.
+      var devig = function (prices) {
+        var inv = prices.map(function (p) { return (p && p > 1) ? 1 / p : 0; });
+        var s = inv.reduce(function (a, b) { return a + b; }, 0);
+        return s > 0 ? inv.map(function (x) { return x / s; }) : null;
+      };
       var out = [];
-      var dbg = { withSmPred: 0, withOdds: 0, withProb: 0, inBand: 0, sample: null };
       fixtures.forEach(function (f) {
-        if (f.smPred && f.smPred.home != null) dbg.withSmPred++;
-        if (f.homeOdds) dbg.withOdds++;
-        if (!dbg.sample && f.homeTeam) dbg.sample = { ev: f.homeTeam + ' v ' + f.awayTeam, smPred: f.smPred || null, homeOdds: f.homeOdds || null, src: f.oddsSource || 'book' };
         if (!f.homeTeam || !f.awayTeam || FIN[f.status]) return;
-        // Informed probabilities only: SportMonks predictions, else our quant model
-        // ONLY when it knows BOTH teams (its default-rating output is uniform and
-        // would invent value on unrated clubs).
-        var prob = null, psrc = '';
-        if (f.smPred && f.smPred.home != null) {
-          prob = { home: f.smPred.home, draw: f.smPred.draw, away: f.smPred.away,
-            over25: f.smPred.over25, under25: (f.smPred.over25 != null ? 100 - f.smPred.over25 : null), btts: f.smPred.btts };
-          psrc = 'sportmonks';
-        } else if (qm && qm.knows && qm.predict && qm.knows(f.homeTeam) && qm.knows(f.awayTeam)) {
-          try {
-            var pr = qm.predict(f.homeTeam, f.awayTeam);
-            if (pr && pr.winProb) { prob = { home: pr.winProb.home, draw: pr.winProb.draw, away: pr.winProb.away, over25: pr.over25, under25: pr.under25, btts: pr.btts }; psrc = 'quant'; }
-          } catch (e) {}
+        if (f.oddsSource === 'model') return; // need a REAL market (not our fair-price fallback)
+        // Fair (de-vigged consensus) probability for each selection.
+        var f1 = devig([f.homeOdds, f.drawOdds, f.awayOdds]);      // 1X2
+        var fou = devig([f.overOdds, f.underOdds]);                 // Over/Under 2.5
+        // Optional model edge, ONLY when our quant model knows both teams (its
+        // default-rating output is uniform and would fabricate value on clubs).
+        var qp = null;
+        if (qm && qm.knows && qm.predict && qm.knows(f.homeTeam) && qm.knows(f.awayTeam)) {
+          try { var pr = qm.predict(f.homeTeam, f.awayTeam); if (pr && pr.winProb) qp = pr; } catch (e) {}
         }
-        if (prob) dbg.withProb++;
-        if (!prob) return; // no informed model → never fabricate value
         var cands = [
-          { sel: f.homeTeam + ' Win', market: 'Match Result', odds: f.homeOdds, prob: prob.home, side: 'home' },
-          { sel: f.awayTeam + ' Win', market: 'Match Result', odds: f.awayOdds, prob: prob.away, side: 'away' },
-          { sel: 'Over 2.5 Goals', market: 'Over/Under', odds: f.overOdds, prob: prob.over25, side: null },
-          { sel: 'Under 2.5 Goals', market: 'Over/Under', odds: f.underOdds, prob: prob.under25, side: null },
-          { sel: 'Both Teams to Score', market: 'BTTS', odds: f.bttsOdds, prob: prob.btts, side: null },
+          { sel: f.homeTeam + ' Win', market: 'Match Result', odds: f.homeOdds, fair: f1 ? f1[0] : null, model: qp ? qp.winProb.home / 100 : null, side: 'home' },
+          { sel: f.awayTeam + ' Win', market: 'Match Result', odds: f.awayOdds, fair: f1 ? f1[2] : null, model: qp ? qp.winProb.away / 100 : null, side: 'away' },
+          { sel: 'Over 2.5 Goals', market: 'Over/Under', odds: f.overOdds, fair: fou ? fou[0] : null, model: qp ? qp.over25 / 100 : null, side: null },
+          { sel: 'Under 2.5 Goals', market: 'Over/Under', odds: f.underOdds, fair: fou ? fou[1] : null, model: qp ? qp.under25 / 100 : null, side: null },
         ];
         var best = null;
         cands.forEach(function (c) {
-          if (f.oddsSource === 'model') return; // need a REAL market to beat
           var o = parseFloat(c.odds) || 0;
-          if (o < band.min || o > band.max) return;
-          var mp = (c.prob || 0) / 100;
-          if (mp < 0.48) return;
-          var edge = mp - (1 / o);
-          if (edge < 0.02) return;
-          var edgePct = Math.round(edge * 1000) / 10;
+          if (o < band.min || o > band.max || !c.fair) return;
+          if (c.fair < 0.50) return; // a banker must be the market's genuine favourite
+          // Optional genuine value: our model rates it higher than the consensus.
+          var modelEdge = (c.model != null) ? Math.round((c.model - c.fair) * 1000) / 10 : null;
+          var fairPct = Math.round(c.fair * 100);
           var cand = {
             event: f.homeTeam + ' vs ' + f.awayTeam, league: f.league || '', kickoff: f.kickoff || '',
-            selection: c.sel, market: c.market, odds: o, modelProb: Math.round(mp * 100), impliedProb: Math.round((1 / o) * 100),
-            edge: edgePct, confidence: Math.min(9, 6 + (edgePct >= 4 ? 1 : 0) + (edgePct >= 8 ? 1 : 0) + (mp >= 0.58 ? 1 : 0)),
-            modelSource: psrc, oddsSource: f.oddsSource || 'book', side: c.side,
-            cosmoBetslip: f.cosmoBetslip || null,
+            selection: c.sel, market: c.market, odds: o, marketProb: fairPct,
+            modelEdge: (modelEdge != null && modelEdge >= 2) ? modelEdge : null,
+            confidence: Math.min(9, 6 + (c.fair >= 0.55 ? 1 : 0) + (c.fair >= 0.60 ? 1 : 0) + (c.fair >= 0.66 ? 1 : 0)),
+            oddsSource: f.oddsSource || 'book', side: c.side, cosmoBetslip: f.cosmoBetslip || null,
           };
-          if (!best || cand.edge > best.edge) best = cand; // one (best) per fixture
+          // Prefer the strongest (highest fair prob); if tied, one with model value.
+          if (!best || cand.marketProb > best.marketProb) best = cand;
         });
         if (best) out.push(best);
       });
-      out.sort(function (a, b) { return (b.edge - a.edge) || (b.modelProb - a.modelProb); });
-      if (req.query.debug === '1') {
-        // Raw predictions probe for the first upcoming fixture — diagnose type ids.
-        var probe = fixtures.find(function (f) { return f.id && !FIN[f.status]; });
-        if (probe && sportMonks.getPredictions) {
-          try {
-            var raw = await sportMonks.getPredictions(probe.id);
-            dbg.probe = { id: probe.id, ev: probe.homeTeam + ' v ' + probe.awayTeam, count: (raw || []).length,
-              typeIds: (raw || []).map(function (p) { return p.type_id; }),
-              first: (raw || [])[0] ? { type_id: raw[0].type_id, keys: Object.keys(raw[0].predictions || {}) } : null };
-          } catch (e) { dbg.probe = { err: e.message }; }
-        }
-      }
-      res.json({ bankers: out.slice(0, 6), scanned: fixtures.length, debug: req.query.debug === '1' ? dbg : undefined });
+      // Rank by conviction (consensus prob), surfacing any with genuine model value.
+      out.sort(function (a, b) {
+        var av = (a.modelEdge || 0), bv = (b.modelEdge || 0);
+        return (bv - av) || (b.marketProb - a.marketProb);
+      });
+      res.json({ bankers: out.slice(0, 6), scanned: fixtures.length });
     } catch (err) { res.json({ bankers: [], error: err.message }); }
   });
 

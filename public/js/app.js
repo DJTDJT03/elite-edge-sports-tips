@@ -7450,22 +7450,26 @@ const App = {
       var link = (b.cosmoBetslip && b.side && b.cosmoBetslip[b.side]) ? b.cosmoBetslip[b.side] : genericCosmo;
       var srcTag = b.oddsSource === 'cosmo' ? '⚡ Cosmo price' : 'market price';
       var confPct = Math.min(100, b.confidence * 10);
+      // A genuine model edge over the consensus (only when our model knows both
+      // teams) gets a green value flag; otherwise it's a market-consensus banker.
+      var topRight = (b.modelEdge != null)
+        ? '<span style="font-size:11px;color:#22c55e;font-weight:800;">+' + b.modelEdge + '% model value</span>'
+        : '<span style="font-size:10px;color:var(--text-muted);font-weight:700;">consensus rated</span>';
       return '<div class="card" style="padding:16px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
-            '<span style="font-size:10px;font-weight:800;letter-spacing:0.5px;color:var(--accent);text-transform:uppercase;">💎 Banker</span>' +
-            '<span style="font-size:11px;color:#22c55e;font-weight:800;">+' + b.edge + '% value</span>' +
+            '<span style="font-size:10px;font-weight:800;letter-spacing:0.5px;color:var(--accent);text-transform:uppercase;">💎 Banker</span>' + topRight +
           '</div>' +
           '<div style="font-size:16px;font-weight:800;color:#fff;margin-bottom:2px;">' + self.escapeHtml(b.selection) + '</div>' +
           '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">' + self.escapeHtml(b.event) + (b.league ? ' · ' + self.escapeHtml(b.league) : '') + (ktTxt ? ' · ' + ktTxt : '') + '</div>' +
           '<div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;">' +
             '<div><div style="font-size:22px;font-weight:900;color:var(--accent);line-height:1;">' + self.formatOdds(b.odds) + '</div><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;">' + srcTag + '</div></div>' +
-            '<div style="flex:1;font-size:11px;color:var(--text-secondary);">Our model <strong style="color:#fff;">' + b.modelProb + '%</strong> vs market <strong style="color:#fff;">' + b.impliedProb + '%</strong></div>' +
+            '<div style="flex:1;font-size:11px;color:var(--text-secondary);">Market consensus rates this <strong style="color:#fff;">' + b.marketProb + '%</strong> to land</div>' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="font-size:10px;color:var(--text-muted);">Confidence</span><div style="flex:1;height:5px;border-radius:3px;background:var(--bg-elevated);overflow:hidden;"><div style="width:' + confPct + '%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));"></div></div><span style="font-size:11px;font-weight:800;color:var(--accent);">' + b.confidence + '/10</span></div>' +
           '<a href="' + self._attrUrl(link) + '" target="_blank" rel="noopener sponsored" class="btn btn-gold btn-sm" style="width:100%;box-sizing:border-box;">⚡ Back with Cosmo Bet</a>' +
         '</div>';
     }).join('') + '</div>' +
-      '<div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:10px;">Model value picks (Elo + Dixon-Coles) — not our published analyst tips. Odds indicative · 18+ · gamble responsibly · BeGambleAware.org</div>';
+      '<div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:10px;">Strongest picks by de-vigged market consensus (140+ books), around evens to 4/6 — not our published analyst tips. Odds indicative · 18+ · gamble responsibly · BeGambleAware.org</div>';
   },
 
   async refreshFootballData(btn) {
