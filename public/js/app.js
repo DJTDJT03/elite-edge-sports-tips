@@ -7426,7 +7426,9 @@ const App = {
     var token = (this._bankersToken = (this._bankersToken || 0) + 1);
     try {
       var q = date ? ('?date=' + encodeURIComponent(date)) : '';
-      var data = await this.api('/football/bankers' + q, { silent: true, cacheTtl: 300000 });
+      // Short client cache (the server caches the heavy scan 5 min); short here so a
+      // cold-start empty recovers quickly rather than sticking for minutes.
+      var data = await this.api('/football/bankers' + q, { silent: true, cacheTtl: 60000 });
       if (this._bankersToken !== token) return; // superseded by a newer load
       el = document.getElementById('bankers-section'); // may have re-rendered
       if (!el) return;
