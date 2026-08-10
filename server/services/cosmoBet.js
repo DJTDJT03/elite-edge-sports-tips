@@ -353,6 +353,13 @@ CosmoBet.prototype.enrichFixturesWithOdds = async function(fixtures, opts) {
         if (mr.draw) job.f.drawOdds = mr.draw;
         if (mr.away) job.f.awayOdds = mr.away;
         job.f.oddsSource = 'cosmo';
+        // Per-selection betslip deep-links so a tap on the 1/X/2 price adds that
+        // exact bet to the Cosmo slip (attribution-safe via betslipLink).
+        job.f.cosmoBetslip = {
+          home: mr.homeId ? self.betslipLink({ outcomeId: mr.homeId, subId: 'matches' }) : null,
+          draw: mr.drawId ? self.betslipLink({ outcomeId: mr.drawId, subId: 'matches' }) : null,
+          away: mr.awayId ? self.betslipLink({ outcomeId: mr.awayId, subId: 'matches' }) : null,
+        };
       }
       return worker();
     }).catch(function() { return worker(); });

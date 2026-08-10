@@ -6413,7 +6413,7 @@ const App = {
     var self = this;
     var fixtures = [], tips = [];
     try {
-      var res = await Promise.all([ this.fetchLiveFootball(true), this.api('/tips?sport=football').catch(function(){return [];}) ]);
+      var res = await Promise.all([ this.fetchLiveFootball(true, null, true), this.api('/tips?sport=football').catch(function(){return [];}) ]);
       fixtures = (res[0] && res[0].fixtures) || [];
       tips = res[1] || [];
     } catch (e) {}
@@ -6483,25 +6483,46 @@ const App = {
       var hasOdds = psum > 0;
       var nH = hasOdds ? ph / psum : 0, nD = hasOdds ? pd / psum : 0, nA = hasOdds ? pa / psum : 0;
 
-      // Prediction pill: our genuine Our Take if published, else the market favourite.
-      var predHtml = '';
-      if (pk) {
-        var code = shortCode(pk.market, pk.selection, f);
-        var cNum = Number(pk.confidence);
-        var conf = (cNum && !isNaN(cNum)) ? cNum * 10 : (hasOdds ? Math.max(nH, nD, nA) * 100 : 60);
-        predHtml = '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">' +
-          '<span title="Our Take" style="font-size:12px;font-weight:900;color:#0a0e1a;background:var(--gold);border-radius:6px;padding:3px 9px;display:inline-block;">' + code + '</span>' +
-          confBar(conf, true) + '</div>';
-      } else if (hasOdds) {
-        var best = Math.max(nH, nD, nA);
-        // Explicit argmax so a float tie can't mislabel the favourite.
-        var mcode = (nH >= nD && nH >= nA) ? '1' : (nA >= nD && nA >= nH) ? '2' : 'X';
-        predHtml = '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">' +
-          '<span title="Market favourite (implied by odds)" style="font-size:12px;font-weight:800;color:#c7d0e0;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:3px 9px;display:inline-block;">' + mcode + '</span>' +
-          confBar(best * 100, false) + '</div>';
-      } else {
-        predHtml = '<span style="font-size:11px;color:var(--text-muted);">—</span>';
-      }
+      // Our pick as a 1X2 code (1/X/2) so we can highlight the matching odds cell.
+      // Non-1X2 picks (Over/BTTS/etc) show as a chip under the teams instead.
+      var pickCode = pk ? shortCode(pk.market, pk.selection, f) : null;
+      var pickSide = pickCode === '1' ? 'home' : pickCode === '2' ? 'away' : pickCode === 'X' ? 'draw' : null;
+
+      // Cosmo Bet 1X2 odds strip — each price taps through to Cosmo (deep-linked to
+      // that exact selection when we matched the game, else the tracked partner
+      // link). Our pick's cell is highlighted in cyan.
+      var cBet = f.cosmoBetslip || {};
+      var genericCosmo = self.cosmoLink('matches-1x2');
+      var linkFor = function (side) { return cBet[side] || genericCosmo; };
+      var oddsBtn = function (label, val, side) {
+        if (!val) {
+          return '<div style="flex:1;min-width:0;text-align:center;padding:6px 2px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elevated);opacity:0.4;">' +
+            '<div style="font-size:8px;color:var(--text-muted);font-weight:700;">' + label + '</div>' +
+            '<div style="font-size:12px;font-weight:800;color:var(--text-muted);">—</div></div>';
+        }
+        var isPick = pickSide === side;
+        var border = isPick ? 'var(--accent)' : 'var(--border)';
+        var bg = isPick ? 'rgba(34,211,238,0.14)' : 'var(--bg-elevated)';
+        var glow = isPick ? 'box-shadow:0 0 9px rgba(34,211,238,0.3);' : '';
+        var labCol = isPick ? 'var(--accent)' : 'var(--text-muted)';
+        return '<a href="' + self._attrUrl(linkFor(side)) + '" target="_blank" rel="noopener sponsored" onclick="event.stopPropagation();" ' +
+          'style="flex:1;min-width:0;text-align:center;padding:6px 2px;border:1px solid ' + border + ';border-radius:8px;background:' + bg + ';' + glow + 'text-decoration:none;display:block;">' +
+          '<div style="font-size:8px;color:' + labCol + ';font-weight:800;letter-spacing:0.5px;">' + label + '</div>' +
+          '<div style="font-size:12px;font-weight:800;color:#fff;">' + self.formatOdds(val) + '</div></a>';
+      };
+      var srcTag = hasOdds
+        ? '<div style="text-align:center;font-size:8px;color:var(--text-muted);margin-top:3px;letter-spacing:0.3px;">' +
+            (f.oddsSource === 'cosmo' ? '⚡ via Cosmo Bet' : f.oddsSource === 'model' ? 'model est.' : 'odds') + '</div>'
+        : '';
+      var oddsStrip = hasOdds
+        ? '<div style="display:flex;gap:4px;">' + oddsBtn('1', f.homeOdds, 'home') + oddsBtn('X', f.drawOdds, 'draw') + oddsBtn('2', f.awayOdds, 'away') + '</div>' + srcTag
+        : '<div style="text-align:center;font-size:10px;color:var(--text-muted);">No odds yet</div>';
+
+      // Compact "Our Take" chip shown under the teams (so non-1X2 picks are visible
+      // on the row, and 1X2 picks reinforce the highlighted cell).
+      var pickChip = pk
+        ? '<div style="margin-top:1px;"><span style="font-size:9px;font-weight:800;color:var(--accent);background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.28);border-radius:5px;padding:1px 6px;display:inline-block;">Our Take: ' + self.escapeHtml(pickCode || '') + '</span></div>'
+        : '';
 
       var rid = 'mr-' + ri;
       var teamLine = function (logo, name, goals, bold, teamId) {
@@ -6534,11 +6555,10 @@ const App = {
         '</div>';
 
       return '<div style="border-top:1px solid var(--border);">' +
-        '<div onclick="App._toggleMatchRow(\'' + rid + '\',this)" style="display:grid;grid-template-columns:46px 1fr auto 16px;gap:10px;align-items:center;padding:11px 14px;cursor:pointer;user-select:none;">' +
-          '<div style="font-size:11px;color:var(--text-secondary);text-align:center;line-height:1.3;">' + timeTxt + '</div>' +
-          '<div style="min-width:0;display:flex;flex-direction:column;gap:5px;">' + teamLine(f.homeTeamLogo, f.homeTeam, f.homeGoals, hWin, f.homeTeamId) + teamLine(f.awayTeamLogo, f.awayTeam, f.awayGoals, aWin, f.awayTeamId) + '</div>' +
-          '<div>' + predHtml + '</div>' +
-          '<span class="mtch-arrow" style="color:var(--text-muted);font-size:11px;transition:transform .2s;">▼</span>' +
+        '<div onclick="App._toggleMatchRow(\'' + rid + '\',this)" style="display:grid;grid-template-columns:38px 1fr 132px;gap:9px;align-items:center;padding:11px 12px 11px 14px;cursor:pointer;user-select:none;">' +
+          '<div style="font-size:11px;color:var(--text-secondary);text-align:center;line-height:1.3;">' + timeTxt + '<div class="mtch-arrow" style="color:var(--text-muted);font-size:9px;margin-top:3px;transition:transform .2s;">▼</div></div>' +
+          '<div style="min-width:0;display:flex;flex-direction:column;gap:4px;">' + teamLine(f.homeTeamLogo, f.homeTeam, f.homeGoals, hWin, f.homeTeamId) + teamLine(f.awayTeamLogo, f.awayTeam, f.awayGoals, aWin, f.awayTeamId) + pickChip + '</div>' +
+          '<div>' + oddsStrip + '</div>' +
         '</div>' + detail +
       '</div>';
     };
@@ -6562,8 +6582,9 @@ const App = {
     app.innerHTML =
       '<div class="container" style="padding-top:18px;max-width:900px;">' +
         '<div style="margin-bottom:18px;"><h1 style="font-size:clamp(24px,6vw,32px);font-weight:900;color:#fff;margin:0 0 4px;">All Matches</h1>' +
-        '<p style="color:var(--text-muted);font-size:14px;margin:0;">Every game, grouped by competition. Tap a match to open the full odds. <span style="color:var(--gold);font-weight:700;">Gold</span> = Our Take; blue = market favourite.</p></div>' +
+        '<p style="color:var(--text-muted);font-size:14px;margin:0;">Every game, grouped by competition, with live <span style="color:var(--accent);font-weight:700;">Cosmo Bet</span> odds. Tap a price to back it; <span style="color:var(--accent);font-weight:700;">cyan</span> = Our Take. Tap a row for all markets.</p></div>' +
         body +
+        '<div style="text-align:center;font-size:10px;color:var(--text-muted);margin:16px 0 8px;">Odds provided by Cosmo Bet (indicative, subject to change). Official partner · 18+ · Please gamble responsibly · BeGambleAware.org</div>' +
       '</div>';
   },
 
