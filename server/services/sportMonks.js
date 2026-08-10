@@ -23,6 +23,7 @@ function SportMonks() {
   this.requestCount = 0;
   this.lastError = null;
   this._oddsCache = {}; // fixtureId -> { at, val } market odds, short-TTL
+  this._predCache = {}; // fixtureId -> { at, val } parsed prediction probs
 }
 
 SportMonks.prototype.isAvailable = function() {
@@ -270,6 +271,68 @@ SportMonks.prototype.getPredictions = function(fixtureId) {
   return this._request('/predictions/probabilities/fixtures/' + fixtureId, {})
     .then(function(data) { return data.data || []; })
     .catch(function() { return []; });
+};
+
+// Parsed, cached prediction probabilities for a fixture — the team-aware model
+// SportMonks provides across leagues (unlike our sparse in-house Elo). type_id
+// 237 = 1X2, 231 = BTTS, 240 = correct score (→ derive Over/Under 2.5). Cached
+// 30 min (predictions are stable pre-match). Returns { home, draw, away, btts,
+// over25 } percentages, or null when SportMonks has no prediction for the game.
+SportMonks.prototype.getPredictionsCached = function(fixtureId) {
+  var self = this, now = Date.now();
+  var hit = this._predCache[fixtureId];
+  if (hit && (now - hit.at) < 1800000) return Promise.resolve(hit.val);
+  return this.getPredictions(fixtureId).then(function(arr) {
+    var out = { home: null, draw: null, away: null, btts: null, over25: null };
+    (arr || []).forEach(function(p) {
+      var pv = p.predictions || {};
+      if (p.type_id === 237 && pv.home != null) {
+        out.home = Math.round(pv.home); out.draw = Math.round(pv.draw); out.away = Math.round(pv.away);
+      } else if (p.type_id === 231 && pv.yes != null) {
+        out.btts = Math.round(pv.yes);
+      } else if (p.type_id === 240 && pv.scores) {
+        var over = 0, tot = 0;
+        Object.keys(pv.scores).forEach(function(k) {
+          if (k.indexOf('Other') !== -1) return;
+          var ps = k.split('-'); if (ps.length !== 2) return;
+          var v = pv.scores[k]; tot += v;
+          if (((parseInt(ps[0]) || 0) + (parseInt(ps[1]) || 0)) > 2.5) over += v;
+        });
+        if (tot > 0) out.over25 = Math.round(over / tot * 100);
+      }
+    });
+    // Fallback: some plans use different type ids — detect 1X2 by shape.
+    if (out.home == null) (arr || []).forEach(function(p) {
+      var pv = p.predictions || {};
+      if (out.home == null && pv.home != null && pv.draw != null && pv.away != null) {
+        out.home = Math.round(pv.home); out.draw = Math.round(pv.draw); out.away = Math.round(pv.away);
+      }
+    });
+    var val = (out.home != null || out.btts != null || out.over25 != null) ? out : null;
+    self._predCache[fixtureId] = { at: now, val: val };
+    return val;
+  }).catch(function() { self._predCache[fixtureId] = { at: now, val: null }; return null; });
+};
+
+// Attach SportMonks prediction probs (f.smPred) to a fixture list, joined by
+// exact fixture id, in small concurrent batches (capped, cached). Mutates in
+// place. Only upcoming fixtures are fetched.
+SportMonks.prototype.enrichFixturesWithPredictions = function(fixtures, opts) {
+  opts = opts || {};
+  var self = this, cap = opts.cap || 60, conc = opts.concurrency || 6;
+  var FIN = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
+  var targets = (fixtures || []).filter(function(f) { return f && f.id && !FIN[f.status]; }).slice(0, cap);
+  if (!targets.length) return Promise.resolve(fixtures);
+  var i = 0;
+  var worker = function() {
+    if (i >= targets.length) return Promise.resolve();
+    var f = targets[i++];
+    return self.getPredictionsCached(f.id).then(function(p) { if (p) f.smPred = p; return worker(); })
+      .catch(function() { return worker(); });
+  };
+  var runners = [];
+  for (var w = 0; w < conc; w++) runners.push(worker());
+  return Promise.all(runners).then(function() { return fixtures; });
 };
 
 // =========================================================================

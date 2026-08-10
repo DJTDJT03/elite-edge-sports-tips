@@ -7414,55 +7414,10 @@ const App = {
   },
 
   // ---- BANKERS: model value picks around evens / 5-6 ----------------------
-  // Uses the quant model's probabilities (attached to the enriched odds feed)
-  // vs the real market price to surface genuine value in a "banker" odds band —
-  // short-ish prices our model rates HIGHER than the market. This is a
-  // transparent model value-finder Darren asked for, NOT the locked analyst
-  // tips (so it never touches the scored/consensus pipeline).
-  _bankerBand: { min: 1.60, max: 2.40 },
-  _computeBankers: function (fixtures) {
-    var band = this._bankerBand;
-    var FIN = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
-    var out = [];
-    (fixtures || []).forEach(function (f) {
-      if (!f.homeTeam || !f.awayTeam || FIN[f.status] || !f.model) return;
-      var m = f.model;
-      var cands = [
-        { sel: f.homeTeam + ' Win', market: 'Match Result', odds: f.homeOdds, prob: m.home, side: 'home' },
-        { sel: f.awayTeam + ' Win', market: 'Match Result', odds: f.awayOdds, prob: m.away, side: 'away' },
-        { sel: 'Over 2.5 Goals', market: 'Over/Under', odds: f.overOdds, prob: m.over25, side: null },
-        { sel: 'Under 2.5 Goals', market: 'Over/Under', odds: f.underOdds, prob: m.under25, side: null },
-        { sel: 'Both Teams to Score', market: 'BTTS', odds: f.bttsOdds, prob: m.btts, side: null },
-      ];
-      cands.forEach(function (c) {
-        var o = parseFloat(c.odds) || 0;
-        if (o < band.min || o > band.max) return;
-        var mp = (c.prob || 0) / 100;
-        if (mp < 0.48) return;              // model must actually favour it (banker)
-        var implied = 1 / o;
-        var edge = mp - implied;
-        if (edge < 0.02) return;            // require real value (+2 pts) — excludes model-priced fixtures (edge ~0)
-        var edgePct = Math.round(edge * 1000) / 10;
-        // Confidence reflects BOTH the model's conviction and the size of the edge,
-        // so bankers aren't all a flat 6/10.
-        var conf = 6 + (edgePct >= 4 ? 1 : 0) + (edgePct >= 8 ? 1 : 0) + (mp >= 0.58 ? 1 : 0);
-        out.push({
-          event: f.homeTeam + ' vs ' + f.awayTeam, league: f.league || '', kickoff: f.kickoff || '',
-          selection: c.sel, market: c.market, odds: o,
-          modelProb: Math.round(mp * 100), impliedProb: Math.round(implied * 100),
-          edge: edgePct, confidence: Math.min(9, conf),
-          oddsSource: f.oddsSource || '', side: c.side, cosmoBetslip: f.cosmoBetslip || null,
-        });
-      });
-    });
-    // One per fixture (best edge), then rank by value (edge), tiebreak model prob.
-    var byFx = {};
-    out.forEach(function (b) { var k = b.event.toLowerCase(); if (!byFx[k] || b.edge > byFx[k].edge) byFx[k] = b; });
-    var list = Object.keys(byFx).map(function (k) { return byFx[k]; });
-    list.sort(function (a, b) { return (b.edge - a.edge) || (b.modelProb - a.modelProb); });
-    return list.slice(0, 6);
-  },
-
+  // Server-computed value scan (/football/bankers): SportMonks' team-aware
+  // predictions vs REAL bookmaker odds, surfaced where our model rates the price
+  // higher than the market in a "banker" band. Transparent value-finder Darren
+  // asked for — NOT the locked analyst tips.
   async _loadBankers(date) {
     var el = document.getElementById('bankers-section');
     if (!el) return;
@@ -7470,14 +7425,12 @@ const App = {
     // Stale-render guard: fast date-tab switches re-issue this; only the latest wins.
     var token = (this._bankersToken = (this._bankersToken || 0) + 1);
     try {
-      // Reuse the 10-min odds cache (force:false) so every football render doesn't
-      // re-trigger the heavy odds+model server scan.
-      var data = await this.fetchLiveFootball(false, date || null, true); // odds + model feed
+      var q = date ? ('?date=' + encodeURIComponent(date)) : '';
+      var data = await this.api('/football/bankers' + q, { silent: true, cacheTtl: 300000 });
       if (this._bankersToken !== token) return; // superseded by a newer load
-      // The section may have been re-rendered under us — re-resolve the node.
-      el = document.getElementById('bankers-section');
+      el = document.getElementById('bankers-section'); // may have re-rendered
       if (!el) return;
-      var bankers = this._computeBankers((data && data.fixtures) || []);
+      var bankers = (data && data.bankers) || [];
       if (!bankers.length) {
         el.innerHTML = '<div style="text-align:center;padding:22px;color:var(--text-muted);font-size:13px;">No clear value bankers on this card right now — our model needs a market price it rates too short. Check back closer to kick-off.</div>';
         return;

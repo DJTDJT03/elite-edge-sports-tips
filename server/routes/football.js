@@ -270,36 +270,25 @@ module.exports = function(deps) {
               // (Elo + Dixon-Coles) so every real fixture is priceable. Flagged
               // oddsSource:'model' so the UI can label an estimated price. Skip when
               // ?model=0 (tools that must show bookmaker prices only).
-              // ONE model prediction per fixture: attach the model probabilities to
-              // EVERY fixture (powers the Bankers value scan + acca edge), and use
-              // them as a fair-price fallback for any fixture no bookmaker priced
-              // (oddsSource:'model'). ?model=0 suppresses the odds fallback (tools
-              // that must show bookmaker prices only) but still attaches probs.
-              if (deps.quantModel && deps.quantModel.predictAsync) {
+              // Model-price fallback: fixtures no bookmaker priced get fair 1X2 /
+              // O-U / BTTS prices from our quant model so every fixture is
+              // priceable (oddsSource:'model'). ?model=0 opts out (bookmaker-only).
+              if (req.query.model !== '0' && deps.quantModel && deps.quantModel.predictAsync) {
                 var FINQ = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
                 var fairOdds = function (pctv) { var p = (pctv || 0) / 100; return p > 0.02 ? Math.round((1 / p) * 100) / 100 : null; };
-                var allowModelOdds = req.query.model !== '0';
                 for (var qi = 0; qi < smFixtures.length; qi++) {
                   var qf = smFixtures[qi];
-                  if (!qf.homeTeam || !qf.awayTeam || FINQ[qf.status]) continue;
+                  if (qf.homeOdds || !qf.homeTeam || !qf.awayTeam || FINQ[qf.status]) continue;
                   try {
                     var pr = await deps.quantModel.predictAsync(qf.homeTeam, qf.awayTeam);
                     if (pr && pr.winProb) {
-                      qf.model = {
-                        home: pr.winProb.home, draw: pr.winProb.draw, away: pr.winProb.away,
-                        over25: pr.over25, under25: pr.under25, btts: pr.btts,
-                        egHome: pr.expectedGoals ? pr.expectedGoals.home : null,
-                        egAway: pr.expectedGoals ? pr.expectedGoals.away : null,
-                      };
-                      if (allowModelOdds && !qf.homeOdds) {
-                        qf.homeOdds = fairOdds(pr.winProb.home);
-                        qf.drawOdds = fairOdds(pr.winProb.draw);
-                        qf.awayOdds = fairOdds(pr.winProb.away);
-                        qf.overOdds = fairOdds(pr.over25);
-                        qf.underOdds = fairOdds(pr.under25);
-                        qf.bttsOdds = fairOdds(pr.btts);
-                        qf.oddsSource = 'model';
-                      }
+                      qf.homeOdds = fairOdds(pr.winProb.home);
+                      qf.drawOdds = fairOdds(pr.winProb.draw);
+                      qf.awayOdds = fairOdds(pr.winProb.away);
+                      qf.overOdds = fairOdds(pr.over25);
+                      qf.underOdds = fairOdds(pr.under25);
+                      qf.bttsOdds = fairOdds(pr.btts);
+                      qf.oddsSource = 'model';
                     }
                   } catch (e) { /* non-fatal — fixture just stays priceless */ }
                 }
@@ -320,6 +309,78 @@ module.exports = function(deps) {
       var normalised = footballSource.normalise(raw);
       res.json({ live: true, fixtures: normalised, source: 'api-football', fetchedAt: new Date().toISOString() });
     } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // GET /football/bankers — model VALUE picks in a "banker" odds band (~evens /
+  // 5-6) where our informed model rates the price higher than the market. Uses
+  // SportMonks' team-aware predictions (our sparse in-house Elo only when it
+  // KNOWS both teams — never its uniform default, which would fabricate value),
+  // compared against REAL bookmaker odds. Display-only; does not touch the locked
+  // analyst/scoring/settle pipeline.
+  router.get('/football/bankers', async (req, res) => {
+    try {
+      if (!sportMonks || !sportMonks.isAvailable()) return res.json({ bankers: [] });
+      var date = req.query.date || new Date().toISOString().split('T')[0];
+      var fixtures = await sportMonks.getFixturesByDate(date);
+      if (!fixtures || !fixtures.length) return res.json({ bankers: [], scanned: 0 });
+      // Real bookmaker odds (SportMonks 140+ books, then Cosmo partner for gaps +
+      // betslip deep-links) and team-aware prediction probabilities.
+      try { await sportMonks.enrichFixturesWithOdds(fixtures, { cap: 60 }); } catch (e) {}
+      if (cosmoBet && cosmoBet.enrichFixturesWithOdds) { try { await cosmoBet.enrichFixturesWithOdds(fixtures, { cap: 40 }); } catch (e) {} }
+      try { await sportMonks.enrichFixturesWithPredictions(fixtures, { cap: 60 }); } catch (e) {}
+
+      var band = { min: 1.60, max: 2.40 };
+      var FIN = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
+      var qm = deps.quantModel;
+      var out = [];
+      fixtures.forEach(function (f) {
+        if (!f.homeTeam || !f.awayTeam || FIN[f.status]) return;
+        // Informed probabilities only: SportMonks predictions, else our quant model
+        // ONLY when it knows BOTH teams (its default-rating output is uniform and
+        // would invent value on unrated clubs).
+        var prob = null, psrc = '';
+        if (f.smPred && f.smPred.home != null) {
+          prob = { home: f.smPred.home, draw: f.smPred.draw, away: f.smPred.away,
+            over25: f.smPred.over25, under25: (f.smPred.over25 != null ? 100 - f.smPred.over25 : null), btts: f.smPred.btts };
+          psrc = 'sportmonks';
+        } else if (qm && qm.knows && qm.predict && qm.knows(f.homeTeam) && qm.knows(f.awayTeam)) {
+          try {
+            var pr = qm.predict(f.homeTeam, f.awayTeam);
+            if (pr && pr.winProb) { prob = { home: pr.winProb.home, draw: pr.winProb.draw, away: pr.winProb.away, over25: pr.over25, under25: pr.under25, btts: pr.btts }; psrc = 'quant'; }
+          } catch (e) {}
+        }
+        if (!prob) return; // no informed model → never fabricate value
+        var cands = [
+          { sel: f.homeTeam + ' Win', market: 'Match Result', odds: f.homeOdds, prob: prob.home, side: 'home' },
+          { sel: f.awayTeam + ' Win', market: 'Match Result', odds: f.awayOdds, prob: prob.away, side: 'away' },
+          { sel: 'Over 2.5 Goals', market: 'Over/Under', odds: f.overOdds, prob: prob.over25, side: null },
+          { sel: 'Under 2.5 Goals', market: 'Over/Under', odds: f.underOdds, prob: prob.under25, side: null },
+          { sel: 'Both Teams to Score', market: 'BTTS', odds: f.bttsOdds, prob: prob.btts, side: null },
+        ];
+        var best = null;
+        cands.forEach(function (c) {
+          if (f.oddsSource === 'model') return; // need a REAL market to beat
+          var o = parseFloat(c.odds) || 0;
+          if (o < band.min || o > band.max) return;
+          var mp = (c.prob || 0) / 100;
+          if (mp < 0.48) return;
+          var edge = mp - (1 / o);
+          if (edge < 0.02) return;
+          var edgePct = Math.round(edge * 1000) / 10;
+          var cand = {
+            event: f.homeTeam + ' vs ' + f.awayTeam, league: f.league || '', kickoff: f.kickoff || '',
+            selection: c.sel, market: c.market, odds: o, modelProb: Math.round(mp * 100), impliedProb: Math.round((1 / o) * 100),
+            edge: edgePct, confidence: Math.min(9, 6 + (edgePct >= 4 ? 1 : 0) + (edgePct >= 8 ? 1 : 0) + (mp >= 0.58 ? 1 : 0)),
+            modelSource: psrc, oddsSource: f.oddsSource || 'book', side: c.side,
+            cosmoBetslip: f.cosmoBetslip || null,
+          };
+          if (!best || cand.edge > best.edge) best = cand; // one (best) per fixture
+        });
+        if (best) out.push(best);
+      });
+      out.sort(function (a, b) { return (b.edge - a.edge) || (b.modelProb - a.modelProb); });
+      res.json({ bankers: out.slice(0, 6), scanned: fixtures.length });
+    } catch (err) { res.json({ bankers: [], error: err.message }); }
   });
 
   router.get('/football/live-scores', async (req, res) => {
