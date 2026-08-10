@@ -7384,6 +7384,12 @@ const App = {
           </div>
         </div>
 
+        ${!isPastTab ? `
+        <div class="section" id="bankers-wrap">
+          <div class="section-title"><span class="icon">&#128142;</span> Today's Bankers <span style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:none;letter-spacing:0;">· model value around evens</span></div>
+          <div id="bankers-section"><div style="text-align:center;padding:24px;color:var(--text-muted);"><div class="loading-spinner" style="margin:0 auto 10px;"></div>Scanning the card for value…</div></div>
+        </div>` : ''}
+
         <div class="section">
           <div class="section-title"><span class="icon">&#9917;</span> ${isPastTab ? 'Results' : 'Football Selections'}</div>
           <div class="${isPastTab ? '' : 'grid grid-2'}" id="football-tips">
@@ -7399,6 +7405,114 @@ const App = {
         </div>` : ''}
       </div>
     `;
+
+    // Populate the Bankers value-scan asynchronously (needs the odds+model feed).
+    if (!isPastTab) {
+      var bankersDate = dateTab === 'future' ? futureDate : null;
+      this._loadBankers(bankersDate);
+    }
+  },
+
+  // ---- BANKERS: model value picks around evens / 5-6 ----------------------
+  // Uses the quant model's probabilities (attached to the enriched odds feed)
+  // vs the real market price to surface genuine value in a "banker" odds band —
+  // short-ish prices our model rates HIGHER than the market. This is a
+  // transparent model value-finder Darren asked for, NOT the locked analyst
+  // tips (so it never touches the scored/consensus pipeline).
+  _bankerBand: { min: 1.60, max: 2.40 },
+  _computeBankers: function (fixtures) {
+    var band = this._bankerBand;
+    var FIN = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
+    var out = [];
+    (fixtures || []).forEach(function (f) {
+      if (!f.homeTeam || !f.awayTeam || FIN[f.status] || !f.model) return;
+      var m = f.model;
+      var cands = [
+        { sel: f.homeTeam + ' Win', market: 'Match Result', odds: f.homeOdds, prob: m.home, side: 'home' },
+        { sel: f.awayTeam + ' Win', market: 'Match Result', odds: f.awayOdds, prob: m.away, side: 'away' },
+        { sel: 'Over 2.5 Goals', market: 'Over/Under', odds: f.overOdds, prob: m.over25, side: null },
+        { sel: 'Under 2.5 Goals', market: 'Over/Under', odds: f.underOdds, prob: m.under25, side: null },
+        { sel: 'Both Teams to Score', market: 'BTTS', odds: f.bttsOdds, prob: m.btts, side: null },
+      ];
+      cands.forEach(function (c) {
+        var o = parseFloat(c.odds) || 0;
+        if (o < band.min || o > band.max) return;
+        var mp = (c.prob || 0) / 100;
+        if (mp < 0.48) return;              // model must actually favour it (banker)
+        var implied = 1 / o;
+        var edge = mp - implied;
+        if (edge < 0.02) return;            // require real value (+2 pts) — excludes model-priced fixtures (edge ~0)
+        var edgePct = Math.round(edge * 1000) / 10;
+        // Confidence reflects BOTH the model's conviction and the size of the edge,
+        // so bankers aren't all a flat 6/10.
+        var conf = 6 + (edgePct >= 4 ? 1 : 0) + (edgePct >= 8 ? 1 : 0) + (mp >= 0.58 ? 1 : 0);
+        out.push({
+          event: f.homeTeam + ' vs ' + f.awayTeam, league: f.league || '', kickoff: f.kickoff || '',
+          selection: c.sel, market: c.market, odds: o,
+          modelProb: Math.round(mp * 100), impliedProb: Math.round(implied * 100),
+          edge: edgePct, confidence: Math.min(9, conf),
+          oddsSource: f.oddsSource || '', side: c.side, cosmoBetslip: f.cosmoBetslip || null,
+        });
+      });
+    });
+    // One per fixture (best edge), then rank by value (edge), tiebreak model prob.
+    var byFx = {};
+    out.forEach(function (b) { var k = b.event.toLowerCase(); if (!byFx[k] || b.edge > byFx[k].edge) byFx[k] = b; });
+    var list = Object.keys(byFx).map(function (k) { return byFx[k]; });
+    list.sort(function (a, b) { return (b.edge - a.edge) || (b.modelProb - a.modelProb); });
+    return list.slice(0, 6);
+  },
+
+  async _loadBankers(date) {
+    var el = document.getElementById('bankers-section');
+    if (!el) return;
+    var wrap = document.getElementById('bankers-wrap');
+    // Stale-render guard: fast date-tab switches re-issue this; only the latest wins.
+    var token = (this._bankersToken = (this._bankersToken || 0) + 1);
+    try {
+      // Reuse the 10-min odds cache (force:false) so every football render doesn't
+      // re-trigger the heavy odds+model server scan.
+      var data = await this.fetchLiveFootball(false, date || null, true); // odds + model feed
+      if (this._bankersToken !== token) return; // superseded by a newer load
+      // The section may have been re-rendered under us — re-resolve the node.
+      el = document.getElementById('bankers-section');
+      if (!el) return;
+      var bankers = this._computeBankers((data && data.fixtures) || []);
+      if (!bankers.length) {
+        el.innerHTML = '<div style="text-align:center;padding:22px;color:var(--text-muted);font-size:13px;">No clear value bankers on this card right now — our model needs a market price it rates too short. Check back closer to kick-off.</div>';
+        return;
+      }
+      el.innerHTML = this._renderBankersCards(bankers);
+    } catch (e) {
+      if (this._bankersToken === token && wrap) wrap.style.display = 'none';
+    }
+  },
+
+  _renderBankersCards: function (bankers) {
+    var self = this;
+    var genericCosmo = this.cosmoLink('bankers');
+    return '<div class="grid grid-2" style="gap:12px;">' + bankers.map(function (b) {
+      var kt = b.kickoff ? new Date(b.kickoff) : null;
+      var ktTxt = (kt && !isNaN(kt.getTime())) ? kt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+      var link = (b.cosmoBetslip && b.side && b.cosmoBetslip[b.side]) ? b.cosmoBetslip[b.side] : genericCosmo;
+      var srcTag = b.oddsSource === 'cosmo' ? '⚡ Cosmo price' : 'market price';
+      var confPct = Math.min(100, b.confidence * 10);
+      return '<div class="card" style="padding:16px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+            '<span style="font-size:10px;font-weight:800;letter-spacing:0.5px;color:var(--accent);text-transform:uppercase;">💎 Banker</span>' +
+            '<span style="font-size:11px;color:#22c55e;font-weight:800;">+' + b.edge + '% value</span>' +
+          '</div>' +
+          '<div style="font-size:16px;font-weight:800;color:#fff;margin-bottom:2px;">' + self.escapeHtml(b.selection) + '</div>' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">' + self.escapeHtml(b.event) + (b.league ? ' · ' + self.escapeHtml(b.league) : '') + (ktTxt ? ' · ' + ktTxt : '') + '</div>' +
+          '<div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;">' +
+            '<div><div style="font-size:22px;font-weight:900;color:var(--accent);line-height:1;">' + self.formatOdds(b.odds) + '</div><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;">' + srcTag + '</div></div>' +
+            '<div style="flex:1;font-size:11px;color:var(--text-secondary);">Our model <strong style="color:#fff;">' + b.modelProb + '%</strong> vs market <strong style="color:#fff;">' + b.impliedProb + '%</strong></div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="font-size:10px;color:var(--text-muted);">Confidence</span><div style="flex:1;height:5px;border-radius:3px;background:var(--bg-elevated);overflow:hidden;"><div style="width:' + confPct + '%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));"></div></div><span style="font-size:11px;font-weight:800;color:var(--accent);">' + b.confidence + '/10</span></div>' +
+          '<a href="' + self._attrUrl(link) + '" target="_blank" rel="noopener sponsored" class="btn btn-gold btn-sm" style="width:100%;box-sizing:border-box;">⚡ Back with Cosmo Bet</a>' +
+        '</div>';
+    }).join('') + '</div>' +
+      '<div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:10px;">Model value picks (Elo + Dixon-Coles) — not our published analyst tips. Odds indicative · 18+ · gamble responsibly · BeGambleAware.org</div>';
   },
 
   async refreshFootballData(btn) {

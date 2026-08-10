@@ -270,22 +270,36 @@ module.exports = function(deps) {
               // (Elo + Dixon-Coles) so every real fixture is priceable. Flagged
               // oddsSource:'model' so the UI can label an estimated price. Skip when
               // ?model=0 (tools that must show bookmaker prices only).
-              if (req.query.model !== '0' && deps.quantModel && deps.quantModel.predictAsync) {
+              // ONE model prediction per fixture: attach the model probabilities to
+              // EVERY fixture (powers the Bankers value scan + acca edge), and use
+              // them as a fair-price fallback for any fixture no bookmaker priced
+              // (oddsSource:'model'). ?model=0 suppresses the odds fallback (tools
+              // that must show bookmaker prices only) but still attaches probs.
+              if (deps.quantModel && deps.quantModel.predictAsync) {
                 var FINQ = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
                 var fairOdds = function (pctv) { var p = (pctv || 0) / 100; return p > 0.02 ? Math.round((1 / p) * 100) / 100 : null; };
+                var allowModelOdds = req.query.model !== '0';
                 for (var qi = 0; qi < smFixtures.length; qi++) {
                   var qf = smFixtures[qi];
-                  if (qf.homeOdds || !qf.homeTeam || !qf.awayTeam || FINQ[qf.status]) continue;
+                  if (!qf.homeTeam || !qf.awayTeam || FINQ[qf.status]) continue;
                   try {
                     var pr = await deps.quantModel.predictAsync(qf.homeTeam, qf.awayTeam);
                     if (pr && pr.winProb) {
-                      qf.homeOdds = fairOdds(pr.winProb.home);
-                      qf.drawOdds = fairOdds(pr.winProb.draw);
-                      qf.awayOdds = fairOdds(pr.winProb.away);
-                      qf.overOdds = fairOdds(pr.over25);
-                      qf.underOdds = fairOdds(pr.under25);
-                      qf.bttsOdds = fairOdds(pr.btts);
-                      qf.oddsSource = 'model';
+                      qf.model = {
+                        home: pr.winProb.home, draw: pr.winProb.draw, away: pr.winProb.away,
+                        over25: pr.over25, under25: pr.under25, btts: pr.btts,
+                        egHome: pr.expectedGoals ? pr.expectedGoals.home : null,
+                        egAway: pr.expectedGoals ? pr.expectedGoals.away : null,
+                      };
+                      if (allowModelOdds && !qf.homeOdds) {
+                        qf.homeOdds = fairOdds(pr.winProb.home);
+                        qf.drawOdds = fairOdds(pr.winProb.draw);
+                        qf.awayOdds = fairOdds(pr.winProb.away);
+                        qf.overOdds = fairOdds(pr.over25);
+                        qf.underOdds = fairOdds(pr.under25);
+                        qf.bttsOdds = fairOdds(pr.btts);
+                        qf.oddsSource = 'model';
+                      }
                     }
                   } catch (e) { /* non-fatal — fixture just stays priceless */ }
                 }
