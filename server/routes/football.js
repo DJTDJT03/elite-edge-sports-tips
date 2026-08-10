@@ -110,6 +110,7 @@ module.exports = function(deps) {
   // fires a dozen external + LLM calls per open; re-opening the same fixture (or
   // many users opening the same WC game) should be instant, not a full recompute.
   var _miCache = {};
+  var _bankersCache = {}; // date -> { at, val } — the bankers scan is heavy, cache 5 min
 
   // ---------------------------------------------------------------------------
   // VERDICT LOCK — integrity guard for the World Cup "Our Take".
@@ -321,13 +322,17 @@ module.exports = function(deps) {
     try {
       if (!sportMonks || !sportMonks.isAvailable()) return res.json({ bankers: [] });
       var date = req.query.date || new Date().toISOString().split('T')[0];
+      // Serve a recent cached scan (the enrichment is heavy) unless ?fresh=1.
+      var cHit = _bankersCache[date];
+      if (cHit && req.query.fresh !== '1' && (Date.now() - cHit.at) < 300000) return res.json(cHit.val);
       var fixtures = await sportMonks.getFixturesByDate(date);
       if (!fixtures || !fixtures.length) return res.json({ bankers: [], scanned: 0 });
-      // Real bookmaker odds (SportMonks 140+ books, then Cosmo partner for gaps +
-      // betslip deep-links) and team-aware prediction probabilities.
+      // Real bookmaker odds: SportMonks 140+ books (the de-vig consensus signal),
+      // then Cosmo partner for gaps + per-selection betslip deep-links. (SportMonks
+      // predictions are not populated for these fixtures, so we don't spend calls
+      // on them — the de-vigged multi-book consensus is our probability source.)
       try { await sportMonks.enrichFixturesWithOdds(fixtures, { cap: 60 }); } catch (e) {}
-      if (cosmoBet && cosmoBet.enrichFixturesWithOdds) { try { await cosmoBet.enrichFixturesWithOdds(fixtures, { cap: 40 }); } catch (e) {} }
-      try { await sportMonks.enrichFixturesWithPredictions(fixtures, { cap: 60 }); } catch (e) {}
+      if (cosmoBet && cosmoBet.enrichFixturesWithOdds) { try { await cosmoBet.enrichFixturesWithOdds(fixtures, { cap: 30 }); } catch (e) {} }
 
       // Band tuned to "around evens / 5-6" (~4/6 to 11/10). A banker is a strong,
       // fairly-priced pick — not a sub-1.5 no-value shortie, not a longshot.
@@ -342,13 +347,9 @@ module.exports = function(deps) {
         return s > 0 ? inv.map(function (x) { return x / s; }) : null;
       };
       var out = [];
-      var dbg = { has1x2: 0, hasOU: 0, inBandStrong: 0, sample: null };
       fixtures.forEach(function (f) {
         if (!f.homeTeam || !f.awayTeam || FIN[f.status]) return;
         if (f.oddsSource === 'model') return; // need a REAL market (not our fair-price fallback)
-        if (f.homeOdds && f.drawOdds && f.awayOdds) dbg.has1x2++;
-        if (f.overOdds && f.underOdds) dbg.hasOU++;
-        if (!dbg.sample && f.homeOdds) dbg.sample = { ev: f.homeTeam + ' v ' + f.awayTeam, H: f.homeOdds, D: f.drawOdds, A: f.awayOdds, O: f.overOdds, U: f.underOdds, src: f.oddsSource || 'book' };
         // Fair (de-vigged consensus) probability for each selection.
         var f1 = devig([f.homeOdds, f.drawOdds, f.awayOdds]);      // 1X2
         var fou = devig([f.overOdds, f.underOdds]);                 // Over/Under 2.5
@@ -368,7 +369,6 @@ module.exports = function(deps) {
         cands.forEach(function (c) {
           var o = parseFloat(c.odds) || 0;
           if (o < band.min || o > band.max || !c.fair) return;
-          if (c.fair >= 0.50) dbg.inBandStrong++;
           if (c.fair < 0.50) return; // a banker must be the market's genuine favourite
           // Optional genuine value: our model rates it higher than the consensus.
           var modelEdge = (c.model != null) ? Math.round((c.model - c.fair) * 1000) / 10 : null;
@@ -390,7 +390,9 @@ module.exports = function(deps) {
         var av = (a.modelEdge || 0), bv = (b.modelEdge || 0);
         return (bv - av) || (b.marketProb - a.marketProb);
       });
-      res.json({ bankers: out.slice(0, 6), scanned: fixtures.length, debug: req.query.debug === '1' ? dbg : undefined });
+      var payload = { bankers: out.slice(0, 6), scanned: fixtures.length };
+      _bankersCache[date] = { at: Date.now(), val: payload };
+      res.json(payload);
     } catch (err) { res.json({ bankers: [], error: err.message }); }
   });
 
