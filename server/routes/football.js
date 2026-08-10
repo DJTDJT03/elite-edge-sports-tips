@@ -384,6 +384,18 @@ module.exports = function(deps) {
         if (best) out.push(best);
       });
       out.sort(function (a, b) { return (b.edge - a.edge) || (b.modelProb - a.modelProb); });
+      if (req.query.debug === '1') {
+        // Raw predictions probe for the first upcoming fixture — diagnose type ids.
+        var probe = fixtures.find(function (f) { return f.id && !FIN[f.status]; });
+        if (probe && sportMonks.getPredictions) {
+          try {
+            var raw = await sportMonks.getPredictions(probe.id);
+            dbg.probe = { id: probe.id, ev: probe.homeTeam + ' v ' + probe.awayTeam, count: (raw || []).length,
+              typeIds: (raw || []).map(function (p) { return p.type_id; }),
+              first: (raw || [])[0] ? { type_id: raw[0].type_id, keys: Object.keys(raw[0].predictions || {}) } : null };
+          } catch (e) { dbg.probe = { err: e.message }; }
+        }
+      }
       res.json({ bankers: out.slice(0, 6), scanned: fixtures.length, debug: req.query.debug === '1' ? dbg : undefined });
     } catch (err) { res.json({ bankers: [], error: err.message }); }
   });
