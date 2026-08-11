@@ -341,6 +341,7 @@ module.exports = function(deps) {
       var valueMax = 2.60; // value can sit a touch bigger than a pure banker price
       var FIN = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
       var devig = function (prices) {
+        if (!Array.isArray(prices)) return null;
         var inv = prices.map(function (p) { return (p && p > 1) ? 1 / p : 0; });
         var s = inv.reduce(function (a, b) { return a + b; }, 0);
         return s > 0 ? inv.map(function (x) { return x / s; }) : null;
