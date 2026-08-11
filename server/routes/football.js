@@ -355,8 +355,8 @@ module.exports = function(deps) {
         var cos = f.cosmo || {};
         var triple = smHasTriple ? [f.homeOdds, f.drawOdds, f.awayOdds]
           : (cos.home && cos.draw && cos.away) ? [cos.home, cos.draw, cos.away] : null;
-        var f1 = devig(triple);
-        var fou = devig([f.overOdds, f.underOdds]); // O/U from the consensus book
+        var f1 = triple ? devig(triple) : null;
+        var fou = (f.overOdds && f.underOdds) ? devig([f.overOdds, f.underOdds]) : null; // O/U from the consensus book
         var cands = [
           { sel: f.homeTeam + ' Win', market: 'Match Result', consensusOdds: triple ? triple[0] : null, fair: f1 ? f1[0] : null, cosmoOdds: cos.home || null, cosmoLink: cos.homeLink || null, side: 'home' },
           { sel: f.awayTeam + ' Win', market: 'Match Result', consensusOdds: triple ? triple[2] : null, fair: f1 ? f1[2] : null, cosmoOdds: cos.away || null, cosmoLink: cos.awayLink || null, side: 'away' },
