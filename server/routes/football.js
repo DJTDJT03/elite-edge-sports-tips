@@ -333,6 +333,33 @@ module.exports = function(deps) {
       // value, at our partner book. (SportMonks predictions aren't populated for
       // these fixtures, so we don't spend calls on them.)
       try { await sportMonks.enrichFixturesWithOdds(fixtures, { cap: 60 }); } catch (e) {}
+      // Independent multi-book CONSENSUS via the Odds API (major leagues) — averaged
+      // across every bookmaker it returns, so it's a genuine consensus to value
+      // Cosmo against (SportMonks pre-match odds are sparse on our plan). Only near
+      // dates carry Odds API data.
+      if (oddsSource && process.env.ODDS_API_KEY) {
+        try {
+          var oddsData = oddsSource.normalise(await oddsSource.fetch()) || [];
+          var avg = function (a) { return a.length ? a.reduce(function (x, y) { return x + y; }, 0) / a.length : null; };
+          fixtures.forEach(function (f) {
+            if (f.homeOdds || !f.homeTeam || !f.awayTeam) return; // keep SM if it had it
+            var fH = f.homeTeam.toLowerCase(), fA = f.awayTeam.toLowerCase();
+            var m = oddsData.find(function (o) {
+              var oH = (o.homeTeam || '').toLowerCase(), oA = (o.awayTeam || '').toLowerCase();
+              return (oH.indexOf(fH.slice(0, 6)) !== -1 || fH.indexOf(oH.slice(0, 6)) !== -1) &&
+                     (oA.indexOf(fA.slice(0, 6)) !== -1 || fA.indexOf(oA.slice(0, 6)) !== -1);
+            });
+            if (!m || !m.bookmakerOdds) return;
+            var hs = [], ds = [], as = [];
+            Object.keys(m.bookmakerOdds).forEach(function (bk) {
+              var b = m.bookmakerOdds[bk], ks = Object.keys(b);
+              var h = b[f.homeTeam] || b[ks[0]], dr = b['Draw'] || b['draw'], aw = b[f.awayTeam] || b[ks[2]];
+              if (h > 1) hs.push(h); if (dr > 1) ds.push(dr); if (aw > 1) as.push(aw);
+            });
+            if (hs.length && ds.length && as.length) { f.homeOdds = avg(hs); f.drawOdds = avg(ds); f.awayOdds = avg(as); f.oddsSource = 'oddsapi'; }
+          });
+        } catch (e) { /* non-fatal */ }
+      }
       if (cosmoBet && cosmoBet.enrichFixturesWithCosmoPrices) { try { await cosmoBet.enrichFixturesWithCosmoPrices(fixtures, { cap: 50 }); } catch (e) {} }
 
       // Band tuned to "around evens / 5-6" (~4/6 to 11/10). A banker is a strong,
@@ -347,13 +374,10 @@ module.exports = function(deps) {
         return s > 0 ? inv.map(function (x) { return x / s; }) : null;
       };
       var out = [];
-      var dbg = { withSM: 0, withCosmo: 0, maxEdge: -99, edgeSample: [] };
       fixtures.forEach(function (f) {
         if (!f.homeTeam || !f.awayTeam || FIN[f.status]) return;
         if (f.oddsSource === 'model') return; // need a REAL market (not our fair-price fallback)
-        if (f.homeOdds && f.drawOdds && f.awayOdds) dbg.withSM++;
-        if (f.cosmo && f.cosmo.home) dbg.withCosmo++;
-        // Consensus source: SportMonks multi-book if present, else Cosmo's own 1X2
+        // Consensus source: SportMonks/Odds-API multi-book if present, else Cosmo's own 1X2
         // (single book — no independent value comparison, but still a fair prob).
         var smHasTriple = !!(f.homeOdds && f.drawOdds && f.awayOdds);
         var cos = f.cosmo || {};
@@ -375,8 +399,6 @@ module.exports = function(deps) {
           var valueEdge = null, betOdds = c.consensusOdds, betLink = null, betSrc = 'consensus';
           if (smHasTriple && c.cosmoOdds && c.cosmoOdds >= band.min && c.cosmoOdds <= valueMax) {
             var ve = c.fair - (1 / c.cosmoOdds);           // fair prob minus Cosmo-implied
-            if (ve > dbg.maxEdge) { dbg.maxEdge = Math.round(ve * 1000) / 10; }
-            if (ve > 0 && dbg.edgeSample.length < 8) dbg.edgeSample.push({ s: c.sel.slice(0, 14), fair: Math.round(c.fair * 100), cos: c.cosmoOdds, e: Math.round(ve * 1000) / 10 });
             // 5% floor: comfortably above proportional-de-vig favourite bias (which
             // over-states the favourite's fair prob by a point or two) + the small
             // staleness skew between the consensus and Cosmo snapshots, so a flagged
@@ -411,7 +433,6 @@ module.exports = function(deps) {
         return (bv - av) || (b.marketProb - a.marketProb);
       });
       var payload = { bankers: out.slice(0, 6), scanned: fixtures.length };
-      if (req.query.debug === '1') payload.debug = dbg;
       _bankersCache[date] = { at: Date.now(), val: payload };
       res.json(payload);
     } catch (err) { res.json({ bankers: [], error: err.message }); }
