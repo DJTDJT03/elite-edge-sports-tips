@@ -369,6 +369,51 @@ CosmoBet.prototype.enrichFixturesWithOdds = async function(fixtures, opts) {
   return Promise.all(runners).then(function() { return fixtures; });
 };
 
+// Attach Cosmo's 1X2 prices ALONGSIDE any existing consensus odds (does NOT
+// overwrite f.homeOdds), under f.cosmo = { home, draw, away, homeLink, drawLink,
+// awayLink }. Used by the value scan to compare Cosmo's price against the de-vigged
+// multi-book consensus — flagging where Cosmo pays MORE than fair (genuine value,
+// and it's our partner book). Matches unambiguously only; fetches matched games in
+// capped concurrent batches.
+CosmoBet.prototype.enrichFixturesWithCosmoPrices = async function(fixtures, opts) {
+  opts = opts || {};
+  var self = this;
+  var cap = opts.cap || 50;
+  var FIN = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
+  await this.ensureTeamMap();
+  if (!this.hasTeamMap()) return fixtures;
+  var jobs = [];
+  for (var i = 0; i < (fixtures || []).length && jobs.length < cap; i++) {
+    var f = fixtures[i];
+    if (!f || !f.homeTeam || !f.awayTeam || FIN[f.status]) continue; // note: NOT gated on f.homeOdds
+    try {
+      var game = await this.matchFixture(f.homeTeam, f.awayTeam, f.kickoff);
+      if (game && game.gameId) jobs.push({ f: f, gameId: game.gameId });
+    } catch (e) { /* skip unmatched */ }
+  }
+  if (!jobs.length) return fixtures;
+  var idx = 0, conc = opts.concurrency || 5, subId = opts.subId || 'bankers';
+  var worker = function() {
+    if (idx >= jobs.length) return Promise.resolve();
+    var job = jobs[idx++];
+    return self.getGameOdds(job.gameId).then(function(od) {
+      if (od && od.matchResult) {
+        var mr = od.matchResult;
+        job.f.cosmo = {
+          home: mr.home || null, draw: mr.draw || null, away: mr.away || null,
+          homeLink: mr.homeId ? self.betslipLink({ outcomeId: mr.homeId, subId: subId }) : null,
+          drawLink: mr.drawId ? self.betslipLink({ outcomeId: mr.drawId, subId: subId }) : null,
+          awayLink: mr.awayId ? self.betslipLink({ outcomeId: mr.awayId, subId: subId }) : null,
+        };
+      }
+      return worker();
+    }).catch(function() { return worker(); });
+  };
+  var runners = [];
+  for (var w = 0; w < conc; w++) runners.push(worker());
+  return Promise.all(runners).then(function() { return fixtures; });
+};
+
 // Whether the "add to betslip" deep-link is genuinely wired (Cosmo have confirmed
 // attribution). Until then the CTA must not promise a pre-filled slip.
 CosmoBet.prototype.isDeepLinkReady = function() {

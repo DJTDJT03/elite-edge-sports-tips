@@ -327,20 +327,19 @@ module.exports = function(deps) {
       if (cHit && req.query.fresh !== '1' && (Date.now() - cHit.at) < 300000) return res.json(cHit.val);
       var fixtures = await sportMonks.getFixturesByDate(date);
       if (!fixtures || !fixtures.length) return res.json({ bankers: [], scanned: 0 });
-      // Real bookmaker odds: SportMonks 140+ books (the de-vig consensus signal),
-      // then Cosmo partner for gaps + per-selection betslip deep-links. (SportMonks
-      // predictions are not populated for these fixtures, so we don't spend calls
-      // on them — the de-vigged multi-book consensus is our probability source.)
+      // Real bookmaker odds: SportMonks 140+ books = the de-vig CONSENSUS (our fair
+      // probability). Then attach Cosmo's OWN 1X2 prices alongside (not overwriting)
+      // so we can flag where Cosmo pays MORE than the consensus fair price — genuine
+      // value, at our partner book. (SportMonks predictions aren't populated for
+      // these fixtures, so we don't spend calls on them.)
       try { await sportMonks.enrichFixturesWithOdds(fixtures, { cap: 60 }); } catch (e) {}
-      if (cosmoBet && cosmoBet.enrichFixturesWithOdds) { try { await cosmoBet.enrichFixturesWithOdds(fixtures, { cap: 30 }); } catch (e) {} }
+      if (cosmoBet && cosmoBet.enrichFixturesWithCosmoPrices) { try { await cosmoBet.enrichFixturesWithCosmoPrices(fixtures, { cap: 50 }); } catch (e) {} }
 
       // Band tuned to "around evens / 5-6" (~4/6 to 11/10). A banker is a strong,
       // fairly-priced pick — not a sub-1.5 no-value shortie, not a longshot.
       var band = { min: 1.57, max: 2.15 };
+      var valueMax = 2.60; // value can sit a touch bigger than a pure banker price
       var FIN = { FT: 1, AET: 1, PEN: 1, CANC: 1, POSTP: 1, ABAN: 1 };
-      var qm = deps.quantModel;
-      // De-vig a set of prices in one market → fair probabilities (strips the
-      // bookmaker overround). The multi-book consensus is a sharp, informed signal.
       var devig = function (prices) {
         var inv = prices.map(function (p) { return (p && p > 1) ? 1 / p : 0; });
         var s = inv.reduce(function (a, b) { return a + b; }, 0);
@@ -350,44 +349,59 @@ module.exports = function(deps) {
       fixtures.forEach(function (f) {
         if (!f.homeTeam || !f.awayTeam || FIN[f.status]) return;
         if (f.oddsSource === 'model') return; // need a REAL market (not our fair-price fallback)
-        // Fair (de-vigged consensus) probability for each selection.
-        var f1 = devig([f.homeOdds, f.drawOdds, f.awayOdds]);      // 1X2
-        var fou = devig([f.overOdds, f.underOdds]);                 // Over/Under 2.5
-        // Optional model edge, ONLY when our quant model knows both teams (its
-        // default-rating output is uniform and would fabricate value on clubs).
-        var qp = null;
-        if (qm && qm.knows && qm.predict && qm.knows(f.homeTeam) && qm.knows(f.awayTeam)) {
-          try { var pr = qm.predict(f.homeTeam, f.awayTeam); if (pr && pr.winProb) qp = pr; } catch (e) {}
-        }
+        // Consensus source: SportMonks multi-book if present, else Cosmo's own 1X2
+        // (single book — no independent value comparison, but still a fair prob).
+        var smHasTriple = !!(f.homeOdds && f.drawOdds && f.awayOdds);
+        var cos = f.cosmo || {};
+        var triple = smHasTriple ? [f.homeOdds, f.drawOdds, f.awayOdds]
+          : (cos.home && cos.draw && cos.away) ? [cos.home, cos.draw, cos.away] : null;
+        var f1 = devig(triple);
+        var fou = devig([f.overOdds, f.underOdds]); // O/U from the consensus book
         var cands = [
-          { sel: f.homeTeam + ' Win', market: 'Match Result', odds: f.homeOdds, fair: f1 ? f1[0] : null, model: qp ? qp.winProb.home / 100 : null, side: 'home' },
-          { sel: f.awayTeam + ' Win', market: 'Match Result', odds: f.awayOdds, fair: f1 ? f1[2] : null, model: qp ? qp.winProb.away / 100 : null, side: 'away' },
-          { sel: 'Over 2.5 Goals', market: 'Over/Under', odds: f.overOdds, fair: fou ? fou[0] : null, model: qp ? qp.over25 / 100 : null, side: null },
-          { sel: 'Under 2.5 Goals', market: 'Over/Under', odds: f.underOdds, fair: fou ? fou[1] : null, model: qp ? qp.under25 / 100 : null, side: null },
+          { sel: f.homeTeam + ' Win', market: 'Match Result', consensusOdds: triple ? triple[0] : null, fair: f1 ? f1[0] : null, cosmoOdds: cos.home || null, cosmoLink: cos.homeLink || null, side: 'home' },
+          { sel: f.awayTeam + ' Win', market: 'Match Result', consensusOdds: triple ? triple[2] : null, fair: f1 ? f1[2] : null, cosmoOdds: cos.away || null, cosmoLink: cos.awayLink || null, side: 'away' },
+          { sel: 'Over 2.5 Goals', market: 'Over/Under', consensusOdds: f.overOdds, fair: fou ? fou[0] : null, cosmoOdds: null, cosmoLink: null, side: null },
+          { sel: 'Under 2.5 Goals', market: 'Over/Under', consensusOdds: f.underOdds, fair: fou ? fou[1] : null, cosmoOdds: null, cosmoLink: null, side: null },
         ];
         var best = null;
         cands.forEach(function (c) {
-          var o = parseFloat(c.odds) || 0;
-          if (o < band.min || o > band.max || !c.fair) return;
-          if (c.fair < 0.50) return; // a banker must be the market's genuine favourite
-          // Optional genuine value: our model rates it higher than the consensus.
-          var modelEdge = (c.model != null) ? Math.round((c.model - c.fair) * 1000) / 10 : null;
+          if (!c.fair) return;
           var fairPct = Math.round(c.fair * 100);
+          // VALUE: Cosmo pays more than the (independent SM) consensus fair price.
+          var valueEdge = null, betOdds = c.consensusOdds, betLink = null, betSrc = 'consensus';
+          if (smHasTriple && c.cosmoOdds && c.cosmoOdds >= band.min && c.cosmoOdds <= valueMax) {
+            var ve = c.fair - (1 / c.cosmoOdds);           // fair prob minus Cosmo-implied
+            // 5% floor: comfortably above proportional-de-vig favourite bias (which
+            // over-states the favourite's fair prob by a point or two) + the small
+            // staleness skew between the consensus and Cosmo snapshots, so a flagged
+            // edge is genuine, not method artefact.
+            if (ve >= 0.05 && c.fair >= 0.42) {
+              valueEdge = Math.round(ve * 1000) / 10; betOdds = c.cosmoOdds; betLink = c.cosmoLink; betSrc = 'cosmo';
+            }
+          }
+          // CONSENSUS banker (no value edge): strong favourite at a fair price in band.
+          var isConsensus = c.consensusOdds && c.consensusOdds >= band.min && c.consensusOdds <= band.max && c.fair >= 0.50;
+          if (valueEdge == null && !isConsensus) return;
+          var o = parseFloat(betOdds) || 0;
+          if (!o) return;
           var cand = {
             event: f.homeTeam + ' vs ' + f.awayTeam, league: f.league || '', kickoff: f.kickoff || '',
             selection: c.sel, market: c.market, odds: o, marketProb: fairPct,
-            modelEdge: (modelEdge != null && modelEdge >= 2) ? modelEdge : null,
-            confidence: Math.min(9, 6 + (c.fair >= 0.55 ? 1 : 0) + (c.fair >= 0.60 ? 1 : 0) + (c.fair >= 0.66 ? 1 : 0)),
-            oddsSource: f.oddsSource || 'book', side: c.side, cosmoBetslip: f.cosmoBetslip || null,
+            valueEdge: valueEdge, valueSource: valueEdge != null ? betSrc : null,
+            confidence: Math.min(9, 6 + (valueEdge != null && valueEdge >= 5 ? 1 : 0) + (c.fair >= 0.55 ? 1 : 0) + (c.fair >= 0.62 ? 1 : 0)),
+            oddsSource: valueEdge != null ? 'cosmo' : (f.oddsSource || 'book'), side: c.side,
+            cosmoLink: betLink,
           };
-          // Prefer the strongest (highest fair prob); if tied, one with model value.
-          if (!best || cand.marketProb > best.marketProb) best = cand;
+          // Prefer a value pick over a plain consensus one; else the stronger fair prob.
+          var better = !best || (cand.valueEdge != null && best.valueEdge == null) ||
+            (((cand.valueEdge != null) === (best.valueEdge != null)) && cand.marketProb > best.marketProb);
+          if (better) best = cand;
         });
         if (best) out.push(best);
       });
-      // Rank by conviction (consensus prob), surfacing any with genuine model value.
+      // Value bankers first (by edge), then consensus bankers (by conviction).
       out.sort(function (a, b) {
-        var av = (a.modelEdge || 0), bv = (b.modelEdge || 0);
+        var av = (a.valueEdge || -1), bv = (b.valueEdge || -1);
         return (bv - av) || (b.marketProb - a.marketProb);
       });
       var payload = { bankers: out.slice(0, 6), scanned: fixtures.length };

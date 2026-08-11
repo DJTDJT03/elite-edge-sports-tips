@@ -7434,7 +7434,7 @@ const App = {
       if (!el) return;
       var bankers = (data && data.bankers) || [];
       if (!bankers.length) {
-        el.innerHTML = '<div style="text-align:center;padding:22px;color:var(--text-muted);font-size:13px;">No clear value bankers on this card right now — our model needs a market price it rates too short. Check back closer to kick-off.</div>';
+        el.innerHTML = '<div style="text-align:center;padding:22px;color:var(--text-muted);font-size:13px;">No standout bankers on this card right now — nothing where Cosmo clearly beats the market consensus in the evens/5-6 range. Check back closer to kick-off.</div>';
         return;
       }
       el.innerHTML = this._renderBankersCards(bankers);
@@ -7449,13 +7449,13 @@ const App = {
     return '<div class="grid grid-2" style="gap:12px;">' + bankers.map(function (b) {
       var kt = b.kickoff ? new Date(b.kickoff) : null;
       var ktTxt = (kt && !isNaN(kt.getTime())) ? kt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
-      var link = (b.cosmoBetslip && b.side && b.cosmoBetslip[b.side]) ? b.cosmoBetslip[b.side] : genericCosmo;
+      var link = b.cosmoLink || genericCosmo;
       var srcTag = b.oddsSource === 'cosmo' ? '⚡ Cosmo price' : 'market price';
       var confPct = Math.min(100, b.confidence * 10);
-      // A genuine model edge over the consensus (only when our model knows both
-      // teams) gets a green value flag; otherwise it's a market-consensus banker.
-      var topRight = (b.modelEdge != null)
-        ? '<span style="font-size:11px;color:#22c55e;font-weight:800;">+' + b.modelEdge + '% model value</span>'
+      // A genuine value edge (Cosmo pays more than the de-vigged consensus fair
+      // price) gets a green flag; otherwise it's a market-consensus banker.
+      var topRight = (b.valueEdge != null)
+        ? '<span style="font-size:11px;color:#22c55e;font-weight:800;">+' + b.valueEdge + '% value at Cosmo</span>'
         : '<span style="font-size:10px;color:var(--text-muted);font-weight:700;">consensus rated</span>';
       return '<div class="card" style="padding:16px;">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
@@ -7471,7 +7471,7 @@ const App = {
           '<a href="' + self._attrUrl(link) + '" target="_blank" rel="noopener sponsored" class="btn btn-gold btn-sm" style="width:100%;box-sizing:border-box;">⚡ Back with Cosmo Bet</a>' +
         '</div>';
     }).join('') + '</div>' +
-      '<div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:10px;">Strongest picks by de-vigged market consensus (140+ books), around evens to 4/6 — not our published analyst tips. Odds indicative · 18+ · gamble responsibly · BeGambleAware.org</div>';
+      '<div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:10px;">Ranked by value — where <strong style="color:#22c55e;">Cosmo Bet beats the de-vigged 140-book consensus</strong>, then strongest consensus picks. Not our published analyst tips. 18+ · gamble responsibly · BeGambleAware.org</div>';
   },
 
   async refreshFootballData(btn) {
