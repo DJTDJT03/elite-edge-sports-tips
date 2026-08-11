@@ -374,9 +374,15 @@ module.exports = function(deps) {
         return s > 0 ? inv.map(function (x) { return x / s; }) : null;
       };
       var out = [];
+      var dbg = { indieConsensus: 0, withCosmo: 0, bothIndieAndCosmo: 0, maxEdge: -99, top: [] };
       fixtures.forEach(function (f) {
         if (!f.homeTeam || !f.awayTeam || FIN[f.status]) return;
         if (f.oddsSource === 'model') return; // need a REAL market (not our fair-price fallback)
+        var _indie = !!(f.homeOdds && f.drawOdds && f.awayOdds);
+        var _cos = !!(f.cosmo && f.cosmo.home);
+        if (_indie) dbg.indieConsensus++;
+        if (_cos) dbg.withCosmo++;
+        if (_indie && _cos) dbg.bothIndieAndCosmo++;
         // Consensus source: SportMonks/Odds-API multi-book if present, else Cosmo's own 1X2
         // (single book — no independent value comparison, but still a fair prob).
         var smHasTriple = !!(f.homeOdds && f.drawOdds && f.awayOdds);
@@ -399,6 +405,8 @@ module.exports = function(deps) {
           var valueEdge = null, betOdds = c.consensusOdds, betLink = null, betSrc = 'consensus';
           if (smHasTriple && c.cosmoOdds && c.cosmoOdds >= band.min && c.cosmoOdds <= valueMax) {
             var ve = c.fair - (1 / c.cosmoOdds);           // fair prob minus Cosmo-implied
+            if (ve > dbg.maxEdge) dbg.maxEdge = Math.round(ve * 1000) / 10;
+            if (ve >= 0.02 && dbg.top.length < 6) dbg.top.push({ s: c.sel.slice(0, 12), fair: Math.round(c.fair * 100), cos: c.cosmoOdds, e: Math.round(ve * 1000) / 10 });
             // 5% floor: comfortably above proportional-de-vig favourite bias (which
             // over-states the favourite's fair prob by a point or two) + the small
             // staleness skew between the consensus and Cosmo snapshots, so a flagged
@@ -433,6 +441,7 @@ module.exports = function(deps) {
         return (bv - av) || (b.marketProb - a.marketProb);
       });
       var payload = { bankers: out.slice(0, 6), scanned: fixtures.length };
+      if (req.query.debug === '1') payload.debug = dbg;
       _bankersCache[date] = { at: Date.now(), val: payload };
       res.json(payload);
     } catch (err) { res.json({ bankers: [], error: err.message }); }
