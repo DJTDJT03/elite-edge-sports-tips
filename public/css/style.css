@@ -515,7 +515,7 @@ ul, ol { list-style: none; padding: 0; margin: 0; }
 /* =========================================================================
    PRICING
    ========================================================================= */
-.pricing-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; max-width: 1100px; margin: 0 auto; align-items: stretch; }
+.pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 360px)); justify-content: center; gap: 16px; max-width: 1100px; margin: 0 auto; align-items: stretch; }
 .pricing-card {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius-xl); padding: 24px 20px; text-align: center;
@@ -6533,9 +6533,9 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   .profit-cal-day { height: 10px; }
 }
 
-/* --- Pricing cards on mobile — stack vertically (768px) --- */
+/* --- Pricing cards on mobile — single column so the Elite card is full-width & readable (768px) --- */
 @media (max-width: 768px) {
-  .pricing-grid { grid-template-columns: 1fr 1fr !important; gap: 12px; }
+  .pricing-grid { grid-template-columns: 1fr !important; gap: 12px; }
   .pricing-card { transform: none !important; padding: 20px 16px !important; }
   .pricing-card h3 { font-size: 18px; }
   .pricing-price { font-size: 32px; }
