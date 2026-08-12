@@ -128,8 +128,9 @@ module.exports = function(deps) {
         ? session.subscription
         : (session.subscription && session.subscription.id) || null;
 
-      // Set monthly credit allowance based on tier
-      var creditAllowance = tier === 'vip' ? 999999 : tier === 'premium' ? 250 : tier === 'starter' ? 50 : 0;
+      // Set monthly credit allowance based on tier. The single Elite plan (stored
+      // as 'premium') is full access — unlimited credits. Legacy starter kept.
+      var creditAllowance = (tier === 'vip' || tier === 'premium') ? 999999 : tier === 'starter' ? 50 : 0;
       var nextResetDate = new Date();
       nextResetDate.setMonth(nextResetDate.getMonth() + 1);
 
@@ -178,7 +179,7 @@ module.exports = function(deps) {
         emailService.sendTrialConfirmation({
           name: user.name, email: user.email, tier: tier,
           trialEndDate: chargeDate,
-          price: tier === 'vip' ? '£39.99' : '£19.99',
+          price: tier === 'vip' ? '£39.99' : '£14.99',
           portalUrl: 'https://eliteedgesports.co.uk/#/account',
         }).catch(function(err) { console.error('[Email] Trial confirmation failed:', err.message); });
       }
@@ -249,7 +250,13 @@ module.exports = function(deps) {
             const sub = webhookSubId ? await stripeService.getSubscription(webhookSubId) : null;
             let tier = md.tier === 'vip' ? 'vip' : md.tier === 'starter' ? 'starter' : md.tier === 'premium' ? 'premium' : null;
             if (!tier && sub) tier = await stripeService.tierFromSubscription(sub);
-            if (!tier) { tier = 'starter'; console.warn('[Stripe] checkout tier unresolved (no metadata, no price match) — defaulting to starter to avoid over-granting'); }
+            if (!tier) {
+              // NEVER downgrade an already-paying subscriber. Legacy subs on the old
+              // price IDs won't match tierFromSubscription — preserve their access
+              // rather than dropping them to starter.
+              tier = ['premium', 'vip', 'starter'].includes(user.subscription) ? user.subscription : 'starter';
+              console.warn('[Stripe] checkout tier unresolved (no metadata, no price match) — preserving existing "' + tier + '"');
+            }
 
             // Idempotency: already on this tier with this sub linked → nothing to do.
             if (user.stripeSubscriptionId === webhookSubId && user.subscription === tier) {
@@ -260,7 +267,7 @@ module.exports = function(deps) {
             let expiry = new Date();
             if (sub && subPeriodEnd(sub)) expiry = new Date(subPeriodEnd(sub) * 1000);
             else expiry.setMonth(expiry.getMonth() + 1);
-            const credits = tier === 'vip' ? 999999 : tier === 'premium' ? 250 : 50;
+            const credits = (tier === 'vip' || tier === 'premium') ? 999999 : 50; // Elite (premium) = full access
 
             // Win-back attribution (mirrors the success-redirect handler)
             var wbFields = {};
@@ -328,7 +335,7 @@ module.exports = function(deps) {
               paymentFailedAt: null, paymentGraceEnd: null, dunningStage: 0,
             };
             if (!isPaid) {
-              update.credits = tier === 'vip' ? 999999 : tier === 'premium' ? 250 : 50;
+              update.credits = (tier === 'vip' || tier === 'premium') ? 999999 : 50;
               update.trialActive = false;
               if (db.recordCreditTransaction) {
                 db.recordCreditTransaction({ userId: user.id, amount: update.credits, balanceAfter: update.credits, type: 'subscription_grant', description: tier + ' via invoice.payment_succeeded (' + update.credits + ' credits)' }).catch(function(){});

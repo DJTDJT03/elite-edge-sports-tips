@@ -101,10 +101,11 @@ const App = {
   getAccessLevel() {
     if (!this.user) return 'free';
     if (this.user.role === 'admin') return 'vip'; // admin gets everything
-    if (this.user.subscription === 'vip') return 'vip';
-    if (this.user.subscription === 'premium') return 'premium';
-    if (this.user.subscription === 'starter') return 'starter';
-    if (this.user.trialActive) return 'premium'; // trial = premium level
+    // Single Elite plan: every paid subscriber (and any legacy starter/premium/vip
+    // sub) gets full access. Trial too. Only free users are gated.
+    var s = this.user.subscription;
+    if (s === 'vip' || s === 'premium' || s === 'starter' || s === 'elite') return 'vip';
+    if (this.user.trialActive) return 'vip';
     return 'free';
   },
 
@@ -1038,7 +1039,7 @@ const App = {
     if (this.user) {
       guest.style.display = 'none';
       userEl.style.display = 'flex';
-      badge.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">VIP</span>' : '');
+      badge.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">ELITE</span>' : '');
       badge.style.cursor = 'pointer';
       badge.onclick = () => { window.location.hash = '#/account'; };
       // Dedicated, always-visible credits pill (desktop + mobile). VIP = unlimited.
@@ -1065,7 +1066,7 @@ const App = {
       // with `!important`, which an inline style can't override (logged-in users were
       // still seeing "Sign Up Free"). .nav-hidden hides it with matching !important.
       if (signupMobileBtn) { signupMobileBtn.style.display = 'none'; signupMobileBtn.classList.add('nav-hidden'); }
-      if (badgeMobile) { badgeMobile.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">VIP</span>' : ''); badgeMobile.style.cursor = 'pointer'; badgeMobile.onclick = () => { window.location.hash = '#/account'; }; }
+      if (badgeMobile) { badgeMobile.innerHTML = this.user.name + (this.isVIP() ? ' <span class="vip-badge">ELITE</span>' : ''); badgeMobile.style.cursor = 'pointer'; badgeMobile.onclick = () => { window.location.hash = '#/account'; }; }
       // Top menu auth (mobile only — toggled via class, CSS hides on desktop)
       var topGuest = document.getElementById('nav-auth-top-guest');
       var topUser = document.getElementById('nav-auth-top-user');
@@ -1076,7 +1077,7 @@ const App = {
       var navPlan = document.getElementById('nav-user-plan');
       if (navAvatar) navAvatar.textContent = (this.user.name || '?').charAt(0).toUpperCase();
       if (navWelcome) navWelcome.textContent = 'Welcome, ' + (this.user.name || '').split(' ')[0];
-      var planLabel = this.isVIP() ? 'VIP Member' : this.isPremium() ? 'Premium Member' : this.user.subscription === 'starter' ? 'Starter Member' : 'Free Member';
+      var planLabel = this.isPremium() ? 'Elite Member' : 'Free Member';
       if (navPlan) navPlan.textContent = planLabel;
       adminLink.style.display = this.user.role === 'admin' ? 'inline-block' : 'none';
       if (myBetsLink) myBetsLink.style.display = 'inline-block';
@@ -1407,7 +1408,7 @@ const App = {
       'live': 'Real-time race day dashboard with countdown, live results, and instant P/L updates.',
       'value-bets': 'Scanner comparing 40+ UK bookmakers to find where odds disagree — genuine value opportunities.',
       'results': 'Fully transparent, verified results page. Every tip, every outcome. Track record you can trust.',
-      'pricing': 'Start free, upgrade to Premium (£19.99/mo) or VIP (£39.99/mo). 14-day free trial available.',
+      'pricing': 'Start free, upgrade to Elite — £14.99/month or £99.99/year, everything unlocked. 14-day free trial available.',
     };
 
     var title = titles[page] || 'Elite Edge Sports Tips — Premium UK Betting Intelligence';
@@ -3336,7 +3337,7 @@ const App = {
           <h2 style="margin-bottom:8px;">Stop Missing Winners</h2>
           <p class="text-muted mb-24">Every day you wait is another edge opportunity gone. Get full access to all selections, analysis, and staking.</p>
           <a href="#/pricing" class="btn btn-gold btn-lg">Start 14-Day Free Trial</a>
-          <p class="text-xs text-muted mt-16">Then &pound;19.99/month. Cancel anytime. No commitment.</p>
+          <p class="text-xs text-muted mt-16">Then &pound;14.99/month. Cancel anytime. No commitment.</p>
         </div>` : ''}
 
         <!-- 17. HOW IT WORKS — education last, only visible to newer users -->
@@ -4159,9 +4160,7 @@ const App = {
     // 6) PRICING
     var tiers = [
       { name: 'Free', price: '£0', sub: 'forever', feats: ['Daily free tips', 'Results & analysis', 'Ask the Edge assistant'], cta: 'Sign Up Free', action: "App.showModal('register')", highlight: false },
-      { name: 'Starter', price: '£9.99', sub: 'per month', feats: ['50 credits every month', '~2 tips per day', 'Racing + Football selections', 'Personal ROI tracking'], cta: 'Get Starter', action: "window.location.hash='#/pricing'", highlight: false },
-      { name: 'Premium', price: '£19.99', sub: 'per month', feats: ['Every tip unlocked', 'Full match intelligence', 'Value Finder & Acca Builder', 'Proven-edge CLV data'], cta: 'Start 14-day trial', action: "window.location.hash='#/pricing'", highlight: true },
-      { name: 'VIP', price: '£39.99', sub: 'per month', feats: ['Everything in Premium', 'Unlimited credits', 'Early access (6:30am tips)', 'Priority + SMS/Telegram alerts'], cta: 'Go VIP', action: "window.location.hash='#/pricing'", highlight: false },
+      { name: 'Elite', price: '£14.99', sub: 'per month', feats: ['Every tip unlocked, every day', 'Full 5-analyst match intelligence', 'Value Bankers, Acca Builder & Value Finder', 'Live Cosmo odds + proven-edge CLV', 'Unlimited — nothing to count', 'Or £99.99/year (save £80)'], cta: 'Start 14-day trial', action: "window.location.hash='#/pricing'", highlight: true },
     ];
     var pricingSection =
       '<div style="padding:clamp(34px,7vw,52px) 18px;background:rgba(255,255,255,0.02);border-top:1px solid var(--border);"><div style="max-width:1080px;margin:0 auto;">' +
@@ -5177,10 +5176,11 @@ const App = {
     var credits = this.user ? this.user.credits || 0 : 0;
     var sub = this.user ? this.user.subscription : 'free';
 
-    var upgradeTier = sub === 'free' ? 'Starter' : sub === 'starter' ? 'Premium' : sub === 'premium' ? 'VIP' : '';
-    var upgradeCredits = sub === 'free' ? '40' : sub === 'starter' ? '120' : sub === 'premium' ? 'Unlimited' : '';
-    var upgradePrice = sub === 'free' ? '9.99' : sub === 'starter' ? '19.99' : sub === 'premium' ? '39.99' : '';
-    var upgradePlan = sub === 'free' ? 'starter-monthly' : sub === 'starter' ? 'premium-monthly' : sub === 'premium' ? 'vip-monthly' : '';
+    // Single Elite plan: only free users have an upgrade (to Elite, unlimited).
+    var upgradeTier = sub === 'free' ? 'Elite' : '';
+    var upgradeCredits = sub === 'free' ? 'Unlimited' : '';
+    var upgradePrice = sub === 'free' ? '14.99' : '';
+    var upgradePlan = sub === 'free' ? 'premium-monthly' : '';
 
     app.innerHTML =
       '<div class="container" style="max-width:700px;padding-top:40px;">' +
@@ -8192,7 +8192,7 @@ const App = {
         '<div style="font-size:18px;font-weight:800;color:#22d3ee;margin-bottom:8px;">Unlock All 15+ Festival Selections</div>' +
         '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Full analysis, staking plans, and live updates for every race across all 3 days.</div>' +
         '<a href="#/pricing" style="display:inline-block;background:#22d3ee;color:#0a0e1a;padding:14px 36px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">Subscribe Now &mdash; 14-Day Free Trial</a>' +
-        '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;19.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>' +
+        '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;14.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>' +
       '</div>' : '') +
 
     '</div>';
@@ -8445,7 +8445,7 @@ const App = {
           '<div style="font-size:18px;font-weight:800;color:#22d3ee;margin-bottom:8px;">Unlock All Festival Selections</div>' +
           '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Full analysis, staking plans, and live updates for every festival race.</div>' +
           '<a href="#/pricing" style="display:inline-block;background:#22d3ee;color:#0a0e1a;padding:14px 36px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;">Subscribe Now &mdash; 14-Day Free Trial</a>' +
-          '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;19.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>' +
+          '<div style="font-size:11px;color:#6b7280;margin-top:8px;">Then &pound;14.99/mo. Cancel anytime. 18+ BeGambleAware.org</div>' +
         '</div>' : '') +
       '</div>';
   },
@@ -9004,89 +9004,32 @@ const App = {
             </button>
           </div>
 
-          <!-- STARTER CARD -->
-          <div class="pricing-card${accessLevel === 'starter' ? ' featured' : ''}">
-            <div style="height:30px;margin:-24px -24px 16px;"></div>
-            <h3>Starter</h3>
-            <p class="text-muted">The daily NAP + extras</p>
-            <div class="pricing-price"><span class="currency">&pound;</span>9<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
-            <p class="text-xs text-gold mb-8">&pound;99.99/year (save &pound;20) | Cancel anytime</p>
-            <div style="background:rgba(34, 211, 238,0.1);border:1px solid rgba(34, 211, 238,0.25);border-radius:8px;padding:14px;margin:0 0 12px;text-align:center;">
-              <div style="font-size:32px;font-weight:900;color:var(--gold);">50</div>
-              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
-              <div style="font-size:11px;color:#22c55e;font-weight:600;margin-top:4px;">20p per credit &bull; 16x more than Free</div>
-            </div>
-            <ul class="pricing-features">
-              <li><strong>Everything in Free, plus:</strong></li>
-              <li>50 credits renewed monthly</li>
-              <li>~2 tips per day comfortably</li>
-              <li>Selection + odds before the off</li>
-              <li>Racing + Football tips</li>
-              <li>Personal ROI tracking</li>
-              <li style="color:var(--text-muted);text-decoration:line-through;">Full AI deep analysis</li>
-              <li style="color:var(--text-muted);text-decoration:line-through;">Daily email bulletin</li>
-            </ul>
-            ${accessLevel === 'starter' ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button><p class="text-xs text-gold mt-8"><a href="#" onclick="App.startCheckout(\'premium-monthly\');return false;" style="color:var(--gold);">Upgrade to Premium &rarr;</a></p>' :
-              isLoggedIn && !isPremium ? '<button class="btn btn-outline btn-full" onclick="App.startCheckout(\'starter-monthly\')">Subscribe &mdash; &pound;9.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'starter-annual\')">Annual &mdash; &pound;99.99/year</button>' :
-              isPremium ? '<button class="btn btn-outline btn-full" disabled>Included in your plan</button>' :
-              '<button class="btn btn-outline btn-full" onclick="App.showModal(\'register\')">Sign Up First</button>'}
-          </div>
-
-          <!-- PREMIUM CARD -->
-          <div class="pricing-card${accessLevel === 'premium' ? ' featured' : ''}">
-            <div class="featured-badge" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">MOST POPULAR</div>
-            <h3>Premium</h3>
-            <p class="text-muted">Every tip, every day, all month</p>
-            <div class="pricing-price"><span class="currency">&pound;</span>19<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
-            <p class="text-xs text-gold mb-8">&pound;199.99/year (save &pound;40) | Cancel anytime</p>
-            <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:14px;margin:0 0 12px;text-align:center;">
-              <div style="font-size:32px;font-weight:900;color:#3b82f6;">250</div>
-              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits / Month</div>
-              <div style="font-size:11px;color:#22c55e;font-weight:600;margin-top:4px;">8p per credit &bull; 83x more than Free</div>
-            </div>
-            <ul class="pricing-features">
-              <li><strong>Everything in Starter, plus:</strong></li>
-              <li style="color:#22c55e;font-weight:700;">250 credits — view every tip, every day</li>
-              <li>All Racing + Football selections</li>
-              <li>All AI match + race previews included</li>
-              <li>Full 5-analyst deep analysis</li>
-              <li>Acca Generator included (3 credits)</li>
-              <li>Daily email bulletin with AI insights</li>
-              <li>Personal ROI dashboard</li>
-            </ul>
-            ${accessLevel === 'premium' && !this.user.trialActive ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
-              isOnTrial ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'premium-monthly\')">Subscribe — &pound;19.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'premium-annual\')">Annual — &pound;199.99/year (Save &pound;40)</button><p class="text-xs text-gold mt-8">Lock in before your trial ends.</p>' :
-              isVIP ? '<button class="btn btn-outline btn-full" disabled>Included in VIP</button>' :
-              isLoggedIn ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'premium-monthly\')">Subscribe — &pound;19.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'premium-annual\')">Annual — &pound;199.99/year (Save &pound;40)</button>' :
-              '<button class="btn btn-outline btn-full" onclick="App.showModal(\'register\')">Sign Up Free First</button><p class="text-xs text-muted mt-8">Create your free account, then upgrade.</p>'}
-          </div>
-
-          <!-- VIP CARD -->
-          <div class="pricing-card vip${isVIP ? ' featured' : ''}">
-            <div class="featured-badge" style="background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">ELITE</div>
-            <h3>VIP</h3>
-            <p class="text-muted">Zero limits. Zero thinking.</p>
-            <div class="pricing-price"><span class="currency">&pound;</span>39<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
-            <p class="text-xs text-gold mb-8">&pound;399.99/year (save &pound;80) | Cancel anytime</p>
+          <!-- ELITE (single) CARD -->
+          <div class="pricing-card vip${isPremium ? ' featured' : ''}">
+            <div class="featured-badge" style="background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;text-align:center;padding:8px;border-radius:8px 8px 0 0;margin:-24px -24px 16px;font-weight:800;font-size:14px;letter-spacing:0.5px;">ELITE MEMBERSHIP</div>
+            <h3>Elite</h3>
+            <p class="text-muted">Everything, unlocked. One simple plan.</p>
+            <div class="pricing-price"><span class="currency">&pound;</span>14<span style="font-size:20px;">.99</span><span class="period">/month</span></div>
+            <p class="text-xs text-gold mb-8">or &pound;99.99/year (save &pound;80) | Cancel anytime</p>
             <div style="background:linear-gradient(135deg,rgba(34, 211, 238,0.15),rgba(34, 211, 238,0.05));border:2px solid rgba(34, 211, 238,0.4);border-radius:8px;padding:14px;margin:0 0 12px;text-align:center;">
               <div style="font-size:28px;font-weight:900;color:var(--gold);">UNLIMITED</div>
-              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Credits Forever</div>
-              <div style="font-size:11px;color:#22d3ee;font-weight:600;margin-top:4px;">Never count. Never run out. Never miss.</div>
+              <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Everything included</div>
+              <div style="font-size:11px;color:#22d3ee;font-weight:600;margin-top:4px;">No credits to count. Never miss a pick.</div>
             </div>
             <ul class="pricing-features">
-              <li><strong>Everything in Premium, plus:</strong></li>
-              <li style="color:var(--gold);font-weight:700;">Unlimited — every tip, every preview, every acca</li>
-              <li>Early access tips (6:30am — before anyone else)</li>
-              <li>AI race replay analysis</li>
-              <li>Personalised AI morning bulletin</li>
-              <li>Priority email support</li>
-              <li>Custom edge threshold alerts</li>
-              <li style="color:var(--gold);font-weight:600;">If you're buying 2+ packs/month — VIP saves you money</li>
+              <li style="color:#22c55e;font-weight:700;">Every tip, every day — Racing + Football</li>
+              <li>Full 5-analyst deep analysis on every pick</li>
+              <li>All AI match + race previews</li>
+              <li>Value Bankers, Acca Builder &amp; Value Finder</li>
+              <li>Live Cosmo Bet odds + proven-edge CLV data</li>
+              <li>Daily email bulletin with AI insights</li>
+              <li>Early access tips (6:30am) + priority support</li>
+              <li>Personal ROI dashboard</li>
             </ul>
-            ${isVIP && !this.user.trialActive ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
-              isOnTrial ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'vip-monthly\')">Subscribe — &pound;39.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'vip-annual\')">Annual — &pound;399.99/year (Save &pound;80)</button><p class="text-xs text-gold mt-8">Lock in before your trial ends.</p>' :
-              isLoggedIn ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'vip-monthly\')">Subscribe — &pound;39.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'vip-annual\')">Annual — &pound;399.99/year (Save &pound;80)</button>' :
-              '<button class="btn btn-outline btn-full" onclick="App.showModal(\'register\')">Sign Up Free First</button><p class="text-xs text-muted mt-8">Create your free account, then upgrade.</p>'}
+            ${isPremium && !this.user.trialActive ? '<button class="btn btn-gold btn-full" disabled>Your Current Plan</button>' :
+              isOnTrial ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'premium-monthly\')">Subscribe — &pound;14.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'premium-annual\')">Annual — &pound;99.99/year (Save &pound;80)</button><p class="text-xs text-gold mt-8">Lock in before your trial ends.</p>' :
+              isLoggedIn ? '<button class="btn btn-gold btn-full" onclick="App.startCheckout(\'premium-monthly\')">Subscribe — &pound;14.99/month</button><button class="btn btn-outline btn-full mt-8" onclick="App.startCheckout(\'premium-annual\')">Annual — &pound;99.99/year (Save &pound;80)</button>' :
+              '<button class="btn btn-gold btn-full" onclick="App.showModal(\'register\')">Start Free — then upgrade</button><p class="text-xs text-muted mt-8">Create your free account, then unlock Elite.</p>'}
           </div>
         </div>
 
@@ -10637,7 +10580,7 @@ const App = {
         } else if (isFree) {
           messages.innerHTML = '<div class="chat-msg bot">Hi ' + (this.user.name || 'there') + '! 👋</div>' +
             '<div class="chat-msg bot">You\'re on the Free plan. Upgrade to Premium for <strong>2-4 daily picks</strong>, full analysis, and the daily bulletin email.</div>' +
-            '<div class="chat-msg bot"><strong>14-day free trial</strong> 🎁 then £19.99/mo. Cancel anytime.</div>' +
+            '<div class="chat-msg bot"><strong>14-day free trial</strong> 🎁 then £14.99/mo. Cancel anytime.</div>' +
             '<div class="chat-suggestions" id="chat-suggestions">' +
               '<button onclick="App.closeChat();window.location.hash=\'#/pricing\'">Upgrade to Premium</button>' +
               '<button onclick="App.chatSend(\'What\\\'s included?\')">What\'s included?</button>' +
@@ -11009,9 +10952,9 @@ const App = {
           <h2>6. Subscription Terms, Free Trial &amp; Auto-Renewal</h2>
           <ul>
             <li><strong>Free Tier:</strong> Limited access to one daily NAP selection and basic analysis. No payment required.</li>
-            <li><strong>Premium Tier:</strong> Full access to all tips, detailed analysis, email bulletins, and priority support. Pricing: &pound;19.99/month or &pound;199.99/year.</li>
+            <li><strong>Elite Membership:</strong> Full access to all tips, detailed analysis, email bulletins, and priority support. Pricing: &pound;14.99/month or &pound;99.99/year.</li>
             <li><strong>Free Trial:</strong> New Premium subscribers receive their first month (30 days) completely free of charge. No payment is taken during the trial period. You may cancel at any time during the free trial without incurring any charge.</li>
-            <li><strong>Auto-Renewal:</strong> <strong>Your subscription will automatically renew at the end of each billing period (including at the end of your free trial) unless you cancel before the renewal date.</strong> By subscribing, you expressly consent to auto-renewal and authorise us to charge your chosen payment method at the then-current subscription rate (&pound;19.99/month or &pound;199.99/year) on each renewal date.</li>
+            <li><strong>Auto-Renewal:</strong> <strong>Your subscription will automatically renew at the end of each billing period (including at the end of your free trial) unless you cancel before the renewal date.</strong> By subscribing, you expressly consent to auto-renewal and authorise us to charge your chosen payment method at the then-current subscription rate (&pound;14.99/month or &pound;99.99/year) on each renewal date.</li>
             <li><strong>Billing:</strong> After your free trial ends, subscriptions are billed in advance on a recurring monthly or annual basis. Your payment method will be charged automatically on the same date each month (or year for annual plans). You will receive an email reminder at least 3 days before each renewal.</li>
             <li><strong>Cancellation:</strong> You may cancel your subscription at any time through your account settings, by emailing support@eliteedgesports.co.uk, or by contacting us via the in-app support form. Cancellation takes effect at the end of the current billing period — you will retain access until that date. <strong>If you cancel during your free trial, you will not be charged.</strong></li>
             <li><strong>Price Changes:</strong> We reserve the right to change subscription prices. We will notify you at least 14 days before any price increase. If you do not agree with the new price, you may cancel before the new rate takes effect.</li>
@@ -12338,24 +12281,19 @@ const App = {
             </div>
           ` : u.subscription === 'premium' ? `
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-              <span style="background:var(--gold);color:#0a0e1a;padding:4px 12px;border-radius:20px;font-weight:700;font-size:13px;">Premium Active</span>
+              <span style="background:var(--gold);color:#0a0e1a;padding:4px 12px;border-radius:20px;font-weight:700;font-size:13px;">Elite Active</span>
             </div>
             <p class="text-sm text-muted mb-8">Next billing date: <strong>${expiryLabel}</strong></p>
             <div id="stripe-sub-details"></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-              <button class="btn btn-gold btn-sm" onclick="App.startCheckout('vip-monthly')">Upgrade to VIP — &pound;39.99/month</button>
               <button class="btn btn-outline btn-sm" onclick="App.openBillingPortal()">Manage Billing</button>
               <button class="btn btn-ghost btn-sm" style="color:#ef4444;border:1px solid rgba(239,68,68,0.4);" onclick="App.cancelSubscription()">Cancel Subscription</button>
             </div>
           ` : `
-            <p class="text-muted text-sm mb-12">You are on the Free plan. Upgrade for full access to all tips, analysis, and features.</p>
+            <p class="text-muted text-sm mb-12">You are on the Free plan. Unlock Elite for full access to every tip, analysis, and feature.</p>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn btn-gold btn-sm" onclick="App.startCheckout('premium-monthly')">Premium — &pound;19.99/month</button>
-              <button class="btn btn-outline btn-sm" onclick="App.startCheckout('premium-annual')">Premium Annual — &pound;199.99/year</button>
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-              <button class="btn btn-gold btn-sm" onclick="App.startCheckout('vip-monthly')">VIP — &pound;39.99/month</button>
-              <button class="btn btn-outline btn-sm" onclick="App.startCheckout('vip-annual')">VIP Annual — &pound;399.99/year</button>
+              <button class="btn btn-gold btn-sm" onclick="App.startCheckout('premium-monthly')">Elite — &pound;14.99/month</button>
+              <button class="btn btn-outline btn-sm" onclick="App.startCheckout('premium-annual')">Annual — &pound;99.99/year (Save &pound;80)</button>
             </div>
           `}
         </div>
@@ -13086,7 +13024,7 @@ const App = {
             '<div>&#10003; Expert staking advice</div>' +
           '</div>' +
         '</div>' +
-        '<a href="#/pricing" onclick="document.getElementById(\'trial-expired-overlay\').remove()" style="display:block;width:100%;padding:14px;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;text-decoration:none;text-align:center;margin-bottom:12px;">View Plans — From &pound;19.99/month</a>' +
+        '<a href="#/pricing" onclick="document.getElementById(\'trial-expired-overlay\').remove()" style="display:block;width:100%;padding:14px;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;text-decoration:none;text-align:center;margin-bottom:12px;">View Plans — From &pound;14.99/month</a>' +
         '<button onclick="document.getElementById(\'trial-expired-overlay\').remove()" style="width:100%;padding:10px;background:transparent;color:#8b8d93;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-size:13px;cursor:pointer;">Continue on Free Plan</button>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -13303,7 +13241,7 @@ const App = {
     ];
 
     var features = [
-      { label: 'Monthly Price', key: 'price', elite: '£19.99' },
+      { label: 'Monthly Price', key: 'price', elite: '£14.99' },
       { label: 'Live Data APIs', key: 'apis', elite: '14' },
       { label: 'Sports Covered', key: 'sports', elite: '6' },
       { label: 'Horse Racing Tips', key: 'racing', elite: true },

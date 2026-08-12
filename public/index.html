@@ -49,7 +49,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css?v=20260811b">
+  <link rel="stylesheet" href="/css/style.css?v=20260811c">
   <link rel="stylesheet" href="/css/worldCup.css?v=20260503a">
 
   <!-- Google Analytics 4 — Uncomment and replace GA_ID when ready
@@ -499,27 +499,15 @@
   <div class="modal" id="modal-stripe" style="display:none;">
     <button class="modal-close" onclick="App.closeModal()">&times;</button>
     <div style="text-align:center;padding:20px 0;">
-      <h2 style="margin-bottom:6px;">Choose Your Plan</h2>
-      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;">Cancel anytime. 14-day free trial on Premium.</p>
+      <h2 style="margin-bottom:6px;">Unlock Elite</h2>
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;">One plan, everything included. 14-day free trial. Cancel anytime.</p>
       <div style="display:grid;gap:12px;text-align:left;">
-        <div style="border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:14px;">
-          <strong style="color:var(--gold);">Starter — &pound;9.99/month</strong>
-          <div style="font-size:12px;color:var(--text-secondary);margin:4px 0 10px;">50 credits/month &middot; daily tips</div>
-          <button class="btn btn-outline btn-full" onclick="App.startCheckout('starter-monthly')">Subscribe Monthly</button>
-          <button class="btn btn-ghost btn-full" style="margin-top:6px;" onclick="App.startCheckout('starter-annual')">Annual &mdash; &pound;99.99/yr</button>
-        </div>
-        <div style="border:1px solid var(--gold);border-radius:10px;padding:14px;position:relative;">
-          <span style="position:absolute;top:-10px;right:12px;background:var(--gold);color:#0a1a2f;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">MOST POPULAR</span>
-          <strong style="color:var(--gold);">Premium — &pound;19.99/month</strong>
-          <div style="font-size:12px;color:var(--text-secondary);margin:4px 0 10px;">250 credits/month &middot; full analysis &middot; 14-day free trial</div>
-          <button class="btn btn-gold btn-full" onclick="App.startCheckout('premium-monthly')">Start Premium</button>
-          <button class="btn btn-ghost btn-full" style="margin-top:6px;" onclick="App.startCheckout('premium-annual')">Annual &mdash; &pound;199.99/yr (Save &pound;40)</button>
-        </div>
-        <div style="border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:14px;">
-          <strong style="color:var(--gold);">VIP — &pound;39.99/month</strong>
-          <div style="font-size:12px;color:var(--text-secondary);margin:4px 0 10px;">Unlimited credits &middot; every pick, every sport</div>
-          <button class="btn btn-outline btn-full" onclick="App.startCheckout('vip-monthly')">Subscribe Monthly</button>
-          <button class="btn btn-ghost btn-full" style="margin-top:6px;" onclick="App.startCheckout('vip-annual')">Annual &mdash; &pound;399.99/yr (Save &pound;80)</button>
+        <div style="border:2px solid var(--gold);border-radius:10px;padding:16px;position:relative;">
+          <span style="position:absolute;top:-10px;right:12px;background:var(--gold);color:#0a1a2f;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">ELITE MEMBERSHIP</span>
+          <strong style="color:var(--gold);font-size:16px;">Elite — &pound;14.99/month</strong>
+          <div style="font-size:12px;color:var(--text-secondary);margin:6px 0 12px;">Unlimited access &middot; every tip &middot; full 5-analyst analysis &middot; AI previews &middot; bankers, accas &amp; value finder &middot; 14-day free trial</div>
+          <button class="btn btn-gold btn-full" onclick="App.startCheckout('premium-monthly')">Start Elite &mdash; &pound;14.99/month</button>
+          <button class="btn btn-ghost btn-full" style="margin-top:6px;" onclick="App.startCheckout('premium-annual')">Annual &mdash; &pound;99.99/yr (Save &pound;80)</button>
         </div>
       </div>
       <p style="font-size:11px;color:var(--text-muted);margin-top:12px;text-align:center;">Secure payment via Stripe. Cancel anytime.</p>
@@ -647,7 +635,7 @@
   <script src="/js/calculators.js?v=20260501c"></script>
   <script src="/js/worldCup.js?v=20260616c"></script>
   <script src="/js/lms.js?v=20260612b"></script>
-  <script src="/js/app.js?v=20260811b"></script>
+  <script src="/js/app.js?v=20260811c"></script>
   <script>
     if ('serviceWorker' in navigator) {
       // Auto-update: when a NEW build's service worker takes control, reload once so

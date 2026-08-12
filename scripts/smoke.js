@@ -107,9 +107,9 @@ async function run() {
   }
   check('At least one valid tier slug present', VALID_PLAN_SLUGS.some((s) => combined.includes(s)),
     'none of ' + VALID_PLAN_SLUGS.join(', ') + ' found — pricing may be unwired');
-  check('Current tier prices shown (£9.99 / £19.99 / £39.99)',
-    indexHtml.includes('9.99') && indexHtml.includes('19.99') && indexHtml.includes('39.99'),
-    'a tier price is missing from the page');
+  check('Elite plan prices shown (£14.99 / £99.99)',
+    indexHtml.includes('14.99') && indexHtml.includes('99.99'),
+    'the Elite plan price is missing from the page');
   check('Trial length is consistent (no stray "7 Days" unlock CTA)', !/Unlock Free for 7 Days/i.test(appJs),
     'the 7-vs-14-day trial inconsistency is back');
 

@@ -33,7 +33,9 @@ class StripeService {
 
     const existingProducts = await stripe.products.list({ limit: 100 });
 
-    // --- Premium product (£19.99/month, £199.99/year) ---
+    // --- Elite (single) plan — £14.99/month, £99.99/year — reuses the "Premium"
+    // product so all existing plumbing (slugs, webhook, tier resolution) keeps
+    // working; the site now offers this one plan with full access. ---
     let premiumProductId;
     const foundPremium = existingProducts.data.find(p => p.name === 'Elite Edge Premium');
     if (foundPremium) {
@@ -52,32 +54,32 @@ class StripeService {
 
     let premiumMonthlyId;
     const pmPrice = premiumPrices.data.find(
-      p => p.active && p.recurring && p.recurring.interval === 'month' && p.unit_amount === 1999 && p.currency === 'gbp'
+      p => p.active && p.recurring && p.recurring.interval === 'month' && p.unit_amount === 1499 && p.currency === 'gbp'
     );
     if (pmPrice) {
       premiumMonthlyId = pmPrice.id;
-      console.log('[Stripe] Found existing Premium monthly price:', premiumMonthlyId);
+      console.log('[Stripe] Found existing Elite monthly price:', premiumMonthlyId);
     } else {
       const mp = await stripe.prices.create({
-        product: premiumProductId, unit_amount: 1999, currency: 'gbp', recurring: { interval: 'month' },
+        product: premiumProductId, unit_amount: 1499, currency: 'gbp', recurring: { interval: 'month' },
       });
       premiumMonthlyId = mp.id;
-      console.log('[Stripe] Created Premium monthly price:', premiumMonthlyId);
+      console.log('[Stripe] Created Elite monthly price (£14.99):', premiumMonthlyId);
     }
 
     let premiumAnnualId;
     const paPrice = premiumPrices.data.find(
-      p => p.active && p.recurring && p.recurring.interval === 'year' && p.unit_amount === 19999 && p.currency === 'gbp'
+      p => p.active && p.recurring && p.recurring.interval === 'year' && p.unit_amount === 9999 && p.currency === 'gbp'
     );
     if (paPrice) {
       premiumAnnualId = paPrice.id;
-      console.log('[Stripe] Found existing Premium annual price:', premiumAnnualId);
+      console.log('[Stripe] Found existing Elite annual price:', premiumAnnualId);
     } else {
       const ap = await stripe.prices.create({
-        product: premiumProductId, unit_amount: 19999, currency: 'gbp', recurring: { interval: 'year' },
+        product: premiumProductId, unit_amount: 9999, currency: 'gbp', recurring: { interval: 'year' },
       });
       premiumAnnualId = ap.id;
-      console.log('[Stripe] Created Premium annual price:', premiumAnnualId);
+      console.log('[Stripe] Created Elite annual price (£99.99):', premiumAnnualId);
     }
 
     // --- Starter product (£9.99/month, £99.99/year) ---
@@ -287,12 +289,19 @@ class StripeService {
    */
   async tierFromSubscription(sub) {
     if (!sub) return null;
-    const priceId = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price && sub.items.data[0].price.id;
+    const price = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price;
+    const priceId = price && price.id;
     if (!priceId) return null;
     const prices = await this.ensureProducts();
     if (priceId === prices.vipMonthlyId || priceId === prices.vipAnnualId) return 'vip';
     if (priceId === prices.starterMonthlyId || priceId === prices.starterAnnualId) return 'starter';
     if (priceId === prices.premiumMonthlyId || priceId === prices.premiumAnnualId) return 'premium';
+    // Fallback by PRODUCT so LEGACY / re-priced prices (e.g. the old £19.99 premium
+    // price) still resolve to the right tier — never mis-classify a paying sub.
+    const productId = price && (typeof price.product === 'string' ? price.product : (price.product && price.product.id));
+    if (productId && productId === prices.vipProductId) return 'vip';
+    if (productId && productId === prices.premiumProductId) return 'premium';
+    if (productId && productId === prices.starterProductId) return 'starter';
     return null;
   }
 
