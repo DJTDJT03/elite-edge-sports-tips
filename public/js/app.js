@@ -9247,6 +9247,7 @@ const App = {
           <button class="admin-tab" onclick="App.switchAdminTab('asklog', this)">Ask Log</button>
           <button class="admin-tab" onclick="App.switchAdminTab('funnel', this)">&#128200; Conversion Funnel</button>
           <button class="admin-tab" onclick="App.switchAdminTab('events', this)">&#127942; Events</button>
+          <button class="admin-tab" onclick="App.switchAdminTab('cosmoprice', this)">&#128181; Cosmo Pricing</button>
         </div>
 
         <!-- TIPS PANEL -->
@@ -9592,6 +9593,17 @@ const App = {
           </div>
           <div id="events-list"><p class="text-muted">Loading…</p></div>
         </div>
+
+        <!-- COSMO PRICING PANEL -->
+        <div class="admin-panel" id="panel-cosmoprice">
+          <h3 class="mb-8">&#128181; Cosmo Pricing vs Market</h3>
+          <p class="text-muted mb-16" style="font-size:13px;max-width:680px;">How competitive Cosmo Bet's odds are against the wider market (Odds API, all books). For every fixture we can price from both, it compares Cosmo's 1X2 price vs the de-vigged consensus (fair value) and the market's <strong>best available</strong> price. Hard evidence for negotiating sharper odds with Cosmo.</p>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="date" id="cosmoprice-date" style="padding:7px;">
+            <button class="btn btn-gold btn-sm" onclick="App._loadCosmoPricing()">Run price check</button>
+          </div>
+          <div id="cosmoprice-content" style="margin-top:16px;"><p class="text-muted">Pick a date (defaults to today) and run the check.</p></div>
+        </div>
       </div>
     `;
   },
@@ -9695,6 +9707,51 @@ const App = {
     if (panel === 'asklog') this._loadAssistantQueries();
     if (panel === 'funnel') this._loadAdminFunnel(30);
     if (panel === 'events') this._loadAdminEvents();
+  },
+
+  // Admin: run the Cosmo-vs-market price competitiveness check and render the
+  // headline numbers + worst offenders (evidence for the Cosmo odds conversation).
+  async _loadCosmoPricing() {
+    var box = document.getElementById('cosmoprice-content');
+    if (!box) return;
+    var dateEl = document.getElementById('cosmoprice-date');
+    var date = dateEl && dateEl.value ? dateEl.value : '';
+    box.innerHTML = '<p class="text-muted"><span class="loading-spinner" style="display:inline-block;vertical-align:middle;margin-right:8px;"></span>Scanning the card (fetching all-book market odds + Cosmo prices)…</p>';
+    var d;
+    try { d = await this.api('/football/admin/cosmo-pricing' + (date ? '?date=' + encodeURIComponent(date) : '')); }
+    catch (e) { box.innerHTML = '<div class="card"><p class="text-muted">Could not run the check: ' + this.escapeHtml(e.message) + '</p></div>'; return; }
+    if (!d || !d.ok) { box.innerHTML = '<div class="card"><p class="text-muted">Check failed.</p></div>'; return; }
+    if (!d.selectionsCompared) {
+      box.innerHTML = '<div class="card"><p class="text-muted">No fixtures could be priced from BOTH the market and Cosmo on this date (' + (d.fixturesScanned || 0) + ' fixtures, ' + (d.marketCovered || 0) + ' with market odds, ' + (d.cosmoMatched || 0) + ' matched to Cosmo). Try a day with major-league games.</p></div>';
+      return;
+    }
+    var s = d.summary;
+    var stat = function (label, val, colour, hint) {
+      return '<div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;min-width:140px;flex:1;">' +
+        '<div style="font-size:26px;font-weight:900;color:' + colour + ';">' + val + '</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px;">' + label + '</div>' +
+        (hint ? '<div style="font-size:10px;color:var(--text-muted);margin-top:4px;">' + hint + '</div>' : '') + '</div>';
+    };
+    var verdict = s.cosmoIsBestPct >= 15 ? 'Cosmo is competitive on a fair share of picks.'
+      : s.avgVsBestPct >= 4 ? 'Cosmo is materially short of the market — a strong case for sharper odds.'
+      : 'Cosmo is broadly off the pace vs the best market prices.';
+    var esc = this.escapeHtml.bind(this);
+    box.innerHTML =
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">' +
+        stat('Avg vs best price', '+' + s.avgVsBestPct + '%', s.avgVsBestPct >= 4 ? '#ef4444' : '#f59e0b', 'market\'s best beats Cosmo by this') +
+        stat('Cosmo is best', s.cosmoIsBestPct + '%', s.cosmoIsBestPct >= 15 ? '#22c55e' : '#ef4444', 'of selections') +
+        stat('Competitive (≤1%)', s.competitivePct + '%', s.competitivePct >= 40 ? '#22c55e' : '#f59e0b', 'within 1% of best') +
+        stat('Overround vs fair', '+' + s.avgCosmoMarginPts + 'pts', '#f59e0b', 'margin baked in') +
+      '</div>' +
+      '<p style="font-size:13px;color:var(--text-secondary);margin:0 0 14px;"><strong>' + s.selectionsCompared + '</strong> selections across <strong>' + d.cosmoMatched + '</strong> Cosmo-matched fixtures (' + d.fixturesScanned + ' scanned). <span style="color:' + (s.avgVsBestPct >= 4 ? '#ef4444' : '#22c55e') + ';font-weight:700;">' + esc(verdict) + '</span></p>' +
+      '<div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin:8px 0 6px;">Worst offenders (Cosmo furthest below the best price)</div>' +
+      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+        '<tr style="text-align:left;color:var(--text-muted);"><th style="padding:6px;">Fixture</th><th>Sel</th><th>Cosmo</th><th>Best</th><th>Gap</th><th>Fair%</th></tr>' +
+        (d.worst || []).map(function (r) {
+          return '<tr style="border-top:1px solid var(--border);"><td style="padding:6px;">' + esc(r.fixture) + '</td><td>' + esc(r.sel) + '</td>' +
+            '<td>' + r.cosmo + '</td><td style="color:#22c55e;">' + r.best + '</td><td style="color:#ef4444;font-weight:700;">+' + r.vsBestPct + '%</td><td style="color:var(--text-muted);">' + r.fairPct + '%</td></tr>';
+        }).join('') +
+      '</table></div>';
   },
 
   // Conversion funnel (admin) — two honest sub-funnels: accounts (exact DB) and
