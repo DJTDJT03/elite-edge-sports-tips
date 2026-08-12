@@ -106,6 +106,84 @@ module.exports = function(deps) {
     }
   });
 
+  // GET /football/admin/cosmo-pricing — HARD EVIDENCE of how competitive Cosmo's
+  // odds are vs the wider market. For every fixture we can price from BOTH the
+  // multi-book market (Odds API) and Cosmo, compares Cosmo's 1X2 price against the
+  // de-vigged consensus (fair) AND the market's BEST available price. Produces the
+  // margin gap + a "how often is Cosmo the best price / competitive / materially
+  // worse" breakdown — the numbers to take to Cosmo to negotiate sharper odds.
+  router.get('/football/admin/cosmo-pricing', deps.authenticate, deps.requireAdmin, async function(req, res) {
+    try {
+      if (!sportMonks || !oddsSource || !cosmoBet) return res.status(503).json({ error: 'Odds API / Cosmo not available' });
+      var date = req.query.date || new Date().toISOString().split('T')[0];
+      var fixtures = await sportMonks.getFixturesByDate(date);
+      if (!fixtures || !fixtures.length) return res.json({ ok: true, date: date, compared: 0, note: 'No fixtures for this date.' });
+
+      // Multi-book market prices (avg = consensus, max = best available) per 1X2 leg.
+      var oddsData = [];
+      try { oddsData = oddsSource.normalise(await oddsSource.fetch()) || []; } catch (e) {}
+      var avg = function(a) { return a.length ? a.reduce(function(x, y) { return x + y; }, 0) / a.length : null; };
+      var mx = function(a) { return a.length ? Math.max.apply(null, a) : null; };
+      var devig = function(prices) {
+        var inv = prices.map(function(p) { return (p && p > 1) ? 1 / p : 0; });
+        var s = inv.reduce(function(x, y) { return x + y; }, 0);
+        return s > 0 ? inv.map(function(x) { return x / s; }) : null;
+      };
+      fixtures.forEach(function(f) {
+        var fH = (f.homeTeam || '').toLowerCase(), fA = (f.awayTeam || '').toLowerCase();
+        var m = oddsData.find(function(o) {
+          var oH = (o.homeTeam || '').toLowerCase(), oA = (o.awayTeam || '').toLowerCase();
+          return fH && oH && (oH.indexOf(fH.slice(0, 6)) !== -1 || fH.indexOf(oH.slice(0, 6)) !== -1) &&
+                 (oA.indexOf(fA.slice(0, 6)) !== -1 || fA.indexOf(oA.slice(0, 6)) !== -1);
+        });
+        if (!m || !m.bookmakerOdds) return;
+        var hs = [], ds = [], as = [];
+        Object.keys(m.bookmakerOdds).forEach(function(bk) {
+          var b = m.bookmakerOdds[bk], ks = Object.keys(b);
+          var h = b[f.homeTeam] || b[ks[0]], dr = b['Draw'] || b['draw'], aw = b[f.awayTeam] || b[ks[2]];
+          if (h > 1) hs.push(h); if (dr > 1) ds.push(dr); if (aw > 1) as.push(aw);
+        });
+        if (hs.length >= 2) f.market = { avg: [avg(hs), avg(ds), avg(as)], best: [mx(hs), mx(ds), mx(as)], books: hs.length };
+      });
+
+      try { await cosmoBet.enrichFixturesWithCosmoPrices(fixtures, { cap: 50 }); } catch (e) {}
+
+      var rows = [], sumMargin = 0, sumVsBest = 0, cosmoBest = 0, competitive = 0, poor = 0, n = 0;
+      fixtures.forEach(function(f) {
+        if (!f.market || !f.cosmo) return;
+        var fair = devig(f.market.avg);
+        if (!fair) return;
+        [['home', 0], ['draw', 1], ['away', 2]].forEach(function(leg) {
+          var side = leg[0], i = leg[1];
+          var cosmo = f.cosmo[side], best = f.market.best[i], fairProb = fair[i];
+          if (!cosmo || !best || !fairProb) return;
+          var marginPts = Math.round(((1 / cosmo) - fairProb) * 1000) / 10;     // Cosmo overround vs fair (+ = worse)
+          var vsBestPct = Math.round(((best - cosmo) / cosmo) * 1000) / 10;      // best price is X% bigger than Cosmo
+          n++; sumMargin += marginPts; sumVsBest += vsBestPct;
+          if (cosmo >= best) cosmoBest++;
+          if (cosmo >= best * 0.99) competitive++;
+          if (vsBestPct >= 3) poor++;
+          rows.push({ fixture: f.homeTeam + ' v ' + f.awayTeam, sel: side.toUpperCase(), cosmo: cosmo, best: Math.round(best * 100) / 100, fairPct: Math.round(fairProb * 100), marginPts: marginPts, vsBestPct: vsBestPct, books: f.market.books });
+        });
+      });
+      rows.sort(function(a, b) { return b.vsBestPct - a.vsBestPct; });
+      res.json({
+        ok: true, date: date, fixturesScanned: fixtures.length, marketCovered: fixtures.filter(function(f){return f.market;}).length,
+        cosmoMatched: fixtures.filter(function(f){return f.cosmo;}).length, selectionsCompared: n,
+        summary: n ? {
+          avgCosmoMarginPts: Math.round((sumMargin / n) * 10) / 10,   // avg overround Cosmo bakes in vs fair
+          avgVsBestPct: Math.round((sumVsBest / n) * 10) / 10,        // avg % the market's best beats Cosmo
+          cosmoIsBestPct: Math.round((cosmoBest / n) * 100),          // how often Cosmo IS the best price
+          competitivePct: Math.round((competitive / n) * 100),        // within 1% of best
+          poorPct: Math.round((poor / n) * 100),                      // 3%+ short of best
+        } : null,
+        worst: rows.slice(0, 10),
+      });
+    } catch (err) {
+      res.status(500).json({ error: 'Cosmo pricing scan failed: ' + err.message });
+    }
+  });
+
   // Short-lived server-side cache for match-intelligence responses. The modal
   // fires a dozen external + LLM calls per open; re-opening the same fixture (or
   // many users opening the same WC game) should be instant, not a full recompute.
