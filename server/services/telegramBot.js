@@ -110,9 +110,7 @@ class TelegramBot {
       text += '\n\uD83D\uDCCA Powered by Elite Edge Sports Tips\n' +
         '\uD83C\uDF10 eliteedgesports.co.uk';
 
-      if (tip.isNap) {
-        text = '\u2B50 <b>NAP OF THE DAY</b> \u2B50\n\n' + text;
-      }
+      // NAP headline removed \u2014 we no longer feature a single "NAP of the day".
 
       return await this.sendMessage(text);
     } catch (err) {
@@ -172,7 +170,7 @@ class TelegramBot {
       // signal that today's selections are live and drive to the site.
       var text = '\u2600\uFE0F <b>Good Morning \u2014 ' + today + '</b>\n\n' +
         '\u26BD Today\'s football is covered \u2014 <b>' + tipCount + ' selection' + (tipCount === 1 ? '' : 's') + '</b> from our 5 analysts + AI engines are live.\n' +
-        '\n\uD83E\uDDE0 Picks, the NAP of the day & full analysis (form, injuries, xG, H2H, market intel) are on the site:\n' +
+        '\n\uD83E\uDDE0 Picks & full analysis (form, injuries, xG, H2H, market intel) are on the site:\n' +
         '\n\uD83D\uDD17 <b>eliteedgesports.co.uk</b>\n' +
         '\n18+ | Entertainment only | BeGambleAware.org';
       return await this.sendMessage(text);
@@ -287,7 +285,7 @@ class TelegramBot {
       for (var g = 0; g < games.length; g++) {
         text += '\u2022 ' + games[g] + '\n';
       }
-      text += '\n\uD83D\uDD12 Today\'s picks, the NAP of the day & full AI analysis are members-only \u2014 see them all on the site:\n';
+      text += '\n\uD83D\uDD12 Today\'s picks & full AI analysis are members-only \u2014 see them all on the site:\n';
       text += '\uD83D\uDD17 <b>eliteedgesports.co.uk</b>\n';
       text += '\n18+ | Entertainment only | BeGambleAware.org';
 

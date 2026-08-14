@@ -3090,8 +3090,9 @@ const App = {
           <div id="ee-ask-answer" style="display:none;margin-top:14px;padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:14px;line-height:1.6;color:var(--text-primary);"></div>
         </div>
 
-        <!-- 2. NAP OF THE DAY — Hero product, first thing you see -->
-        ${napTip ? (this.isPremium() ? `
+        <!-- NAP / Tip of the Day removed — we no longer headline a single pick
+             (kept short-priced losers front-and-centre). Full selections below. -->
+        ${false ? (this.isPremium() ? `
         <div class="nap-card-wrapper">
           <div class="nap-label"><span class="star">\u2605</span> NAP OF THE DAY — Our Strongest Selection <span class="star">\u2605</span></div>
           <div class="nap-card" onclick="window.location.hash='#/tip/${napTip.id}'">
@@ -4351,7 +4352,7 @@ const App = {
         <div class="container">
           <p class="mb-16"><a href="#/" class="text-gold">&larr; Back to Dashboard</a></p>
 
-          ${tip.isNap ? `<div class="nap-card-wrapper mb-16"><div class="nap-label"><span class="star">\u2605</span> NAP OF THE DAY <span class="star">\u2605</span></div></div>` : ''}
+          ${'' /* NAP OF THE DAY label removed \u2014 we no longer headline a single pick */}
 
           <!-- Premium Analysis Header -->
           <div class="premium-analysis-header">
@@ -5519,16 +5520,10 @@ const App = {
     var racingTips = todayTips.filter(function(t) { return t.sport === 'racing'; });
     var footballTips = todayTips.filter(function(t) { return t.sport === 'football'; });
 
-    // Find NAP of the day (highest confidence tip, or one flagged as NAP)
+    // NAP / featured pick removed — every selection is shown equally in its sport
+    // section below (no single headline pick that kept short-priced losers up top).
     var napTip = null;
     var otherTips = todayTips.slice();
-    if (todayTips.length) {
-      // Look for an explicit NAP first (valueRating === 'Elite' and highest confidence)
-      var sortedByConf = todayTips.slice().sort(function(a, b) { return (b.confidence || 0) - (a.confidence || 0); });
-      var eliteTips = sortedByConf.filter(function(t) { return t.valueRating === 'Elite'; });
-      napTip = eliteTips.length > 0 ? eliteTips[0] : sortedByConf[0];
-      otherTips = todayTips.filter(function(t) { return t.id !== napTip.id; });
-    }
 
     // Apply confidence threshold filter
     var confMin = this._confThreshold || 0;
@@ -13532,9 +13527,9 @@ const App = {
             <tr style="border-bottom:1px solid var(--border);"><td style="padding:8px;font-weight:700;color:#ef4444;">1-4</td><td style="padding:8px;">Low confidence — we would never publish these</td></tr>
             <tr style="border-bottom:1px solid var(--border);"><td style="padding:8px;font-weight:700;color:#f59e0b;">5-6</td><td style="padding:8px;">Moderate — only published if edge is very strong</td></tr>
             <tr style="border-bottom:1px solid var(--border);"><td style="padding:8px;font-weight:700;color:#22c55e;">7-8</td><td style="padding:8px;">Strong — the majority of our selections</td></tr>
-            <tr><td style="padding:8px;font-weight:700;color:#22d3ee;">9-10</td><td style="padding:8px;">Elite — our strongest conviction picks (NAP territory)</td></tr>
+            <tr><td style="padding:8px;font-weight:700;color:#22d3ee;">9-10</td><td style="padding:8px;">Elite — our strongest conviction picks</td></tr>
           </table>
-          <p>We only publish tips with a confidence of <strong>6 or higher</strong>. Our NAP of the Day must be <strong>7+</strong>.</p>
+          <p>We only publish tips with a confidence of <strong>6 or higher</strong>.</p>
 
           <h2>&#128200; What is Edge?</h2>
           <p>Edge is the difference between <strong>what we think the probability is</strong> and <strong>what the bookmaker's odds imply</strong>.</p>

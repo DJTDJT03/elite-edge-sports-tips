@@ -2018,22 +2018,20 @@ module.exports = function startScheduler(deps) {
 
     // In-app notification for all users — tips are live
     try {
-      var napTip = newTips.find(function(t) { return t.isNap && (t.confidence || 0) >= 6; });
       await db.createNotification({
         type: 'tips_published',
-        message: newTips.length + ' football selection' + (newTips.length === 1 ? '' : 's') + ' published for today' + (napTip ? ' — NAP: ' + napTip.selection + ' (' + napTip.confidence + '/10)' : '') + '. Check your dashboard now.',
+        message: newTips.length + ' football selection' + (newTips.length === 1 ? '' : 's') + ' published for today. Check your dashboard now.',
         audience: 'all',
       });
       console.log('[Auto-Tips] In-app notification created');
     } catch(e) {}
 
-    // Push notification if available
+    // Push notification if available (no NAP — we don't headline a single pick).
     var pushSvc = deps.pushService;
     if (pushSvc && pushSvc.isAvailable) {
-      var napName = newTips.find(function(t) { return t.isNap && (t.confidence || 0) >= 6; });
       pushSvc.broadcast(db, {
         title: newTips.length + ' football tips published',
-        body: (napName ? 'NAP: ' + napName.selection + ' — ' : '') + 'Check your dashboard for today\'s selections.',
+        body: 'Check your dashboard for today\'s selections.',
         url: '/#/dashboard',
         tag: 'daily-tips-' + today,
       }, 'all').catch(function(e) { console.log('[Push] Broadcast error:', e.message); });
@@ -3420,9 +3418,11 @@ module.exports = function startScheduler(deps) {
       for (var i = 0; i < premiumUsers.length; i++) {
         var u = premiumUsers[i];
 
-        // Try AI-enhanced bulletin
+        // Tips-in-email DISABLED — the daily email is now a teaser only (no picks,
+        // no NAP), driving subscribers to the site. So we skip the AI tip-bulletin
+        // generation entirely and send the teaser in the else branch below.
         var aiContent = null;
-        if (aiReports && aiReports.isAvailable()) {
+        if (false && aiReports && aiReports.isAvailable()) {
           try {
             aiContent = await aiReports.generateEmailBulletin({
               userName: u.name || 'Subscriber',
@@ -3488,12 +3488,27 @@ module.exports = function startScheduler(deps) {
 
           console.log('[Bulletin] AI-enhanced bulletin sent to ' + u.email);
         } else {
-          // Fall back to standard template
-          emailService.sendDailyBulletin({
-            name: u.name, email: u.email,
-            nap: nap, premiumTips: premiumTips,
-            yesterdayResults: yesterdayResults.length > 0 ? yesterdayResults : null
-          }).catch(function(err) { console.error('[Email] Daily bulletin failed:', err.message); });
+          // TEASER ONLY — no tips, no NAP. Tell subscribers the card is live and
+          // drive them to the site to see the picks, analysis and live odds.
+          var teaserCount = todayTips.filter(function (x) { return !x.isWeeklyAcca; }).length;
+          var teaserName = u.name ? String(u.name).split(' ')[0] : '';
+          var teaserHtml = '<div style="font-family:Inter,sans-serif;background:#0a0e1a;color:#e8e6e3;padding:32px;">' +
+            '<h1 style="color:#22d3ee;margin:0 0 6px;">Elite Edge Sports Tips</h1>' +
+            '<p style="color:#e8e6e3;font-size:15px;">Morning ' + teaserName + ' — today\'s card is live.</p>' +
+            '<div style="background:linear-gradient(135deg,rgba(34,211,238,0.12),rgba(34,211,238,0.04));border:2px solid rgba(34,211,238,0.3);border-radius:12px;padding:24px;margin:20px 0;text-align:center;">' +
+              '<div style="font-size:34px;font-weight:900;color:#22d3ee;">' + teaserCount + '</div>' +
+              '<div style="font-size:13px;color:#8b8d93;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;">selections live today</div>' +
+              '<a href="https://eliteedgesports.co.uk/#/dashboard" style="display:inline-block;padding:13px 32px;background:linear-gradient(135deg,#22d3ee,#0891b2);color:#0a0e1a;text-decoration:none;border-radius:8px;font-weight:800;font-size:15px;">See today\'s picks &rarr;</a>' +
+            '</div>' +
+            '<p style="color:#8b8d93;font-size:13px;">Full selections, 5-analyst analysis and live odds are on the site — log in to view them.</p>' +
+            '<p style="font-size:11px;color:#64748b;margin-top:28px;">18+ | Entertainment &amp; statistical analysis only | BeGambleAware.org</p>' +
+          '</div>';
+          emailService._sendEmail({
+            to: u.email,
+            subject: teaserCount + ' selections live today — Elite Edge',
+            html: teaserHtml,
+            emailType: 'daily_bulletin'
+          }).catch(function (err) { console.error('[Email] Daily teaser failed:', err.message); });
         }
         sentCount++;
       }
@@ -3504,10 +3519,9 @@ module.exports = function startScheduler(deps) {
       // Push notification — sent here at 10:30am (not at 7:30am tip generation)
       var pushService = deps.pushService;
       if (pushService && pushService.isAvailable && todayTips.length > 0) {
-        var napTip = todayTips.find(function(t) { return t.isNap; });
         pushService.broadcast(db, {
           title: todayTips.length + ' tips live — non-runners cleared',
-          body: (napTip ? 'NAP: ' + napTip.selection + ' — ' : '') + 'Today\'s selections are ready.',
+          body: 'Today\'s selections are ready.',
           url: '/#/dashboard',
           tag: 'daily-tips-' + dateStr,
         }, 'premium').catch(function(e) {});
