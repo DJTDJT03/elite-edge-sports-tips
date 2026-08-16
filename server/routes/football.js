@@ -197,13 +197,13 @@ module.exports = function(deps) {
       // Per-tier base Elo encodes cross-league strength (a mid PL side > a top
       // Championship side). Within a league, standings shift each team around base.
       var TARGETS = [
-        { re: /^premier league$/i, base: 1560 }, { re: /^championship$/i, base: 1470 },
-        { re: /^league one$/i, base: 1420 }, { re: /^league two$/i, base: 1385 },
-        { re: /la ?liga/i, base: 1550 }, { re: /serie a/i, base: 1545 },
-        { re: /bundesliga/i, base: 1545 }, { re: /ligue 1/i, base: 1535 },
-        { re: /eredivisie/i, base: 1495 }, { re: /eerste divisie/i, base: 1420 },
-        { re: /primeira liga|liga portugal/i, base: 1505 }, { re: /premiership/i, base: 1465 },
-        { re: /jupiler|pro league/i, base: 1485 }, { re: /s(ü|u)per lig/i, base: 1490 },
+        { re: /^premier league$/i, base: 1590 }, { re: /^championship$/i, base: 1445 },
+        { re: /^league one$/i, base: 1380 }, { re: /^league two$/i, base: 1340 },
+        { re: /la ?liga/i, base: 1580 }, { re: /serie a/i, base: 1575 },
+        { re: /bundesliga/i, base: 1575 }, { re: /ligue 1/i, base: 1560 },
+        { re: /eredivisie/i, base: 1510 }, { re: /eerste divisie/i, base: 1400 },
+        { re: /primeira liga|liga portugal/i, base: 1520 }, { re: /premiership/i, base: 1470 },
+        { re: /jupiler|pro league/i, base: 1495 }, { re: /s(ü|u)per lig/i, base: 1495 },
       ];
       var leagues = await sportMonks.getLeagues();
       var statOf = function(row, names) {
@@ -244,27 +244,29 @@ module.exports = function(deps) {
           var p = row.participant || {};
           return {
             name: p.name,
+            position: row.position != null ? row.position : null,
             played: statOf(row, ['OVERALL_MATCHES', 'MATCHES_PLAYED', 'GAMES_PLAYED', 'PLAYED']) || 0,
             pts: row.points != null ? row.points : statOf(row, ['POINTS']),
             gf: statOf(row, ['OVERALL_SCORED', 'GOALS_FOR', 'SCORED']), ga: statOf(row, ['OVERALL_CONCEDED', 'GOALS_AGAINST', 'CONCEDED']),
           };
         }).filter(function(r) { return r.name; });
-        var totPts = 0, totPl = 0;
-        rows.forEach(function(r) { if (r.pts != null && r.played) { totPts += r.pts; totPl += r.played; } });
-        var avgPpg = totPl ? totPts / totPl : 1.35;
+        var nTeams = rows.length;
         var lgSeeded = 0;
         for (var i = 0; i < rows.length; i++) {
           var r = rows[i], elo;
-          if (r.played >= 1 && r.pts != null) {
-            var ppg = r.pts / r.played, gdpg = ((r.gf || 0) - (r.ga || 0)) / r.played;
-            // Wider scaling so real within-league strength shows through (an elite
-            // side should sit well above a relegation side once games accumulate).
-            elo = T.base + (ppg - avgPpg) * 230 + gdpg * 45;
-            elo = Math.max(T.base - 260, Math.min(T.base + 320, elo));
+          // FINAL LEAGUE POSITION is the primary strength signal (monotonic, robust
+          // — top of the table always outranks the bottom). Spread ±190 Elo across
+          // the table; nudge by goal difference per game for magnitude.
+          if (r.position != null && nTeams > 1) {
+            var posFrac = (r.position - 1) / (nTeams - 1);      // 0 = champions, 1 = bottom
+            elo = T.base + (0.5 - posFrac) * 380;
+            var gdpg = (r.played >= 1) ? ((r.gf || 0) - (r.ga || 0)) / r.played : 0;
+            elo += Math.max(-25, Math.min(25, gdpg * 20));
+            elo = Math.max(T.base - 210, Math.min(T.base + 210, elo));
           } else { elo = T.base; }
           try { if (await deps.quantModel.seedRating(r.name, elo)) { totalSeeded++; lgSeeded++; } } catch (e) {}
         }
-        perLeague.push({ league: lg.name, season: seasonId, source: usedSeason, teams: rows.length, seeded: lgSeeded, avgPpg: Math.round(avgPpg * 100) / 100 });
+        perLeague.push({ league: lg.name, season: seasonId, source: usedSeason, teams: rows.length, seeded: lgSeeded });
       }
       if (deps.quantModel.reloadRatings) await deps.quantModel.reloadRatings();
       return { ok: true, totalSeeded: totalSeeded, leagues: perLeague };
