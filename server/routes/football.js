@@ -279,13 +279,24 @@ module.exports = function(deps) {
   // spread. Runs the seed and returns the per-league summary + a few sample grades.
   router.get('/football/seed-diag-x7k2', async function(req, res) {
     try {
-      var out = await doSeedRatings();
-      var sample = {};
-      ['Liverpool', 'Como', 'Manchester City', 'Sunderland', 'Wrexham', 'Barnsley', 'Arsenal', 'Sheffield Wednesday'].forEach(function(n) {
-        try { sample[n] = { rating: deps.quantModel.getRating(n), known: deps.quantModel.knows(n) }; } catch (e) {}
+      // Dump the RAW structure of a real standings row so we can see the actual
+      // field names (why points/played/goals parse as null).
+      var leagues = await sportMonks.getLeagues();
+      var pl = leagues.find(function(l) { return /^premier league$/i.test(l.name || ''); });
+      var seasons = pl ? await sportMonks.getLeagueSeasons(pl.id) : [];
+      var prev = (seasons || []).filter(function(s) { return s && s.id; }).sort(function(a, b) { return new Date(b.ending_at || 0) - new Date(a.ending_at || 0); })[0];
+      var standings = prev ? await sportMonks.getStandings(prev.id) : [];
+      var row0 = standings[0] || {};
+      var detailDump = Array.isArray(row0.details) ? row0.details.slice(0, 8).map(function(d) {
+        return { type_id: d.type_id, dev: d.type && d.type.developer_name, name: d.type && d.type.name, value: d.value, dataValue: d.data && d.data.value };
+      }) : row0.details;
+      res.json({
+        leagueUsed: pl && pl.name, prevSeason: prev && (prev.name || prev.id), standingsCount: standings.length,
+        row0Keys: Object.keys(row0), row0Points: row0.points, row0Position: row0.position,
+        row0Participant: row0.participant ? { name: row0.participant.name, keys: Object.keys(row0.participant) } : null,
+        detailsIsArray: Array.isArray(row0.details), detailDump: detailDump,
       });
-      res.json({ seed: out, sample: sample });
-    } catch (err) { res.status(500).json({ error: err.message, stack: (err.stack || '').split('\n').slice(0, 3) }); }
+    } catch (err) { res.status(500).json({ error: err.message, stack: (err.stack || '').split('\n').slice(0, 4) }); }
   });
 
   // Short-lived server-side cache for match-intelligence responses. The modal
