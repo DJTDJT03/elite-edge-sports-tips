@@ -388,10 +388,12 @@ module.exports = function(deps) {
   async function getLockedVerdict(fid) {
     try {
       if (!db || !db.query) return null;
-      var r = await db.query('SELECT market, selection, reason, confidence, risk_level, risk_text FROM match_verdict_locks WHERE fixture_id = $1 LIMIT 1', [String(fid)]);
+      var r = await db.query('SELECT market, selection, reason, confidence, risk_level, risk_text, source FROM match_verdict_locks WHERE fixture_id = $1 LIMIT 1', [String(fid)]);
       if (r.rows && r.rows.length) {
         var v = r.rows[0];
-        return { market: v.market, pick: v.selection, reason: v.reason, confidence: v.confidence, riskLevel: v.risk_level || 'medium', riskText: v.risk_text || '', source: 'locked' };
+        // Restore the original derivation (market/model/analyst) so the badge is
+        // consistent on every view; legacy rows with no source read as 'locked'.
+        return { market: v.market, pick: v.selection, reason: v.reason, confidence: v.confidence, riskLevel: v.risk_level || 'medium', riskText: v.risk_text || '', source: v.source || 'locked' };
       }
     } catch (e) { /* table may not exist yet */ }
     return null;
@@ -401,9 +403,9 @@ module.exports = function(deps) {
       if (!db || !db.query || !fid || !v || !v.pick) return;
       if (_hasStarted(status, kickoff)) return; // only ever lock a PRE-kick-off pick
       await db.query(
-        'INSERT INTO match_verdict_locks (fixture_id, market, selection, reason, confidence, risk_level, risk_text, kickoff) ' +
-        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (fixture_id) DO NOTHING',
-        [String(fid), v.market || null, v.pick || null, v.reason || null, v.confidence || null, v.riskLevel || null, v.riskText || null, kickoff || null]
+        'INSERT INTO match_verdict_locks (fixture_id, market, selection, reason, confidence, risk_level, risk_text, kickoff, source) ' +
+        'VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (fixture_id) DO NOTHING',
+        [String(fid), v.market || null, v.pick || null, v.reason || null, v.confidence || null, v.riskLevel || null, v.riskText || null, kickoff || null, v.source || null]
       );
     } catch (e) { /* non-fatal */ }
   }
@@ -431,6 +433,79 @@ module.exports = function(deps) {
       confidence: conf, riskLevel: conf >= 8 ? 'Low' : conf >= 7 ? 'Low-Medium' : 'Medium',
       riskText: 'Elite Edge model call.', source: 'model',
     };
+  }
+
+  // ---- MARKET-BASED "OUR TAKE" ---------------------------------------------
+  // The de-vigged bookmaker CONSENSUS is the sharpest reliable read available for
+  // ANY fixture — so when we have no published tip or locked analyst verdict, this
+  // gives an informed "Our Take" on every game (correctly favouring the strong
+  // side), instead of "no take" or a wobbly early-season model read. 1X2 only.
+  var _oddsApiCache = null, _oddsApiAt = 0; // route-lifetime cache of the Odds API slate (2 min)
+  async function marketConsensus(homeName, awayName) {
+    if (!homeName || !awayName) return null;
+    var triple = null;
+    // 1) Odds API — multi-book average (the consensus).
+    if (oddsSource && process.env.ODDS_API_KEY) {
+      try {
+        if (!_oddsApiCache || (Date.now() - _oddsApiAt) > 120000) {
+          _oddsApiCache = oddsSource.normalise(await oddsSource.fetch()) || [];
+          _oddsApiAt = Date.now();
+        }
+        var fH = homeName.toLowerCase(), fA = awayName.toLowerCase();
+        var m = _oddsApiCache.find(function (o) {
+          var oH = (o.homeTeam || '').toLowerCase(), oA = (o.awayTeam || '').toLowerCase();
+          return oH && oA && (oH.indexOf(fH.slice(0, 6)) !== -1 || fH.indexOf(oH.slice(0, 6)) !== -1) &&
+                 (oA.indexOf(fA.slice(0, 6)) !== -1 || fA.indexOf(oA.slice(0, 6)) !== -1);
+        });
+        if (m && m.bookmakerOdds) {
+          var hs = [], ds = [], as = [];
+          Object.keys(m.bookmakerOdds).forEach(function (bk) {
+            var b = m.bookmakerOdds[bk];
+            // Draw is a known literal ('Draw'); home/away by exact name, else the
+            // two NON-draw keys positionally ([home, away] — never the draw price).
+            var nonDraw = Object.keys(b).filter(function (k) { return k.toLowerCase() !== 'draw'; });
+            var dr = b['Draw'] || b['draw'];
+            var h = b[homeName] || b[nonDraw[0]], aw = b[awayName] || b[nonDraw[1]];
+            if (h > 1) hs.push(h); if (dr > 1) ds.push(dr); if (aw > 1) as.push(aw);
+          });
+          var avg = function (a) { return a.length ? a.reduce(function (x, y) { return x + y; }, 0) / a.length : null; };
+          if (hs.length && ds.length && as.length) triple = [avg(hs), avg(ds), avg(as)];
+        }
+      } catch (e) { /* fall through */ }
+    }
+    // 2) Cosmo partner book fallback (real 1X2 for fixtures the Odds API misses).
+    if (!triple && cosmoBet && cosmoBet.matchFixture) {
+      try {
+        var game = await cosmoBet.matchFixture(homeName, awayName, null);
+        if (game && game.gameId) {
+          var od = await cosmoBet.getGameOdds(game.gameId);
+          if (od && od.matchResult && od.matchResult.home && od.matchResult.draw && od.matchResult.away) {
+            triple = [od.matchResult.home, od.matchResult.draw, od.matchResult.away];
+          }
+        }
+      } catch (e) { /* fall through */ }
+    }
+    if (!triple) return null;
+    var inv = triple.map(function (p) { return (p && p > 1) ? 1 / p : 0; });
+    var s = inv.reduce(function (a, b) { return a + b; }, 0);
+    if (s <= 0) return null;
+    return { home: inv[0] / s, draw: inv[1] / s, away: inv[2] / s };
+  }
+  async function marketVerdict(homeName, awayName) {
+    var c = await marketConsensus(homeName, awayName);
+    if (!c) return null;
+    var pct = function (x) { return Math.round(x * 100); };
+    var favHome = c.home >= c.away, favP = favHome ? c.home : c.away, favName = favHome ? homeName : awayName;
+    var line = 'The market makes it ' + homeName + ' ' + pct(c.home) + '% · Draw ' + pct(c.draw) + '% · ' + awayName + ' ' + pct(c.away) + '% (de-vigged bookmaker consensus). ';
+    if (favP >= 0.55) {
+      var conf = Math.max(6, Math.min(9, Math.round(favP * 10)));
+      return { market: 'Match Result', pick: favName + ' Win', reason: line + favName + ' are the clear pick.', confidence: conf, riskLevel: conf >= 8 ? 'Low' : 'Low-Medium', riskText: 'Market-led call.', source: 'market' };
+    }
+    if (favP >= 0.42) {
+      var dcP = Math.min(0.92, favP + c.draw);
+      return { market: 'Double Chance', pick: 'Double Chance - ' + favName + ' or Draw', reason: line + favName + ' marginally favoured — Double Chance banks the win or the draw (' + pct(dcP) + '%).', confidence: Math.max(6, Math.min(8, Math.round(dcP * 10))), riskLevel: 'Low-Medium', riskText: 'Market-led call.', source: 'market' };
+    }
+    return { market: 'Match Result', pick: 'Draw', reason: line + 'Genuinely even — the draw is the market\'s most likely single outcome.', confidence: Math.max(6, Math.min(7, Math.round(c.draw * 14))), riskLevel: 'Medium', riskText: 'Market-led call.', source: 'market' };
   }
 
   // ---------------------------------------------------------------------------
@@ -1032,7 +1107,17 @@ module.exports = function(deps) {
 
             // Pick the verdict source, then guard: a World Cup "Our Take" must
             // never headline a bare Draw — back the favourite to win instead.
-            var _finalVerdict = wcConsensusVerdict || smVerdict || {
+            // Verdict hierarchy for a game we don't publish a tip on:
+            //   1) frozen WC consensus  2) SportMonks model take (smVerdict)
+            //   3) de-vigged bookmaker CONSENSUS (marketVerdict) — the sharp
+            //      fallback that correctly backs the strong side on fixtures SM
+            //      has no prediction for (League One/Two, cups, etc.), instead of
+            //      a weak H2H guess  4) H2H fallback (last resort).
+            var _finalVerdict = wcConsensusVerdict || smVerdict || null;
+            if (!_finalVerdict) {
+              try { _finalVerdict = await marketVerdict(smF.homeTeam || '', smF.awayTeam || ''); } catch (e) { /* fall through */ }
+            }
+            if (!_finalVerdict) _finalVerdict = {
               market: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Total Goals' : 'Match Result',
               pick: smH2HTotalGoals / Math.max(smH2H.length, 1) > 2.5 ? 'Over 2.5 Goals' : (smH2HHomeWins > smH2HAwayWins ? smF.homeTeam + ' Win' : smF.awayTeam + ' Win'),
               reason: 'Based on head-to-head record: ' + smH2HHomeWins + ' home wins, ' + smH2HAwayWins + ' away wins, ' + smH2HDraws + ' draws across ' + smH2H.length + ' meetings. Average ' + smH2HAvg + ' goals per game.',
@@ -1056,7 +1141,12 @@ module.exports = function(deps) {
                 // deterministic model's read (Elo + Dixon-Coles — the same engine
                 // shown in the model panel below), clearly badged as the model's
                 // call. We still never retrofit an editorial/analyst narrative.
-                var _smMv = null;
+                var _smMv = null, _smMkt = null;
+                try {
+                  // Market consensus first — the de-vigged bookmaker read is the
+                  // sharpest informed take available for any fixture.
+                  _smMkt = await marketVerdict(smF.homeTeam || '', smF.awayTeam || '');
+                } catch (e) { /* fall through */ }
                 try {
                   if (deps.quantModel) {
                     var _smNeutral = /world cup|world championship|friendl/i.test((smF.league) || '');
@@ -1064,7 +1154,7 @@ module.exports = function(deps) {
                     _smMv = modelVerdict(_smPred, smF.homeTeam || 'Home', smF.awayTeam || 'Away');
                   }
                 } catch (e) { /* fall through */ }
-                _finalVerdict = _smMv || {
+                _finalVerdict = _smMkt || _smMv || {
                   market: 'Match Result', pick: 'No pre-match take on record',
                   reason: 'We lock our verdict in before kick-off and never publish one after the result is known — so there is no pre-match take on record for this game.',
                   confidence: 0, riskLevel: 'n/a', riskText: 'Integrity: we only publish pre-kick-off.', source: 'none',
@@ -1435,7 +1525,11 @@ module.exports = function(deps) {
           // the SAME Elo + Dixon-Coles numbers shown in the model panel below,
           // clearly framed as the model's call. We never retrofit an editorial
           // analyst narrative to a known result.
-          var _mv = null;
+          var _mv = null, _mkt = null;
+          try {
+            // Market consensus first — sharpest informed read for any fixture.
+            _mkt = await marketVerdict(homeTeam.name || '', awayTeam.name || '');
+          } catch (e) { /* fall through */ }
           try {
             if (deps.quantModel) {
               var _mvNeutral = /world cup|world championship|friendl/i.test(league.name || '');
@@ -1443,7 +1537,11 @@ module.exports = function(deps) {
               _mv = modelVerdict(_mvPred, homeTeam.name || 'Home', awayTeam.name || 'Away');
             }
           } catch (e) { /* fall through */ }
-          if (_mv) {
+          if (_mkt) {
+            verdictMarket = _mkt.market; verdictPick = _mkt.pick; verdictReason = _mkt.reason;
+            confidence = _mkt.confidence; riskLevel = _mkt.riskLevel; riskText = _mkt.riskText;
+            verdictSource = 'market';
+          } else if (_mv) {
             verdictMarket = _mv.market; verdictPick = _mv.pick; verdictReason = _mv.reason;
             confidence = _mv.confidence; riskLevel = _mv.riskLevel; riskText = _mv.riskText;
             verdictSource = 'model';
@@ -1542,8 +1640,8 @@ module.exports = function(deps) {
       // A model-derived take carries its own risk text — don't overwrite it with
       // the analyst-narrative version (that would dress a transparent model read
       // in editorial framing it never claimed).
-      var riskText = 'Elite Edge model call.';
-      if (verdictSource !== 'model') {
+      var riskText = verdictSource === 'market' ? 'Market-led call — de-vigged bookmaker consensus.' : 'Elite Edge model call.';
+      if (verdictSource !== 'model' && verdictSource !== 'market') {
         if (riskLevel === 'Low') {
           riskText = 'The data signals are clear and consistent across form, head-to-head, and statistical trends. This represents one of the stronger opportunities on the card.';
         } else if (riskLevel === 'Low-Medium') {

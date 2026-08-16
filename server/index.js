@@ -325,6 +325,10 @@ app.use('/', require('./routes/public')(deps));
         // Verdict integrity lock — freeze the match-intel "Our Take" pre-kick-off
         // for ALL football so it can never be recomputed once the result is known.
         "CREATE TABLE IF NOT EXISTS match_verdict_locks (fixture_id TEXT PRIMARY KEY, market TEXT, selection TEXT, reason TEXT, confidence INTEGER, risk_level TEXT, risk_text TEXT, kickoff TIMESTAMPTZ, locked_at TIMESTAMPTZ DEFAULT NOW())",
+        // 'source' preserves how the frozen take was derived (market / model /
+        // analyst) so the UI badge stays consistent on every re-view, not just the
+        // first. Older rows are NULL → treated as the neutral 'locked' take.
+        "ALTER TABLE match_verdict_locks ADD COLUMN IF NOT EXISTS source TEXT",
         // Sporting-events calendar — reusable "featured meeting" hubs (replaces the
         // one-off World Cup hub). Admin-managed; the site spotlights the active one.
         "CREATE TABLE IF NOT EXISTS sporting_events (id SERIAL PRIMARY KEY, slug TEXT UNIQUE NOT NULL, name TEXT NOT NULL, sport TEXT, tagline TEXT, blurb TEXT, start_date DATE NOT NULL, end_date DATE NOT NULL, venue TEXT, accent TEXT, emoji TEXT, enabled BOOLEAN DEFAULT TRUE, created_at TIMESTAMPTZ DEFAULT NOW())",

@@ -41,6 +41,7 @@ the system genuinely elite, live and self-improving.
 - **AutoTune fixed to the charter's 14-day rolling window** (results + loss three-strike), using `normDate()` so Postgres DATE columns actually compare (previous attempt was a silent no-op).
 - **Real xG → goals/BTTS.** `scoringModel.xgSignals` turns Understat xG into genuine Over 2.5 + BTTS probabilities via Poisson (`factors.overProb`/`btts`) — match-result pick logic untouched.
 - **Stopped uninformed output.** Model Read verdict + model panel + Cosmo value scan are hidden unless the model `knows()` both teams. As grades/learning land, informed reads return.
+- **Market-based "Our Take"** (`football.js` `marketConsensus`/`marketVerdict`). For any fixture we don't publish a tip on, the match-intel "OUR TAKE" now derives an informed verdict from the **de-vigged bookmaker CONSENSUS** (multi-book average via The Odds API, Cosmo partner-book fallback → fair 1X2 probabilities). Verdict hierarchy: frozen WC consensus → SportMonks model take → **market consensus** → weak H2H guess (last resort). This fixes the two failure modes at once: strong sides are now correctly favoured on games we don't tip (the market knows Liverpool ≫ Como even when our young Elo doesn't), and untipped lower-league/cup fixtures (League One/Two) get a sharp read instead of a coin-flip H2H line. Thresholds: fav ≥55% → *Win*; ≥42% → *Double Chance (fav or draw)*; else *Draw*. Badged **MARKET READ** (gold) in the UI, distinct from the cyan **MODEL READ**. Frozen pre-kick-off like every take (integrity), and the derivation (`source`) is persisted on the lock so the badge stays consistent on every re-view. Does **not** touch the locked pick/scoring/settle pipeline — display-layer verdict only, and it can never override a published tip or a locked analyst verdict.
 
 ## 4. The self-learning loop (current logic)
 
@@ -57,8 +58,8 @@ the system genuinely elite, live and self-improving.
    finalises (short server cache + post-settle standings refresh). *(safe)*
 2. **Faster settlement** — tighten the settle loop + result verification so wins/
    losses post within minutes of full-time. *(safe)*
-3. **Market-based "Our Take"** — de-vigged bookmaker consensus as the informed
-   verdict for every fixture *today*, model read layered on. *(safe)*
+3. ~~**Market-based "Our Take"** — de-vigged bookmaker consensus as the informed
+   verdict for every fixture *today*, model read layered on.~~ **✅ SHIPPED** (see §3).
 4. **Wire the dead signals into the PICK** — real xG into match-result strength,
    quant goals/BTTS into consensus factors, "The Market" agent fed by persisted
    odds movement, Perplexity/injuries/lineups pre-pick. **⚠ touches locked

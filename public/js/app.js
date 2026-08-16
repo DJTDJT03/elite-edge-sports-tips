@@ -7681,7 +7681,9 @@ const App = {
     // --- OUR TAKE verdict ---
     // A model-derived take (no locked pre-match analyst verdict existed) gets a
     // small badge so it's clear this is the deterministic engine's read.
-    var takeBadge = (v.source === 'model')
+    var takeBadge = (v.source === 'market')
+      ? ' <span style="font-size:9px;font-weight:800;letter-spacing:0.5px;color:#facc15;border:1px solid rgba(250,204,21,0.4);border-radius:10px;padding:1px 7px;vertical-align:middle;">MARKET READ</span>'
+      : (v.source === 'model')
       ? ' <span style="font-size:9px;font-weight:800;letter-spacing:0.5px;color:#22d3ee;border:1px solid rgba(34,211,238,0.4);border-radius:10px;padding:1px 7px;vertical-align:middle;">MODEL READ</span>'
       : '';
     html += '<div class="match-intel-verdict' + lockedClass + '">' +
