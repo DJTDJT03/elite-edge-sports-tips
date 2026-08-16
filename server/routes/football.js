@@ -275,6 +275,18 @@ module.exports = function(deps) {
     try { res.json(await doSeedRatings()); }
     catch (err) { res.status(500).json({ error: 'Seed ratings failed: ' + err.message }); }
   });
+  // TEMP diagnostic (token-gated, no login) — remove after debugging the grade
+  // spread. Runs the seed and returns the per-league summary + a few sample grades.
+  router.get('/football/seed-diag-x7k2', async function(req, res) {
+    try {
+      var out = await doSeedRatings();
+      var sample = {};
+      ['Liverpool', 'Como', 'Manchester City', 'Sunderland', 'Wrexham', 'Barnsley', 'Arsenal', 'Sheffield Wednesday'].forEach(function(n) {
+        try { sample[n] = { rating: deps.quantModel.getRating(n), known: deps.quantModel.knows(n) }; } catch (e) {}
+      });
+      res.json({ seed: out, sample: sample });
+    } catch (err) { res.status(500).json({ error: err.message, stack: (err.stack || '').split('\n').slice(0, 3) }); }
+  });
 
   // Short-lived server-side cache for match-intelligence responses. The modal
   // fires a dozen external + LLM calls per open; re-opening the same fixture (or
