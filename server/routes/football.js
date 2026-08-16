@@ -241,8 +241,10 @@ module.exports = function(deps) {
           var r = rows[i], elo;
           if (r.played >= 1 && r.pts != null) {
             var ppg = r.pts / r.played, gdpg = ((r.gf || 0) - (r.ga || 0)) / r.played;
-            elo = T.base + (ppg - avgPpg) * 160 + gdpg * 30;
-            elo = Math.max(T.base - 170, Math.min(T.base + 230, elo));
+            // Wider scaling so real within-league strength shows through (an elite
+            // side should sit well above a relegation side once games accumulate).
+            elo = T.base + (ppg - avgPpg) * 230 + gdpg * 45;
+            elo = Math.max(T.base - 260, Math.min(T.base + 320, elo));
           } else { elo = T.base; }
           try { if (await deps.quantModel.seedRating(r.name, elo)) { totalSeeded++; lgSeeded++; } } catch (e) {}
         }
