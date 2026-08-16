@@ -6603,6 +6603,8 @@ const App = {
   LEAGUES: {
     'premier-league':        { name: 'Premier League',        country: 'England',      flag: '🏴',  std: 'PL',  xg: 'EPL',        match: ['premier league'] },
     'championship':          { name: 'Championship',          country: 'England',      flag: '🏴',  std: 'ELC', xg: null,         match: ['championship'] },
+    'league-one':            { name: 'League One',            country: 'England',      flag: '🏴',  std: null,  xg: null,         match: ['league one'] },
+    'league-two':            { name: 'League Two',            country: 'England',      flag: '🏴',  std: null,  xg: null,         match: ['league two'] },
     'champions-league':      { name: 'UEFA Champions League',  country: 'Europe',       flag: '🇪🇺', std: 'CL',  xg: null,         match: ['champions league'] },
     'la-liga':               { name: 'La Liga',               country: 'Spain',        flag: '🇪🇸', std: 'PD',  xg: 'La_Liga',    match: ['la liga', 'laliga', 'primera'] },
     'serie-a':               { name: 'Serie A',               country: 'Italy',        flag: '🇮🇹', std: 'SA',  xg: 'Serie_A',    match: ['serie a (italy)'] },
