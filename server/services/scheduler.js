@@ -6039,6 +6039,18 @@ module.exports = function startScheduler(deps) {
   setInterval(safeRun('AutoTune', autoTuneAnalysts), 30 * 60 * 1000);
   setTimeout(safeRun('AutoTune', autoTuneAnalysts), 120000);
 
+  // Grade the clubs: seed the quant model's Elo from live league standings on boot
+  // (once, 90s in) and refresh weekly, so the model always has informed club
+  // ratings instead of a uniform default. Never clobbers ratings learnt from
+  // results (seedRating guards on played=0).
+  async function seedClubRatingsJob() {
+    if (!deps.seedClubRatings) return;
+    var r = await deps.seedClubRatings();
+    console.log('[SeedRatings] ' + ((r && r.totalSeeded) || 0) + ' club ratings graded from standings');
+  }
+  setTimeout(safeRun('SeedRatings', seedClubRatingsJob), 90000);
+  setInterval(safeRun('SeedRatings', seedClubRatingsJob), 7 * 24 * 60 * 60 * 1000);
+
   // =========================================================================
   // MONTHLY CREDIT RESET — runs at 1am UK daily, resets credits for users whose reset date has passed
   // =========================================================================

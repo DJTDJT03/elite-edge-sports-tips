@@ -190,10 +190,9 @@ module.exports = function(deps) {
   // a uniform 43/27/29 for every club. Cross-league comparable via a per-tier base
   // Elo; within-league spread from points-per-game + goal difference. Never
   // overwrites a rating the model has LEARNED from actual results (played>0).
-  var _seedRatings = async function(req, res) {
-    try {
+  var doSeedRatings = async function() {
       if (!sportMonks || !sportMonks.isAvailable() || !deps.quantModel || !deps.quantModel.seedRating) {
-        return res.status(503).json({ error: 'SportMonks / quant model not available' });
+        return { ok: false, error: 'SportMonks / quant model not available' };
       }
       // Per-tier base Elo encodes cross-league strength (a mid PL side > a top
       // Championship side). Within a league, standings shift each team around base.
@@ -250,13 +249,14 @@ module.exports = function(deps) {
         perLeague.push({ league: lg.name, season: seasonId, teams: rows.length, seeded: lgSeeded, avgPpg: Math.round(avgPpg * 100) / 100 });
       }
       if (deps.quantModel.reloadRatings) await deps.quantModel.reloadRatings();
-      res.json({ ok: true, totalSeeded: totalSeeded, leagues: perLeague });
-    } catch (err) {
-      res.status(500).json({ error: 'Seed ratings failed: ' + err.message });
-    }
+      return { ok: true, totalSeeded: totalSeeded, leagues: perLeague };
   };
-  router.get('/football/admin/seed-ratings', deps.authenticate, deps.requireAdmin, _seedRatings);
-  deps._seedRatings = _seedRatings; // exposed so the scheduler can refresh weekly
+  // Expose so the scheduler can refresh grades on boot + weekly (self-populating).
+  deps.seedClubRatings = doSeedRatings;
+  router.get('/football/admin/seed-ratings', deps.authenticate, deps.requireAdmin, async function(req, res) {
+    try { res.json(await doSeedRatings()); }
+    catch (err) { res.status(500).json({ error: 'Seed ratings failed: ' + err.message }); }
+  });
 
   // Short-lived server-side cache for match-intelligence responses. The modal
   // fires a dozen external + LLM calls per open; re-opening the same fixture (or
