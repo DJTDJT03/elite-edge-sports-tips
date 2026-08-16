@@ -224,7 +224,7 @@ module.exports = function(deps) {
         // Grade off the CURRENT season only once it has real games; a near-empty
         // early-season table gives no spread. Otherwise use the last COMPLETED
         // season's final table (full 38/46-game spread = real strength).
-        var maxPlayed = function(st) { var m = 0; (st || []).forEach(function(row) { var p = statOf(row, ['MATCHES_PLAYED', 'GAMES_PLAYED', 'PLAYED']) || 0; if (p > m) m = p; }); return m; };
+        var maxPlayed = function(st) { var m = 0; (st || []).forEach(function(row) { var p = statOf(row, ['OVERALL_MATCHES', 'MATCHES_PLAYED', 'GAMES_PLAYED', 'PLAYED']) || 0; if (p > m) m = p; }); return m; };
         var standings = [], seasonId = curId, usedSeason = 'current';
         try { standings = curId ? await sportMonks.getStandings(curId) : []; } catch (e) { standings = []; }
         if (maxPlayed(standings) < 5) {
@@ -244,9 +244,9 @@ module.exports = function(deps) {
           var p = row.participant || {};
           return {
             name: p.name,
-            played: statOf(row, ['MATCHES_PLAYED', 'GAMES_PLAYED', 'PLAYED']) || 0,
+            played: statOf(row, ['OVERALL_MATCHES', 'MATCHES_PLAYED', 'GAMES_PLAYED', 'PLAYED']) || 0,
             pts: row.points != null ? row.points : statOf(row, ['POINTS']),
-            gf: statOf(row, ['GOALS_FOR', 'SCORED']), ga: statOf(row, ['GOALS_AGAINST', 'CONCEDED']),
+            gf: statOf(row, ['OVERALL_SCORED', 'GOALS_FOR', 'SCORED']), ga: statOf(row, ['OVERALL_CONCEDED', 'GOALS_AGAINST', 'CONCEDED']),
           };
         }).filter(function(r) { return r.name; });
         var totPts = 0, totPl = 0;
@@ -274,29 +274,6 @@ module.exports = function(deps) {
   router.get('/football/admin/seed-ratings', deps.authenticate, deps.requireAdmin, async function(req, res) {
     try { res.json(await doSeedRatings()); }
     catch (err) { res.status(500).json({ error: 'Seed ratings failed: ' + err.message }); }
-  });
-  // TEMP diagnostic (token-gated, no login) — remove after debugging the grade
-  // spread. Runs the seed and returns the per-league summary + a few sample grades.
-  router.get('/football/seed-diag-x7k2', async function(req, res) {
-    try {
-      // Dump the RAW structure of a real standings row so we can see the actual
-      // field names (why points/played/goals parse as null).
-      var leagues = await sportMonks.getLeagues();
-      var pl = leagues.find(function(l) { return /^premier league$/i.test(l.name || ''); });
-      var seasons = pl ? await sportMonks.getLeagueSeasons(pl.id) : [];
-      var prev = (seasons || []).filter(function(s) { return s && s.id; }).sort(function(a, b) { return new Date(b.ending_at || 0) - new Date(a.ending_at || 0); })[0];
-      var standings = prev ? await sportMonks.getStandings(prev.id) : [];
-      var row0 = standings[0] || {};
-      var detailDump = Array.isArray(row0.details) ? row0.details.slice(0, 8).map(function(d) {
-        return { type_id: d.type_id, dev: d.type && d.type.developer_name, name: d.type && d.type.name, value: d.value, dataValue: d.data && d.data.value };
-      }) : row0.details;
-      res.json({
-        leagueUsed: pl && pl.name, prevSeason: prev && (prev.name || prev.id), standingsCount: standings.length,
-        row0Keys: Object.keys(row0), row0Points: row0.points, row0Position: row0.position,
-        row0Participant: row0.participant ? { name: row0.participant.name, keys: Object.keys(row0.participant) } : null,
-        detailsIsArray: Array.isArray(row0.details), detailDump: detailDump,
-      });
-    } catch (err) { res.status(500).json({ error: err.message, stack: (err.stack || '').split('\n').slice(0, 4) }); }
   });
 
   // Short-lived server-side cache for match-intelligence responses. The modal
@@ -2107,8 +2084,8 @@ module.exports = function(deps) {
 
       var standings = raw.map(function (row) {
         var p = row.participant || {};
-        var gf = statOf(row, ['GOALS_FOR', 'SCORED']);
-        var ga = statOf(row, ['GOALS_AGAINST', 'CONCEDED']);
+        var gf = statOf(row, ['OVERALL_SCORED', 'GOALS_FOR', 'SCORED']);
+        var ga = statOf(row, ['OVERALL_CONCEDED', 'GOALS_AGAINST', 'CONCEDED']);
         var gd = statOf(row, ['GOAL_DIFFERENCE']);
         if (gd == null && gf != null && ga != null) gd = gf - ga;
         return {
@@ -2116,10 +2093,10 @@ module.exports = function(deps) {
           team: p.name || 'Unknown',
           teamId: p.id != null ? p.id : null, // SportMonks team id → links to /football/club
           teamCrest: p.image_path || null,
-          playedGames: statOf(row, ['MATCHES_PLAYED', 'GAMES_PLAYED', 'PLAYED']),
-          won: statOf(row, ['WON']),
-          draw: statOf(row, ['DRAW']),
-          lost: statOf(row, ['LOST']),
+          playedGames: statOf(row, ['OVERALL_MATCHES', 'MATCHES_PLAYED', 'GAMES_PLAYED', 'PLAYED']),
+          won: statOf(row, ['OVERALL_WINS', 'WON']),
+          draw: statOf(row, ['OVERALL_DRAWS', 'DRAW']),
+          lost: statOf(row, ['OVERALL_LOST', 'LOST']),
           points: row.points != null ? row.points : statOf(row, ['POINTS']),
           goalsFor: gf,
           goalsAgainst: ga,
