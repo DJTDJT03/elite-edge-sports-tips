@@ -184,6 +184,80 @@ module.exports = function(deps) {
     }
   });
 
+  // GET /football/admin/seed-ratings — GRADE THE CLUBS. Pulls current league
+  // standings from SportMonks (form, points, goals, position) and seeds the quant
+  // model with a real, differentiated Elo per team — so the model stops returning
+  // a uniform 43/27/29 for every club. Cross-league comparable via a per-tier base
+  // Elo; within-league spread from points-per-game + goal difference. Never
+  // overwrites a rating the model has LEARNED from actual results (played>0).
+  var _seedRatings = async function(req, res) {
+    try {
+      if (!sportMonks || !sportMonks.isAvailable() || !deps.quantModel || !deps.quantModel.seedRating) {
+        return res.status(503).json({ error: 'SportMonks / quant model not available' });
+      }
+      // Per-tier base Elo encodes cross-league strength (a mid PL side > a top
+      // Championship side). Within a league, standings shift each team around base.
+      var TARGETS = [
+        { re: /^premier league$/i, base: 1560 }, { re: /^championship$/i, base: 1470 },
+        { re: /^league one$/i, base: 1420 }, { re: /^league two$/i, base: 1385 },
+        { re: /la ?liga/i, base: 1550 }, { re: /serie a/i, base: 1545 },
+        { re: /bundesliga/i, base: 1545 }, { re: /ligue 1/i, base: 1535 },
+        { re: /eredivisie/i, base: 1495 }, { re: /eerste divisie/i, base: 1420 },
+        { re: /primeira liga|liga portugal/i, base: 1505 }, { re: /premiership/i, base: 1465 },
+        { re: /jupiler|pro league/i, base: 1485 }, { re: /s(ü|u)per lig/i, base: 1490 },
+      ];
+      var leagues = await sportMonks.getLeagues();
+      var statOf = function(row, names) {
+        if (!Array.isArray(row.details)) return null;
+        for (var i = 0; i < row.details.length; i++) {
+          var d = row.details[i], dn = (d.type && d.type.developer_name ? d.type.developer_name : '').toUpperCase();
+          if (names.indexOf(dn) !== -1) { var v = (d.value != null) ? d.value : (d.data && d.data.value != null ? d.data.value : null); if (v != null) return parseFloat(v); }
+        }
+        return null;
+      };
+      var totalSeeded = 0, perLeague = [];
+      for (var t = 0; t < TARGETS.length; t++) {
+        var T = TARGETS[t];
+        var lg = leagues.find(function(l) { return T.re.test(l.name || ''); });
+        if (!lg) { perLeague.push({ target: T.re.source, matched: null }); continue; }
+        var season = lg.currentseason || lg.current_season || lg.currentSeason;
+        var seasonId = season && season.id;
+        if (!seasonId) { perLeague.push({ league: lg.name, season: null }); continue; }
+        var standings;
+        try { standings = await sportMonks.getStandings(seasonId); } catch (e) { perLeague.push({ league: lg.name, err: e.message }); continue; }
+        var rows = (standings || []).map(function(row) {
+          var p = row.participant || {};
+          return {
+            name: p.name,
+            played: statOf(row, ['MATCHES_PLAYED', 'GAMES_PLAYED', 'PLAYED']) || 0,
+            pts: row.points != null ? row.points : statOf(row, ['POINTS']),
+            gf: statOf(row, ['GOALS_FOR', 'SCORED']), ga: statOf(row, ['GOALS_AGAINST', 'CONCEDED']),
+          };
+        }).filter(function(r) { return r.name; });
+        var totPts = 0, totPl = 0;
+        rows.forEach(function(r) { if (r.pts != null && r.played) { totPts += r.pts; totPl += r.played; } });
+        var avgPpg = totPl ? totPts / totPl : 1.35;
+        var lgSeeded = 0;
+        for (var i = 0; i < rows.length; i++) {
+          var r = rows[i], elo;
+          if (r.played >= 1 && r.pts != null) {
+            var ppg = r.pts / r.played, gdpg = ((r.gf || 0) - (r.ga || 0)) / r.played;
+            elo = T.base + (ppg - avgPpg) * 160 + gdpg * 30;
+            elo = Math.max(T.base - 170, Math.min(T.base + 230, elo));
+          } else { elo = T.base; }
+          try { if (await deps.quantModel.seedRating(r.name, elo)) { totalSeeded++; lgSeeded++; } } catch (e) {}
+        }
+        perLeague.push({ league: lg.name, season: seasonId, teams: rows.length, seeded: lgSeeded, avgPpg: Math.round(avgPpg * 100) / 100 });
+      }
+      if (deps.quantModel.reloadRatings) await deps.quantModel.reloadRatings();
+      res.json({ ok: true, totalSeeded: totalSeeded, leagues: perLeague });
+    } catch (err) {
+      res.status(500).json({ error: 'Seed ratings failed: ' + err.message });
+    }
+  };
+  router.get('/football/admin/seed-ratings', deps.authenticate, deps.requireAdmin, _seedRatings);
+  deps._seedRatings = _seedRatings; // exposed so the scheduler can refresh weekly
+
   // Short-lived server-side cache for match-intelligence responses. The modal
   // fires a dozen external + LLM calls per open; re-opening the same fixture (or
   // many users opening the same WC game) should be instant, not a full recompute.

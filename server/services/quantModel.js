@@ -195,6 +195,42 @@ module.exports = function (deps) {
     return _ratings[c] != null || BASELINE[c] != null;
   }
 
+  // Seed a team's INITIAL rating from external grading (e.g. league standings —
+  // form, goals, position). Only writes teams we have NOT learned from real
+  // results (played = 0): a rating the model earned from outcomes is never
+  // clobbered by a seed. Sets in-memory too so predictions are informed at once.
+  async function seedRating(name, elo) {
+    await ensureLoaded();
+    var c = canon(name);
+    if (!c || !(elo > 0)) return false;
+    elo = Math.round(elo);
+    if (db && db.query) {
+      try {
+        await db.query(
+          "INSERT INTO team_ratings (team, rating, played, updated_at) VALUES ($1,$2,0,NOW()) " +
+          "ON CONFLICT (team) DO UPDATE SET rating = $2, updated_at = NOW() WHERE team_ratings.played = 0",
+          [c, elo]
+        );
+      } catch (e) { return false; }
+    }
+    // Reflect immediately unless this team already carries a LEARNED rating. We
+    // can't see `played` in memory, so reloadRatings() after a seed batch is the
+    // authority; here we only fill defaults/absent to avoid clobbering a learned
+    // in-memory value mid-batch.
+    if (_ratings[c] == null) _ratings[c] = elo;
+    return true;
+  }
+
+  // Re-read all ratings from the DB into memory (call after a seed batch so the
+  // in-memory cache matches the DB, which honoured the played=0 guard).
+  async function reloadRatings() {
+    if (!db || !db.query) return;
+    try {
+      var rows = (await db.query("SELECT team, rating FROM team_ratings")).rows || [];
+      rows.forEach(function (r) { _ratings[r.team] = parseFloat(r.rating); });
+    } catch (e) { /* keep existing cache */ }
+  }
+
   return {
     predict: predict,             // sync (uses cache/baseline)
     predictAsync: predictAsync,   // ensures DB ratings loaded first
@@ -202,6 +238,8 @@ module.exports = function (deps) {
     getRating: getRating,
     knows: knows,
     ensureLoaded: ensureLoaded,
+    seedRating: seedRating,
+    reloadRatings: reloadRatings,
     _baseline: BASELINE,
   };
 };
