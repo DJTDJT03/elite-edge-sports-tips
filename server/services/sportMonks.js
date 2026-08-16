@@ -264,6 +264,15 @@ SportMonks.prototype.getStandings = function(seasonId) {
   });
 };
 
+// All seasons for a league (id, name, finished flag, dates) — used to grade clubs
+// from the last COMPLETED season's full table when the current season is too new.
+SportMonks.prototype.getLeagueSeasons = function(leagueId) {
+  return this._request('/leagues/' + leagueId, { include: 'seasons' }).then(function(data) {
+    var lg = data.data || {};
+    return lg.seasons || (lg.seasons && lg.seasons.data) || [];
+  }).catch(function() { return []; });
+};
+
 // =========================================================================
 // PREDICTIONS — pre-match probabilities (All-In plan)
 // =========================================================================

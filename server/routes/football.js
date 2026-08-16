@@ -218,12 +218,28 @@ module.exports = function(deps) {
       for (var t = 0; t < TARGETS.length; t++) {
         var T = TARGETS[t];
         var lg = leagues.find(function(l) { return T.re.test(l.name || ''); });
-        if (!lg) { perLeague.push({ target: T.re.source, matched: null }); continue; }
-        var season = lg.currentseason || lg.current_season || lg.currentSeason;
-        var seasonId = season && season.id;
-        if (!seasonId) { perLeague.push({ league: lg.name, season: null }); continue; }
-        var standings;
-        try { standings = await sportMonks.getStandings(seasonId); } catch (e) { perLeague.push({ league: lg.name, err: e.message }); continue; }
+        if (!lg || !lg.id) { perLeague.push({ target: T.re.source, matched: null }); continue; }
+        var curSeason = lg.currentseason || lg.current_season || lg.currentSeason;
+        var curId = curSeason && curSeason.id;
+        // Grade off the CURRENT season only once it has real games; a near-empty
+        // early-season table gives no spread. Otherwise use the last COMPLETED
+        // season's final table (full 38/46-game spread = real strength).
+        var maxPlayed = function(st) { var m = 0; (st || []).forEach(function(row) { var p = statOf(row, ['MATCHES_PLAYED', 'GAMES_PLAYED', 'PLAYED']) || 0; if (p > m) m = p; }); return m; };
+        var standings = [], seasonId = curId, usedSeason = 'current';
+        try { standings = curId ? await sportMonks.getStandings(curId) : []; } catch (e) { standings = []; }
+        if (maxPlayed(standings) < 5) {
+          var seasons = [];
+          try { seasons = await sportMonks.getLeagueSeasons(lg.id); } catch (e) {}
+          var prev = (seasons || []).filter(function(s) { return s && s.id && s.id !== curId; })
+            .sort(function(a, b) { return new Date(b.ending_at || b.starting_at || 0) - new Date(a.ending_at || a.starting_at || 0); })[0];
+          if (prev) {
+            try {
+              var prevStand = await sportMonks.getStandings(prev.id);
+              if (prevStand && prevStand.length) { standings = prevStand; seasonId = prev.id; usedSeason = 'last (' + (prev.name || prev.id) + ')'; }
+            } catch (e) {}
+          }
+        }
+        if (!standings || !standings.length) { perLeague.push({ league: lg.name, err: 'no standings' }); continue; }
         var rows = (standings || []).map(function(row) {
           var p = row.participant || {};
           return {
@@ -248,7 +264,7 @@ module.exports = function(deps) {
           } else { elo = T.base; }
           try { if (await deps.quantModel.seedRating(r.name, elo)) { totalSeeded++; lgSeeded++; } } catch (e) {}
         }
-        perLeague.push({ league: lg.name, season: seasonId, teams: rows.length, seeded: lgSeeded, avgPpg: Math.round(avgPpg * 100) / 100 });
+        perLeague.push({ league: lg.name, season: seasonId, source: usedSeason, teams: rows.length, seeded: lgSeeded, avgPpg: Math.round(avgPpg * 100) / 100 });
       }
       if (deps.quantModel.reloadRatings) await deps.quantModel.reloadRatings();
       return { ok: true, totalSeeded: totalSeeded, leagues: perLeague };
