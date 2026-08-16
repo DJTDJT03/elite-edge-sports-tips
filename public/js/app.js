@@ -6692,6 +6692,16 @@ const App = {
       standings = await this.api('/football/sm-standings/' + seasonId).catch(function () { return null; });
       tableClickable = false;
     }
+    // Reliable fallback: resolve the league SERVER-SIDE by name. Guarantees a table
+    // (and today's fixtures) for lower leagues the capped daily feed drops — e.g.
+    // League One / League Two — even when no fixture was in the global feed.
+    if ((!standings || !standings.standings || !standings.standings.length) && catalog) {
+      var ov = await this.api('/football/league-overview/' + slug).catch(function () { return null; });
+      if (ov && ov.found) {
+        if (ov.standings && ov.standings.length) { standings = { standings: ov.standings }; tableClickable = false; }
+        if ((!leagueFixtures || !leagueFixtures.length) && ov.fixtures && ov.fixtures.length) leagueFixtures = ov.fixtures;
+      }
+    }
     var table = (standings && standings.standings) || [];
 
     // League-wide summary — only what we can genuinely compute from the table.

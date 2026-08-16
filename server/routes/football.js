@@ -278,6 +278,69 @@ module.exports = function(deps) {
     catch (err) { res.status(500).json({ error: 'Seed ratings failed: ' + err.message }); }
   });
 
+  // GET /football/league-overview/:slug — a league's STANDINGS + today's fixtures
+  // resolved SERVER-SIDE by name (not the global daily feed, which caps at ~50 and
+  // drops lower leagues). Guarantees the League One / League Two pages populate.
+  // Cached 5 min per slug. Slug maps: league-one, league-two, championship, etc.
+  var _leagueOvCache = {};
+  var _leagueKw = { // slug → { re, country-hint via name only }
+    'premier-league': /^premier league$/i, 'championship': /^championship$/i,
+    'league-one': /^league one$/i, 'league-two': /^league two$/i,
+    'la-liga': /la ?liga/i, 'serie-a': /serie a/i, 'bundesliga': /bundesliga/i,
+    'ligue-1': /ligue 1/i, 'ligue-2': /ligue 2/i, 'scottish-premiership': /premiership/i,
+  };
+  router.get('/football/league-overview/:slug', async function(req, res) {
+    try {
+      if (!sportMonks || !sportMonks.isAvailable()) return res.json({ found: false });
+      var slug = req.params.slug;
+      var hit = _leagueOvCache[slug];
+      if (hit && (Date.now() - hit.at) < 300000) return res.json(hit.val);
+      var re = _leagueKw[slug] || new RegExp('^' + String(slug).replace(/-/g, ' ').replace(/[^a-z0-9 ]/gi, '') + '$', 'i');
+      var leagues = await sportMonks.getLeagues();
+      var lg = leagues.find(function(l) { return re.test(l.name || ''); });
+      if (!lg || !lg.id) { var nf = { found: false }; _leagueOvCache[slug] = { at: Date.now(), val: nf }; return res.json(nf); }
+      // Standings: current season, fall back to last completed if it has no rows.
+      var curSeason = lg.currentseason || lg.current_season || lg.currentSeason;
+      var seasonId = curSeason && curSeason.id, raw = [];
+      try { raw = seasonId ? await sportMonks.getStandings(seasonId) : []; } catch (e) {}
+      if (!raw.length && lg.id && sportMonks.getLeagueSeasons) {
+        try {
+          var seasons = await sportMonks.getLeagueSeasons(lg.id);
+          var prev = (seasons || []).filter(function(s) { return s && s.id && s.id !== seasonId; }).sort(function(a, b) { return new Date(b.ending_at || 0) - new Date(a.ending_at || 0); })[0];
+          if (prev) { raw = await sportMonks.getStandings(prev.id); seasonId = prev.id; }
+        } catch (e) {}
+      }
+      var statOf = function(row, names) {
+        if (!Array.isArray(row.details)) return null;
+        for (var i = 0; i < row.details.length; i++) {
+          var d = row.details[i], dn = (d.type && d.type.developer_name ? d.type.developer_name : '').toUpperCase();
+          if (names.indexOf(dn) !== -1) { var v = (d.value != null) ? d.value : (d.data && d.data.value != null ? d.data.value : null); if (v != null) return parseFloat(v); }
+        }
+        return null;
+      };
+      var standings = (raw || []).map(function(row) {
+        var p = row.participant || {};
+        var gf = statOf(row, ['OVERALL_SCORED', 'GOALS_FOR', 'SCORED']), ga = statOf(row, ['OVERALL_CONCEDED', 'GOALS_AGAINST', 'CONCEDED']);
+        var gd = statOf(row, ['GOAL_DIFFERENCE']); if (gd == null && gf != null && ga != null) gd = gf - ga;
+        return {
+          position: row.position != null ? row.position : null, team: p.name || 'Unknown', teamId: p.id != null ? p.id : null, teamCrest: p.image_path || null,
+          playedGames: statOf(row, ['OVERALL_MATCHES', 'MATCHES_PLAYED', 'GAMES_PLAYED', 'PLAYED']),
+          won: statOf(row, ['OVERALL_WINS', 'WON']), draw: statOf(row, ['OVERALL_DRAWS', 'DRAW']), lost: statOf(row, ['OVERALL_LOST', 'LOST']),
+          points: row.points != null ? row.points : statOf(row, ['POINTS']), goalsFor: gf, goalsAgainst: ga, goalDifference: gd, form: null,
+        };
+      }).filter(function(r) { return r.position != null; }).sort(function(a, b) { return a.position - b.position; });
+      // Today's fixtures for this league (direct, not the capped global feed).
+      var fixtures = [];
+      try {
+        var today = new Date().toISOString().split('T')[0];
+        fixtures = (await sportMonks.getFixturesByLeagueDate(lg.id, today)) || [];
+      } catch (e) {}
+      var payload = { found: true, name: lg.name, seasonId: seasonId, standings: standings, fixtures: fixtures };
+      _leagueOvCache[slug] = { at: Date.now(), val: payload };
+      res.json(payload);
+    } catch (err) { res.status(500).json({ error: 'league overview failed: ' + err.message }); }
+  });
+
   // Short-lived server-side cache for match-intelligence responses. The modal
   // fires a dozen external + LLM calls per open; re-opening the same fixture (or
   // many users opening the same WC game) should be instant, not a full recompute.
