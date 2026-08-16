@@ -93,12 +93,30 @@ SportMonks.prototype.getLivescores = function() {
 // =========================================================================
 SportMonks.prototype.getFixturesByDate = function(dateStr) {
   var self = this;
-  return this._request('/fixtures/date/' + dateStr, {
-    include: 'participants;scores;state;league;venue',
-    per_page: 50,
-  }).then(function(data) {
-    var fixtures = (data.data || []).map(normaliseFixture);
+  // Short per-date cache so the paginated fetch (up to 6 SportMonks calls) runs at
+  // most once per 60s per date, regardless of how many clients ask — bounds API
+  // load and makes the feed feel instant.
+  this._fixturesCache = this._fixturesCache || {};
+  var hit = this._fixturesCache[dateStr];
+  if (hit && (Date.now() - hit.at) < 60000) { self._lastFixtures = hit.val; return Promise.resolve(hit.val); }
+  // PAGINATE — SportMonks caps per_page at 50, so a single call misses lower
+  // leagues (League One/Two, etc.) on a busy day. Fetch all pages up to a cap so
+  // every league's fixtures are returned (powers the league pages + All Matches).
+  var all = [];
+  var fetchPage = function(page) {
+    return self._request('/fixtures/date/' + dateStr, {
+      include: 'participants;scores;state;league;venue',
+      per_page: 50, page: page,
+    }).then(function(data) {
+      all = all.concat((data.data || []).map(normaliseFixture));
+      var hasMore = data.pagination && data.pagination.has_more;
+      if (hasMore && page < 6) return fetchPage(page + 1); // cap 6 pages (~300 fixtures)
+      return all;
+    });
+  };
+  return fetchPage(1).then(function(fixtures) {
     self._lastFixtures = fixtures; // Cache for logo fallback in match intelligence
+    self._fixturesCache[dateStr] = { at: Date.now(), val: fixtures };
     return fixtures;
   });
 };
