@@ -2244,6 +2244,11 @@ module.exports = function startScheduler(deps) {
       var results = await db.getResults();
       var updated = 0;
       var today = new Date().toISOString().split('T')[0];
+      // SELF-LEARNING: feed each settled football result into the quant model (Elo +
+      // Dixon-Coles) so it actually learns club ratings over time — previously it
+      // only learned from World Cup games and stayed uninformed for every club.
+      // Deduped per run so a fixture with multiple tips only teaches the model once.
+      var _quantLearned = {};
 
       // Process ALL unsettled tips from last 3 days
       var threeDaysAgo = new Date(new Date(today).getTime() - 3 * 86400000).toISOString().split('T')[0];
@@ -2527,6 +2532,30 @@ module.exports = function startScheduler(deps) {
               var awayGoals = fmatch.awayGoals || 0;
               var totalGoals = homeGoals + awayGoals;
               var won = false;
+
+              // Teach the quant model this club result so it learns real Elo over
+              // time. IDEMPOTENT: skip if already learned this run, OR if a result
+              // for this fixture already existed before this run (a prior tip on the
+              // same fixture already taught it — prevents double-counting across the
+              // 2-min settle loop). SKIP internationals / World Cup — those are
+              // learned by the dedicated WC path with the correct neutral-venue flag.
+              try {
+                if (deps.quantModel && deps.quantModel.updateFromResult &&
+                    fmatch.homeGoals != null && fmatch.awayGoals != null && fmatch.homeTeam && fmatch.awayTeam) {
+                  var _lg = (ftip.league || ftip.event || '').toLowerCase();
+                  var _isIntl = /world cup|world championship|nations league|international|copa america|africa cup|euro 20/.test(_lg);
+                  var _qk = (fmatch.homeTeam + '|' + fmatch.awayTeam + '|' + normDate(ftip.date)).toLowerCase();
+                  var _priorResult = results.some(function (rr) {
+                    return rr && rr.event && ftip.event &&
+                      String(rr.event).toLowerCase() === String(ftip.event).toLowerCase() &&
+                      normDate(rr.date) === normDate(ftip.date);
+                  });
+                  if (!_isIntl && !_quantLearned[_qk] && !_priorResult) {
+                    _quantLearned[_qk] = true;
+                    await deps.quantModel.updateFromResult(fmatch.homeTeam, fmatch.awayTeam, homeGoals, awayGoals, { neutral: false });
+                  }
+                }
+              } catch (qErr) { /* non-fatal — learning must never block settlement */ }
 
               var market = (ftip.market || '').toLowerCase();
               var selection = (ftip.selection || '').toLowerCase();
@@ -5468,8 +5497,17 @@ module.exports = function startScheduler(deps) {
     var isMonday = uk.getDay() === 1;
     console.log('[AutoTune] Starting daily analyst review...' + (isMonday ? ' (Monday — full report + email)' : ''));
 
-    var allResults = await db.getResults();
+    var allResultsFull = await db.getResults();
     var allTips = await db.getTips();
+
+    // CHARTER rule #2 — pattern detection runs on a TRAILING 14-DAY WINDOW, never
+    // lifetime aggregates (which average away recent form and let stale patterns
+    // keep tripping tuning). Calibration keeps its own 30-day window below.
+    var _cutoff14 = new Date(Date.now() - 14 * 86400000).toISOString().split('T')[0];
+    var allResults = allResultsFull.filter(function(r) {
+      var d = r.date ? normDate(r.date) : null; // DATE cols come back as JS Date — normDate → YYYY-MM-DD
+      return !(d && d < _cutoff14);
+    });
 
     // Build tip map for enrichment
     var tipMap = {};
@@ -5730,6 +5768,13 @@ module.exports = function startScheduler(deps) {
         // All analysts: learn from LOSS PATTERNS (causal analysis)
         try {
           var analystLosses = await db.getLossAnalysis({ analyst: name });
+          // Charter rule #2 — the three-strike threshold counts only losses within
+          // the trailing 14-day window, not the last ~200 lifetime losses.
+          analystLosses = (analystLosses || []).filter(function(la) {
+            var raw = la.date || la.created_at || null;
+            var d = raw ? normDate(raw) : null;
+            return !(d && d < _cutoff14);
+          });
           if (analystLosses.length >= 3) {
             // Count loss categories
             var catCounts = {};

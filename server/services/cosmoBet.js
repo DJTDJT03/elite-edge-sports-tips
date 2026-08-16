@@ -466,6 +466,10 @@ CosmoBet.prototype.scanValue = async function(fixtures, quantModel, opts) {
     var f = fixtures[i];
     var game = await this.matchFixture(f.home, f.away, f.kickoff);
     if (!game) continue;
+    // Only claim value when the model actually KNOWS both teams — otherwise its
+    // default 1500-vs-1500 rating produces a uniform prediction and "value" would
+    // be an artefact of the model's ignorance, not a real edge.
+    if (quantModel.knows && (!quantModel.knows(f.home) || !quantModel.knows(f.away))) continue;
     var odds = await this.getGameOdds(game.gameId);
     if (!odds || !odds.matchResult) continue;
     var pred;

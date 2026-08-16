@@ -759,6 +759,33 @@ class ScoringModel {
   }
 
   /**
+   * REAL expected-goals model. Turns the Understat xG the scheduler already
+   * attaches to each fixture (homeXG/awayXG = xG scored per match, homeXGA/awayXGA
+   * = xG conceded) into genuine Over 2.5 and BTTS probabilities via Poisson — the
+   * signals that previously ran on an odds proxy. Returns null when real xG is
+   * absent (so callers keep their existing behaviour). Only overProb/btts are used
+   * downstream (goals/BTTS markets); we deliberately do NOT touch the match-result
+   * xG factor here to avoid destabilising the win/loss logic.
+   * @returns {{overProb:number, btts:number, lambdaHome:number, lambdaAway:number}|null}
+   */
+  xgSignals(fixture) {
+    if (!fixture) return null;
+    var hXG = parseFloat(fixture.homeXG), aXG = parseFloat(fixture.awayXG);
+    var hXGA = parseFloat(fixture.homeXGA), aXGA = parseFloat(fixture.awayXGA);
+    if (!(hXG > 0 && aXG > 0 && hXGA >= 0 && aXGA >= 0)) return null; // need real xG both sides
+    // Expected goals for THIS fixture: blend each side's attack with the opponent's defence.
+    var clamp = function (x, lo, hi) { return Math.max(lo, Math.min(hi, x)); };
+    var lambdaHome = clamp((hXG + aXGA) / 2, 0.15, 4.5);
+    var lambdaAway = clamp((aXG + hXGA) / 2, 0.15, 4.5);
+    var lambdaTot = lambdaHome + lambdaAway;
+    var pois = function (k, l) { var p = Math.exp(-l); for (var i = 1; i <= k; i++) p *= l / i; return p; };
+    var pUnder3 = pois(0, lambdaTot) + pois(1, lambdaTot) + pois(2, lambdaTot);
+    var overProb = clamp(1 - pUnder3, 0.05, 0.95);
+    var btts = clamp((1 - Math.exp(-lambdaHome)) * (1 - Math.exp(-lambdaAway)), 0.05, 0.95);
+    return { overProb: overProb, btts: btts, lambdaHome: lambdaHome, lambdaAway: lambdaAway };
+  }
+
+  /**
    * Score a football fixture from live API data
    * @param {Object} fixture — Fixture object from API-Football (normalised)
    * @param {Object} oddsData — Odds from Odds API for this fixture
@@ -1007,6 +1034,13 @@ class ScoringModel {
       scheduleCongestion: Math.round(congestionScore * 100) / 100,
       marketMovement: Math.round(marketScore * 100) / 100,
     };
+
+    // REAL xG → genuine Over 2.5 / BTTS probabilities (were null → proxy before).
+    var _xg = this.xgSignals(fixture);
+    if (_xg) {
+      factors.overProb = Math.round(_xg.overProb * 100) / 100;
+      factors.btts = Math.round(_xg.btts * 100) / 100;
+    }
 
     // Apply referee modifier — strict refs boost goals/BTTS markets by 5-10%
     var isGoalsMarket = selectedMarket === 'Over 2.5 Goals' || selectedMarket === 'Both Teams to Score';

@@ -258,6 +258,11 @@ module.exports = function(deps) {
   // the model's call, never a retrofitted editorial narrative.
   function modelVerdict(pred, homeName, awayName) {
     if (!pred || !pred.pick || !pred.winProb) return null;
+    // Only emit a model take when the model actually KNOWS both teams. Otherwise
+    // its default-rating output is a uniform 43/27/29 → "Draw" for EVERY club
+    // fixture, which is worse than showing no take at all. (The model learns real
+    // club ratings from results over time — once it knows a team, its read returns.)
+    if (deps.quantModel && deps.quantModel.knows && (!deps.quantModel.knows(homeName) || !deps.quantModel.knows(awayName))) return null;
     var wp = pred.winProb, eg = pred.expectedGoals || {};
     var reason = 'Our Elo + Dixon-Coles model makes it ' + homeName + ' ' + wp.home + '% · Draw ' +
       wp.draw + '% · ' + awayName + ' ' + wp.away + '%' +
@@ -924,7 +929,14 @@ module.exports = function(deps) {
             // model and the headline pick line up (the SportMonks panel can
             // diverge from our engine; the quant model is what we actually back).
             var _wcQuant = null;
-            try { if (deps.quantModel) _wcQuant = deps.quantModel.predict(smF.homeTeam || '', smF.awayTeam || '', { neutral: true }); } catch (e) { /* non-fatal */ }
+            try {
+              // Only when the model knows both teams (WC nations do; unrated clubs
+              // don't → hide rather than show a uniform default readout).
+              if (deps.quantModel && (!deps.quantModel.knows ||
+                  (deps.quantModel.knows(smF.homeTeam || '') && deps.quantModel.knows(smF.awayTeam || '')))) {
+                _wcQuant = deps.quantModel.predict(smF.homeTeam || '', smF.awayTeam || '', { neutral: true });
+              }
+            } catch (e) { /* non-fatal */ }
 
             return res.json({
               fixtureId: parseInt(fixtureId),
@@ -1564,7 +1576,11 @@ module.exports = function(deps) {
       // genuine in-house signal shown alongside the engine's verdict).
       var _quant = null;
       try {
-        if (deps.quantModel) {
+        // Only surface the model panel when it KNOWS both teams — otherwise it's a
+        // uniform default-rating readout (identical 43/27/29 on every club game),
+        // which looks broken. Hidden until the model has learnt these teams.
+        if (deps.quantModel && (!deps.quantModel.knows ||
+            (deps.quantModel.knows(homeTeam.name || '') && deps.quantModel.knows(awayTeam.name || '')))) {
           var _neutral = /world cup|world championship/i.test(league.name || '');
           _quant = deps.quantModel.predict(homeTeam.name || '', awayTeam.name || '', { neutral: _neutral });
         }
