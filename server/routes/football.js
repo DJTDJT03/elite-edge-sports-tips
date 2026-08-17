@@ -278,6 +278,21 @@ module.exports = function(deps) {
     catch (err) { res.status(500).json({ error: 'Seed ratings failed: ' + err.message }); }
   });
 
+  // POST /football/admin/refresh-verdict-locks — one-time maintenance. Clears
+  // frozen "Our Take" locks on fixtures that HAVEN'T kicked off yet AND predate
+  // the market-consensus verdict (source IS NULL), so the next view re-locks them
+  // with the sharp market-led take instead of the old form/H2H heuristic. Safe:
+  // display-only, only future fixtures (no result known), never touches a lock
+  // that already carries a derivation. Idempotent — new locks carry a source, so
+  // a second run clears nothing.
+  router.post('/football/admin/refresh-verdict-locks', deps.authenticate, deps.requireAdmin, async function(req, res) {
+    try {
+      if (!db || !db.query) return res.status(503).json({ error: 'db unavailable' });
+      var r = await db.query("DELETE FROM match_verdict_locks WHERE source IS NULL AND kickoff > NOW()");
+      res.json({ cleared: r.rowCount || 0, note: 'Future pre-market locks cleared; they re-lock with the market verdict on next view.' });
+    } catch (err) { res.status(500).json({ error: 'Refresh failed: ' + err.message }); }
+  });
+
   // GET /football/league-overview/:slug — a league's STANDINGS + today's fixtures
   // resolved SERVER-SIDE by name (not the global daily feed, which caps at ~50 and
   // drops lower leagues). Guarantees the League One / League Two pages populate.
@@ -1534,8 +1549,10 @@ module.exports = function(deps) {
         if (_lockedAf) {
           verdictMarket = _lockedAf.market; verdictPick = _lockedAf.pick; verdictReason = _lockedAf.reason;
           confidence = _lockedAf.confidence || confidence; riskLevel = _lockedAf.riskLevel || riskLevel;
-          // Restore the original derivation so the UI badge is identical every view.
-          if (_lockedAf.source && _lockedAf.source !== 'locked') verdictSource = _lockedAf.source;
+          // The restored verdict IS the lock — its badge must reflect the lock's
+          // own derivation, never a source we recomputed this request (which would
+          // mis-badge a frozen heuristic pick as 'market'). Legacy rows → no badge.
+          verdictSource = (_lockedAf.source && _lockedAf.source !== 'locked') ? _lockedAf.source : '';
         } else if (_hasStarted(_afStatus, kickoff)) {
           // No locked pre-match take (nobody opened this game before kick-off).
           // Rather than a dead "no take", surface our deterministic model's read —
