@@ -1440,9 +1440,24 @@ module.exports = function(deps) {
       var h2hDominance = Math.abs(h2hHomeWins - h2hAwayWins);
       var avgTotalGoals = (homeStats.avgScored + homeStats.avgConceded + awayStats.avgScored + awayStats.avgConceded) / 2;
 
+      // Market consensus — for a fixture we DON'T tip, the de-vigged multi-book
+      // bookmaker read is the sharpest informed take available (esp. on League
+      // One/Two + cups where our model has no prediction). Computed once here and
+      // ranked ABOVE the crude form/H2H heuristics below, so untipped games get a
+      // proper market-led "Our Take" instead of a coin-flip Draw. Only fetched when
+      // there's a genuine no-tip gap to fill (published tips already win at 1444).
+      var _afMkt = null;
+      if (!verdictPick && !fromPublishedTip && !fromConsensus && homeTeam && awayTeam) {
+        try { _afMkt = await marketVerdict(homeTeam.name || '', awayTeam.name || ''); } catch (e) { /* fall through to heuristics */ }
+      }
+
       // Only auto-generate verdict if no published tip exists for this fixture
       if (verdictMarket && verdictPick) {
         // Already set from published tip — skip auto-generation
+      } else if (_afMkt) {
+        // Sharp market-led take — leads the uninformed heuristics below.
+        verdictMarket = _afMkt.market; verdictPick = _afMkt.pick; verdictReason = _afMkt.reason;
+        confidence = _afMkt.confidence; riskLevel = _afMkt.riskLevel; verdictSource = 'market';
       } else if (combinedBttsPct >= 65 && homeStats.avgScored >= 1.0 && awayStats.avgScored >= 1.0) {
         verdictMarket = 'Both Teams to Score';
         verdictPick = 'BTTS - Yes';
@@ -1519,6 +1534,8 @@ module.exports = function(deps) {
         if (_lockedAf) {
           verdictMarket = _lockedAf.market; verdictPick = _lockedAf.pick; verdictReason = _lockedAf.reason;
           confidence = _lockedAf.confidence || confidence; riskLevel = _lockedAf.riskLevel || riskLevel;
+          // Restore the original derivation so the UI badge is identical every view.
+          if (_lockedAf.source && _lockedAf.source !== 'locked') verdictSource = _lockedAf.source;
         } else if (_hasStarted(_afStatus, kickoff)) {
           // No locked pre-match take (nobody opened this game before kick-off).
           // Rather than a dead "no take", surface our deterministic model's read —
@@ -1552,7 +1569,7 @@ module.exports = function(deps) {
             confidence = 0; riskLevel = 'n/a';
           }
         } else {
-          await saveLockedVerdict(fixtureId, { market: verdictMarket, pick: verdictPick, reason: verdictReason, confidence: confidence, riskLevel: riskLevel, riskText: riskText }, kickoff, _afStatus);
+          await saveLockedVerdict(fixtureId, { market: verdictMarket, pick: verdictPick, reason: verdictReason, confidence: confidence, riskLevel: riskLevel, riskText: riskText, source: verdictSource }, kickoff, _afStatus);
         }
         if (typeof _cf !== 'undefined' && _cf) await lockWcVerdict(_cf, verdictReason, verdictMarket, verdictPick, confidence);
       }
