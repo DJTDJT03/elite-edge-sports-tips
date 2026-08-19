@@ -3021,6 +3021,7 @@ const App = {
       app.innerHTML = this._renderLandingFunnel({ todayTips: todayTips, napTip: napTip, perf: perf, recentWins: recentWins, streak: streak });
       this._loadEventSpotlight(); // featured meeting (Goodwood etc.) — fills the slot in the funnel
       this._loadClvProof();       // CLV proof-of-edge block — fills #clv-proof-slot when ready
+      this._loadHomeFixtures();   // interactive fixtures grid → tap for Our Take (#ee-home-fixtures-slot)
       if (!this._landingBeaconSent) { this._landingBeaconSent = true; trackFunnel('landing_view'); }
       return;
     }
@@ -4111,6 +4112,37 @@ const App = {
         '</div>' +
       '</div>';
 
+    // 4b) TODAY'S FIXTURES — interactive proof. Every game (even ones we don't
+    // publish a tip on) carries an instant "Our Take" a click away, so a first-time
+    // visitor can poke a real fixture and see the engine's verdict. A 3-step mini
+    // explainer sits above it so newcomers understand what they're looking at.
+    // The card grid is filled async by _loadHomeFixtures() into #ee-home-fixtures-slot.
+    var takeSteps = [
+      { i: '⚖️', t: 'Market consensus', d: 'We de-vig the odds from 140+ bookmakers into one fair price — the sharpest read on any game.' },
+      { i: '🧮', t: 'Our quant model', d: 'An in-house Elo + Dixon-Coles engine cross-checks the market on every fixture.' },
+      { i: '🧠', t: '5-analyst debate', d: 'On our published tips, 5 analysts + a 3-AI panel argue it to a single, most-probable call.' },
+    ];
+    var fixturesSection =
+      '<div style="padding:clamp(34px,7vw,52px) 18px;max-width:1080px;margin:0 auto;">' +
+        '<div style="text-align:center;margin-bottom:26px;">' +
+          '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:var(--gold);margin-bottom:8px;">SEE IT FOR YOURSELF</div>' +
+          '<h2 style="font-size:clamp(22px,5.5vw,30px);font-weight:900;color:#fff;margin:0 0 8px;">Today\'s games — tap one for Our Take</h2>' +
+          '<p style="color:var(--text-secondary);font-size:15px;max-width:620px;margin:0 auto;line-height:1.6;">Click any fixture below and we\'ll show you our verdict on the game in seconds — the pick, the reasoning and the confidence. Free, no account needed.</p>' +
+        '</div>' +
+        // 3-step mini explainer band
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:12px;margin-bottom:26px;">' +
+          takeSteps.map(function (s, i) { return '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;display:flex;gap:13px;align-items:flex-start;">' +
+            '<div style="font-size:22px;line-height:1;flex-shrink:0;">' + s.i + '</div>' +
+            '<div><div style="font-size:11px;color:var(--text-muted);font-weight:700;">STEP ' + (i + 1) + '</div>' +
+            '<div style="font-size:15px;font-weight:800;color:#fff;margin:1px 0 4px;">' + s.t + '</div>' +
+            '<div style="font-size:13px;color:var(--text-secondary);line-height:1.55;">' + s.d + '</div></div>' +
+          '</div>'; }).join('') +
+        '</div>' +
+        // fixtures grid (async)
+        '<div id="ee-home-fixtures-slot"><div style="text-align:center;padding:26px;color:var(--text-muted);font-size:14px;">Loading today\'s fixtures…</div></div>' +
+        '<div style="text-align:center;margin-top:18px;"><a href="#/how-it-works" style="color:var(--gold);font-size:13px;font-weight:700;">How the whole system works →</a></div>' +
+      '</div>';
+
     // 5) PROVEN EDGE + winners
     var winnersHtml = recentWins.slice(0, 8).map(function (r) {
       // Strip the redundant market prefix ("Double Chance - Kairat or Draw" → "Kairat or Draw")
@@ -4203,7 +4235,7 @@ const App = {
         '<div style="font-size:12px;color:var(--text-muted);margin-top:16px;">18+ · Please gamble responsibly · BeGambleAware.org · Analysis, not betting advice</div>' +
       '</div>';
 
-    return '<div style="max-width:100%;overflow-x:hidden;">' + hero + spotlight + tipsSection + whySection + howSection + proofSection + pricingSection + faqSection + finalCta + '</div>';
+    return '<div style="max-width:100%;overflow-x:hidden;">' + hero + spotlight + tipsSection + fixturesSection + whySection + howSection + proofSection + pricingSection + faqSection + finalCta + '</div>';
   },
 
   renderTipCard(tip) {
@@ -7677,6 +7709,12 @@ const App = {
 
     // --- Premium content wrapper ---
     var lockedClass = isPremium ? '' : ' match-intel-locked';
+    // The OUR TAKE verdict is shown IN FULL to everyone when it's a market- or
+    // model-derived read (i.e. a game we DON'T publish a paid tip on) — that's the
+    // interactive proof we want first-timers to see. A published/consensus PAID
+    // pick (source '' / 'locked') stays gated behind premium.
+    var isFreeTake = (v.source === 'market' || v.source === 'model');
+    var verdictLockedClass = (isPremium || isFreeTake) ? '' : ' match-intel-locked';
 
     // --- OUR TAKE verdict ---
     // A model-derived take (no locked pre-match analyst verdict existed) gets a
@@ -7686,7 +7724,7 @@ const App = {
       : (v.source === 'model')
       ? ' <span style="font-size:9px;font-weight:800;letter-spacing:0.5px;color:#22d3ee;border:1px solid rgba(34,211,238,0.4);border-radius:10px;padding:1px 7px;vertical-align:middle;">MODEL READ</span>'
       : '';
-    html += '<div class="match-intel-verdict' + lockedClass + '">' +
+    html += '<div class="match-intel-verdict' + verdictLockedClass + '">' +
       '<div class="match-intel-verdict-label">OUR TAKE' + takeBadge + '</div>' +
       '<div class="match-intel-verdict-pick">' + v.pick + '</div>' +
       '<div class="match-intel-verdict-market">' + v.market + '</div>' +
@@ -16523,6 +16561,60 @@ const App = {
           '<span style="color:#22d3ee;font-weight:700;">Proof of Edge — tracking live.</span> We\'re capturing the closing price on every pick and will publish our CLV once the sample is meaningful (' + have + '/' + need + ' bets measured).' +
         '</div>';
     }
+  },
+
+  // Fill the landing page's interactive fixtures grid. Every card opens the
+  // full match-intelligence "Our Take" (free, no account) — the market-led verdict
+  // means even untipped games get a real read, which is exactly the proof a
+  // first-time visitor needs. Non-fatal: on any failure the slot just hides.
+  async _loadHomeFixtures() {
+    var slot = document.getElementById('ee-home-fixtures-slot');
+    if (!slot) return;
+    var self = this;
+    var data = null;
+    try { data = await this.fetchLiveFootball(); } catch (e) {}
+    slot = document.getElementById('ee-home-fixtures-slot');
+    if (!slot) return;
+    var fixtures = (data && data.fixtures) ? data.fixtures.slice() : [];
+    if (!fixtures.length) {
+      slot.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);background:var(--bg-card);border:1px solid var(--border);border-radius:14px;font-size:14px;">No fixtures on the card right now — check back on a matchday and tap any game for our take.</div>';
+      return;
+    }
+    var LIVE = { LIVE: 1, HT: 1, '1H': 1, '2H': 1, ET: 1, BREAK: 1, P: 1, INT: 1 };
+    var FT = { FT: 1, AET: 1, PEN: 1, FT_PEN: 1 };
+    var esc = function (s) { return self.escapeHtml(s || ''); };
+    var koTime = function (f) {
+      if (!f.kickoff) return '';
+      var d = new Date(f.kickoff);
+      return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    };
+    // Order: live first, then upcoming (soonest kick-off), finished last.
+    var rank = function (f) { var s = String(f.status || '').toUpperCase(); return LIVE[s] ? 0 : FT[s] ? 2 : 1; };
+    fixtures.sort(function (a, b) {
+      var ra = rank(a), rb = rank(b);
+      if (ra !== rb) return ra - rb;
+      var ka = a.kickoff ? new Date(a.kickoff).getTime() : 0, kb = b.kickoff ? new Date(b.kickoff).getTime() : 0;
+      return ka - kb;
+    });
+    var cards = fixtures.slice(0, 12).map(function (f) {
+      var s = String(f.status || '').toUpperCase();
+      var isLive = !!LIVE[s], isFT = !!FT[s];
+      var statusPill = isLive
+        ? '<span style="font-size:10px;font-weight:800;color:#ef4444;background:rgba(239,68,68,0.14);border-radius:5px;padding:2px 7px;white-space:nowrap;">● LIVE ' + (f.homeGoals != null ? f.homeGoals : '-') + '-' + (f.awayGoals != null ? f.awayGoals : '-') + '</span>'
+        : isFT
+        ? '<span style="font-size:10px;font-weight:800;color:var(--text-muted);background:rgba(255,255,255,0.05);border-radius:5px;padding:2px 7px;white-space:nowrap;">FT ' + (f.homeGoals || 0) + '-' + (f.awayGoals || 0) + '</span>'
+        : '<span style="font-size:11px;font-weight:800;color:#fff;background:rgba(34, 211, 238,0.15);border-radius:5px;padding:2px 7px;white-space:nowrap;">' + esc(koTime(f)) + '</span>';
+      return '<div onclick="App.openMatchIntelligence(' + (f.id || 0) + ', this)" title="Tap for Our Take" ' +
+        'style="cursor:pointer;background:linear-gradient(160deg,#161b28,#0d1019);border:1px solid var(--border);border-radius:14px;padding:14px 16px;transition:transform .15s,border-color .15s;display:flex;flex-direction:column;gap:9px;" ' +
+        'onmouseover="this.style.transform=\'translateY(-3px)\';this.style.borderColor=\'rgba(34,211,238,0.4)\'" onmouseout="this.style.transform=\'\';this.style.borderColor=\'\'">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+          '<span style="font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;">⚽ ' + esc(f.league) + '</span>' + statusPill +
+        '</div>' +
+        '<div style="font-size:15px;font-weight:800;color:#fff;line-height:1.3;">' + esc(f.homeTeam) + ' <span style="color:var(--text-muted);font-weight:600;">v</span> ' + esc(f.awayTeam) + '</div>' +
+        '<div style="font-size:12px;font-weight:800;color:#22d3ee;">See Our Take →</div>' +
+      '</div>';
+    }).join('');
+    slot.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:12px;">' + cards + '</div>';
   },
 
   async _loadEventSpotlight() {

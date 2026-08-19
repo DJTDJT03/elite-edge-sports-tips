@@ -1,4 +1,4 @@
-const CACHE_NAME = 'elite-edge-v27-20260816c';
+const CACHE_NAME = 'elite-edge-v28-20260819a';
 const ASSETS = [
   '/',
   '/index.html',

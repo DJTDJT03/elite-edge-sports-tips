@@ -1110,6 +1110,9 @@ module.exports = function(deps) {
                 // Genuinely even — a draw is a legitimate call here.
                 smVerdict = { market: 'Match Result', pick: 'Draw', reason: _modelLine + ' Tightly matched — the draw is live.', confidence: 6, riskLevel: 'medium', riskText: 'Evenly poised.' };
               }
+              // SportMonks-model read on a game we don't tip → badge + reveal it
+              // like our own model read (never a paid pick; only a no-tip fallback).
+              if (smVerdict) smVerdict.source = 'model';
             }
             var smH2HHomeWins = 0, smH2HAwayWins = 0, smH2HDraws = 0, smH2HTotalGoals = 0;
             smH2H.forEach(function(m) {
