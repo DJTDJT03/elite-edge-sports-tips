@@ -3052,6 +3052,33 @@ const App = {
           ${this._loginStreak >= 2 ? '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:18px;">&#128293;</span><span style="font-weight:800;color:#22d3ee;">' + this._loginStreak + '-day streak</span>' + (this._loginStreak >= 7 ? '<span style="font-size:11px;color:#22c55e;font-weight:600;">Best: ' + (this._bestStreak || this._loginStreak) + '</span>' : '') + '</div>' : ''}
         </div>
 
+        <!-- DASHBOARD TABS — football-first on login, full briefing behind tab 2 -->
+        <div id="dash-tab-bar" style="display:flex;gap:4px;margin-bottom:22px;border-bottom:1px solid var(--border);overflow-x:auto;">
+          <button data-dtab="football" onclick="App.switchDashTab('football',this)" style="padding:12px 20px;background:none;border:none;border-bottom:3px solid #22d3ee;color:#fff;font-size:15px;font-weight:800;cursor:pointer;white-space:nowrap;">&#9917; Football</button>
+          <button data-dtab="briefing" onclick="App.switchDashTab('briefing',this)" style="padding:12px 20px;background:none;border:none;border-bottom:3px solid transparent;color:var(--text-muted);font-size:15px;font-weight:800;cursor:pointer;white-space:nowrap;">&#127919; Command Centre</button>
+        </div>
+
+        <!-- TAB 1: FOOTBALL (default) — the games + a brief on what they show -->
+        <div id="dash-tab-football">
+          <div style="margin-bottom:18px;">
+            <h2 style="margin:0 0 6px;font-size:clamp(20px,4.5vw,26px);font-weight:900;color:#fff;">Today's Football</h2>
+            <p style="color:var(--text-secondary);font-size:14.5px;line-height:1.6;margin:0;max-width:680px;">Tap any game for <strong style="color:#fff;">Our Take</strong> — the pick, the reasoning and our confidence, plus form, head-to-head and the model read. Here's how every verdict is built:</p>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:12px;margin-bottom:22px;">
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:15px 17px;display:flex;gap:12px;align-items:flex-start;"><div style="font-size:21px;line-height:1;flex-shrink:0;">&#9878;&#65039;</div><div><div style="font-size:11px;color:var(--text-muted);font-weight:700;">STEP 1</div><div style="font-size:15px;font-weight:800;color:#fff;margin:1px 0 4px;">Market consensus</div><div style="font-size:13px;color:var(--text-secondary);line-height:1.55;">We de-vig 140+ bookmakers into one fair price — the sharpest read on any game.</div></div></div>
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:15px 17px;display:flex;gap:12px;align-items:flex-start;"><div style="font-size:21px;line-height:1;flex-shrink:0;">&#129518;</div><div><div style="font-size:11px;color:var(--text-muted);font-weight:700;">STEP 2</div><div style="font-size:15px;font-weight:800;color:#fff;margin:1px 0 4px;">Our quant model</div><div style="font-size:13px;color:var(--text-secondary);line-height:1.55;">An in-house Elo + Dixon-Coles engine cross-checks the market on every fixture.</div></div></div>
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:15px 17px;display:flex;gap:12px;align-items:flex-start;"><div style="font-size:21px;line-height:1;flex-shrink:0;">&#129504;</div><div><div style="font-size:11px;color:var(--text-muted);font-weight:700;">STEP 3</div><div style="font-size:15px;font-weight:800;color:#fff;margin:1px 0 4px;">5-analyst debate</div><div style="font-size:13px;color:var(--text-secondary);line-height:1.55;">On our published tips, 5 analysts + a 3-AI panel argue it to a single, most-probable call.</div></div></div>
+          </div>
+          <div id="dash-fixtures-slot"><div style="text-align:center;padding:26px;color:var(--text-muted);font-size:14px;">Loading today’s fixtures…</div></div>
+          <div style="text-align:center;margin-top:18px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
+            <a href="#/football" class="btn btn-outline btn-sm">Full football hub &amp; all leagues &rarr;</a>
+            <a href="#/how-it-works" style="color:var(--gold);font-size:13px;font-weight:700;align-self:center;">How the system works &rarr;</a>
+          </div>
+        </div>
+
+        <!-- TAB 2: COMMAND CENTRE — the full personal briefing (was the dashboard) -->
+        <div id="dash-tab-briefing" style="display:none;">
+
         <!-- WORLD CUP COUNTDOWN BANNER -->
         ${typeof WorldCup !== 'undefined' && document.getElementById('nav-world-cup') && document.getElementById('nav-world-cup').style.display !== 'none' ? `
         <div onclick="window.location.hash='#/world-cup'" style="background:linear-gradient(135deg,#1a0a2e 0%,#0a0e1a 40%,#0a2a1a 100%);border:2px solid rgba(34,197,94,0.3);border-radius:14px;padding:20px 24px;margin-bottom:20px;cursor:pointer;position:relative;overflow:hidden;">
@@ -3395,8 +3422,12 @@ const App = {
             `).join('')}
           </div>
         </div>
+        </div><!-- /dash-tab-briefing -->
       </div>
     `;
+
+    // Football tab (default) — fill the fixtures grid; tap any game for Our Take.
+    this._loadHomeFixtures('dash-fixtures-slot');
 
     // Live & Latest (in-play scores + results landing) + Winners Wall
     this._loadLiveNow();
@@ -16563,17 +16594,41 @@ const App = {
     }
   },
 
+  // Switch the logged-in dashboard between the Football tab (default on every
+  // login) and the Command Centre (the full personal briefing). Pure show/hide —
+  // nothing is re-fetched, so it's instant and can't disturb the live pollers.
+  switchDashTab(name, btn) {
+    ['football', 'briefing'].forEach(function (n) {
+      var el = document.getElementById('dash-tab-' + n);
+      if (el) el.style.display = (n === name) ? '' : 'none';
+    });
+    var bar = document.getElementById('dash-tab-bar');
+    if (bar) {
+      Array.prototype.forEach.call(bar.querySelectorAll('[data-dtab]'), function (b) {
+        var active = b.getAttribute('data-dtab') === name;
+        b.style.color = active ? '#fff' : 'var(--text-muted)';
+        b.style.borderBottomColor = active ? '#22d3ee' : 'transparent';
+      });
+    }
+    // The bankroll chart (Chart.js, responsive) was built while this tab was
+    // display:none, so it sized to 0×0. Re-render it now the tab is visible — the
+    // method destroys and rebuilds cleanly, so this is safe to call every reveal.
+    if (name === 'briefing') { var self = this; setTimeout(function () { try { self.renderBankrollChart(); } catch (e) {} }, 30); }
+    try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+  },
+
   // Fill the landing page's interactive fixtures grid. Every card opens the
   // full match-intelligence "Our Take" (free, no account) — the market-led verdict
   // means even untipped games get a real read, which is exactly the proof a
   // first-time visitor needs. Non-fatal: on any failure the slot just hides.
-  async _loadHomeFixtures() {
-    var slot = document.getElementById('ee-home-fixtures-slot');
+  async _loadHomeFixtures(slotId) {
+    slotId = slotId || 'ee-home-fixtures-slot';
+    var slot = document.getElementById(slotId);
     if (!slot) return;
     var self = this;
     var data = null;
     try { data = await this.fetchLiveFootball(); } catch (e) {}
-    slot = document.getElementById('ee-home-fixtures-slot');
+    slot = document.getElementById(slotId);
     if (!slot) return;
     var fixtures = (data && data.fixtures) ? data.fixtures.slice() : [];
     if (!fixtures.length) {
