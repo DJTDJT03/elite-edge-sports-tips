@@ -16643,33 +16643,46 @@ const App = {
       var d = new Date(f.kickoff);
       return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     };
-    // Order: live first, then upcoming (soonest kick-off), finished last.
     var rank = function (f) { var s = String(f.status || '').toUpperCase(); return LIVE[s] ? 0 : FT[s] ? 2 : 1; };
-    fixtures.sort(function (a, b) {
-      var ra = rank(a), rb = rank(b);
-      if (ra !== rb) return ra - rb;
-      var ka = a.kickoff ? new Date(a.kickoff).getTime() : 0, kb = b.kickoff ? new Date(b.kickoff).getTime() : 0;
-      return ka - kb;
+    // Group by league (Premier League first, then alphabetical) and render the
+    // SAME rich fixture cards as the Football hub — team badges, venue, kick-off,
+    // live/FT score — so the detail is identical, plus a "See Our Take" cue since
+    // this surface is all about tapping through to the verdict.
+    var byLeague = {};
+    fixtures.forEach(function (f) { var k = f.league || 'Other'; (byLeague[k] = byLeague[k] || []).push(f); });
+    var leagues = Object.keys(byLeague).sort(function (a, b) {
+      var aPL = a.toLowerCase().indexOf('premier') !== -1 ? 0 : 1, bPL = b.toLowerCase().indexOf('premier') !== -1 ? 0 : 1;
+      return aPL !== bPL ? aPL - bPL : a.localeCompare(b);
     });
-    var cards = fixtures.slice(0, 12).map(function (f) {
-      var s = String(f.status || '').toUpperCase();
-      var isLive = !!LIVE[s], isFT = !!FT[s];
-      var statusPill = isLive
-        ? '<span style="font-size:10px;font-weight:800;color:#ef4444;background:rgba(239,68,68,0.14);border-radius:5px;padding:2px 7px;white-space:nowrap;">● LIVE ' + (f.homeGoals != null ? f.homeGoals : '-') + '-' + (f.awayGoals != null ? f.awayGoals : '-') + '</span>'
-        : isFT
-        ? '<span style="font-size:10px;font-weight:800;color:var(--text-muted);background:rgba(255,255,255,0.05);border-radius:5px;padding:2px 7px;white-space:nowrap;">FT ' + (f.homeGoals || 0) + '-' + (f.awayGoals || 0) + '</span>'
-        : '<span style="font-size:11px;font-weight:800;color:#fff;background:rgba(34, 211, 238,0.15);border-radius:5px;padding:2px 7px;white-space:nowrap;">' + esc(koTime(f)) + '</span>';
-      return '<div onclick="App.openMatchIntelligence(' + (f.id || 0) + ', this)" title="Tap for Our Take" ' +
-        'style="cursor:pointer;background:linear-gradient(160deg,#161b28,#0d1019);border:1px solid var(--border);border-radius:14px;padding:14px 16px;transition:transform .15s,border-color .15s;display:flex;flex-direction:column;gap:9px;" ' +
-        'onmouseover="this.style.transform=\'translateY(-3px)\';this.style.borderColor=\'rgba(34,211,238,0.4)\'" onmouseout="this.style.transform=\'\';this.style.borderColor=\'\'">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
-          '<span style="font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;">⚽ ' + esc(f.league) + '</span>' + statusPill +
-        '</div>' +
-        '<div style="font-size:15px;font-weight:800;color:#fff;line-height:1.3;">' + esc(f.homeTeam) + ' <span style="color:var(--text-muted);font-weight:600;">v</span> ' + esc(f.awayTeam) + '</div>' +
-        '<div style="font-size:12px;font-weight:800;color:#22d3ee;">See Our Take →</div>' +
-      '</div>';
+    slot.innerHTML = leagues.map(function (leagueName) {
+      var lf = byLeague[leagueName].slice().sort(function (a, b) {
+        var ra = rank(a), rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        var ka = a.kickoff ? new Date(a.kickoff).getTime() : 0, kb = b.kickoff ? new Date(b.kickoff).getTime() : 0;
+        return ka - kb;
+      });
+      return '<div class="meeting-card"><h3>&#9917; ' + esc(leagueName) + '</h3><div style="display:grid;gap:8px;">' +
+        lf.map(function (f) {
+          var s = String(f.status || '').toUpperCase();
+          var isLive = !!LIVE[s], isFT = !!FT[s];
+          var kickoffTime = koTime(f);
+          return '<div class="fixture-card fixture-card-clickable" onclick="App.openMatchIntelligence(' + (f.id || 0) + ', this)" title="Tap for Our Take">' +
+            '<div style="flex:1;">' +
+              '<div class="fixture-league">' + esc(leagueName) + '</div>' +
+              '<div class="fixture-teams" style="display:flex;align-items:center;gap:6px;">' +
+                (f.homeTeamLogo ? '<img src="' + f.homeTeamLogo + '" style="width:20px;height:20px;object-fit:contain;" onerror="this.style.display=\'none\'">' : '') +
+                esc(f.homeTeam) + ' <span class="fixture-vs">vs</span> ' + esc(f.awayTeam) +
+                (f.awayTeamLogo ? '<img src="' + f.awayTeamLogo + '" style="width:20px;height:20px;object-fit:contain;" onerror="this.style.display=\'none\'">' : '') +
+              '</div>' +
+              '<div class="fixture-meta">' + esc(f.venue || '') + (kickoffTime ? ' | ' + kickoffTime : '') + '</div>' +
+              '<div style="font-size:12px;font-weight:800;color:#22d3ee;margin-top:6px;">See Our Take &rarr;</div>' +
+            '</div>' +
+            (isLive ? '<div><div class="fixture-live-badge">LIVE ' + (f.elapsed || '') + '\'</div><div class="fixture-score">' + (f.homeGoals != null ? f.homeGoals : '-') + ' - ' + (f.awayGoals != null ? f.awayGoals : '-') + '</div></div>' :
+             isFT ? '<div><div style="font-size:10px;color:var(--text-muted);">FT</div><div class="fixture-score" style="color:var(--text-primary);font-size:18px;font-weight:900;">' + (f.homeGoals || 0) + ' - ' + (f.awayGoals || 0) + '</div></div>' :
+             '<div class="fixture-meta" style="font-size:14px;font-weight:600;">' + kickoffTime + '</div>') +
+          '</div>';
+        }).join('') + '</div></div>';
     }).join('');
-    slot.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:12px;">' + cards + '</div>';
   },
 
   async _loadEventSpotlight() {
