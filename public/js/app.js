@@ -2701,17 +2701,26 @@ const App = {
       var inner = document.getElementById('activity-ticker-inner');
       if (!ticker || !inner) return;
 
-      var html = '';
       var separator = '<span class="activity-separator">\u25C6</span>';
-      // Build items twice for seamless infinite scroll
+      var typeClassOf = function (item) { return item.type === 'won' ? 'activity-won' : item.type === 'tip' ? 'activity-tip' : item.type === 'settled' ? 'activity-settled' : 'activity-general'; };
+      var itemHtml = function (item) { return '<span class="activity-item ' + typeClassOf(item) + '">' + item.text + '</span>'; };
+
+      // With only a couple of real items, a duplicated scroll reads as a glitch
+      // ("X \u25C6 X"). Show them once, centred and static instead \u2014 we never pad with
+      // fabricated activity.
+      if (items.length < 3) {
+        inner.innerHTML = items.map(itemHtml).join(separator);
+        inner.classList.add('activity-static');
+        ticker.style.display = '';
+        return;
+      }
+      inner.classList.remove('activity-static');
+      var html = '';
+      // Build items twice for a seamless infinite scroll.
       for (var pass = 0; pass < 2; pass++) {
         for (var i = 0; i < items.length; i++) {
-          var item = items[i];
-          var typeClass = item.type === 'won' ? 'activity-won' : item.type === 'tip' ? 'activity-tip' : item.type === 'settled' ? 'activity-settled' : 'activity-general';
-          html += '<span class="activity-item ' + typeClass + '">' + item.text + '</span>';
-          if (i < items.length - 1 || pass === 0) {
-            html += separator;
-          }
+          html += itemHtml(items[i]);
+          if (i < items.length - 1 || pass === 0) html += separator;
         }
       }
       inner.innerHTML = html;

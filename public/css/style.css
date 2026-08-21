@@ -1651,8 +1651,8 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
    ENHANCEMENT: DAILY STATS BAR
    ========================================================================= */
 .daily-stats-bar {
-  background: var(--bg-deep); border-bottom: 1px solid var(--border);
-  padding: 6px 24px; display: flex; justify-content: center; gap: 32px;
+  background: #090d17; border-bottom: 1px solid rgba(255,255,255,0.055);
+  padding: 7px 24px; display: flex; justify-content: center; gap: 32px;
   font-size: 12px; font-weight: 600; color: var(--text-muted);
 }
 .daily-stats-bar .ds-item { display: flex; align-items: center; gap: 4px; }
@@ -1911,9 +1911,9 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   align-items: center;
   justify-content: center;
   gap: 16px;
-  height: 40px;
-  background: linear-gradient(90deg, var(--bg-deep), #0c1622 55%, var(--bg-deep));
-  border-bottom: 1px solid rgba(45,216,221,0.28);
+  height: 34px;
+  background: #090d17;
+  border-bottom: 1px solid rgba(45,216,221,0.22);
   font-size: 12px;
   color: var(--text-muted);
   padding: 0 16px;
@@ -1921,7 +1921,7 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   text-decoration: none;
   transition: background 0.2s ease;
 }
-.sponsor-header:hover { background: linear-gradient(90deg, var(--bg-deep), #0f1d2b 55%, var(--bg-deep)); }
+.sponsor-header:hover { background: #0c1420; }
 .sponsor-label {
   font-weight: 700;
   color: var(--gold);
@@ -3919,9 +3919,9 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
    ========================================================================= */
 .activity-ticker {
   overflow: hidden;
-  background: linear-gradient(90deg, var(--bg-deep), rgba(34, 211, 238,0.03), var(--bg-deep));
-  border-bottom: 1px solid var(--border);
-  padding: 8px 0;
+  background: #090d17;
+  border-bottom: 1px solid rgba(255,255,255,0.055);
+  padding: 6px 0;
   position: relative;
 }
 .activity-ticker::before,
@@ -3935,17 +3935,23 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
 }
 .activity-ticker::before {
   left: 0;
-  background: linear-gradient(90deg, var(--bg-deep), transparent);
+  background: linear-gradient(90deg, #090d17, transparent);
 }
 .activity-ticker::after {
   right: 0;
-  background: linear-gradient(270deg, var(--bg-deep), transparent);
+  background: linear-gradient(270deg, #090d17, transparent);
 }
 .activity-ticker-inner {
   display: flex;
   gap: 0;
   width: max-content;
   animation: activity-scroll 45s linear infinite;
+}
+/* Too few items to scroll seamlessly — show them once, centred, no animation. */
+.activity-ticker-inner.activity-static {
+  animation: none;
+  width: 100%;
+  justify-content: center;
 }
 .activity-ticker-inner:hover {
   animation-play-state: paused;
@@ -4535,9 +4541,9 @@ body.light-mode .chat-msg.user { color: var(--bg-deep); }
   display: flex;
   align-items: center;
   width: 100%;
-  height: 32px;
-  background: #0f1322;
-  border-top: 1px solid var(--gold-dark);
+  height: 30px;
+  background: #090d17;
+  border-bottom: 1px solid rgba(255,255,255,0.055);
   overflow: hidden;
   position: relative;
   z-index: 50;
