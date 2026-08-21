@@ -322,6 +322,15 @@ module.exports = function(deps) {
         else tempStreak = 0;
       }
 
+      // Longest losing run — shown honestly alongside the winning streaks (we
+      // publish the down side too, not just the flattering numbers).
+      let longestLossStreak = 0;
+      let tempLoss = 0;
+      for (const r of counted) {
+        if (r.result === 'lost') { tempLoss++; longestLossStreak = Math.max(longestLossStreak, tempLoss); }
+        else tempLoss = 0;
+      }
+
       // Best week (by P/L)
       const weekMap = {};
       counted.forEach(r => {
@@ -379,6 +388,7 @@ module.exports = function(deps) {
       res.json({
         currentStreak,
         longestStreak,
+        longestLossStreak,
         bestWeek,
         bestMonth,
         totalTips: counted.length,

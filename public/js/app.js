@@ -1338,6 +1338,7 @@ const App = {
       case 'festivals': this.renderFestivalHub(); break;
       case 'results': this.renderResults(); break;
       case 'track-record': this.renderTrackRecord(); break;
+      case 'stats': this.renderStats(); break;
       case 'pricing': this.renderPricing(); break;
       case 'analysts': this.renderAnalysts(); break;
       case 'my-roi': this.renderMyROI(); break;
@@ -3078,6 +3079,18 @@ const App = {
 
         <!-- TAB 2: COMMAND CENTRE — the full personal briefing (was the dashboard) -->
         <div id="dash-tab-briefing" style="display:none;">
+
+        <!-- PERFORMANCE SNAPSHOT → gateway to the full Stats hub -->
+        ${perf && perf.totalTips ? `
+        <div onclick="window.location.hash='#/stats'" title="See full performance" style="cursor:pointer;background:linear-gradient(135deg,rgba(34,211,238,0.08),var(--bg-card));border:1px solid rgba(34,211,238,0.3);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+          <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:center;">
+            <div><div style="font-size:22px;font-weight:900;color:${perf.roi >= 0 ? '#22c55e' : '#ef4444'};line-height:1;">${perf.roi > 0 ? '+' : ''}${perf.roi}%</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">ROI</div></div>
+            <div><div style="font-size:22px;font-weight:900;color:#22d3ee;line-height:1;">${perf.strikeRate}%</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Strike rate</div></div>
+            ${typeof perf.totalPnl === 'number' ? `<div><div style="font-size:22px;font-weight:900;color:${perf.totalPnl >= 0 ? '#22c55e' : '#ef4444'};line-height:1;">${perf.totalPnl >= 0 ? '+' : ''}${perf.totalPnl.toFixed(1)}u</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Net profit</div></div>` : ''}
+            <div><div style="font-size:22px;font-weight:900;color:#fff;line-height:1;">${perf.totalTips}</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Verified tips</div></div>
+          </div>
+          <span class="btn btn-outline btn-sm" style="pointer-events:none;">View full stats &rarr;</span>
+        </div>` : ''}
 
         <!-- WORLD CUP COUNTDOWN BANNER -->
         ${typeof WorldCup !== 'undefined' && document.getElementById('nav-world-cup') && document.getElementById('nav-world-cup').style.display !== 'none' ? `
@@ -12109,6 +12122,254 @@ const App = {
 
       '<p style="text-align:center;font-size:10px;color:#334155;">Elite Edge Sports Tips Ltd. Company No. 17138566. Statistical analysis and entertainment only. Past performance does not guarantee future results. 18+ BeGambleAware.org</p>' +
     '</div>';
+  },
+
+  // The Stats hub — one visually-rich performance view built entirely on REAL,
+  // auto-settled data (same endpoints as Track Record / Results). Honesty rules
+  // apply: CLV is sample-gated, low-sample gets an honest note, empty sections
+  // are hidden. Members also get a personal "Your numbers" strip.
+  async renderStats() {
+    var app = document.getElementById('app');
+    app.innerHTML = '<div class="container" style="padding-top:40px;"><div style="text-align:center;"><div class="spinner"></div><p class="text-muted" style="margin-top:12px;">Crunching the numbers…</p></div></div>';
+    var self = this;
+    var tr = null, clv = null, streaks = null, mine = null;
+    var jobs = [
+      this.api('/track-record').catch(function () { return null; }),
+      this.api('/analytics/clv-public').catch(function () { return null; }),
+      this.api('/results/streaks').catch(function () { return null; }),
+    ];
+    if (this.user) jobs.push(this.api('/user/bets/roi').catch(function () { return null; }));
+    try { var r = await Promise.all(jobs); tr = r[0]; clv = r[1]; streaks = r[2]; mine = r[3] || null; } catch (e) {}
+    if (!tr || !tr.overview) {
+      app.innerHTML = '<div class="container" style="padding-top:60px;text-align:center;"><h2>Stats unavailable</h2><p class="text-muted">Please try again in a moment.</p></div>';
+      return;
+    }
+    var o = tr.overview;
+    var GREEN = '#22c55e', RED = '#ef4444', CYAN = '#22d3ee', MUTED = '#94a3b8';
+    var esc = function (s) { return self.escapeHtml(s || ''); };
+    var fmt2 = function (n) { return (n >= 0 ? '+' : '') + (Number(n) || 0).toFixed(2); };
+    var pnlCol = o.totalPnl >= 0 ? GREEN : RED;
+    var roiCol = o.roi >= 0 ? GREEN : RED;
+    var srCol = o.strikeRate >= 50 ? GREEN : o.strikeRate >= 30 ? CYAN : RED;
+    var lowSample = (o.totalTips || 0) < 30;
+
+    // Animated hero KPI tile (count-up handled post-render).
+    var kpi = function (label, target, format, colour, sub) {
+      var seed = format === 'pct' ? '0%' : format === 'signed2' ? '+0.00' : '0';
+      return '<div style="background:linear-gradient(155deg,rgba(255,255,255,0.045),rgba(255,255,255,0.01));border:1px solid var(--border);border-radius:16px;padding:22px 16px;text-align:center;position:relative;overflow:hidden;">' +
+        '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,' + colour + ',transparent);"></div>' +
+        '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1.4px;color:' + MUTED + ';margin-bottom:8px;">' + label + '</div>' +
+        '<div style="font-size:clamp(26px,6vw,38px);font-weight:900;color:' + colour + ';line-height:1;" data-countup="' + target + '" data-format="' + format + '">' + seed + '</div>' +
+        (sub ? '<div style="font-size:11px;color:' + MUTED + ';margin-top:8px;">' + sub + '</div>' : '') +
+      '</div>';
+    };
+    var heroTiles =
+      kpi('Net Profit', o.totalPnl || 0, 'signed2', pnlCol, 'level stakes (pts)') +
+      kpi('ROI', o.roi || 0, 'pct', roiCol, 'return on stakes') +
+      kpi('Strike Rate', o.strikeRate || 0, 'pct', srCol, (o.wins || 0) + '/' + (o.totalTips || 0) + ' winners') +
+      kpi('Verified Tips', o.totalTips || 0, 'int', '#fff', 'auto-settled & graded');
+
+    // CLV proof-of-edge band (sample-gated — the honesty rule).
+    var clvBand = '';
+    if (clv && clv.ready) {
+      var clvPos = clv.avgClv >= 0;
+      var sportsLine = (clv.bySport || []).map(function (s) { return esc(s.sport.charAt(0).toUpperCase() + s.sport.slice(1)) + ' ' + s.beatRate + '%'; }).join(' · ');
+      clvBand = '<div style="background:linear-gradient(135deg,rgba(34,197,94,0.10),rgba(34,211,238,0.06));border:1px solid rgba(34,197,94,0.3);border-radius:16px;padding:22px;margin-bottom:22px;">' +
+        '<div style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:1.5px;color:' + GREEN + ';border:1px solid rgba(34,197,94,0.4);border-radius:5px;padding:2px 8px;margin-bottom:12px;">✓ PROOF OF EDGE · LIVE</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">' +
+          '<div style="text-align:center;"><div style="font-size:clamp(24px,6vw,32px);font-weight:900;color:' + GREEN + ';">' + clv.beatRate + '%</div><div style="font-size:11px;color:' + MUTED + ';">beat the closing line</div></div>' +
+          '<div style="text-align:center;"><div style="font-size:clamp(24px,6vw,32px);font-weight:900;color:' + (clvPos ? GREEN : RED) + ';">' + (clvPos ? '+' : '') + clv.avgClv + '%</div><div style="font-size:11px;color:' + MUTED + ';">average CLV</div></div>' +
+          '<div style="text-align:center;"><div style="font-size:clamp(24px,6vw,32px);font-weight:900;color:' + CYAN + ';">' + clv.sample + '</div><div style="font-size:11px;color:' + MUTED + ';">tips measured</div></div>' +
+        '</div>' +
+        '<p style="font-size:12.5px;color:' + MUTED + ';margin:14px 0 0;line-height:1.55;">Beating the price the market closes at is how professionals prove genuine edge — not luck. We measure it on every settled tip and show it win or lose.' + (sportsLine ? ' <span style="color:#64748b;">By sport: ' + sportsLine + '.</span>' : '') + '</p>' +
+      '</div>';
+    } else if (clv && clv.ready === false) {
+      clvBand = '<div style="background:rgba(255,255,255,0.03);border:1px dashed var(--border);border-radius:14px;padding:16px 18px;margin-bottom:22px;font-size:13px;color:' + MUTED + ';">' +
+        '<span style="color:' + CYAN + ';font-weight:700;">Proof of Edge — tracking live.</span> We capture the closing price on every pick and publish CLV once the sample is meaningful (' + (clv.sample || 0) + '/' + (clv.minSample || 15) + ' settled).' +
+      '</div>';
+    }
+
+    // Comparison bar (width ∝ |pnl| / max, coloured by sign).
+    var barRow = function (label, colour, pnl, sub, maxAbs) {
+      var w = maxAbs > 0 ? Math.max(4, Math.round(Math.abs(pnl) / maxAbs * 100)) : 4;
+      var pos = pnl >= 0;
+      return '<div style="margin-bottom:11px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;margin-bottom:5px;gap:8px;"><span style="color:#fff;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + label + '</span><span style="color:' + MUTED + ';white-space:nowrap;">' + sub + '</span></div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<div style="flex:1;height:9px;background:rgba(255,255,255,0.05);border-radius:6px;overflow:hidden;"><div style="height:100%;width:' + w + '%;background:' + (pos ? colour : RED) + ';border-radius:6px;transition:width .6s ease;"></div></div>' +
+          '<span style="font-size:13px;font-weight:800;color:' + (pos ? GREEN : RED) + ';min-width:62px;text-align:right;">' + fmt2(pnl) + 'u</span>' +
+        '</div>' +
+      '</div>';
+    };
+    var sectionCard = function (title, inner) {
+      return '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:20px 22px;margin-bottom:18px;">' +
+        '<h2 style="font-size:16px;font-weight:800;color:#fff;margin:0 0 16px;">' + title + '</h2>' + inner + '</div>';
+    };
+
+    // By sport
+    var sportKeys = Object.keys(tr.bySport || {}).filter(function (s) { return tr.bySport[s].total > 0; });
+    sportKeys.sort(function (a, b) { return tr.bySport[b].pnl - tr.bySport[a].pnl; });
+    var sportMax = sportKeys.reduce(function (m, s) { return Math.max(m, Math.abs(tr.bySport[s].pnl)); }, 0);
+    var sportIcon = function (s) { return s === 'racing' ? '🏇' : s === 'football' ? '⚽' : s === 'basketball' ? '🏀' : s === 'tennis' ? '🎾' : s === 'rugby' ? '🏉' : s === 'american-football' ? '🏈' : '•'; };
+    var sportSection = sportKeys.length ? sectionCard('Profit by sport', sportKeys.map(function (s) {
+      var d = tr.bySport[s];
+      return barRow(sportIcon(s) + ' ' + esc(s.charAt(0).toUpperCase() + s.slice(1)), CYAN, d.pnl, d.wins + '/' + d.total + ' · ' + d.strikeRate + '% · ROI ' + (d.roi > 0 ? '+' : '') + d.roi + '%', sportMax);
+    }).join('')) : '';
+
+    // By analyst
+    var analystCol = { 'The Professor': '#3b82f6', 'The Scout': '#22c55e', 'The Clocker': '#a855f7', 'The Tactician': '#ef4444', 'The Edge': '#22d3ee' };
+    var analystKeys = Object.keys(tr.byAnalyst || {}).filter(function (a) { return tr.byAnalyst[a].total > 0; });
+    analystKeys.sort(function (a, b) { return tr.byAnalyst[b].pnl - tr.byAnalyst[a].pnl; });
+    var analystMax = analystKeys.reduce(function (m, a) { return Math.max(m, Math.abs(tr.byAnalyst[a].pnl)); }, 0);
+    var analystSection = analystKeys.length ? sectionCard('Profit by analyst', analystKeys.map(function (a) {
+      var d = tr.byAnalyst[a];
+      return barRow(esc(a), analystCol[a] || CYAN, d.pnl, d.wins + '/' + d.total + ' · ' + d.strikeRate + '%', analystMax);
+    }).join('')) : '';
+
+    // By confidence (calibration story)
+    var confOrder = ['elite', 'strong', 'other'];
+    var confLabels = { elite: 'Elite (9–10)', strong: 'Strong (7–8)', other: 'Standard (<7)' };
+    var confAvail = confOrder.filter(function (t) { return tr.byConfidence && tr.byConfidence[t] && tr.byConfidence[t].total > 0; });
+    var confSection = '';
+    if (confAvail.length) {
+      var sr = function (t) { return tr.byConfidence[t].strikeRate || 0; };
+      var calibHolds = confAvail.length >= 2 && sr(confAvail[0]) >= sr(confAvail[confAvail.length - 1]);
+      var confInner = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:12px;">' +
+        confAvail.map(function (t) {
+          var d = tr.byConfidence[t];
+          return '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">' +
+            '<div style="font-size:12px;font-weight:700;color:' + CYAN + ';margin-bottom:8px;">' + confLabels[t] + '</div>' +
+            '<div style="font-size:26px;font-weight:900;color:#fff;line-height:1;">' + d.strikeRate + '%</div>' +
+            '<div style="font-size:11px;color:' + MUTED + ';margin-top:4px;">strike rate</div>' +
+            '<div style="font-size:12px;font-weight:800;margin-top:8px;color:' + (d.pnl >= 0 ? GREEN : RED) + ';">' + fmt2(d.pnl) + 'u · ' + d.wins + '/' + d.total + '</div>' +
+          '</div>';
+        }).join('') + '</div>' +
+        '<p style="font-size:12.5px;color:' + MUTED + ';margin:14px 0 0;line-height:1.55;">' + (calibHolds ? '<span style="color:' + GREEN + ';font-weight:700;">✓ Calibration holds</span> — our higher-confidence picks are winning at a higher rate, which is exactly what a well-calibrated model should do.' : 'We track whether higher-confidence picks actually win more often — the nightly AutoTune flags any sustained inversion.') + '</p>';
+      confSection = sectionCard('Does confidence mean wins?', confInner);
+    }
+
+    // Cumulative P/L trend (Chart.js) — only with ≥2 months of data.
+    var months = Object.keys(tr.monthly || {}).sort();
+    var trendSection = '';
+    if (months.length >= 2) {
+      trendSection = sectionCard('Profit over time', '<div style="position:relative;height:260px;"><canvas id="stats-pnl-chart"></canvas></div>');
+    }
+
+    // Streaks & consistency (honest — shows the down streak too).
+    var streakChips = '';
+    if (streaks) {
+      var chip = function (v, label, colour) { return '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:26px;font-weight:900;color:' + colour + ';line-height:1;">' + v + '</div><div style="font-size:11px;color:' + MUTED + ';margin-top:6px;">' + label + '</div></div>'; };
+      var bm = streaks.bestMonth && streaks.bestMonth.month ? streaks.bestMonth : null;
+      streakChips = sectionCard('Streaks &amp; consistency',
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr));gap:12px;">' +
+          chip((streaks.currentStreak || 0), 'current win streak', CYAN) +
+          chip((streaks.longestStreak || o.longestStreak || 0), 'longest win streak', GREEN) +
+          chip((streaks.longestLossStreak || 0), 'longest losing run', RED) +
+          (bm ? chip(fmt2(bm.pnl) + 'u', 'best month (' + esc(bm.month) + ')', GREEN) : '') +
+        '</div>');
+    }
+
+    // Members' personal strip
+    var mineSection = '';
+    if (mine && (mine.totalBets || 0) > 0) {
+      var mCol = (mine.totalPnl || 0) >= 0 ? GREEN : RED;
+      var wi = mine.whatIf || null;
+      mineSection = '<div style="background:linear-gradient(135deg,rgba(34,211,238,0.08),var(--bg-card));border:1px solid rgba(34,211,238,0.3);border-radius:16px;padding:22px;margin-bottom:18px;">' +
+        '<h2 style="font-size:16px;font-weight:800;color:#fff;margin:0 0 4px;">Your numbers</h2>' +
+        '<p style="font-size:12.5px;color:' + MUTED + ';margin:0 0 16px;">Based on the tips you\'ve backed' + (mine.memberSince ? ' since ' + formatDateUK(mine.memberSince) : '') + '.</p>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr));gap:12px;">' +
+          '<div style="text-align:center;"><div style="font-size:24px;font-weight:900;color:' + mCol + ';">' + fmt2(mine.totalPnl || 0) + 'u</div><div style="font-size:11px;color:' + MUTED + ';">your P/L</div></div>' +
+          '<div style="text-align:center;"><div style="font-size:24px;font-weight:900;color:' + ((mine.roi || 0) >= 0 ? GREEN : RED) + ';">' + ((mine.roi || 0) > 0 ? '+' : '') + (mine.roi || 0) + '%</div><div style="font-size:11px;color:' + MUTED + ';">your ROI</div></div>' +
+          '<div style="text-align:center;"><div style="font-size:24px;font-weight:900;color:#fff;">' + (mine.strikeRate || 0) + '%</div><div style="font-size:11px;color:' + MUTED + ';">strike rate</div></div>' +
+          '<div style="text-align:center;"><div style="font-size:24px;font-weight:900;color:#fff;">' + (mine.totalBets || 0) + '</div><div style="font-size:11px;color:' + MUTED + ';">bets tracked</div></div>' +
+        '</div>' +
+        (wi && wi.totalTips ? '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);font-size:13px;color:' + MUTED + ';">If you\'d followed <strong style="color:#fff;">every</strong> tip: <strong style="color:' + (wi.pnl >= 0 ? GREEN : RED) + ';">' + fmt2(wi.pnl) + 'u</strong> from ' + wi.totalTips + ' tips (' + wi.strikeRate + '% SR).</div>' : '') +
+      '</div>';
+    } else if (this.user) {
+      mineSection = '<div style="background:rgba(255,255,255,0.03);border:1px dashed var(--border);border-radius:14px;padding:16px 18px;margin-bottom:18px;font-size:13px;color:' + MUTED + ';">Back a tip from the dashboard and your personal ROI, strike rate and P/L appear here.</div>';
+    }
+
+    app.innerHTML = '<div class="container" style="padding-top:32px;max-width:960px;">' +
+      '<div style="text-align:center;margin-bottom:26px;">' +
+        '<div style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:' + CYAN + ';margin-bottom:8px;">THE NUMBERS</div>' +
+        '<h1 style="font-size:clamp(24px,5.5vw,32px);font-weight:900;margin:0;">Performance, in full</h1>' +
+        '<p style="color:' + MUTED + ';font-size:14px;margin:8px 0 0;">Every pick logged, auto-settled from live data and graded — winners and losers.</p>' +
+        '<p style="font-size:12px;color:#475569;margin-top:6px;">' + (o.firstTipDate ? 'Since ' + esc(o.firstTipDate) : 'Verified record') + (tr.generatedAt ? ' · updated ' + new Date(tr.generatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '') + '</p>' +
+      '</div>' +
+      (lowSample ? '<div style="background:rgba(34,211,238,0.06);border:1px solid rgba(34,211,238,0.25);border-radius:12px;padding:12px 16px;margin-bottom:20px;font-size:12.5px;color:' + MUTED + ';text-align:center;">Early sample (' + (o.totalTips || 0) + ' settled tips) — the numbers below are real and auto-settled, and stabilise as more results land.</div>' : '') +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,45%),1fr));gap:12px;margin-bottom:22px;">' + heroTiles + '</div>' +
+      clvBand +
+      mineSection +
+      trendSection +
+      sportSection +
+      analystSection +
+      confSection +
+      streakChips +
+      '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:24px 0 40px;">' +
+        '<a href="#/results" class="btn btn-outline">Full results log &rarr;</a>' +
+        '<a href="#/track-record" class="btn btn-outline">Verified track record &rarr;</a>' +
+        '<a href="#/analysts" class="btn btn-outline">Meet the analysts &rarr;</a>' +
+      '</div>' +
+      '<p style="text-align:center;font-size:10px;color:#334155;margin-bottom:30px;">Statistical analysis and entertainment only. Past performance does not guarantee future results. 18+ BeGambleAware.org</p>' +
+    '</div>';
+
+    // Count-up animation on the hero KPIs.
+    setTimeout(function () {
+      document.querySelectorAll('[data-countup]').forEach(function (el) {
+        var target = parseFloat(el.getAttribute('data-countup')) || 0;
+        var format = el.getAttribute('data-format');
+        var dur = 850, startTs = null;
+        var render = function (v) {
+          if (format === 'pct') return (Math.round(v * 10) / 10) + '%';
+          if (format === 'signed2') return (v >= 0 ? '+' : '') + v.toFixed(2);
+          return String(Math.round(v));
+        };
+        var step = function (ts) {
+          if (!startTs) startTs = ts;
+          var p = Math.min(1, (ts - startTs) / dur);
+          var eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = render(target * eased);
+          if (p < 1) requestAnimationFrame(step); else el.textContent = render(target);
+        };
+        requestAnimationFrame(step);
+      });
+    }, 30);
+
+    // Cumulative P/L trend chart.
+    if (months.length >= 2) { var self2 = this; setTimeout(function () { try { self2.renderStatsPnlChart(tr.monthly); } catch (e) {} }, 60); }
+  },
+
+  // Cumulative level-stakes P/L across the months we have data for.
+  renderStatsPnlChart(monthly) {
+    var canvas = document.getElementById('stats-pnl-chart');
+    if (!canvas || typeof Chart === 'undefined' || !monthly) return;
+    var months = Object.keys(monthly).sort();
+    var labels = [], data = [], cum = 0;
+    months.forEach(function (m) {
+      cum += (monthly[m].pnl || 0);
+      var d = new Date(m + '-01T12:00:00');
+      labels.push(isNaN(d.getTime()) ? m : d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }));
+      data.push(Math.round(cum * 100) / 100);
+    });
+    if (this._statsPnlChart) { try { this._statsPnlChart.destroy(); } catch (e) {} this._statsPnlChart = null; }
+    var ctx = canvas.getContext('2d');
+    var grad = ctx.createLinearGradient(0, 0, 0, 240);
+    grad.addColorStop(0, 'rgba(34,211,238,0.35)');
+    grad.addColorStop(1, 'rgba(34,211,238,0)');
+    var end = data.length ? data[data.length - 1] : 0;
+    var line = end >= 0 ? '#22d3ee' : '#ef4444';
+    this._statsPnlChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: labels, datasets: [{ label: 'Cumulative P/L (pts)', data: data, borderColor: line, backgroundColor: grad, fill: true, tension: 0.3, pointRadius: 2, pointHoverRadius: 5, borderWidth: 2.5 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (c) { return (c.parsed.y >= 0 ? '+' : '') + c.parsed.y + ' pts'; } } } },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
+          y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: '#64748b', callback: function (v) { return (v >= 0 ? '+' : '') + v; } } },
+        },
+      },
+    });
   },
 
   async renderAnalysts() {
