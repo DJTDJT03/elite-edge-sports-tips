@@ -49,7 +49,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/style.css?v=20260819d">
+  <link rel="stylesheet" href="/css/style.css?v=20260821a">
   <link rel="stylesheet" href="/css/worldCup.css?v=20260503a">
 
   <!-- Google Analytics 4 — Uncomment and replace GA_ID when ready
@@ -123,22 +123,28 @@
         <!-- Simplified, grouped navigation — every destination kept, tucked into
              clear menus. Desktop: hover dropdowns. Mobile: labelled sections. -->
         <a href="#/" class="nav-link" data-page="dashboard">Dashboard</a>
-        <a href="#/selections" class="nav-link" data-page="selections">Tips</a>
-        <!-- SPORTS -->
+        <a href="#/football" class="nav-link" data-page="football">Football</a>
+        <a href="#/racing" class="nav-link" data-page="racing">Horse Racing</a>
+        <a href="#/acca-generator" class="nav-link" data-page="acca-generator">Acca Builder</a>
+        <a href="#/pricing" class="nav-link nav-link-pricing" data-page="pricing">Pricing</a>
+        <!-- MORE — every other destination, grouped into sections -->
         <div class="nav-dropdown" data-nav-group>
-          <a class="nav-link nav-dropdown-trigger" onclick="return false;" style="cursor:pointer;">Sports &#9662;</a>
+          <a class="nav-link nav-dropdown-trigger" onclick="return false;" style="cursor:pointer;">More &#9662;</a>
           <div class="nav-dropdown-menu">
+            <div class="nav-dd-label">Tips &amp; Tools</div>
+            <a href="#/selections" class="nav-link" data-page="selections">Tips</a>
             <a href="#/matches" class="nav-link" data-page="matches">&#128197; All Matches</a>
-            <a href="#/football" class="nav-link" data-page="football">&#9917; Football</a>
-            <a href="#/racing" class="nav-link" data-page="racing">&#127943; Racing</a>
-            <a href="#/acca-generator" class="nav-link" data-page="acca-generator">Acca Builder</a>
             <a href="#/calculators" class="nav-link" data-page="calculators">Calculators</a>
-          </div>
-        </div>
 
-        <div class="nav-dropdown" data-nav-group>
-          <a class="nav-link nav-dropdown-trigger" onclick="return false;" style="cursor:pointer;">Leagues &#9662;</a>
-          <div class="nav-dropdown-menu">
+            <div class="nav-dd-label">Track Record</div>
+            <a href="#/stats" class="nav-link" data-page="stats">&#128202; Stats</a>
+            <a href="#/track-record" class="nav-link" data-page="track-record">&#128200; Proven Edge (CLV)</a>
+            <a href="#/results" class="nav-link" data-page="results">Results</a>
+            <a href="#/winners" class="nav-link" data-page="winners">&#127942; Winners</a>
+            <a href="#/analysts" class="nav-link" data-page="analysts">Our Analysts</a>
+            <a href="#/my-roi" class="nav-link nav-link-mybets" id="nav-mybets" data-page="my-roi" style="display:none;">My ROI</a>
+
+            <div class="nav-dd-label">Leagues</div>
             <a href="#/league/premier-league" class="nav-link" data-page="league">&#127988;&#917607;&#917602;&#917605;&#917614;&#917607;&#917631; Premier League</a>
             <a href="#/league/championship" class="nav-link" data-page="league">&#127988;&#917607;&#917602;&#917605;&#917614;&#917607;&#917631; Championship</a>
             <a href="#/league/league-one" class="nav-link" data-page="league">&#127988;&#917607;&#917602;&#917605;&#917614;&#917607;&#917631; League One</a>
@@ -149,39 +155,18 @@
             <a href="#/league/bundesliga" class="nav-link" data-page="league">&#127465;&#127466; Bundesliga</a>
             <a href="#/league/ligue-1" class="nav-link" data-page="league">&#127467;&#127479; Ligue 1</a>
             <a href="#/league/scottish-premiership" class="nav-link" data-page="league">&#127988;&#917607;&#917602;&#917619;&#917603;&#917620;&#917631; Scottish Premiership</a>
-          </div>
-        </div>
-        <!-- TRACK RECORD (our proof — front and centre) -->
-        <div class="nav-dropdown" data-nav-group>
-          <a class="nav-link nav-dropdown-trigger" onclick="return false;" style="cursor:pointer;">Track Record &#9662;</a>
-          <div class="nav-dropdown-menu">
-            <a href="#/stats" class="nav-link" data-page="stats">&#128202; Stats</a>
-            <a href="#/track-record" class="nav-link" data-page="track-record">&#128200; Proven Edge (CLV)</a>
-            <a href="#/results" class="nav-link" data-page="results">Results</a>
-            <a href="#/winners" class="nav-link" data-page="winners">&#127942; Winners</a>
-            <a href="#/analysts" class="nav-link" data-page="analysts">Our Analysts</a>
-            <a href="#/my-roi" class="nav-link nav-link-mybets" id="nav-mybets" data-page="my-roi" style="display:none;">My ROI</a>
-          </div>
-        </div>
-        <!-- COMPETITIONS (hidden entirely when none are live) -->
-        <div class="nav-dropdown" data-nav-group id="nav-group-competitions" style="display:none;">
-          <a class="nav-link nav-dropdown-trigger" onclick="return false;" style="cursor:pointer;">Competitions &#9662;</a>
-          <div class="nav-dropdown-menu">
+
+            <div class="nav-dd-label" id="nav-lbl-competitions" style="display:none;">Competitions</div>
             <a href="#/world-cup" class="nav-link nav-link-worldcup" data-page="world-cup" id="nav-world-cup" style="display:none;">&#9917; World Cup</a>
             <a href="#/last-man-standing" class="nav-link" data-page="last-man-standing" id="nav-lms" style="display:none;">&#127942; Last Man Standing</a>
-          </div>
-        </div>
-        <!-- MORE -->
-        <div class="nav-dropdown" data-nav-group>
-          <a class="nav-link nav-dropdown-trigger" onclick="return false;" style="cursor:pointer;">More &#9662;</a>
-          <div class="nav-dropdown-menu">
+
+            <div class="nav-dd-label">About</div>
             <a href="#/how-it-works" class="nav-link" data-page="how-it-works">How It Works</a>
             <a href="#/why-elite-edge" class="nav-link" data-page="why-elite-edge">Why Elite Edge</a>
             <a href="#/blog" class="nav-link" data-page="blog">Blog</a>
             <a href="#/support" class="nav-link" data-page="support">Support</a>
           </div>
         </div>
-        <a href="#/pricing" class="nav-link nav-link-pricing" data-page="pricing">Pricing</a>
         <a href="#/admin" class="nav-link nav-link-admin" data-page="admin" id="nav-admin" style="display:none;">Admin</a>
         <!-- Old mobile auth moved to top of menu -->
         <div id="nav-auth-guest-mobile" style="display:none;"></div>
@@ -638,7 +623,7 @@
   <script src="/js/calculators.js?v=20260501c"></script>
   <script src="/js/worldCup.js?v=20260616c"></script>
   <script src="/js/lms.js?v=20260612b"></script>
-  <script src="/js/app.js?v=20260819d"></script>
+  <script src="/js/app.js?v=20260821a"></script>
   <script>
     if ('serviceWorker' in navigator) {
       // Auto-update: when a NEW build's service worker takes control, reload once so

@@ -130,9 +130,10 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
 .nav-dropdown > .nav-link::after { display: none; } /* no underline on dropdown triggers */
 .nav-dropdown-menu {
   display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
-  min-width: 180px; padding-top: 4px;
+  min-width: 190px; padding-top: 4px; padding-bottom: 6px;
   background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  max-height: min(72vh, 620px); overflow-y: auto; /* long "More" menu scrolls, never overflows the viewport */
 }
 .nav-dropdown:hover .nav-dropdown-menu,
 .nav-dropdown.open .nav-dropdown-menu { display: block; }
@@ -141,6 +142,13 @@ input, select, textarea, button { font-family: inherit; font-size: inherit; }
   color: var(--text-secondary); transition: all 0.15s; white-space: nowrap;
 }
 .nav-dropdown-menu a:hover { color: var(--gold); background: var(--bg-elevated); }
+/* Section headers inside a grouped dropdown (e.g. the "More" menu) */
+.nav-dd-label {
+  padding: 10px 16px 4px; font-size: 10px; font-weight: 800; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--text-muted);
+  border-top: 1px solid var(--border); margin-top: 4px;
+}
+.nav-dd-label:first-child { border-top: none; margin-top: 0; }
 
 /* Landing-funnel "Why Elite Edge" bento grid — collapses cleanly on mobile.
    Inline grid-span can't hold a media query, so the hero-card span lives here. */

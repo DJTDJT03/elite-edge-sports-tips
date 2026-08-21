@@ -182,14 +182,18 @@ const App = {
       // still be on server-side, but a finished WC must not keep promoting itself
       // ("UNDERWAY" forever). The dashboard WC banner keys off this nav's visibility,
       // so this hides both the nav item and the banner once the WC is over.
+      var _compLive = false;
       if (data && data.features && data.features.worldCup && !App._worldCupOver()) {
         var wcNav = document.getElementById('nav-world-cup');
-        if (wcNav) wcNav.style.display = '';
+        if (wcNav) { wcNav.style.display = ''; _compLive = true; }
       }
       if (data && data.features && data.features.lms) {
         var lmsNav = document.getElementById('nav-lms');
-        if (lmsNav) lmsNav.style.display = '';
+        if (lmsNav) { lmsNav.style.display = ''; _compLive = true; }
       }
+      // Only show the "Competitions" section header inside More when at least one
+      // competition is actually live (otherwise it'd be an orphan label).
+      if (_compLive) { var _cl = document.getElementById('nav-lbl-competitions'); if (_cl) _cl.style.display = ''; }
       App._syncNavGroups();
     }).catch(function() { App._syncNavGroups(); });
   },
