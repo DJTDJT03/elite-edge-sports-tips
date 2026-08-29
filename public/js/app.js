@@ -7781,6 +7781,18 @@ const App = {
       : (v.source === 'model')
       ? ' <span style="font-size:9px;font-weight:800;letter-spacing:0.5px;color:#22d3ee;border:1px solid rgba(34,211,238,0.4);border-radius:10px;padding:1px 7px;vertical-align:middle;">MODEL READ</span>'
       : '';
+    // "No pre-match take" is not a verdict — so don't dress it up as one with a
+    // 0/10 confidence bar, a full red risk meter and a betslip CTA (that read as a
+    // broken/failed state). Show a clean, honest note instead; the form guide,
+    // model read and match analysis below carry the detail.
+    var isNoTake = (v.source === 'none') || (String(v.riskLevel || '').toLowerCase() === 'n/a') || /no pre-?match take/i.test(String(v.pick || ''));
+    if (isNoTake) {
+      html += '<div class="match-intel-verdict">' +
+        '<div class="match-intel-verdict-label">OUR TAKE</div>' +
+        '<div style="font-size:17px;font-weight:800;color:#fff;margin:8px 0 8px;">No pre-match take locked on this game</div>' +
+        '<div style="font-size:13.5px;color:var(--text-secondary);line-height:1.65;">We only publish a verdict when it was locked <strong style="color:#fff;">before kick-off</strong> — we never add one once the result is known, so our track record stays honest. The form guide, model read and full breakdown below still tell the story of this match.</div>' +
+      '</div>';
+    } else {
     html += '<div class="match-intel-verdict' + verdictLockedClass + '">' +
       '<div class="match-intel-verdict-label">OUR TAKE' + takeBadge + '</div>' +
       '<div class="match-intel-verdict-pick">' + v.pick + '</div>' +
@@ -7805,6 +7817,7 @@ const App = {
       // upgrades it to Cosmo's live price + "add to betslip" for this exact pick.
       (isPremium ? '<div id="cosmo-cta-slot">' + this.renderCosmoCta('match-intel', 'Back this with Cosmo Bet') + '</div>' : '') +
     '</div>';
+    }
 
     // --- Elite Edge Quant Model (in-house Elo + Dixon-Coles) ---
     if (data.quantModel && data.quantModel.winProb) {
