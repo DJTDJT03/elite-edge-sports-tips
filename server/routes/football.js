@@ -2155,12 +2155,12 @@ module.exports = function(deps) {
   router.get('/football/ai-test', async (req, res) => {
     try {
       if (!aiReports) return res.json({ error: 'aiReports not in deps' });
-      if (!aiReports.isAvailable()) return res.json({ error: 'AI not available — client is null', hasKey: !!process.env.ANTHROPIC_API_KEY, keyPrefix: process.env.ANTHROPIC_API_KEY ? process.env.ANTHROPIC_API_KEY.substring(0, 12) + '...' : 'NOT SET' });
+      if (!aiReports.isAvailable()) return res.json({ error: 'AI not available — client is null', hasKey: !!process.env.ANTHROPIC_API_KEY });
 
       // Test Claude API directly
       var Anthropic = require('@anthropic-ai/sdk').default;
       var testClient = new Anthropic();
-      var models = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-5-20250514', 'claude-3-5-sonnet-20241022'];
+      var models = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-20250514'];
       var lastError = null;
       for (var i = 0; i < models.length; i++) {
         try {
