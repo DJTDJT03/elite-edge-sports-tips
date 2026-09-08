@@ -58,10 +58,64 @@ module.exports = function (deps) {
     return String(name).trim();
   }
 
-  function getRating(name) {
+  // ---- Tolerant cross-feed name resolution ----------------------------------
+  // The same club arrives under different names from different feeds — seeded as
+  // "Bayern München" (SportMonks) but scored as "FC Bayern München" (API-Football),
+  // "Roda JC Kerkrade" vs "Roda". Without this, knows()/getRating() miss and the
+  // model silently falls back to the flat 1500 default, so it never informs picks.
+  // We resolve a query name to an EXISTING stored rating key in safe tiers:
+  //   1) exact canon   2) diacritic/punctuation fold   3) generic-affix-stripped
+  //   4) unique prefix — and only ever when the match is UNAMBIGUOUS, so we can
+  // never merge two distinct clubs (e.g. Man United vs Man City).
+  var _CLUB_AFFIX = { // generic club-type tokens that are noise, never distinguishing
+    fc: 1, cf: 1, afc: 1, sc: 1, ac: 1, sv: 1, tsv: 1, tsg: 1, vfb: 1, vfl: 1, bsc: 1,
+    jc: 1, ssc: 1, us: 1, as: 1, rc: 1, rcd: 1, fk: 1, sk: 1, ff: 1, if: 1, bk: 1,
+    ca: 1, cd: 1, ud: 1, sd: 1, ogc: 1, rsc: 1, kv: 1, kaa: 1, nec: 1, psv: 1,
+    '1': 1, '04': 1, '05': 1, '09': 1, '1899': 1,
+  };
+  function _stripDia(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function _toks(name) { return _stripDia(String(name || '').toLowerCase()).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean); }
+  function _foldFull(name) { return _toks(name).join(''); }                                    // tier 2
+  function _foldCore(name) { var t = _toks(name).filter(function (x) { return !_CLUB_AFFIX[x]; }); return (t.length ? t : _toks(name)).join(''); } // tier 3
+
+  var _idxFull = {}, _idxCore = {}; // fold -> stored key (value null = ambiguous, do not use)
+  function _registerKey(k) {
+    if (!k) return;
+    var ff = _foldFull(k); if (ff) { if (_idxFull[ff] === undefined) _idxFull[ff] = k; else if (_idxFull[ff] !== k) _idxFull[ff] = null; }
+    var fc = _foldCore(k); if (fc) { if (_idxCore[fc] === undefined) _idxCore[fc] = k; else if (_idxCore[fc] !== k) _idxCore[fc] = null; }
+  }
+  function _rebuildIndex() {
+    _idxFull = {}; _idxCore = {};
+    for (var k in BASELINE) _registerKey(k);
+    for (var r in _ratings) _registerKey(r);
+  }
+  // Resolve a query name to an existing stored key, or '' if genuinely unknown.
+  function resolveKey(name) {
+    if (!name) return '';
     var c = canon(name);
-    if (_ratings[c] != null) return _ratings[c];
-    if (BASELINE[c] != null) return BASELINE[c];
+    if (_ratings[c] != null || BASELINE[c] != null) return c;      // tier 1: exact
+    var ff = _foldFull(name);
+    if (ff && _idxFull[ff]) return _idxFull[ff];                    // tier 2: diacritic/punct fold
+    var fc = _foldCore(name);
+    if (fc && _idxCore[fc]) return _idxCore[fc];                    // tier 3: affix-stripped
+    // tier 4: unique prefix — one stored core is a prefix of ours or vice-versa
+    // (catches "Roda" ⊂ "Roda JC Kerkrade"). Guarded: ≥4 chars + exactly one hit.
+    if (fc && fc.length >= 4) {
+      var hit = '', n = 0;
+      for (var key in _idxCore) {
+        if (_idxCore[key] == null) continue;
+        if (key === fc) continue;
+        if ((key.length >= 4 && (key.indexOf(fc) === 0 || fc.indexOf(key) === 0))) { hit = _idxCore[key]; n++; }
+      }
+      if (n === 1) return hit;
+    }
+    return '';
+  }
+
+  function getRating(name) {
+    var k = resolveKey(name);
+    if (k && _ratings[k] != null) return _ratings[k];
+    if (k && BASELINE[k] != null) return BASELINE[k];
     return DEFAULT_RATING;
   }
 
@@ -143,7 +197,10 @@ module.exports = function (deps) {
     opts = opts || {};
     if (hg == null || ag == null) return;
     await ensureLoaded();
-    var cH = canon(homeTeam), cA = canon(awayTeam);
+    // Accumulate learning on the EXISTING rating row when the club is already
+    // known under any name variant (else a variant would spawn a duplicate row
+    // and split the club's history). Falls back to canon() for genuinely new clubs.
+    var cH = resolveKey(homeTeam) || canon(homeTeam), cA = resolveKey(awayTeam) || canon(awayTeam);
     var rH = getRating(cH), rA = getRating(cA);
     var hfa = opts.neutral ? 0 : HOME_ADV;
     var eH = _expectedScore(rH, rA, hfa);
@@ -152,6 +209,7 @@ module.exports = function (deps) {
     var delta = K * mult * (sH - eH);
     _ratings[cH] = Math.round(rH + delta);
     _ratings[cA] = Math.round(rA - delta);
+    _registerKey(cH); _registerKey(cA); // keep the variant index current
     if (db && db.query) {
       try {
         await db.query("INSERT INTO team_ratings (team, rating, played, updated_at) VALUES ($1,$2,1,NOW()) ON CONFLICT (team) DO UPDATE SET rating=$2, played=team_ratings.played+1, updated_at=NOW()", [cH, _ratings[cH]]);
@@ -174,9 +232,11 @@ module.exports = function (deps) {
       }
       var rows = (await db.query("SELECT team, rating FROM team_ratings")).rows || [];
       rows.forEach(function (r) { _ratings[r.team] = parseFloat(r.rating); });
+      _rebuildIndex();
     } catch (e) {
       console.warn('[QuantModel] load failed, using baseline:', e.message);
       _ratings = Object.assign({}, BASELINE);
+      _rebuildIndex();
     }
   }
 
@@ -191,8 +251,7 @@ module.exports = function (deps) {
   // Do we have a real (non-default) rating for this team? Used so callers only
   // surface model probabilities when they're meaningful (not the fallback default).
   function knows(name) {
-    var c = canon(name);
-    return _ratings[c] != null || BASELINE[c] != null;
+    return resolveKey(name) !== '';
   }
 
   // Seed a team's INITIAL rating from external grading (e.g. league standings —
@@ -218,6 +277,7 @@ module.exports = function (deps) {
     // authority; here we only fill defaults/absent to avoid clobbering a learned
     // in-memory value mid-batch.
     if (_ratings[c] == null) _ratings[c] = elo;
+    _registerKey(c); // make this club resolvable under name variants right away
     return true;
   }
 
@@ -228,6 +288,7 @@ module.exports = function (deps) {
     try {
       var rows = (await db.query("SELECT team, rating FROM team_ratings")).rows || [];
       rows.forEach(function (r) { _ratings[r.team] = parseFloat(r.rating); });
+      _rebuildIndex();
     } catch (e) { /* keep existing cache */ }
   }
 
