@@ -103,6 +103,35 @@ module.exports = function () {
       },
     });
   }
+  // Anthropic Claude — a 4th independent reasoning arbiter (key already used for
+  // reports/chat). Arguably the strongest reasoner on the panel; diverse models
+  // reduce correlated errors.
+  if (process.env.ANTHROPIC_API_KEY) {
+    providers.push({
+      name: 'Claude', model: process.env.ANTHROPIC_ARBITER_MODEL || 'claude-haiku-4-5-20251001',
+      call: function (prompt) {
+        return postJson('api.anthropic.com', '/v1/messages', { 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }, {
+          model: this.model, max_tokens: 300, temperature: 0.3,
+          messages: [{ role: 'user', content: prompt }],
+        }).then(function (r) { try { return r.content[0].text; } catch (e) { return null; } });
+      },
+    });
+  }
+  // Perplexity Sonar — a 5th arbiter, but a DIFFERENT kind: web-grounded, so it
+  // judges the pick against LIVE facts (team news, injuries, suspensions, lineups)
+  // the pure-reasoning models can't see. Its augment tells it to lean on that.
+  if (process.env.PERPLEXITY_API_KEY && process.env.PERPLEXITY_ENABLED !== 'false') {
+    providers.push({
+      name: 'Perplexity', model: process.env.PERPLEXITY_ARBITER_MODEL || 'sonar',
+      augment: '\n\nUse LIVE, up-to-date information — confirmed team news, injuries, suspensions and probable lineups for this exact fixture. If breaking news materially undermines the consensus pick, set agrees=false and say why.',
+      call: function (prompt) {
+        return postJson('api.perplexity.ai', '/chat/completions', { 'Authorization': 'Bearer ' + process.env.PERPLEXITY_API_KEY }, {
+          model: this.model, temperature: 0.2, max_tokens: 350,
+          messages: [{ role: 'user', content: prompt }],
+        }).then(function (r) { return r && r.choices && r.choices[0] && r.choices[0].message ? r.choices[0].message.content : null; });
+      },
+    });
+  }
 
   function isAvailable() { return providers.length > 0; }
   function names() { return providers.map(function (p) { return p.name; }); }
@@ -112,7 +141,7 @@ module.exports = function () {
     if (!providers.length) return null;
     var prompt = buildPrompt(data);
     var results = await Promise.all(providers.map(function (p) {
-      return p.call(prompt).then(function (text) {
+      return p.call(prompt + (p.augment || '')).then(function (text) {
         var v = parseVerdict(text);
         return v ? { model: p.name, agrees: v.agrees, confidence: v.confidence, reasoning: v.reasoning } : null;
       }).catch(function () { return null; });
@@ -133,7 +162,7 @@ module.exports = function () {
     };
   }
 
-  console.log('[AI Arbiters] Panel models: ' + (names().join(', ') || 'none (set OPENAI_API_KEY / GEMINI_API_KEY / XAI_API_KEY)'));
+  console.log('[AI Arbiters] Panel models (' + providers.length + '): ' + (names().join(', ') || 'none (set OPENAI_API_KEY / GEMINI_API_KEY / XAI_API_KEY / ANTHROPIC_API_KEY / PERPLEXITY_API_KEY)'));
 
   return { panel: panel, isAvailable: isAvailable, names: names };
 };

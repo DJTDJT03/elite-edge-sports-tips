@@ -28,7 +28,7 @@ function ConsensusEngine(deps) {
   this.deps = deps;
   scoringModel = deps.scoringModel;
   this.gptVerifier = deps.gptVerifier;
-  this.aiArbiters = deps.aiArbiters; // multi-model arbiter panel (GPT + Gemini + Grok)
+  this.aiArbiters = deps.aiArbiters; // multi-model arbiter panel (Claude + Perplexity + GPT + Gemini + Grok, key-gated)
 }
 
 /**
@@ -461,7 +461,7 @@ ConsensusEngine.prototype.analyse = async function(scored, oddsData) {
     // The full debate
     debate: debate,
     gptVerdict: gptVerdict,
-    arbiterPanel: arbiterPanel, // multi-model panel votes (GPT/Gemini/Grok)
+    arbiterPanel: arbiterPanel, // multi-model panel votes (Claude/Perplexity/GPT/Gemini/Grok)
 
     // Analyst assignment (primary agent from consensus)
     analyst: consensus && consensus.agents[0] ? consensus.agents[0].toLowerCase().replace('the ', '') : 'tactician',
