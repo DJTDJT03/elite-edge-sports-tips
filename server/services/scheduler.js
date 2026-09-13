@@ -1006,9 +1006,84 @@ module.exports = function startScheduler(deps) {
           }
         }
 
-        // Primary filter: edge > 4% AND confidence >= 6
+        // --- Informed-signal blend: the quant model (Elo + Dixon-Coles) now
+        // recognises clubs across feeds, so it's a genuine independent read — not
+        // a re-derivation of the odds. For every candidate whose BOTH teams it
+        // knows, blend its verdict into the pick:
+        //   • CONFIDENCE ← how likely the selected outcome is (model probability)
+        //   • EDGE       ← value on the price (model EV = prob·odds − 1), blended
+        // This replaces the circular odds-proxy edge with a real signal, and lets
+        // genuinely strong model-backed picks clear the bar while correctly
+        // dampening ones the model rates poorly. Gated on knows() so we never act
+        // on the flat 1500 default. Display-only fields (quantProb/quantEV) aid the
+        // UI + audit; the locked market-selection logic is untouched.
+        if (deps.quantModel && deps.quantModel.knows) {
+          // Which side does a selection name refer to? When one club's name is a
+          // substring of the other's ("Inter" ⊂ "Inter Miami", "Manchester" ⊂
+          // "Manchester City"), BOTH match — so the LONGER (more specific) name
+          // wins. Prevents an away pick being read as the home side (or vice-versa).
+          var _sideFromSel = function (s, h, a) {
+            var hHit = h && s.indexOf(h) !== -1, aHit = a && s.indexOf(a) !== -1;
+            if (hHit && aHit) return a.length >= h.length ? 'away' : 'home';
+            if (aHit) return 'away';
+            if (hHit) return 'home';
+            return null;
+          };
+          var _quantProbForPick = function (pred, sel, mkt, homeTeam, awayTeam) {
+            if (!pred || !pred.winProb) return null;
+            var wp = pred.winProb, s = String(sel || '').toLowerCase(), m = String(mkt || '').toLowerCase();
+            var h = String(homeTeam || '').toLowerCase(), a = String(awayTeam || '').toLowerCase();
+            var pct = function (x) { return (x || 0) / 100; };
+            if (m.indexOf('total') !== -1 || s.indexOf('over 2') !== -1 || s.indexOf('under 2') !== -1 || s.indexOf('over 3') !== -1 || s.indexOf('under 3') !== -1 || s.indexOf('over 1') !== -1 || s.indexOf('under 1') !== -1) {
+              if (pred.over25 == null) return null;
+              return s.indexOf('under') !== -1 ? (1 - pct(pred.over25)) : pct(pred.over25);
+            }
+            if (m.indexOf('both teams') !== -1 || s.indexOf('btts') !== -1) {
+              if (pred.btts == null) return null;
+              return s.indexOf('no') !== -1 ? (1 - pct(pred.btts)) : pct(pred.btts);
+            }
+            if (m.indexOf('double chance') !== -1 || s.indexOf('double chance') !== -1 || s.indexOf('or draw') !== -1) {
+              if (s.indexOf('1x') !== -1) return pct(wp.home) + pct(wp.draw);
+              if (s.indexOf('x2') !== -1) return pct(wp.away) + pct(wp.draw);
+              if (s.indexOf('12') !== -1) return pct(wp.home) + pct(wp.away);
+              var dcSide = _sideFromSel(s, h, a);
+              if (dcSide === 'home') return pct(wp.home) + pct(wp.draw);
+              if (dcSide === 'away') return pct(wp.away) + pct(wp.draw);
+              return null;
+            }
+            if (s.indexOf('draw') !== -1) return pct(wp.draw);
+            var mrSide = _sideFromSel(s, h, a);
+            if (mrSide === 'home') return pct(wp.home);
+            if (mrSide === 'away') return pct(wp.away);
+            return null;
+          };
+          for (var qi = 0; qi < allScoredFixtures.length; qi++) {
+            try {
+              var qe = allScoredFixtures[qi], qsc = qe.scored, qfx = qsc && qsc.fixture;
+              if (!qfx || !qfx.homeTeam || !qfx.awayTeam) continue;
+              if (!(deps.quantModel.knows(qfx.homeTeam) && deps.quantModel.knows(qfx.awayTeam))) continue;
+              var qNeutral = /world cup|world championship|friendl|international/.test((qfx.league || '').toLowerCase());
+              var qpred = deps.quantModel.predict(qfx.homeTeam, qfx.awayTeam, { neutral: qNeutral });
+              var mp = _quantProbForPick(qpred, qsc.selectedSelection, qsc.selectedMarket, qfx.homeTeam, qfx.awayTeam);
+              var qOdds = qsc.selectedOdds || 0;
+              if (mp == null || !(qOdds > 1)) continue;
+              var quantEV = mp * qOdds - 1;                         // value on the price
+              qe.edge = Math.round((0.6 * quantEV + 0.4 * (qe.edge || 0)) * 1000) / 1000;
+              qsc.edge = qe.edge;
+              // Confidence from likelihood: how often the model expects this to land.
+              var confAdj = mp >= 0.65 ? 1.5 : mp >= 0.55 ? 0.8 : mp >= 0.45 ? 0 : mp >= 0.35 ? -0.8 : -1.5;
+              var qConf = Math.max(1, Math.min(10, Math.round((qe.confidence || 5) + confAdj)));
+              qe.confidence = qConf; qsc.confidence = qConf;
+              qsc.quantProb = Math.round(mp * 100); qsc.quantEV = Math.round(quantEV * 1000) / 1000;
+            } catch (qErr) { /* non-fatal — leave candidate as scored */ }
+          }
+        }
+
+        // Primary filter: a genuine value edge OR a strong model-backed likelihood.
+        // Now that edge/confidence are informed by the quant model (not the circular
+        // odds proxy), these gates select real quality instead of rejecting everything.
         footballCandidates = allScoredFixtures.filter(function(c) {
-          return c.edge > 0.04 && c.confidence >= 6;
+          return (c.edge > 0.03 && c.confidence >= 6) || (c.confidence >= 7 && c.edge > 0);
         });
         console.log('[Auto-Tips] Football candidates passing primary filter: ' + footballCandidates.length);
 
@@ -1020,11 +1095,15 @@ module.exports = function startScheduler(deps) {
           console.log('[Auto-Tips] Football candidates passing relaxed filter: ' + footballCandidates.length);
         }
 
-        // Fallback 2: If STILL none, pick the best scored fixture regardless of thresholds
+        // Fallback 2: If STILL none, pick the best scored fixture. Prefer a
+        // positive-edge pick — the model's confidence inflation on short-priced
+        // favourites must never let a NEGATIVE-value pick become the day's tip.
         if (footballCandidates.length === 0 && allScoredFixtures.length > 0) {
-          allScoredFixtures.sort(function(a, b) { return b.confidence - a.confidence || b.edge - a.edge; });
-          footballCandidates = [allScoredFixtures[0]];
-          console.log('[Auto-Tips] Football fallback: selected best available fixture (conf: ' + allScoredFixtures[0].confidence + ', edge: ' + (allScoredFixtures[0].edge * 100).toFixed(1) + '%)');
+          var _positiveEdge = allScoredFixtures.filter(function (c) { return (c.edge || 0) > 0; });
+          var _pool = _positiveEdge.length ? _positiveEdge : allScoredFixtures;
+          _pool.sort(function(a, b) { return b.confidence - a.confidence || b.edge - a.edge; });
+          footballCandidates = [_pool[0]];
+          console.log('[Auto-Tips] Football fallback: best ' + (_positiveEdge.length ? 'positive-edge' : 'available') + ' fixture (conf: ' + _pool[0].confidence + ', edge: ' + ((_pool[0].edge || 0) * 100).toFixed(1) + '%)');
         }
 
         console.log('[Auto-Tips] Final football candidates: ' + footballCandidates.length);
