@@ -766,8 +766,13 @@ module.exports = function(deps) {
     }
   });
 
-  // SPA fallback — serve index.html for client-side routing
-  router.get('*', (req, res) => {
+  // SPA fallback — serve index.html for client-side routing.
+  router.get('*', (req, res, next) => {
+    // Never swallow API paths: this router is mounted at '/', so without this
+    // guard it intercepts any /api route registered AFTER it (e.g. /api/health,
+    // /api/admin/tuning-status) and returns index.html — which breaks JSON
+    // clients. Fall through so those handlers (and a JSON 404 backstop) run.
+    if (req.path.startsWith('/api')) return next();
     if (req.path.startsWith('/admin')) return res.sendFile(path.join(__dirname, '..', '..', 'admin', 'index.html'));
     res.sendFile(path.join(__dirname, '..', '..', 'public', 'index.html'));
   });

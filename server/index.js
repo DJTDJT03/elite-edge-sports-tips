@@ -1179,6 +1179,54 @@ app.get('/api/admin/tuning-status', deps.authenticate, deps.requireAdmin, async 
   }
 });
 
+// GET /api/admin/learning-state — one read-only snapshot of whether the system is
+// actually self-teaching: how many clubs the quant model has learned from real
+// results, the live calibration auto-correct state, the most recent AutoTune
+// action, and the rolling 14-day loss-category tally. Pure observability.
+app.get('/api/admin/learning-state', deps.authenticate, deps.requireAdmin, async (req, res) => {
+  try {
+    var out = { generatedAt: new Date().toISOString() };
+
+    // 1) Quant model — clubs learned (played>0) vs seeded-only, + top by games.
+    try {
+      var tot = await db.query("SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE played > 0)::int AS learned, COALESCE(MAX(played),0)::int AS max_played, ROUND(AVG(played) FILTER (WHERE played > 0),1) AS avg_played FROM team_ratings");
+      var top = await db.query("SELECT team, ROUND(rating)::int AS elo, played FROM team_ratings WHERE played > 0 ORDER BY played DESC, rating DESC LIMIT 10");
+      out.quantModel = { totalRated: tot.rows[0].total, learnedFromResults: tot.rows[0].learned, mostGames: tot.rows[0].max_played, avgGamesWhereLearned: tot.rows[0].avg_played, topLearned: top.rows };
+    } catch (e) { out.quantModel = { error: e.message }; }
+
+    // 2) Calibration auto-correct state (nights streak + confidence scale).
+    try {
+      var cs = await db.query("SELECT details, timestamp FROM audit_log WHERE action='calib_state' ORDER BY timestamp DESC LIMIT 1");
+      if (cs.rows.length) { var s = typeof cs.rows[0].details === 'string' ? JSON.parse(cs.rows[0].details) : cs.rows[0].details; out.calibration = { scale: s.scale, consecutiveInversionNights: s.nights, lastUpdated: cs.rows[0].timestamp, lastInversions: s.lastInversions || [] }; }
+      else out.calibration = { scale: 1.0, note: 'no calibration action yet (healthy / insufficient sample)' };
+    } catch (e) { out.calibration = { error: e.message }; }
+
+    // 3) Most recent AutoTune action summary.
+    try {
+      var lt = await db.query("SELECT details, timestamp FROM audit_log WHERE action='tuning_log' ORDER BY timestamp DESC LIMIT 1");
+      if (lt.rows.length) { var l = typeof lt.rows[0].details === 'string' ? JSON.parse(lt.rows[0].details) : lt.rows[0].details; var acts = []; (l.analysts || []).forEach(function (a) { (a.actions || []).forEach(function (x) { acts.push(a.analyst + ': ' + (typeof x === 'string' ? x : JSON.stringify(x))); }); }); out.lastAutoTune = { at: lt.rows[0].timestamp, calibration: l.calibration ? l.calibration.autoAction : null, actionsTaken: acts.length ? acts : 'none (healthy night)' }; }
+      else out.lastAutoTune = { note: 'no tuning cycle logged yet' };
+    } catch (e) { out.lastAutoTune = { error: e.message }; }
+
+    // 4) Rolling 14-day loss-category tally (what the system is learning from) —
+    // from the dedicated loss_analysis table.
+    try {
+      var lc = await db.query("SELECT loss_category, COUNT(*)::int AS n FROM loss_analysis WHERE date > (CURRENT_DATE - INTERVAL '14 days') GROUP BY loss_category ORDER BY n DESC");
+      var tally = {};
+      lc.rows.forEach(function (r) { if (r.loss_category) tally[r.loss_category] = r.n; });
+      out.lossCategories14d = Object.keys(tally).length ? tally : { note: 'no classified losses in the last 14 days' };
+    } catch (e) { out.lossCategories14d = { error: e.message }; }
+
+    res.json(out);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// JSON 404 backstop for unmatched /api paths — so a missing API route returns
+// clean JSON, never the SPA's index.html (which breaks client JSON parsing).
+app.use('/api', (req, res) => res.status(404).json({ error: 'Not found', path: req.path }));
+
 // ---------------------------------------------------------------------------
 // Start server + graceful shutdown
 // ---------------------------------------------------------------------------
