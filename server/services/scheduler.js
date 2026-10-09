@@ -755,6 +755,48 @@ module.exports = function startScheduler(deps) {
           console.log('[Auto-Tips] No top-league fixtures — using all ' + fixtures.length + ' available fixtures');
         }
 
+        // SPORTMONKS FALLBACK — API-Football can return empty for a date even when
+        // games exist (coverage/plan limits), which silently starves generation
+        // (the whole rest of the site runs on SportMonks). When the API-Football
+        // card is thin, merge in SportMonks fixtures for the day so the engine
+        // scores the real games it was blind to. SM fixtures carry homeTeam/
+        // awayTeam/league/ids/their own 1X2 odds — everything scoreFixture needs.
+        // Tagged _smSourced so the API-Football-only enrichment step skips them.
+        var _smSvc = deps.sportMonks; // in-scope alias (module closure)
+        if (topFixtures.length < 4 && _smSvc && _smSvc.isAvailable && _smSvc.isAvailable()) {
+          try {
+            var smFx = await _smSvc.getFixturesByDate(today) || [];
+            // Price them from SportMonks' own books so scoreFixture has real odds
+            // (not flat defaults) for games the Odds API doesn't match by name.
+            if (_smSvc.enrichFixturesWithOdds) { try { await _smSvc.enrichFixturesWithOdds(smFx, { cap: 40 }); } catch (e) {} }
+            // Only pre-kick-off games (we tip before the off), real club fixtures.
+            var UPCOMING = { NS: 1, TBD: 1, 'NOT STARTED': 1 };
+            var _norm = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+            var _seen = {};
+            topFixtures.forEach(function (f) { _seen[_norm(f.homeTeam) + '|' + _norm(f.awayTeam)] = true; });
+            var added = 0;
+            smFx.forEach(function (f) {
+              if (!f || !f.homeTeam || !f.awayTeam) return;
+              var st = String(f.status || '').toUpperCase();
+              if (st && !UPCOMING[st]) return; // skip in-play/finished
+              // INTEGRITY belt-and-braces: a tip must lock strictly BEFORE kick-off.
+              // SM collapses postponed/suspended/abandoned/cancelled to 'NS', and
+              // can lag a just-started game on 'NS' — so also require a FUTURE
+              // kick-off. This rejects all of those (their off-time is past) and
+              // guarantees we never tip a game that has started / won't be played.
+              var koMs = f.kickoff ? new Date(f.kickoff).getTime() : NaN;
+              if (isNaN(koMs) || koMs <= Date.now()) return;
+              var key = _norm(f.homeTeam) + '|' + _norm(f.awayTeam);
+              if (_seen[key]) return;
+              _seen[key] = true;
+              f._smSourced = true;
+              topFixtures.push(f);
+              added++;
+            });
+            if (added) console.log('[Auto-Tips] SportMonks fallback: added ' + added + ' fixture(s) API-Football missed (card now ' + topFixtures.length + ')');
+          } catch (smErr) { console.log('[Auto-Tips] SportMonks fallback failed: ' + smErr.message); }
+        }
+
         // Fetch league standings for position data (Football-Data.org)
         var leagueStandings = {};
         if (footballData) {
@@ -805,6 +847,10 @@ module.exports = function startScheduler(deps) {
 
         // Attach standings position and xG data to fixtures for the scoring model
         topFixtures.forEach(function(fixture) {
+          // SM-sourced fixtures use a DIFFERENT leagueId namespace than the
+          // API-Football map above — skip the attach so we never bind the wrong
+          // league's standings/xG to them (SM league odds + quant blend carry them).
+          if (fixture._smSourced) return;
           // Attach league standings position
           var standingsCode = leagueIdToCode[fixture.leagueId];
           if (standingsCode && leagueStandings[standingsCode]) {
@@ -901,7 +947,7 @@ module.exports = function startScheduler(deps) {
           var fixture = entry.fixture;
           var scored = entry.scored;
 
-          if (fIdx < topCandidateCount && fixture.id && fixture.homeTeamId && fixture.awayTeamId) {
+          if (fIdx < topCandidateCount && !fixture._smSourced && fixture.id && fixture.homeTeamId && fixture.awayTeamId) {
             try {
               var enhancedResults = await Promise.allSettled([
                 footballSource.fetchInjuries(fixture.id),

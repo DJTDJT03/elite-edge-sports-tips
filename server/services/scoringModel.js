@@ -820,8 +820,16 @@ class ScoringModel {
       if (bk['Draw'] || bk['draw']) drawOdds = bk['Draw'] || bk['draw'];
       if (bk[fixture.awayTeam]) awayOdds = bk[fixture.awayTeam];
     }
-    // If no bookmaker odds, estimate from league position (better than flat defaults)
-    if (!firstBookmaker && fixture.homePosition && fixture.awayPosition) {
+    // If no Odds-API bookmaker match, use the fixture's OWN 1X2 odds when present
+    // (SportMonks fixtures carry real prices). Strictly better than flat defaults
+    // or a position estimate — additive, only fills the no-odds gap.
+    if (!firstBookmaker && fixture.homeOdds > 1 && fixture.awayOdds > 1) {
+      homeOdds = fixture.homeOdds;
+      drawOdds = fixture.drawOdds > 1 ? fixture.drawOdds : drawOdds;
+      awayOdds = fixture.awayOdds;
+    }
+    // If still no odds, estimate from league position (better than flat defaults)
+    if (!firstBookmaker && !(fixture.homeOdds > 1) && fixture.homePosition && fixture.awayPosition) {
       var posDiff = fixture.awayPosition - fixture.homePosition; // positive = home team higher
       if (posDiff >= 10) { homeOdds = 1.5; drawOdds = 4.0; awayOdds = 6.0; }
       else if (posDiff >= 5) { homeOdds = 1.8; drawOdds = 3.5; awayOdds = 4.5; }
