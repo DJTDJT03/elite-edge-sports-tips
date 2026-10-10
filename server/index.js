@@ -1223,6 +1223,30 @@ app.get('/api/admin/learning-state', deps.authenticate, deps.requireAdmin, async
   }
 });
 
+// TEMP diagnostic (unguessable path, read-only, no side effects) — reports the
+// fixture-source funnel for today so we can see WHY generation yields 0 tips:
+// how many fixtures API-Football vs SportMonks return, and how many SM games are
+// upcoming with a future kick-off (i.e. actually tippable). Remove after use.
+app.get('/api/gen-diag-q9z2', async (req, res) => {
+  try {
+    var today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' })).toISOString().split('T')[0];
+    var out = { today: today, generatedAt: new Date().toISOString() };
+    // API-Football
+    try {
+      var af = deps.footballSource && process.env.API_FOOTBALL_KEY ? deps.footballSource.normalise(await deps.footballSource.fetchFixturesByDate(today)) : [];
+      out.apiFootball = { count: af.length, sample: af.slice(0, 5).map(function (f) { return (f.homeTeam || '?') + ' v ' + (f.awayTeam || '?') + ' [' + (f.status || '') + ']'; }) };
+    } catch (e) { out.apiFootball = { error: e.message }; }
+    // SportMonks
+    try {
+      var sm = deps.sportMonks && deps.sportMonks.isAvailable && deps.sportMonks.isAvailable() ? (await deps.sportMonks.getFixturesByDate(today) || []) : [];
+      var UP = { NS: 1, TBD: 1, 'NOT STARTED': 1 };
+      var tippable = sm.filter(function (f) { var ko = f.kickoff ? new Date(f.kickoff).getTime() : NaN; return f.homeTeam && f.awayTeam && UP[String(f.status || '').toUpperCase()] && !isNaN(ko) && ko > Date.now(); });
+      out.sportMonks = { count: sm.length, tippableUpcoming: tippable.length, sample: tippable.slice(0, 5).map(function (f) { return f.homeTeam + ' v ' + f.awayTeam + ' [' + f.status + ' @ ' + f.kickoff + ']'; }) };
+    } catch (e) { out.sportMonks = { error: e.message }; }
+    res.json(out);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // JSON 404 backstop for unmatched /api paths — so a missing API route returns
 // clean JSON, never the SPA's index.html (which breaks client JSON parsing).
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found', path: req.path }));
