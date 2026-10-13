@@ -1266,6 +1266,21 @@ app.get('/api/gen-run-q9z2', async (req, res) => {
   } finally { console.error = origErr; console.log = origLog; }
 });
 
+// TEMP (unguessable) — dump recent stored tips with raw status/date so we can see
+// why generated tips don't surface in /api/tips. Remove after use.
+app.get('/api/tips-dump-q9z2', async (req, res) => {
+  try {
+    var all = await db.getTips();
+    var recent = all.filter(function (t) {
+      var d = t.date instanceof Date ? t.date.toISOString().slice(0, 10) : String(t.date || '').slice(0, 10);
+      return d >= '2026-10-10';
+    }).map(function (t) {
+      return { id: t.id, selection: t.selection, market: t.market, odds: t.odds, status: t.status, result: t.result, dateType: typeof t.date, dateVal: t.date instanceof Date ? t.date.toISOString() : t.date, isWeeklyAcca: !!t.isWeeklyAcca, isPremium: t.isPremium };
+    });
+    res.json({ totalTipsInDb: all.length, recentCount: recent.length, recent: recent });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // JSON 404 backstop for unmatched /api paths — so a missing API route returns
 // clean JSON, never the SPA's index.html (which breaks client JSON parsing).
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found', path: req.path }));
