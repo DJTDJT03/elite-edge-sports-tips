@@ -6670,6 +6670,41 @@ module.exports = function startScheduler(deps) {
       console.log('[HealthCheck] ⚠️ Stripe check: ' + e.message);
     }
 
+    // --- 11. TIPPING-ENGINE SELF-CHECK ---------------------------------------
+    // Catch the failure modes we found by hand: a zero-tip day, a high void rate
+    // (tips we can't grade), and market monotony (every pick the same market).
+    // Surfaced as issues in the existing 4:30am admin report — no new job/cadence.
+    try {
+      var _engTips = await db.getTips();
+      var _nd = function (d) { if (!d) return ''; if (d instanceof Date) return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); return String(d).split('T')[0].slice(0, 10); };
+      var _yday = new Date(ukTime.getTime() - 86400000); var _ydayStr = _yday.getFullYear() + '-' + String(_yday.getMonth() + 1).padStart(2, '0') + '-' + String(_yday.getDate()).padStart(2, '0');
+      var _ydayTips = _engTips.filter(function (t) { return !t.isWeeklyAcca && _nd(t.date) === _ydayStr; });
+      // (a) zero-tip day
+      if (_ydayTips.length === 0) {
+        issues.push('ENGINE: 0 tips generated for ' + _ydayStr + ' — generation produced nothing (check fixture feeds / filter).');
+        console.log('[HealthCheck] ❌ Engine: 0 tips for ' + _ydayStr);
+      } else {
+        // (b) void rate over the last 14 days
+        var _cut14 = new Date(ukTime.getTime() - 14 * 86400000);
+        var _recent = _engTips.filter(function (t) { return !t.isWeeklyAcca && _nd(t.date) >= (_cut14.getFullYear() + '-' + String(_cut14.getMonth() + 1).padStart(2, '0') + '-' + String(_cut14.getDate()).padStart(2, '0')); });
+        var _voids = _recent.filter(function (t) { return t.result === 'void' || t.status === 'voided' || t.status === 'expired'; }).length;
+        var _voidRate = _recent.length ? Math.round((_voids / _recent.length) * 100) : 0;
+        if (_recent.length >= 10 && _voidRate >= 30) {
+          issues.push('ENGINE: high void rate — ' + _voidRate + '% of the last ' + _recent.length + ' tips voided/expired (likely ungradeable fixtures hollowing the record).');
+          console.log('[HealthCheck] ⚠️ Engine: void rate ' + _voidRate + '%');
+        } else {
+          console.log('[HealthCheck] ✅ Engine: ' + _ydayTips.length + ' tips yesterday, void rate ' + _voidRate + '% (14d)');
+        }
+        // (c) market monotony yesterday (all one market, 3+ tips)
+        var _mkts = {}; _ydayTips.forEach(function (t) { var m = (t.market || 'Unknown'); _mkts[m] = (_mkts[m] || 0) + 1; });
+        var _mktKeys = Object.keys(_mkts);
+        if (_ydayTips.length >= 3 && _mktKeys.length === 1) {
+          issues.push('ENGINE: market monotony — all ' + _ydayTips.length + ' of yesterday\'s tips were "' + _mktKeys[0] + '". Consensus may be funnelling to one market.');
+          console.log('[HealthCheck] ⚠️ Engine: all tips one market (' + _mktKeys[0] + ')');
+        }
+      }
+    } catch (e) { console.log('[HealthCheck] ⚠️ Engine self-check failed: ' + e.message); }
+
     // --- SUMMARY ---
     console.log('[HealthCheck] ========================================');
     console.log('[HealthCheck] Issues: ' + issues.length + ' | Fixes applied: ' + fixes.length);
