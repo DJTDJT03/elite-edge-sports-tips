@@ -1047,6 +1047,31 @@ module.exports = function startScheduler(deps) {
         var consensus = new ConsensusEngine(deps);
         var consensusResults = [];
 
+        // GOALS-SIGNAL ENRICHMENT — fixes Double-Chance monotony. The consensus
+        // picks Over/Under/BTTS only when factors.overProb/btts are populated;
+        // real xG is absent for most fixtures, so they stayed null → the engine
+        // fell through to "Double Chance - favourite or Draw" on almost every
+        // game. The quant model (now club-aware) produces over25/btts for every
+        // fixture it knows — feed those in when the real-xG signals are missing,
+        // so goals markets compete on merit and variety returns. Only FILLS nulls;
+        // never overrides a real-xG signal. Match-result selection untouched.
+        if (deps.quantModel && deps.quantModel.knows) {
+          for (var gi = 0; gi < allScoredFixtures.length; gi++) {
+            try {
+              var gEntry = allScoredFixtures[gi], gsc = gEntry.scored, gfx = gsc && gsc.fixture;
+              if (!gfx || !gsc.factors) continue;
+              if (gsc.factors.overProb != null && gsc.factors.btts != null) continue; // real xG already present
+              if (!(deps.quantModel.knows(gfx.homeTeam) && deps.quantModel.knows(gfx.awayTeam))) continue;
+              var gNeutral = /world cup|world championship|friendl|international/.test((gfx.league || '').toLowerCase());
+              var gp = deps.quantModel.predict(gfx.homeTeam, gfx.awayTeam, { neutral: gNeutral });
+              if (gp) {
+                if (gsc.factors.overProb == null && gp.over25 != null) gsc.factors.overProb = Math.round(gp.over25) / 100;
+                if (gsc.factors.btts == null && gp.btts != null) gsc.factors.btts = Math.round(gp.btts) / 100;
+              }
+            } catch (gErr) { /* non-fatal — leave factors as-is */ }
+          }
+        }
+
         for (var ci = 0; ci < allScoredFixtures.length; ci++) {
           var cEntry = allScoredFixtures[ci];
           try {
