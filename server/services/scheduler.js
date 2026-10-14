@@ -2674,13 +2674,23 @@ module.exports = function startScheduler(deps) {
 
           var resultVerifier = require('./resultVerifier');
 
+          // Tolerant-but-safe fixture matcher. The old check matched if EITHER
+          // team name appeared as a substring of the tip's event — loose (risked
+          // grading against the wrong game) AND brittle (missed "SL Benfica" vs
+          // "Benfica", accents, FC/CF prefixes), so real games went unsettled and
+          // stale-voided. This strips club affixes + accents, takes each team's
+          // main token, and requires BOTH to appear — fewer false voids, no wrong
+          // matches. Shared by both football settlement sites.
+          var _setNrm = function (s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ' '); };
+          var _SET_AFFIX = { fc: 1, sl: 1, cf: 1, sc: 1, ac: 1, afc: 1, if: 1, bk: 1, sv: 1, vfb: 1, vfl: 1, us: 1, as: 1, rc: 1, cd: 1, ud: 1, sd: 1, ssc: 1, ogc: 1, rcd: 1, club: 1, de: 1, fk: 1, sk: 1, kaa: 1, nec: 1, psv: 1 };
+          var _mainTok = function (name) { var t = _setNrm(name).split(/\s+/).filter(function (x) { return x.length > 2 && !_SET_AFFIX[x]; }); t.sort(function (a, b) { return b.length - a.length; }); return t[0] || ''; };
+          var _fixtureMatchesTip = function (f, ev) { var h = _mainTok(f.homeTeam), a = _mainTok(f.awayTeam); return h && a && ev.indexOf(h) !== -1 && ev.indexOf(a) !== -1; };
+
           for (var fti = 0; fti < activeTips.length; fti++) {
             var ftip = activeTips[fti];
             if (ftip.sport !== 'football') continue;
-            var fmatch = fbResults.find(function(f) {
-              var eventLower = (ftip.event || '').toLowerCase();
-              return eventLower.indexOf(f.homeTeam.toLowerCase()) !== -1 || eventLower.indexOf(f.awayTeam.toLowerCase()) !== -1;
-            });
+            var _evNrm = _setNrm(ftip.event || '');
+            var fmatch = fbResults.find(function(f) { return _fixtureMatchesTip(f, _evNrm); });
             if (fmatch) {
               // RECONCILIATION: verify score across multiple sources before settling
               try {
