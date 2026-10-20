@@ -1223,29 +1223,6 @@ app.get('/api/admin/learning-state', deps.authenticate, deps.requireAdmin, async
   }
 });
 
-// TEMP (unguessable) — void breakdown by date to see if the settlement matcher
-// fix (shipped ~Oct 14) is reducing voids going forward, and WHICH games void.
-app.get('/api/void-diag-q9z2', async (req, res) => {
-  try {
-    var all = await db.getTips();
-    var nd = function (d) { if (!d) return ''; if (d instanceof Date) return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); return String(d).split('T')[0].slice(0, 10); };
-    var rows = all.filter(function (t) { return !t.isWeeklyAcca && nd(t.date) >= '2026-09-25' && t.sport === 'football'; });
-    var byDate = {};
-    rows.forEach(function (t) {
-      var d = nd(t.date); byDate[d] = byDate[d] || { won: 0, lost: 0, void: 0, active: 0 };
-      var voided = t.result === 'void' || t.status === 'voided' || t.status === 'expired';
-      if (voided) byDate[d].void++;
-      else if (t.result === 'won' || t.result === 'placed') byDate[d].won++;
-      else if (t.result === 'lost') byDate[d].lost++;
-      else byDate[d].active++;
-    });
-    var voidedList = rows.filter(function (t) { return t.result === 'void' || t.status === 'voided' || t.status === 'expired'; })
-      .map(function (t) { return { date: nd(t.date), selection: t.selection, status: t.status, result: t.result, event: t.event }; })
-      .sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 25);
-    res.json({ byDate: byDate, recentVoided: voidedList });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 // JSON 404 backstop for unmatched /api paths — so a missing API route returns
 // clean JSON, never the SPA's index.html (which breaks client JSON parsing).
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found', path: req.path }));

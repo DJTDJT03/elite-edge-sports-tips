@@ -5513,16 +5513,29 @@ module.exports = function startScheduler(deps) {
         var warnings = [];
         var shouldPull = false;
 
-        // Odds drift check
+        // Odds drift check — MUST compare like-for-like. bookmakerOdds holds the
+        // 1X2 match-result prices (home/draw/away); tip.odds is the SELECTION's
+        // price. For a Double Chance / Over / BTTS tip, averaging the 1X2 prices
+        // and comparing to e.g. a 1.36 DC price produced a bogus ~+180% "drift"
+        // that auto-VOIDED almost every tip pre-kickoff (Arsenal, Real Madrid…).
+        // So only compute drift when we can read the SAME selection's live price:
+        // a Match Result tip whose side we can find in the 1X2 map. Otherwise we
+        // have no comparable price — skip drift/pull (never void on bad maths).
         if (tip.bookmakerOdds && Object.keys(tip.bookmakerOdds).length > 0) {
-          var prices = Object.values(tip.bookmakerOdds).filter(function(v) { return v > 0; });
-          if (prices.length > 0) {
-            var avgNow = prices.reduce(function(s, v) { return s + v; }, 0) / prices.length;
+          var _mkt = String(tip.market || '').toLowerCase();
+          var _sel = String(tip.selection || '').toLowerCase();
+          var _isMatchResult = _mkt.indexOf('match') !== -1 || _mkt.indexOf('result') !== -1 || (_mkt.indexOf('win') !== -1 && _mkt.indexOf('double') === -1);
+          var _sidePrice = null;
+          if (_isMatchResult) {
+            var _bk = tip.bookmakerOdds;
+            if (_sel.indexOf('draw') !== -1 && (_bk['Draw'] || _bk['draw'])) _sidePrice = _bk['Draw'] || _bk['draw'];
+            else { Object.keys(_bk).forEach(function (k) { var kl = k.toLowerCase(); if (kl !== 'draw' && _sel.indexOf(kl) !== -1 && _bk[k] > 1) _sidePrice = _bk[k]; }); }
+          }
+          if (_sidePrice && _sidePrice > 1) {
             var pubOdds = tip.odds || 0;
-            if (pubOdds > 0 && avgNow > 0) {
-              var drift = ((avgNow - pubOdds) / pubOdds) * 100;
-              await db.updateTip(tip.id, { oddsDrift: Math.round(drift * 10) / 10, currentOdds: Math.round(avgNow * 100) / 100 });
-
+            if (pubOdds > 0) {
+              var drift = ((_sidePrice - pubOdds) / pubOdds) * 100;
+              await db.updateTip(tip.id, { oddsDrift: Math.round(drift * 10) / 10, currentOdds: Math.round(_sidePrice * 100) / 100 });
               if (drift > 30) {
                 warnings.push('ODDS DRIFTED ' + Math.round(drift) + '% — late team news may have changed the picture');
                 shouldPull = true;
