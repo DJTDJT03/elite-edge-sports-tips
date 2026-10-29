@@ -6,6 +6,16 @@
 module.exports = function createAuthMiddleware(JWT_SECRET, db) {
   const jwt = require('jsonwebtoken');
 
+  // Admin allowlist — any account whose email is listed here is granted full
+  // admin on authentication (promoted + persisted), whatever its stored role.
+  // The user keeps their OWN password (we never set one). Durable across DB
+  // resets; extend/override via the ADMIN_EMAILS env var (comma-separated). To
+  // revoke: remove the email here/from env AND set their role to 'free' in the
+  // admin panel.
+  const ADMIN_ALLOWLIST = (process.env.ADMIN_EMAILS || '')
+    .split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean)
+    .concat(['darren@ecocleaningsystems.co.uk', 'caldon@prestigefootballschools.com']);
+
   async function authenticate(req, res, next) {
     try {
       const authHeader = req.headers.authorization;
@@ -17,6 +27,13 @@ module.exports = function createAuthMiddleware(JWT_SECRET, db) {
       const user = await db.getUserById(decoded.id);
       if (!user) {
         return res.status(401).json({ error: 'User not found' });
+      }
+      // Admin allowlist promotion — grant full admin to allow-listed emails and
+      // persist it, so every requireAdmin check (and the admin panel) sees it.
+      // Runs before the trial logic below so it's authoritative.
+      if (user.email && ADMIN_ALLOWLIST.indexOf(String(user.email).toLowerCase()) !== -1 && user.role !== 'admin') {
+        try { await db.updateUser(user.id, { role: 'admin' }); } catch (e) { /* non-fatal */ }
+        user.role = 'admin';
       }
       // Strict single-session: if the DB has a sessionId and it doesn't match the token, reject
       if (user.sessionId && decoded.sessionId !== user.sessionId) {
